@@ -92,6 +92,9 @@ const UserCallDashboard = () => {
           hour12: true,
         });
 
+
+      
+
         totalTalkTimeMS += Number(record.talkTimeMS || 0);
         if (record.direction === "Incoming") incoming++;
         if (record.direction === "Outgoing") outgoing++;

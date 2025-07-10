@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 function Login({ setIsAuthenticated }) {
   const [empId, setEmpId] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false); // 👈 New state
   const [success, setSuccess] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -21,23 +22,23 @@ function Login({ setIsAuthenticated }) {
         { withCredentials: true }
       );
 
-if (res.data.success) {
-  setSuccess(true);
-  setIsAuthenticated(true);
+      if (res.data.success) {
+        setSuccess(true);
+        setIsAuthenticated(true);
 
-  const user = res.data.employee;
-  const token = res.data.token;
+        const user = res.data.employee;
+        const token = res.data.token;
 
-  if (rememberMe) {
-    localStorage.setItem("user", JSON.stringify(user));
-    localStorage.setItem("authToken", token); // ✅ Store token
-  } else {
-    sessionStorage.setItem("user", JSON.stringify(user));
-    sessionStorage.setItem("authToken", token); // ✅ Store token
-  }
+        if (rememberMe) {
+          localStorage.setItem("user", JSON.stringify(user));
+          localStorage.setItem("authToken", token);
+        } else {
+          sessionStorage.setItem("user", JSON.stringify(user));
+          sessionStorage.setItem("authToken", token);
+        }
 
-  navigate("/dashboard");
-} else {
+        navigate("/dashboard");
+      } else {
         setSuccess(false);
         setErrorMessage("Login failed. Please check your credentials.");
       }
@@ -69,17 +70,17 @@ if (res.data.success) {
         </div>
       )}
 
-<div className="absolute top-0 left-0 w-full h-full z-0 overflow-hidden">
-  <video
-    className="w-full h-full object-cover"
-    src={VideoBg}
-    autoPlay
-    loop
-    muted
-    playsInline
-  />
-  <div className="absolute inset-0 backdrop-blur-sm bg-black/20" />
-</div>
+      <div className="absolute top-0 left-0 w-full h-full z-0 overflow-hidden">
+        <video
+          className="w-full h-full object-cover"
+          src={VideoBg}
+          autoPlay
+          loop
+          muted
+          playsInline
+        />
+        <div className="absolute inset-0 backdrop-blur-sm bg-black/20" />
+      </div>
 
       <div className="relative z-20 w-full max-w-md p-14 bg-white/90 backdrop-blur-md rounded-xl shadow-lg">
         <form method="post" className="space-y-5" onSubmit={handleLogin}>
@@ -95,13 +96,22 @@ if (res.data.success) {
             className="w-full py-2 border-b border-gray-400 bg-transparent focus:outline-none focus:border-black"
           />
 
-          <input
-            type="password"
-            value={password}
-            placeholder="Password"
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full py-2 border-b border-gray-400 bg-transparent focus:outline-none focus:border-black"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              placeholder="Password"
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full py-2 border-b border-gray-400 bg-transparent focus:outline-none focus:border-black pr-10"
+            />
+            <span
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-2 top-2 cursor-pointer text-gray-600"
+              title={showPassword ? "Hide Password" : "Show Password"}
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </span>
+          </div>
 
           <div className="flex items-center justify-between text-sm">
             <label className="flex items-center gap-2">

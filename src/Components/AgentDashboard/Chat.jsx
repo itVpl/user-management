@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { FaPaperPlane } from "react-icons/fa";
+import { io } from "socket.io-client";
 
 const ChatPage = () => {
+  const [chatList, setChatList] = useState([]);
   const [chatUsers, setChatUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -10,13 +12,11 @@ const ChatPage = () => {
   const [storedUser, setStoredUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [newMessagesMap, setNewMessagesMap] = useState({});
+  const socketRef = useRef(null);
 
   const fetchMessages = async (selectedEmpId) => {
     if (!storedUser?.empId || !selectedEmpId) return;
-
-    console.log("📩 storedUser.empId:", storedUser.empId);
-    console.log("📩 selectedUser.empId:", selectedEmpId);
-
     try {
       const res = await axios.get(
         `https://vpl-liveproject-1.onrender.com/api/v1/chat/with/${selectedEmpId}`,
@@ -24,8 +24,6 @@ const ChatPage = () => {
       );
 
       const allMessages = res.data || [];
-      console.log("📦 All Messages Fetched from API:", allMessages);
-
       const filtered = allMessages.filter(
         (msg) =>
           (msg.senderEmpId === storedUser.empId &&
@@ -33,8 +31,6 @@ const ChatPage = () => {
           (msg.receiverEmpId === storedUser.empId &&
             msg.senderEmpId === selectedEmpId)
       );
-
-      console.log("✅ Filtered Messages:", filtered);
 
       setMessages(filtered);
 
@@ -48,6 +44,27 @@ const ChatPage = () => {
     }
   };
 
+  const fetchChatList = async () => {
+    try {
+      const res = await axios.get(
+        "https://vpl-liveproject-1.onrender.com/api/v1/chat/list",
+        { withCredentials: true }
+      );
+      const list = res.data || [];
+      setChatList(list);
+
+      const unread = {};
+      list.forEach((user) => {
+        if (user.unseenCount > 0) {
+          unread[user.empId] = user.unseenCount;
+        }
+      });
+      setNewMessagesMap(unread);
+    } catch (err) {
+      console.error("❌ Failed to fetch chat list", err);
+    }
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || !selectedUser) return;
     try {
@@ -55,15 +72,18 @@ const ChatPage = () => {
         receiverEmpId: selectedUser.empId,
         message: input,
       };
-      console.log("📤 Sending Payload:", payload);
-
       await axios.post(
         "https://vpl-liveproject-1.onrender.com/api/v1/chat/send",
         payload,
         { withCredentials: true }
       );
+
+      socketRef.current?.emit("newMessage", {
+        senderEmpId: storedUser.empId,
+        receiverEmpId: selectedUser.empId,
+      });
+
       setInput("");
-      fetchMessages(selectedUser.empId);
     } catch (err) {
       console.error("❌ Send message failed:", err);
     }
@@ -105,7 +125,6 @@ const ChatPage = () => {
       )
       .then((res) => {
         setStoredUser(res.data.employee);
-        console.log("✅ Refetched stored user from backend:", res.data.employee);
       })
       .catch((err) => {
         console.error("❌ Failed to load full stored user profile", err);
@@ -119,10 +138,48 @@ const ChatPage = () => {
     }
   }, [selectedUser, storedUser]);
 
+  useEffect(() => {
+    if (!storedUser?.empId) return;
+
+    socketRef.current = io("https://vpl-liveproject-1.onrender.com", {
+      withCredentials: true,
+    });
+
+    socketRef.current.on("connect", () => {
+      console.log("✅ Socket connected:", socketRef.current.id);
+      socketRef.current.emit("join", storedUser.empId); // optional: room join
+    });
+
+    socketRef.current.on("connect_error", (err) => {
+      console.error("❌ Socket connection error:", err);
+    });
+
+    const handleNewMessage = async ({ senderEmpId, receiverEmpId }) => {
+      console.log("📨 New message from:", senderEmpId, "to", receiverEmpId);
+
+      const isMyChat =
+        (receiverEmpId === storedUser.empId && senderEmpId === selectedUser?.empId) ||
+        (senderEmpId === storedUser.empId && receiverEmpId === selectedUser?.empId);
+
+      if (isMyChat && selectedUser?.empId) {
+        await fetchMessages(selectedUser.empId);
+      }
+
+      await fetchChatList();
+    };
+
+    socketRef.current.on("newMessage", handleNewMessage);
+
+    return () => {
+      socketRef.current.off("newMessage", handleNewMessage);
+      socketRef.current.disconnect();
+    };
+  }, [storedUser, selectedUser]);
+
   if (loading) return <div className="text-center mt-10">Loading chat...</div>;
 
   return (
-    <div className="flex h-[80vh]  font-sans">
+    <div className="flex h-[80vh] font-sans">
       <div className="flex-1 flex flex-col">
         <div className="flex flex-1">
           {/* Left Panel */}
@@ -135,39 +192,77 @@ const ChatPage = () => {
               className="w-full px-4 py-2 border rounded-full text-sm mb-4 outline-none"
             />
             <div className="space-y-2">
-              {chatUsers.length > 0 ? (
-                chatUsers.map((user) => (
-                  <div
-                    key={user.empId}
-                    onClick={async () => {
-                      try {
-                        const res = await axios.get(
-                          `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${user.empId}`,
-                          { withCredentials: true }
-                        );
-                        const fullUser = res.data.employee;
-                        console.log("👤 Fetched Full User Profile:", fullUser);
-                        setSelectedUser(fullUser);
-                        fetchMessages(fullUser.empId);
-                      } catch (err) {
-                        console.error("❌ Failed to load full user profile", err);
-                      }
-                    }}
-                    className={`flex items-center space-x-3 p-2 rounded cursor-pointer ${
-                      selectedUser?.empId === user.empId
-                        ? "bg-blue-100"
-                        : "hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white bg-blue-500">
-                      {user.employeeName?.charAt(0)}
+              {searchTerm && chatUsers.length > 0
+                ? chatUsers.map((user) => (
+                    <div
+                      key={user.empId}
+                      onClick={async () => {
+                        try {
+                          const res = await axios.get(
+                            `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${user.empId}`,
+                            { withCredentials: true }
+                          );
+                          const fullUser = res.data.employee;
+                          setSelectedUser(fullUser);
+                          fetchMessages(fullUser.empId);
+                        } catch (err) {
+                          console.error("❌ Failed to load full user profile", err);
+                        }
+                      }}
+                      className={`flex items-center space-x-3 p-2 rounded cursor-pointer ${
+                        selectedUser?.empId === user.empId
+                          ? "bg-blue-100"
+                          : "hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white bg-blue-500">
+                        {user.employeeName?.charAt(0)}
+                      </div>
+                      <span className="text-sm">{user.employeeName}</span>
                     </div>
-                    <span className="text-sm">{user.employeeName}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-gray-400 text-sm">Search to find users</div>
-              )}
+                  ))
+                : chatList.length > 0
+                ? chatList.map((user) => (
+                    <div
+                      key={user.empId}
+                      onClick={async () => {
+                        try {
+                          const res = await axios.get(
+                            `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${user.empId}`,
+                            { withCredentials: true }
+                          );
+                          const fullUser = res.data.employee;
+                          setSelectedUser(fullUser);
+                          fetchMessages(fullUser.empId);
+                          setNewMessagesMap((prev) => {
+                            const copy = { ...prev };
+                            delete copy[user.empId];
+                            return copy;
+                          });
+                        } catch (err) {
+                          console.error("❌ Failed to load full user profile", err);
+                        }
+                      }}
+                      className={`flex items-center justify-between p-2 rounded cursor-pointer ${
+                        selectedUser?.empId === user.empId
+                          ? "bg-blue-100"
+                          : "hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white bg-blue-500">
+                          {user.employeeName?.charAt(0)}
+                        </div>
+                        <span className="text-sm">{user.employeeName}</span>
+                      </div>
+                      {newMessagesMap[user.empId] && (
+                        <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                          {newMessagesMap[user.empId]}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                : <div className="text-gray-400 text-sm">No chats yet</div>}
             </div>
           </div>
 
@@ -193,12 +288,6 @@ const ChatPage = () => {
               ) : (
                 messages.map((msg, idx) => {
                   const isSentByMe = msg.senderEmpId === storedUser?.empId;
-
-                  console.log("📩 Msg:", msg.message);
-                  console.log("🧾 senderEmpId:", msg.senderEmpId, "| receiverEmpId:", msg.receiverEmpId);
-                  console.log("👤 storedUser.empId:", storedUser?.empId);
-                  console.log("👉 isSentByMe:", isSentByMe);
-
                   return (
                     <div
                       key={idx}

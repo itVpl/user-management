@@ -24,6 +24,16 @@ import ShippersLDocuments from "./Components/AgentDashboard/Shipper-L-Document.j
 import PayrollPage from "./Components/HRDashboard/payroll.jsx";
 // import HRDashboard from "./Components/HRDashboard/HrDashboard.jsx";
 import RoleBasedDashboard from "./Components/RolebasedLogin.jsx";
+import ShiperLoadData from "./Components/AgentDashboard/ShiperLoadData.jsx";
+import HrDocumentsVerification from "./Components/HRDashboard/DocumentVerifcation.jsx";
+import Attendanceleave from "./Components/HRDashboard/Attendance-leave.jsx";
+import TLTeams from "./Components/TLDashboard/Team.jsx";
+import TruckerDocuments from "./Components/CMT/TruckerDocuments.jsx";
+import HREmployeeHygine from "./Components/HRDashboard/HrEmployeeHygine.jsx";
+import ManagerShippersLDocuments from "./Components/Agent-Manager/Manager-Shipper-L-Documents.jsx";
+import TruckerDocumentsPage from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
+import TruckerLDocuments from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
+import HrCreateTask from "./Components/HRDashboard/HrCreateTask.jsx";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -58,9 +68,6 @@ function App() {
       >
         {/* <Route path="dashboard" element={<HRDashboard />} /> */}
         <Route path="dashboard" element={<RoleBasedDashboard />} />
-
-
-
         <Route path="live-tracker" element={<ConsignmentTracker />} />
         <Route path="permissions" element={<UserPermission />} />
         <Route path="manage-users" element={<ManageUser />} />
@@ -77,7 +84,18 @@ function App() {
         <Route path="/AgentRevenueStatistics" element={<AgentRevenueStatistics />} />
         <Route path="/EmployeeHygiene" element={<EmployeeHygiene />} />
         <Route path="/ShippersLDocuments" element={<ShippersLDocuments />} />
-         <Route path="/PayrollPage" element={<PayrollPage />} />
+        <Route path="/PayrollPage" element={<PayrollPage />} />
+        <Route path="/ShiperLoadData" element={<ShiperLoadData />} />
+        <Route path="/HrDocumentsVerification" element={<HrDocumentsVerification />} />
+         <Route path="/Attendanceleave" element={<Attendanceleave />} />
+         <Route path="/TLTeams" element={<TLTeams/>} />
+        <Route path="/TruckerDocuments" element={<TruckerDocuments/>} />
+        <Route path="/HREmployeeHygine" element={<HREmployeeHygine/>} />
+        <Route path="/ManagerShippersLDocuments" element={<ManagerShippersLDocuments/>} />
+        <Route path="/TruckerLDocuments" element={<TruckerLDocuments/>} />
+        <Route path="/HrCreateTask" element={<HrCreateTask/>} />
+        
+
       </Route>
 {/* 
       Optional: Catch-all route */} 

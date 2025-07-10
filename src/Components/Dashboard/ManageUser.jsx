@@ -11,6 +11,7 @@ const ManageUser = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const usersPerPage = 10;
+  
 
     useEffect(() => {
     fetchUsers();
@@ -96,6 +97,24 @@ const ManageUser = () => {
     });
   };
 
+
+const handleRoleChange = async (empId, newRole) => {
+  console.log("PATCH /assign-role/", empId, "Payload:", { role: newRole });
+
+  try {
+    await axios.patch(
+      `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/assign-role/${empId}`,
+      { role: newRole },
+      { withCredentials: true }
+    );
+    fetchUsers(); // Refresh list
+    alert(`Role updated to ${newRole}`);
+  } catch (error) {
+    console.error('Failed to update role:', error);
+    alert(error?.response?.data?.message || 'Failed to update role. Please try again.');
+  }
+};
+
   return (
     <div className="p-6">
       {showModal && <AddUserModal onClose={() => { setShowModal(false); fetchUsers(); }} />}
@@ -104,7 +123,7 @@ const ManageUser = () => {
           className="border px-4 py-2 rounded-full text-blue-600 font-semibold"
           onClick={() => setShowModal(true)}
         >
-          + Add Admin
+          + Add User
         </button>
         <input
           type="text"
@@ -139,7 +158,21 @@ const ManageUser = () => {
                       <div className="text-xs text-gray-500">{user.email}</div>
                     </div>
                   </td>
-                  <td className="p-3 text-blue-600 font-medium">Admin</td>
+                  <td className="p-3">
+  <select
+    value={user.role}
+    onChange={(e) => handleRoleChange(user.empId, e.target.value)}
+    className="d px-2 py-1 text-sm"
+  >
+    <option value="superadmin">Superadmin</option>
+    <option value="admin">Admin</option>
+    <option value="employee">Employee</option>
+    <option value="hr">HR</option>
+    <option value="teamlead">Team Lead</option>
+    {/* Add more roles as needed */}
+  </select>
+</td>
+
                   <td className="p-3">
                     <div className="inline-flex bg-gray-200 rounded-full overflow-hidden text-xs font-medium">
                       <button

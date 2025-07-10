@@ -1,31 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 
 const DocumentsVerification = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-
-  const employees = [
-    {
-      id: "VPL001",
-      name: "Dhruv",
-      date: "17-06-2025",
-      status: "Pending",
-      verifiedBy: "HR Nupur",
-    },
-    {
-      id: "VPL002",
-      name: "Troy",
-      date: "16-06-2025",
-      status: "Rejected",
-      verifiedBy: "HR Nupur",
-    },
-    {
-      id: "VPL003",
-      name: "Eastern",
-      date: "17-06-2025",
-      status: "Approved",
-      verifiedBy: "HR Nupur",
-    },
-  ];
+  const [employees, setEmployees] = useState([]);
 
   const statusStyles = {
     Pending: "bg-yellow-400 text-black",
@@ -33,11 +11,144 @@ const DocumentsVerification = () => {
     Approved: "bg-green-600 text-white",
   };
 
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/");
+        const data = res.data.employees || [];
+
+        const mapped = data.map((emp) => {
+          const docs = [];
+
+          // Flatten document structure
+          if (emp.identityDocs) {
+            Object.entries(emp.identityDocs).forEach(([key, value]) => {
+              if (Array.isArray(value)) {
+                value.forEach((v) => docs.push({ label: key, url: v }));
+              } else {
+                docs.push({ label: key, url: value });
+              }
+            });
+          }
+
+          if (emp.previousCompanyDocs) {
+            Object.entries(emp.previousCompanyDocs).forEach(([key, value]) => {
+              if (Array.isArray(value)) {
+                value.forEach((v) => docs.push({ label: key, url: v }));
+              } else {
+                docs.push({ label: key, url: value });
+              }
+            });
+          }
+
+          // Set status
+          let status = "Pending";
+          if (emp.docVerified === true) status = "Approved";
+          else if (emp.docVerified === false) status = "Rejected";
+
+          return {
+            _id: emp._id,
+            id: emp.empId,
+            name: emp.employeeName,
+            date: new Date(emp.createdAt).toLocaleDateString("en-GB"),
+            status,
+            verifiedBy: "HR System",
+            raw: emp,
+            allDocs: docs,
+          };
+        });
+
+        setEmployees(mapped);
+      } catch (error) {
+        console.error("Fetch failed:", error);
+      }
+    };
+
+    fetchEmployees();
+  }, []);
+
+ const handleApprove = async () => {
+  const token = sessionStorage.getItem("authToken");
+  if (!token) {
+    alert("❌ You are not logged in.");
+    return;
+  }
+
+  try {
+    const res = await axios.patch(
+      `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${selectedEmployee.id}/doc-verified`,
+      { docVerified: true },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (res.data.success) {
+      alert("✅ Approved successfully!");
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp._id === selectedEmployee._id ? { ...emp, status: "Approved" } : emp
+        )
+      );
+      setSelectedEmployee(null);
+    }
+  } catch (error) {
+    console.error("❌ Approval failed:", error.response?.data || error.message);
+    alert("❌ Approval failed. See console for details.");
+  }
+};
+ const handleReject = async () => {
+  const token = sessionStorage.getItem("authToken");
+  if (!token) {
+    alert("❌ You are not logged in.");
+    return;
+  }
+
+  try {
+    const res = await axios.patch(
+      `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${selectedEmployee.id}/doc-verified`,
+      { docVerified: false },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (res.data.success) {
+      alert("❌ Rejected successfully!");
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp._id === selectedEmployee._id ? { ...emp, status: "Rejected" } : emp
+        )
+      );
+      setSelectedEmployee(null);
+    }
+  } catch (error) {
+    console.error("❌ Rejection failed:", error.response?.data || error.message);
+    alert("❌ Rejection failed. See console for details.");
+  }
+};
+
+  const handleDownloadAll = () => {
+    selectedEmployee.allDocs.forEach((doc) => {
+      const link = document.createElement("a");
+      link.href = `https://vpl-liveproject-1.onrender.com/${doc.url}`;
+      link.download = doc.label;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  };
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Documents Verification</h1>
 
-      {/* Table */}
       <table className="w-full bg-white shadow-md rounded-md overflow-hidden">
         <thead className="bg-gray-100 text-left">
           <tr>
@@ -46,12 +157,12 @@ const DocumentsVerification = () => {
             <th className="p-3">Uploaded Date</th>
             <th className="p-3">Status</th>
             <th className="p-3">Verified By</th>
-            <th className="p-3">Uploaded File</th>
+            <th className="p-3">Action</th>
           </tr>
         </thead>
         <tbody>
           {employees.map((emp) => (
-            <tr key={emp.id} className="border-t">
+            <tr key={emp._id} className="border-t">
               <td className="p-3">{emp.id}</td>
               <td className="p-3">{emp.name}</td>
               <td className="p-3">{emp.date}</td>
@@ -76,7 +187,7 @@ const DocumentsVerification = () => {
 
       {/* Modal */}
       {selectedEmployee && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-40 z-50 flex items-center justify-center">
           <div className="bg-white rounded-lg shadow-lg p-6 w-[90%] max-w-6xl relative">
             <button
               className="absolute top-2 right-4 text-xl font-bold"
@@ -88,31 +199,49 @@ const DocumentsVerification = () => {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div><strong>Employee ID:</strong> {selectedEmployee.id}</div>
               <div><strong>Name:</strong> {selectedEmployee.name}</div>
-              <div><strong>Department:</strong> Sales</div>
-              <div><strong>Designation:</strong> Manager/Sales</div>
-              <div><strong>Date of Joining:</strong> 01/01/2023</div>
-              <div><strong>Sex:</strong> Male</div>
-              <div><strong>Account Holder:</strong> Troy Smith</div>
-              <div><strong>Account No:</strong> 587412365478</div>
-              <div><strong>Email:</strong> Troy234@vpower.com</div>
-              <div><strong>Password:</strong> Troy@548*#</div>
-              <div><strong>Mobile:</strong> 9852136547</div>
-              <div><strong>Emergency:</strong> 8523697453</div>
+              <div><strong>Department:</strong> {selectedEmployee.raw.department}</div>
+              <div><strong>Designation:</strong> {selectedEmployee.raw.designation}</div>
+              <div><strong>Date of Joining:</strong> {new Date(selectedEmployee.raw.dateOfJoining).toLocaleDateString("en-GB")}</div>
+              <div><strong>Sex:</strong> {selectedEmployee.raw.sex}</div>
+              <div><strong>Email:</strong> {selectedEmployee.raw.email}</div>
+              <div><strong>Mobile:</strong> {selectedEmployee.raw.mobileNo}</div>
+              <div><strong>Emergency:</strong> {selectedEmployee.raw.emergencyNo}</div>
             </div>
 
             <h3 className="text-lg font-semibold mb-2">Documents</h3>
             <div className="flex flex-wrap gap-3 mb-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="w-32 h-20 bg-gray-200 flex items-center justify-center text-sm">
-                  Doc {i + 1}
-                </div>
+              {selectedEmployee.allDocs?.map((doc, i) => (
+                <a
+                  key={i}
+                  href={`https://vpl-liveproject-1.onrender.com/${doc.url}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-40 h-24 border rounded shadow flex items-center justify-center text-sm bg-gray-50 hover:bg-gray-100"
+                >
+                  {doc.label}
+                </a>
               ))}
             </div>
 
             <div className="flex justify-end gap-4">
-              <button className="bg-red-500 text-white px-4 py-2 rounded">Reject</button>
-              <button className="bg-green-600 text-white px-4 py-2 rounded">Approve</button>
-              <button className="bg-blue-500 text-white px-4 py-2 rounded">Download</button>
+              <button
+                className="bg-red-500 text-white px-4 py-2 rounded"
+                onClick={handleReject}
+              >
+                Reject
+              </button>
+              <button
+                className="bg-green-600 text-white px-4 py-2 rounded"
+                onClick={handleApprove}
+              >
+                Approve
+              </button>
+              <button
+                className="bg-blue-500 text-white px-4 py-2 rounded"
+                onClick={handleDownloadAll}
+              >
+                Download
+              </button>
             </div>
           </div>
         </div>

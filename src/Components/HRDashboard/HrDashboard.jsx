@@ -1,43 +1,6 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-
-// Use token from sessionStorage
-axios.defaults.headers.common["Authorization"] = `Bearer ${sessionStorage.getItem("authToken")}`;
-
-const Card = ({ title, children }) => (
-  <div className="bg-white rounded-2xl shadow p-4 flex flex-col">
-    <div>
-         <h1 className="text-lg font-bold text-gray-800 mb-2">{title}</h1>
-    </div>
-    <div>
- {children}
-    </div>
-   
-  </div>
-);
-
-const CircleIndicator = ({ percentage, color }) => (
-  <div className="relative w-24 h-24">
-    <svg className="absolute top-0 left-0 w-full h-full">
-      <circle cx="48" cy="48" r="40" strokeWidth="10" fill="none" stroke="#e5e7eb" />
-      <circle
-        cx="48"
-        cy="48"
-        r="40"
-        strokeWidth="10"
-        fill="none"
-        stroke={color}
-        strokeDasharray={251.2}
-        strokeDashoffset={251.2 - (251.2 * percentage) / 100}
-        strokeLinecap="round"
-        transform="rotate(-90 48 48)"
-      />
-    </svg>
-    <div className="absolute inset-0 flex items-center justify-center text-xl font-bold text-gray-700">
-      {percentage}%
-    </div>
-  </div>
-);
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { MoreHorizontal, User, Settings } from 'lucide-react';
 
 const HRDashboard = () => {
   const [employees, setEmployees] = useState([]);
@@ -54,18 +17,14 @@ const HRDashboard = () => {
         const empData = empRes.data?.employees || [];
         setEmployees(empData);
 
-        try {
-          const leaveRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/all");
-          const leaveData = Array.isArray(leaveRes.data) ? leaveRes.data : leaveRes.data.leaves || [];
-          setLeaves(leaveData);
-        } catch (err) {
-          console.error("Leave API error:", err.response?.data || err.message);
-          setLeaves([]);
-        }
+        const leaveRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/all");
+        const leaveData = Array.isArray(leaveRes.data) ? leaveRes.data : leaveRes.data.leaves || [];
+        setLeaves(leaveData);
 
         const today = new Date().toISOString().split("T")[0];
-        await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/attendance/my?date=${today}`);
-        setAttendance({ present: 30, absent: 3, onLeave: 2 });
+        const attRes = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/attendance?date=${today}`);
+        const attendanceStats = attRes.data;
+        setAttendance(attendanceStats);
 
         const notVerified = empData.filter(e => !e.docVerified);
         setPendingVerifications(notVerified.length);
@@ -74,146 +33,202 @@ const HRDashboard = () => {
         setTasks(taskRes.data.task || []);
 
         const breakRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/break/my-history");
-        const lateBreaks = breakRes.data.filter(b =>
-          b.duration && parseInt(b.duration.split(":"[0])) > 1
-        );
-        const hygieneScore = empData.length
-          ? Math.round(((empData.length - lateBreaks.length) / empData.length) * 100)
-          : 0;
+        const lateBreaks = breakRes.data.filter(b => b.duration && parseInt(b.duration.split(":")[0]) > 1);
+        const hygieneScore = empData.length ? Math.round(((empData.length - lateBreaks.length) / empData.length) * 100) : 0;
         setHygienePercentage(hygieneScore);
 
       } catch (error) {
-        console.error("Error fetching dashboard data", error);
+        console.error("Dashboard Data Fetch Error:", error);
       }
     };
     fetchData();
   }, []);
 
-  const total = employees.length;
-  const active = employees.filter(e => e.status === "active").length;
-  const notice = employees.filter(e => e.status === "notice").length;
-  const exited = employees.filter(e => e.status === "exited").length;
-  const newJoiners = employees.filter(e => e.joiningStatus === "new").length;
+  const CircularProgress = ({ percentage, size = 120, strokeWidth = 8, color = "green" }) => {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = radius * 2 * Math.PI;
+    const offset = circumference - (percentage / 100) * circumference;
 
-  const totalAttendance = attendance.present + attendance.absent + attendance.onLeave;
-  const attendancePercentage = totalAttendance ? Math.round((attendance.present / totalAttendance) * 100) : 0;
+    const colorClass = color === "green" ? "stroke-green-500" : "stroke-red-500";
+
+    return (
+      <div className="relative inline-flex items-center justify-center">
+        <svg width={size} height={size} className="transform -rotate-90">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            fill="none"
+            className="text-gray-200"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className={`transition-all duration-300 ${colorClass}`}
+            strokeLinecap="round"
+          />
+        </svg>
+        <span className="absolute text-2xl font-bold text-gray-800">
+          {percentage}%
+        </span>
+      </div>
+    );
+  };
 
   return (
-    <div className="grid md:grid-cols-3 gap-6 p-6 bg-gray-100 min-h-screen  ">
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 ">
-      <Card title="Total Employees">
- 
-        <div className="justify-center items-center  mt-10">
-            
-        <div className="flex justify-between text-sm text-gray-600 mt-2"><span>Total</span><span>{total}</span></div>
-        <div className="flex justify-between text-sm text-gray-600 mt-2"><span>Active</span><span>{active}</span></div>
-        <div className="flex justify-between text-sm text-gray-600 mt-2"><span>On-Notice</span><span>{notice}</span></div>
-        <div className="flex justify-between text-sm text-gray-600 mt-2"><span>Exited</span><span>{exited}</span></div>
-        </div>
-  
-      </Card>
-        </div>
-
-
-      <Card title="New Joiners">
-     
-        <div className="flex justify-between items-center mt-6">
-          <div><span className="text-3xl font-bold text-gray-800">{newJoiners}</span>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="grid lg:grid-cols-3 gap-6 mb-6">
+        {/* Total Employees */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Total Employees</h3>
+            <MoreHorizontal className="text-gray-400 cursor-pointer" size={20} />
           </div>
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-            <span className="text-blue-500 text-xl">⚙️</span>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Total</span>
+              <span className="font-semibold">{employees.length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Active</span>
+              <span className="font-semibold">{employees.filter(e => e.status === 'active').length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">On-Notice</span>
+              <span className="font-semibold">{employees.filter(e => e.status === 'notice').length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Exited</span>
+              <span className="font-semibold">{employees.filter(e => e.status === 'exited').length}</span>
+            </div>
           </div>
         </div>
-        <div >
-           <h1></h1> 
+
+        {/* New Joiners */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
+                <User className="text-white" size={16} />
+              </div>
+              <span className="text-lg font-semibold text-gray-800">New Joiners</span>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <Settings className="text-blue-600" size={24} />
+            </div>
+          </div>
+          <div className="text-4xl font-bold text-gray-800">
+            {employees.filter(e => {
+              const today = new Date();
+              const joinDate = new Date(e.createdAt);
+              const diff = (today - joinDate) / (1000 * 60 * 60 * 24);
+              return diff <= 30;
+            }).length}
+          </div>
         </div>
 
+        {/* Today's Attendance */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Today's Attendance</h3>
+            <MoreHorizontal className="text-gray-400 cursor-pointer" size={20} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="space-y-3">
+              <div className="flex justify-between min-w-[120px]">
+                <span className="text-gray-600">Present</span>
+                <span className="font-semibold">{attendance.present}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Absent</span>
+                <span className="font-semibold">{attendance.absent}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">On-Leave</span>
+                <span className="font-semibold">{attendance.onLeave}</span>
+              </div>
+            </div>
+            <div className="ml-8">
+              <CircularProgress percentage={Math.round((attendance.present / (attendance.present + attendance.absent + attendance.onLeave)) * 100)} />
+            </div>
+          </div>
+        </div>
+      </div>
 
-        
-      </Card>
-
-      <Card title="Leave Request">
-        <table className="text-xs w-full">
-          <thead>
-            <tr className="text-gray-500 border-b">
-              <th className="text-left p-1">Employee ID</th>
-              <th className="text-left p-1">Name</th>
-              <th className="text-left p-1">Type</th>
-              <th className="text-left p-1">Duration</th>
-            </tr>
-          </thead>
-          <tbody>
-            {leaves.map((entry, idx) => (
-              <tr key={idx} className="border-b text-gray-600">
-                <td className="p-1">{entry.empId}</td>
-                <td className="p-1">{entry.name}</td>
-                <td className="p-1">{entry.type}</td>
-                <td className="p-1">{entry.duration}</td>
+      {/* Leave Request Table */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">Leave Request</h3>
+          <MoreHorizontal className="text-gray-400 cursor-pointer" size={20} />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 text-blue-600 font-medium">Employee ID</th>
+                <th className="text-left py-3 px-4 text-blue-600 font-medium">Employee Name</th>
+                <th className="text-left py-3 px-4 text-blue-600 font-medium">Type of Leave</th>
+                <th className="text-left py-3 px-4 text-blue-600 font-medium">Leave Duration</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-            <div >
-           <h1></h1> 
+            </thead>
+            <tbody>
+              {leaves.slice(0, 8).map((leave, index) => (
+                <tr key={leave._id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                  <td className="py-3 px-4 text-gray-800">{leave.empId}</td>
+                  <td className="py-3 px-4 text-gray-800">{leave.empName}</td>
+                  <td className="py-3 px-4 text-gray-800">{leave.leaveType}</td>
+                  <td className="py-3 px-4 text-gray-800">{leave.fromDate} - {leave.toDate}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <button className="mt-2 text-sm text-blue-600 hover:underline ">View all</button>
-      </Card>
+        <div className="mt-4 flex justify-end">
+          <button className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+            View all
+          </button>
+        </div>
+      </div>
 
-      <Card title="Today's Attendance">
-        <div className="flex justify-between items-center">
-          <div>
-            <div className="text-sm text-gray-600">Present: {attendance.present}</div>
-            <div className="text-sm text-gray-600">Absent: {attendance.absent}</div>
-            <div className="text-sm text-gray-600">On-Leave: {attendance.onLeave}</div>
+      {/* Bottom Row */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Pending Verification */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">Pending Verification</h3>
+          <div className="flex flex-col items-center">
+            <div className="mb-4">
+              <CircularProgress percentage={Math.round(((employees.length - pendingVerifications) / employees.length) * 100)} size={100} />
+            </div>
+            <div className="text-3xl font-bold text-gray-800 mb-4">{pendingVerifications}</div>
+            <button className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+              View all
+            </button>
           </div>
-          <CircleIndicator percentage={attendancePercentage} color="#22c55e" />
-          
-        </div>
-            <div >
-           <h1></h1> 
-        </div>
-      </Card>
-
-      <Card title="Pending Verification">
-        <div className="flex justify-between items-center flex-col">
-          {/* <div className="text-3xl font-bold text-gray-700">{pendingVerifications}</div> */}
-          <CircleIndicator percentage={100} color="#22c55e" />
-         
-        </div>
-        <button className="mt-2 text-sm text-blue-600 hover:underline cursor-pointer">View all</button>
-            <div >
-           <h1></h1> 
-        </div>
-      </Card>
-
-      <Card title="Hygiene Compliance">
-        <div className="flex justify-between items-center">
-          <CircleIndicator percentage={hygienePercentage} color="#ef4444" />
-          <div className="text-sm text-gray-600">Daily Hygiene Log</div>
         </div>
 
-            <div >
-           <h1></h1> 
+        {/* Hygiene Compliance */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">Hygiene Compliance</h3>
+          <div className="flex flex-col items-center">
+            <div className="mb-4">
+              <CircularProgress percentage={hygienePercentage} size={100} color={hygienePercentage >= 80 ? 'green' : 'red'} />
+            </div>
+            <div className="text-center">
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">Monthly Hygiene Log</h4>
+            </div>
+          </div>
         </div>
-      </Card>
-
-      {/* <Card title="Tasks">
-        <div className="text-3xl font-bold text-gray-700">{tasks.length.toString().padStart(2, '0')}</div>
-        <div className="text-sm text-gray-600 mt-2">
-          {tasks.map((t, i) => (
-            <div key={i}>{t.taskTitle || `Task ${i + 1}`}</div>
-          ))}
-        </div>
-        <button className="mt-2 text-sm text-blue-600 hover:underline">View all</button>
-      </Card> */}
-
-
+      </div>
     </div>
   );
-
-    
-
 };
 
 export default HRDashboard;

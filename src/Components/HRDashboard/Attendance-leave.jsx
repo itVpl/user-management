@@ -1,23 +1,90 @@
-import React, { useState } from 'react';
-
+import React, { useState,useEffect } from 'react';
+import { GreenCheck,RedCrossCheck } from '../../assets/image';
+import axios from 'axios';
 
 const HRManagementSystem = () => {
   const [activeTab, setActiveTab] = useState('dailyAttendance');
   const [activeMenuItem, setActiveMenuItem] = useState('attendance');
 
-  const dailyAttendanceData = [
-    { date: '18-06-2025', empId: 'VPL001', name: 'Troy', logIn: '05:30 PM', logOut: '------', totalHrs: '', status: 'Present', dept: 'Sales', role: 'Admin' },
-    { date: '18-06-2025', empId: 'VPL002', name: 'Easton', logIn: '------', logOut: '------', totalHrs: '', status: 'Absent', dept: 'Sales', role: 'Admin' },
-    { date: '18-06-2025', empId: 'VPL003', name: 'Dhruv', logIn: '------', logOut: '------', totalHrs: '', status: 'On-Leave', dept: 'Sales', role: 'Executive' },
-    { date: '18-06-2025', empId: 'VPL004', name: 'Rishabh', logIn: '06:00 PM', logOut: '------', totalHrs: '', status: 'Half day', dept: 'Sales', role: 'Executive' },
-  ];
+const [dailyAttendanceData, setDailyAttendanceData] = useState([]);
+const [loadingAttendance, setLoadingAttendance] = useState(true);
+const [attendanceError, setAttendanceError] = useState(null);
 
-  const leaveRequestData = [
-    { date: '16-06-2025', empId: 'VPL001', name: 'Troy', from: '18-06-2025', to: '18-06-2025', type: 'CL', dept: 'Sales', role: 'Admin', status: 'pending' },
-    { date: '18-06-2025', empId: 'VPL002', name: 'Easton', from: '20-06-2025', to: '25-06-2025', type: 'CL', dept: 'Sales', role: 'Admin', status: 'approved' },
-    { date: '12-06-2025', empId: 'VPL003', name: 'Dhruv', from: '18-06-2025', to: '18-06-2025', type: 'CL', dept: 'Sales', role: 'Executive', status: 'rejected' },
-    { date: '10-06-2025', empId: 'VPL004', name: 'Rishabh', from: '21-06-2025', to: '------', type: 'SL', dept: 'Sales', role: 'Executive', status: 'pending' },
-  ];
+
+// for leave 
+const [leaveRequestData, setLeaveRequestData] = useState([]);
+const [loadingLeaves, setLoadingLeaves] = useState(true);
+const [leaveError, setLeaveError] = useState(null);
+
+
+useEffect(() => {
+  const fetchAttendance = async () => {
+    const userData = sessionStorage.getItem("user");
+    if (!userData) {
+      setAttendanceError("User not logged in");
+      setLoadingAttendance(false);
+      return;
+    }
+
+    const { empId } = JSON.parse(userData);
+    if (!empId) {
+      setAttendanceError("Invalid session");
+      setLoadingAttendance(false);
+      return;
+    }
+
+    try {
+      const today = new Date().toISOString().split("T")[0];
+
+      const res = await axios.get(
+        `https://vpl-liveproject-1.onrender.com/api/v1/attendance?date=${today}`,
+        {
+          withCredentials: true,
+          headers: {
+            // If token is needed: Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      setDailyAttendanceData(res.data.records || []);
+    } catch (error) {
+      console.error("Error fetching attendance:", error);
+      setAttendanceError("Could not fetch attendance.");
+    } finally {
+      setLoadingAttendance(false);
+    }
+  };
+
+  fetchAttendance();
+}, []);
+
+
+useEffect(() => {
+  const fetchLeaveRequests = async () => {
+    try {
+      const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/all", {
+        withCredentials: true,
+      });
+
+      console.log("Leave API response:", res.data);
+
+      if (Array.isArray(res.data.leaves)) {
+        setLeaveRequestData(res.data.leaves);
+      } else {
+        throw new Error("Unexpected response structure");
+      }
+
+    } catch (err) {
+      console.error("Error fetching leave requests", err);
+      setLeaveError("Could not fetch leave data.");
+    } finally {
+      setLoadingLeaves(false);
+    }
+  };
+
+  fetchLeaveRequests();
+}, []);
+
 
   const leaveBalanceData = [
     { empId: 'VPL001', name: 'Troy', casualLeave: '06', sickLeave: '03', totalLeave: '09' },
@@ -36,33 +103,61 @@ const HRManagementSystem = () => {
     return `px-3 py-1 rounded-full text-sm font-medium ${statusClasses[status] || 'bg-gray-200'}`;
   };
 
-  const getActionButtons = (status) => {
-    if (status === 'pending') {
-      return (
-        <div className="flex gap-2">
-          <button className="text-green-600 hover:text-green-800">
-            <Check size={16} />
-          </button>
-          <button className="text-red-600 hover:text-red-800">
-            <X size={16} />
-          </button>
-        </div>
+const getActionButtons = (status, leaveId) => {
+  const handleLeaveAction = async (newStatus) => {
+    const reviewer = JSON.parse(sessionStorage.getItem("user"))?.empId;
+    if (!reviewer) return alert("Session expired");
+
+    try {
+      await axios.patch(
+        `https://vpl-liveproject-1.onrender.com/api/v1/leave/status/${leaveId}`,
+        {
+          status: newStatus,
+          reviewedBy: reviewer,
+        },
+        { withCredentials: true }
       );
+
+      // ✅ Update UI immediately
+      setLeaveRequestData(prev =>
+        prev.map(req =>
+          req._id === leaveId ? { ...req, status: newStatus } : req
+        )
+      );
+    } catch (err) {
+      console.error("Leave status update failed", err);
+      alert("Failed to update leave status");
     }
-    return null;
   };
 
-  const getLeaveStatusBadge = (status) => {
-    const statusClasses = {
-      'approved': 'bg-green-600 text-white px-3 py-1 rounded text-sm',
-      'rejected': 'bg-red-600 text-white px-3 py-1 rounded text-sm',
-      'pending': null,
-    };
-    
-    if (status === 'approved') return <span className={statusClasses[status]}>Approved</span>;
-    if (status === 'rejected') return <span className={statusClasses[status]}>Rejected</span>;
-    return getActionButtons(status);
+  if (status === 'pending') {
+    return (
+      <div className="flex gap-2">
+        <button onClick={() => handleLeaveAction("approved")}>
+          <img src={GreenCheck} alt="Approve" className="w-5 h-5" />
+        </button>
+        <button onClick={() => handleLeaveAction("rejected")}>
+          <img src={RedCrossCheck} alt="Reject" className="w-5 h-5" />
+        </button>
+      </div>
+    );
+  }
+  return <span className={`text-xs font-medium ${status === 'approved' ? 'text-green-600' : 'text-red-600'}`}>{status}</span>;
+};
+
+const getLeaveStatusBadge = (status, row) => {
+  const statusClasses = {
+    approved: 'bg-green-600 text-white px-3 py-1 rounded text-sm',
+    rejected: 'bg-red-600 text-white px-3 py-1 rounded text-sm',
   };
+
+  if (status === 'approved' || status === 'rejected') {
+    return <span className={statusClasses[status]}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
+  }
+
+  // For pending → show approve/reject action buttons
+  return getActionButtons(status, row._id);
+};
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -84,21 +179,29 @@ const HRManagementSystem = () => {
                 </tr>
               </thead>
               <tbody>
-                {dailyAttendanceData.map((row, index) => (
-                  <tr key={index} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4 text-gray-700">{row.date}</td>
-                    <td className="py-3 px-4 text-blue-600">{row.empId}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.name}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.logIn}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.logOut}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.totalHrs}</td>
-                    <td className="py-3 px-4">
-                      <span className={getStatusBadge(row.status)}>{row.status}</span>
-                    </td>
-                    <td className="py-3 px-4 text-gray-700">{row.dept}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.role}</td>
-                  </tr>
-                ))}
+      {loadingAttendance ? (
+  <tr><td colSpan="9" className="text-center py-4">Loading...</td></tr>
+) : attendanceError ? (
+  <tr><td colSpan="9" className="text-center py-4 text-red-500">{attendanceError}</td></tr>
+) : dailyAttendanceData.length === 0 ? (
+  <tr><td colSpan="9" className="text-center py-4">No attendance data found.</td></tr>
+) : (
+  dailyAttendanceData.map((row, index) => (
+    <tr key={index} className="border-b hover:bg-gray-50">
+      <td className="py-3 px-4 text-gray-700">{row.date}</td>
+      <td className="py-3 px-4 text-blue-600">{row.empId}</td>
+      <td className="py-3 px-4 text-gray-700">{row.name}</td>
+      <td className="py-3 px-4 text-gray-700">{row.logIn || '------'}</td>
+      <td className="py-3 px-4 text-gray-700">{row.logOut || '------'}</td>
+      <td className="py-3 px-4 text-gray-700">{row.totalHrs || ''}</td>
+      <td className="py-3 px-4">
+        <span className={getStatusBadge(row.status)}>{row.status}</span>
+      </td>
+      <td className="py-3 px-4 text-gray-700">{row.dept}</td>
+      <td className="py-3 px-4 text-gray-700">{row.role}</td>
+    </tr>
+  ))
+)}
               </tbody>
             </table>
           </div>
@@ -122,21 +225,29 @@ const HRManagementSystem = () => {
                 </tr>
               </thead>
               <tbody>
-                {leaveRequestData.map((row, index) => (
-                  <tr key={index} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4 text-gray-700">{row.date}</td>
-                    <td className="py-3 px-4 text-blue-600">{row.empId}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.name}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.from}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.to}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.type}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.dept}</td>
-                    <td className="py-3 px-4 text-gray-700">{row.role}</td>
-                    <td className="py-3 px-4">
-                      {getLeaveStatusBadge(row.status)}
-                    </td>
-                  </tr>
-                ))}
+                {loadingLeaves ? (
+  <tr><td colSpan="9" className="text-center py-4">Loading leaves...</td></tr>
+) : leaveError ? (
+  <tr><td colSpan="9" className="text-center py-4 text-red-500">{leaveError}</td></tr>
+) : leaveRequestData.length === 0 ? (
+  <tr><td colSpan="9" className="text-center py-4">No leave requests found.</td></tr>
+) : (
+  leaveRequestData.map((row, index) => (
+<tr key={index} className="border-b hover:bg-gray-50">
+  <td className="py-3 px-4 text-gray-700">{row.createdAt?.slice(0, 10) || '-'}</td>
+  <td className="py-3 px-4 text-blue-600">{row.empId}</td>
+  <td className="py-3 px-4 text-gray-700">{row.empName || 'N/A'}</td>
+  <td className="py-3 px-4 text-gray-700">{row.fromDate?.slice(0, 10)}</td>
+  <td className="py-3 px-4 text-gray-700">{row.toDate?.slice(0, 10)}</td>
+  <td className="py-3 px-4 text-gray-700">{row.leaveType}</td>
+  <td className="py-3 px-4 text-gray-700">{row.department || 'N/A'}</td>
+  <td className="py-3 px-4 text-gray-700">{row.role || 'N/A'}</td>
+  <td className="py-3 px-4">
+    {getLeaveStatusBadge(row.status, row)}
+  </td>
+</tr>
+  ))
+)}
               </tbody>
             </table>
           </div>

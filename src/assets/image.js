@@ -54,8 +54,10 @@ import BlueInbox from './Icons super admin/Nav Bar/Blue/inbox-blue.png'
 import WhiteInbox from './Icons super admin/Nav Bar/White/inbox-white.png'
 import ChatWhite from './Icons super admin/Nav Bar/White/chat-white.png'
 import ChatBlue from './Icons super admin/Nav Bar/Blue/chat-blue.png'
-
-
+import GreenCheck from './GreenCheck.png'
+import RedCrossCheck from './RedCrossCheck.png'
+import AttandaceCalendar from './attendance-calendar.png'
+import laptop from './laptop.png'
 
 
 
@@ -80,6 +82,6 @@ export {
   DashboardImage,LiveTracker,ManageUser,ManageModule,LogOut,Fleet,BackButtonLeft,BackButtonRight,
   WhiteDashboard,locationMarker,Checkcircle,RedTruck,ArrowDown,ArrowUp,
   WhiteLiveTracker,WhiteManageUser,WhiteUserPermission,WhiteAnalytics,WhiteFleet,WhiteLoadBoard,WhiteManageModule,
-  MenuEditIcon,SearchIcon,AdminIcon,DailyTarget,DailyTargetWhite,BlueCall,WhiteCall,BackArrow,WhiteRevenueStatic,BlueRevenueStatic,BlueInbox,WhiteInbox
-
+  MenuEditIcon,SearchIcon,AdminIcon,DailyTarget,DailyTargetWhite,BlueCall,WhiteCall,BackArrow,WhiteRevenueStatic,BlueRevenueStatic,BlueInbox,WhiteInbox,
+ GreenCheck,RedCrossCheck,AttandaceCalendar,laptop
 };
