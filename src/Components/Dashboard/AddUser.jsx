@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import './AddUser.css';
 
 const AddUserModal = ({ onClose }) => {
   const initialFields = [
