@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { ArrowLeft, Download, X } from 'lucide-react';
-import AddTruckerForm from './AddTrucker';
+import AddTruckerForm from './AddCustomer';
 
 const ShippersLDocuments = () => {
   const [shippers, setShippers] = useState([]);
@@ -110,7 +110,7 @@ const ShippersLDocuments = () => {
             onClick={() => setShowAddTruckerForm(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            + Add Trucker
+            + Add Customer
           </button>
         </div>
 

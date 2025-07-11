@@ -88,26 +88,26 @@ const TruckerLDocuments = () => {
           <div className="flex justify-between items-center mb-4">
             <button
               onClick={() => setSelectedTrucker(null)}
-              className="text-blue-600 flex items-center gap-2 hover:underline"
+              className="text-blue-600 flex items-center gap-2 hover:underline cursor-pointer"
             >
-              <FaArrowLeft /> Back
+              <FaArrowLeft /> 
             </button>
             <div className="flex gap-2">
               <button
                 onClick={() => updateTruckerStatus("approved")}
-                className="bg-green-600 text-white text-sm px-3 py-1 rounded flex items-center gap-1 hover:bg-green-700"
+                className="bg-green-600 text-white text-sm px-3 py-1 rounded flex items-center gap-1 hover:bg-green-700 cursor-pointer"
               >
                 <FaCheck /> Approve
               </button>
               <button
                 onClick={() => updateTruckerStatus("rejected")}
-                className="bg-red-600 text-white text-sm px-3 py-1 rounded flex items-center gap-1 hover:bg-red-700"
+                className="bg-red-600 text-white text-sm px-3 py-1 rounded flex items-center gap-1 hover:bg-red-700 cursor-pointer"
               >
                 <FaTimes /> Reject
               </button>
               <button
                 onClick={() => updateTruckerStatus("resubmit")}
-                className="bg-blue-500 text-white text-sm px-3 py-1 rounded flex items-center gap-1 hover:bg-blue-600"
+                className="bg-blue-500 text-white text-sm px-3 py-1 rounded flex items-center gap-1 hover:bg-blue-600 cursor-pointer"
               >
                 <FaRedo /> Re-submit
               </button>

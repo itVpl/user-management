@@ -20,7 +20,7 @@ const AccountantDashboard = () => {
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-sans">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-0 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         {summary.map((item, idx) => (
           <div key={idx} className="bg-white rounded-xl p-4 shadow-md flex flex-col items-center">
             <div className="text-4xl mb-2">{item.icon}</div>
@@ -61,7 +61,7 @@ const AccountantDashboard = () => {
         </div>
 
         {/* Calendar */}
-        <div className="bg-white rounded-xl p-4 shadow-md">
+        {/* <div className="bg-white rounded-xl p-4 shadow-md">
           <h2 className="text-lg font-semibold mb-4">Upcoming Due Dates</h2>
           <div className="text-sm text-gray-700">June 2025</div>
           <div className="grid grid-cols-7 gap-1 mt-2 text-center text-xs">
@@ -74,7 +74,7 @@ const AccountantDashboard = () => {
               </div>
             ))}
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );

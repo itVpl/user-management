@@ -9,6 +9,7 @@ import ShippersLDocuments from "./AgentDashboard/Shipper-L-Document";
 import TLDashboard from "./TLDashboard/TLDashboard";
 import CMTDashboard from "./CMT/CMTDashbaord";
 import CMTMDashboard from "./CMT-Manager/CMT-MDashboard";
+import AccountantDashboard from "./Accountant/AccountantDashboard";
 
 const RoleBasedDashboard = () => {
   const userData = sessionStorage.getItem("user");
@@ -28,7 +29,7 @@ const RoleBasedDashboard = () => {
     case "admin":
       return (
         <>
-          <HRDashboard />
+          <TLDashboard/>
         </>
       );
 
