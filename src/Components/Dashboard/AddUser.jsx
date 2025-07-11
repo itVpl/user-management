@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 
 const AddUserModal = ({ onClose }) => {
+  
   const initialFields = [
     { name: 'empId', placeholder: 'Employee ID', required: true },
     { name: 'password', placeholder: 'Create Password', required: true },
