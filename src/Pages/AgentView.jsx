@@ -9,6 +9,8 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 
+
+
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
 // Chart Data
