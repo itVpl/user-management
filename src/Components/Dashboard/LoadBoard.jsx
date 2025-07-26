@@ -149,7 +149,15 @@ const LoadBoard = () => {
                     </thead>
                     <tbody className="text-gray-800">
                         {loading ? (
-                            <tr><td colSpan="11" className="text-center py-8">Loading...</td></tr>
+                            // <tr><td colSpan="11" className="text-center py-8">Loading...</td></tr>
+                            <tr>
+                                <td colSpan="11" className="text-center py-8">
+                                    <div className="flex justify-center items-center gap-3">
+                                        <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                        <span className="text-gray-600 text-sm font-medium">Loading...</span>
+                                    </div>
+                                </td>
+                            </tr>
                         ) : availableLoads.length === 0 ? (
                             <tr><td colSpan="11" className="text-center py-8">No loads found</td></tr>
                         ) : (
@@ -602,7 +610,7 @@ const LoadBoard = () => {
                                         </div>
                                     </div>
 
-                                    
+
 
                                     {/* Row 8 */}
                                     <div className="flex gap-4">

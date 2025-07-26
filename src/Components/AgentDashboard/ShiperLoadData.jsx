@@ -1,6 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+
+
 
 const ShiperLoadData = () => {
+  const [Loading, setLoading] = useState(true);
+  useEffect(() => {
+    // Simulate data fetch delay
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 1000); // 1 second delay
+
+    return () => clearTimeout(timer);
+  }, []);
   const shipmentData = [
     { id: 'CNU1234567', loadId: 'L00331', weight: '300Lbs', vehicle: 'Flatbed', from: 'Jaipur', to: 'Himachal', pickupDate: 'Flatbed', status: 'Pending' },
     { id: 'CNU1234567', loadId: 'L00331', weight: '300Lbs', vehicle: 'Flatbed', from: 'Norway', to: 'Edenberg', pickupDate: 'Flatbed', status: 'Assigned' },
@@ -22,6 +33,14 @@ const ShiperLoadData = () => {
       default: return 'bg-gray-200 text-gray-800';
     }
   };
+    
+if (Loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
 
 

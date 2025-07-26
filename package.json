@@ -12,6 +12,7 @@
   "dependencies": {
     "@fontsource/poppins": "^5.2.6",
     "@tailwindcss/vite": "^4.1.10",
+    "alertifyjs": "^1.14.0",
     "axios": "^1.10.0",
     "chart.js": "^4.5.0",
     "leaflet": "^1.9.4",

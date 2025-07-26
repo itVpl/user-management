@@ -14,9 +14,27 @@ import AccountantDashboard from "./Accountant/AccountantDashboard";
 const RoleBasedDashboard = () => {
   const userData = sessionStorage.getItem("user");
 
-  if (!userData) return <Navigate to="/" />;
+  if (!userData) {
+    return <Navigate to="/" />;
+  }
 
-  const role = JSON.parse(userData)?.role;
+  const user = JSON.parse(userData);
+  const role = user?.role;
+  const department = user?.department;
+
+  // Temporary fallback for testing
+  if (!role && !department) {
+    return <AgentDashboard />;
+  }
+
+  // Check department first, then role
+  if (department === "HR" || department === "hr") {
+    return (
+      <>
+        <HRDashboard />
+      </>
+    );
+  }
 
   switch (role) {
     case "superadmin":
@@ -33,7 +51,10 @@ const RoleBasedDashboard = () => {
         </>
       );
 
+
+
     default:
+      console.log("Rendering AgentDashboard for role:", role);
       return <AgentDashboard />;
   }
 };

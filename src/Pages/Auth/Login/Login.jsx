@@ -11,10 +11,12 @@ function Login({ setIsAuthenticated }) {
   const [success, setSuccess] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+      setLoading(true);
     try {
       const res = await axios.post(
         "https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/login",
@@ -47,6 +49,9 @@ function Login({ setIsAuthenticated }) {
       setErrorMessage(err.response?.data?.message || "Something went wrong");
       console.log("Login error:", err);
     }
+    finally {
+    setLoading(false); // always stop loader
+  }
   };
 
   useEffect(() => {
@@ -126,12 +131,24 @@ function Login({ setIsAuthenticated }) {
             <a href="#" className="text-blue-500 hover:underline">Forgot Password?</a>
           </div>
 
-          <button
+          {/* <button
             type="submit"
             className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition cursor-pointer"
           >
             Log In
-          </button>
+          </button> */}
+          <button
+  type="submit"
+  disabled={loading}
+  className={`w-full flex justify-center items-center gap-2 bg-blue-500 text-white py-2 rounded-md transition cursor-pointer ${
+    loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-600'
+  }`}
+>
+  {loading && (
+    <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+  )}
+  {loading ? 'Logging in...' : 'Log In'}
+</button>
         </form>
       </div>
     </div>

@@ -4,6 +4,7 @@ import axios from "axios";
 const DocumentsVerification = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const statusStyles = {
     Pending: "bg-yellow-400 text-black",
@@ -13,6 +14,7 @@ const DocumentsVerification = () => {
 
   useEffect(() => {
     const fetchEmployees = async () => {
+    setLoading(true);
       try {
         const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/");
         const data = res.data.employees || [];
@@ -61,6 +63,9 @@ const DocumentsVerification = () => {
         setEmployees(mapped);
       } catch (error) {
         console.error("Fetch failed:", error);
+      }
+      finally{
+        setLoading(false);
       }
     };
 
@@ -161,6 +166,39 @@ const DocumentsVerification = () => {
           </tr>
         </thead>
         <tbody>
+  {loading ? (
+    <tr>
+      <td colSpan="6" className="text-center py-5">
+        <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+      </td>
+    </tr>
+  ) : (
+    employees.map((emp) => (
+      <tr key={emp._id} className="border-t">
+        <td className="p-3">{emp.id}</td>
+        <td className="p-3">{emp.name}</td>
+        <td className="p-3">{emp.date}</td>
+        <td className="p-3">
+          <span className={`px-2 py-1 rounded ${statusStyles[emp.status]}`}>
+            {emp.status}
+          </span>
+        </td>
+        <td className="p-3">{emp.verifiedBy}</td>
+        <td className="p-3">
+          <button
+            onClick={() => setSelectedEmployee(emp)}
+            className="bg-blue-500 text-white px-3 py-1 rounded"
+          >
+            Preview
+          </button>
+        </td>
+      </tr>
+    ))
+  )}
+</tbody>
+
+        {/* <tbody>
+          
           {employees.map((emp) => (
             <tr key={emp._id} className="border-t">
               <td className="p-3">{emp.id}</td>
@@ -182,7 +220,7 @@ const DocumentsVerification = () => {
               </td>
             </tr>
           ))}
-        </tbody>
+        </tbody> */}
       </table>
 
       {/* Modal */}

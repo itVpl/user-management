@@ -10,15 +10,20 @@ const ShippersLDocuments = () => {
   const [reasonText, setReasonText] = useState('');
   const [showAddTruckerForm, setShowAddTruckerForm] = useState(false);
   const [updatedUser, setUpdatedUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // ✅ Fetch shippers from API
   useEffect(() => {
+    
     const fetchShippers = async () => {
+      setLoading(true); //
       try {
         const res = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/shippers');
         setShippers(res.data.data || []);
       } catch (error) {
         console.error('❌ Failed to fetch shippers:', error);
+      } finally{
+        setLoading(false);
       }
     };
     fetchShippers();
@@ -114,7 +119,11 @@ const ShippersLDocuments = () => {
           </button>
         </div>
 
-        {!selectedShipment ? (
+        {loading ? (
+  <div className="flex justify-center items-center py-20">
+    <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+  </div>
+) : !selectedShipment ? (
           <div className="bg-white rounded-lg shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full">

@@ -19,8 +19,8 @@ import {
   WhiteAnalytics,
   WhiteFleet,
   WhiteLoadBoard,
-  WhiteManageModule,ChatWhite,ChatBlue,
-  WhiteDashboard,DailyTarget,DailyTargetWhite,BlueCall,WhiteCall,WhiteRevenueStatic,BlueRevenueStatic,BlueInbox,WhiteInbox
+  WhiteManageModule, ChatWhite, ChatBlue,
+  WhiteDashboard, DailyTarget, DailyTargetWhite, BlueCall, WhiteCall, WhiteRevenueStatic, BlueRevenueStatic, BlueInbox, WhiteInbox
 } from "../assets/image";
 import logo from "../assets/LogoFinal.png";
 
@@ -38,18 +38,19 @@ const menuItems = [
   { name: "Chat", icon: ChatBlue, whiteIcon: ChatWhite, path: "/Chat" },
   { name: "Email", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/Inbox" },
   { name: "Revenue & Satatistics", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AgentRevenueStatistics" },
-   { name: "Employee Hygiene", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/EmployeeHygiene" },
+  { name: "Employee Hygiene", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/EmployeeHygiene" },
   { name: "Pay Rolls", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/PayrollPage" },
   { name: "Shipper", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ShippersLDocuments" },
   { name: "Shipper Load Data", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ShiperLoadData" },
   { name: "HR Document Verification", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrDocumentsVerification" },
-   { name: "Attendance Leave", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/Attendanceleave" },
-   { name: "Team", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TLTeams" },
-    { name: "Trukers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerDocuments" },
-    { name: "Employees Hygine", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HREmployeeHygine" },
-    { name: "Manager L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ManagerShippersLDocuments" },
-    { name: "Trucker L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerLDocuments" },
-    { name: "Task", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrCreateTask" },
+  { name: "Attendance Leave", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/Attendanceleave" },
+  { name: "Team", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TLTeams" },
+  { name: "Trukers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerDocuments" },
+  { name: "Employees Hygine", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HREmployeeHygine" },
+  { name: "Manager L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ManagerShippersLDocuments" },
+  { name: "Trucker L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerLDocuments" },
+  { name: "Task", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrCreateTask" },
+  { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/rate-request" },
 
 ];
 
@@ -59,65 +60,65 @@ const Sidebar = () => {
 
   const toggleSidebar = () => setIsExpanded(!isExpanded);
 
-const handleLogout = async () => {
-  try {
-    await axios.post(
-      "https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/logout",
-      {},
-      { withCredentials: true } // This ensures cookies are sent and cleared
-    );
-
-    // Clear local and session storage
-    localStorage.clear();
-    sessionStorage.clear();
-
-    // Redirect to login/home page
-    window.location.href = "/";
-  } catch (error) {
-    console.error("Logout failed:", error);
-    alert("Failed to logout. Please try again.");
-  }
-};
-useEffect(() => {
-  const fetchModules = async () => {
+  const handleLogout = async () => {
     try {
-      const user = JSON.parse(localStorage.getItem("user") || sessionStorage.getItem("user"));
-      const allowedModuleIds = user?.allowedModules?.map(String) || [];
+      await axios.post(
+        "https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/logout",
+        {},
+        { withCredentials: true } // This ensures cookies are sent and cleared
+      );
 
-      // console.log("👤 Logged in user:", user);
-      // console.log("✅ allowedModuleIds:", allowedModuleIds);
+      // Clear local and session storage
+      localStorage.clear();
+      sessionStorage.clear();
 
-      // const token = localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
-
-const res = await fetch("https://vpl-liveproject-1.onrender.com/api/v1/module", {
-  credentials: "include", // ✅ needed for cross-origin
-});
-
-      const data = await res.json();
-      // console.log("📦 All Modules from API:", data.modules);
-
-      if (data.success) {
-        const allowedModuleNames = data.modules
-          .filter((mod) => allowedModuleIds.includes(mod._id.toString()))
-          .map((mod) => mod.name);
-
-        // console.log("🎯 Allowed module names for sidebar:", allowedModuleNames);
-
-        const matchedMenus = menuItems.filter((item) =>
-          allowedModuleNames.includes(item.name)
-        );
-
-        // console.log("📋 Matched menu items to render:", matchedMenus);
-
-        setFilteredMenuItems(matchedMenus);
-      }
-    } catch (err) {
-      console.error("❌ Failed to fetch modules:", err);
+      // Redirect to login/home page
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Failed to logout. Please try again.");
     }
   };
+  useEffect(() => {
+    const fetchModules = async () => {
+      try {
+        const user = JSON.parse(localStorage.getItem("user") || sessionStorage.getItem("user"));
+        const allowedModuleIds = user?.allowedModules?.map(String) || [];
 
-  fetchModules();
-}, []);
+        // console.log("👤 Logged in user:", user);
+        // console.log("✅ allowedModuleIds:", allowedModuleIds);
+
+        // const token = localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
+
+        const res = await fetch("https://vpl-liveproject-1.onrender.com/api/v1/module", {
+          credentials: "include", // ✅ needed for cross-origin
+        });
+
+        const data = await res.json();
+        // console.log("📦 All Modules from API:", data.modules);
+
+        if (data.success) {
+          const allowedModuleNames = data.modules
+            .filter((mod) => allowedModuleIds.includes(mod._id.toString()))
+            .map((mod) => mod.name);
+
+          // console.log("🎯 Allowed module names for sidebar:", allowedModuleNames);
+
+          const matchedMenus = menuItems.filter((item) =>
+            allowedModuleNames.includes(item.name)
+          );
+
+          // console.log("📋 Matched menu items to render:", matchedMenus);
+
+          setFilteredMenuItems(matchedMenus);
+        }
+      } catch (err) {
+        console.error("❌ Failed to fetch modules:", err);
+      }
+    };
+
+    fetchModules();
+  }, []);
 
   return (
     <div className={`fixed top-0 left-0 h-screen bg-white shadow-md z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-35"}`}>
@@ -136,8 +137,7 @@ const res = await fetch("https://vpl-liveproject-1.onrender.com/api/v1/module", 
               key={idx}
               title={!isExpanded ? item.name : ""}
               className={({ isActive }) =>
-                `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${
-                  isActive ? "bg-blue-500 text-white" : "hover:bg-gray-100 text-gray-700"
+                `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "bg-blue-500 text-white" : "hover:bg-gray-100 text-gray-700"
                 }`
               }
             >

@@ -82,7 +82,11 @@ const EmployeeHygiene = () => {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   };
 
-  if (loading) return <div className="text-center py-10">Loading...</div>;
+  if (loading) return <div className="flex justify-center items-center h-60">
+        <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        {/* animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto */}
+        <span className="ml-2 text-gray-600">Loading...</span>
+      </div>
   if (!score) return <div className="text-center py-10">No data available</div>;
 
   return (

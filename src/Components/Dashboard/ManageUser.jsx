@@ -10,6 +10,7 @@ const ManageUser = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
   const usersPerPage = 10;
   
 
@@ -18,14 +19,17 @@ const ManageUser = () => {
   }, []);
 
   const fetchUsers = () => {
+     setLoading(true);
     axios
       .get('https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser', { withCredentials: true })
-      .then(res => setUsers(res.data.employees || []))
-      .catch(err => console.error('Error fetching users:', err));
+      .then(res => {
+        setUsers(res.data.employees || []) 
+      setLoading(false);
+      })
+      .catch(err => { console.error('Error fetching users:', err)
+        setLoading(false);
+      });
   };
- 
-
-
   useEffect(() => {
     axios
       .get('https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser', { withCredentials: true })
@@ -117,6 +121,8 @@ const handleRoleChange = async (empId, newRole) => {
 
   return (
     <div className="p-6">
+      
+
       {showModal && <AddUserModal onClose={() => { setShowModal(false); fetchUsers(); }} />}
       <div className="flex justify-between items-center mb-4">
              <button
@@ -133,7 +139,14 @@ const handleRoleChange = async (empId, newRole) => {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
-
+ {loading ? (
+      <div className="flex justify-center items-center h-60">
+        <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        {/* animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto */}
+        <span className="ml-2 text-gray-600">Loading users...</span>
+      </div>
+    ) : (
+            <>
       <table className="w-full text-sm text-left">
         <thead className="bg-blue-50">
           <tr>
@@ -282,6 +295,8 @@ const handleRoleChange = async (empId, newRole) => {
           </button>
         </div>
       </div>
+      </>
+    )}
     </div>
   );
 };

@@ -10,10 +10,25 @@ const TruckerLDocuments = () => {
   useEffect(() => {
     const fetchTruckers = async () => {
       try {
-        const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/truckers");
+        // Get current user's empId from session/local storage
+        const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
+        const currentUser = userStr ? JSON.parse(userStr) : null;
+        const empId = currentUser?.empId;
+        
+        if (!empId) {
+          console.error('User not logged in or empId not found');
+          setTruckers([]);
+          return;
+        }
+        
+        // Fetch truckers with user-specific filtering
+        const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/truckers?addedBy=${empId}`, {
+          withCredentials: true
+        });
         setTruckers(res.data.data || []);
       } catch (err) {
         console.error("❌ Failed to fetch truckers:", err);
+        setTruckers([]);
       }
     };
     fetchTruckers();

@@ -125,17 +125,6 @@ const toggleExpand = (item) => {
 
             {expandedId === item.id && (
               <div className="mt-4">
-                {/* <div className="text-sm text-gray-600 mb-2 flex justify-between items-center">
-                  <span>Delivery Progress</span>
-                  <span>{item.deliveryProgress}%</span>
-                </div> */}
-                {/* <div className="w-full h-2 rounded-full bg-gray-200 mb-4">
-                  <div
-                    className="h-2 bg-blue-500 rounded-full"
-                    style={{ width: `${item.deliveryProgress}%` }}
-                  ></div>
-                </div> */}
-
                 <div className="space-y-4">
                   {item.status.map((step, index) => (
                     <div key={index} className="flex items-start gap-3">
@@ -166,25 +155,28 @@ const toggleExpand = (item) => {
       </div>
 
       {/* Map */}
-      <div className="flex-grow relative -z-10 top-[26px]" >
-        <MapContainer center={[20.6, 78.9]} zoom={5} scrollWheelZoom={true} className="w-full h-full">
-          <TileLayer
-            attribution='&copy; OpenStreetMap contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-         {filteredConsignments.map((truck) => (
-    <Marker
-      key={truck.id}
-      position={[truck.lat, truck.lng]}
-      icon={truckIcon}
+      <div className="flex-grow relative z-10 top-[26px]">
+  <MapContainer
+    center={[39.8283, -98.5795]}
+    zoom={4}
+    scrollWheelZoom={true}
+    zoomControl={true}
+    className="w-full h-full"
+  >
+    <TileLayer
+      attribution='&copy; OpenStreetMap contributors'
+      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
     />
-  ))}
-  {selectedShipment && (
-    <RecenterMap lat={selectedShipment.lat} lng={selectedShipment.lng} />
-  )}
-        </MapContainer>
+    {filteredConsignments.map((truck) => (
+      <Marker key={truck.id} position={[truck.lat, truck.lng]} icon={truckIcon} />
+    ))}
+    {selectedShipment && (
+      <RecenterMap lat={selectedShipment.lat} lng={selectedShipment.lng} />
+    )}
+  </MapContainer>
+</div>
 
-      </div>
+      
     </div>
   );
 }

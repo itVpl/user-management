@@ -119,7 +119,15 @@ const ProfilePage = () => {
     const loginTime = filteredSessions[0]?.loginTime || "--";
     const logoutTime = filteredSessions[filteredSessions.length-1]?.logoutTime || "--";
 
-    if (!employee) return <div className="p-6">Loading profile...</div>;
+    // if (!employee) return <div className="p-6">Loading profile...</div>;
+    if (!employee) {
+  return (
+    <div className="flex justify-center items-center h-screen">
+      <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+}
+
 
     return (
         <div className="p-6 pt-2 bg-gradient-to-b from-slate-100 to-blue-50 min-h-screen font-sans">
