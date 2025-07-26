@@ -32,6 +32,7 @@ const menuItems = [
   { name: "Report Analysis", icon: Analytics, whiteIcon: WhiteAnalytics, path: "/analytics" },
   { name: "Fleet", icon: Fleet, whiteIcon: WhiteFleet, path: "/Fleet" },
   { name: "LoadBoard", icon: LoadBoard, whiteIcon: WhiteLoadBoard, path: "/load-board" },
+  { name: "Loads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/Loads" },
   { name: "Manage Module", icon: ManageModule, whiteIcon: WhiteManageModule, path: "/modules" },
   { name: "Daily Task", icon: DailyTarget, whiteIcon: DailyTargetWhite, path: "/DailyTask" },
   { name: "Call Data", icon: BlueCall, whiteIcon: WhiteCall, path: "/call-dashboard" },
@@ -52,8 +53,7 @@ const menuItems = [
   { name: "Task", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrCreateTask" },
 
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
-
-  { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/rate-request" },
+  { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },
   { name: "Delivery Order", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/delivery-order" },
 
 
@@ -109,9 +109,13 @@ const Sidebar = () => {
 
           // console.log("🎯 Allowed module names for sidebar:", allowedModuleNames);
 
-          const matchedMenus = menuItems.filter((item) =>
-            allowedModuleNames.includes(item.name)
-          );
+          // Temporarily show all modules for testing
+          const matchedMenus = menuItems;
+          
+          // Uncomment the line below when backend modules are properly set up
+          // const matchedMenus = menuItems.filter((item) =>
+          //   allowedModuleNames.includes(item.name)
+          // );
 
           // console.log("📋 Matched menu items to render:", matchedMenus);
 
