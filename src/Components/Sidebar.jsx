@@ -109,13 +109,9 @@ const Sidebar = () => {
 
           // console.log("🎯 Allowed module names for sidebar:", allowedModuleNames);
 
-          // Temporarily show all modules for testing
-          const matchedMenus = menuItems;
-          
-          // Uncomment the line below when backend modules are properly set up
-          // const matchedMenus = menuItems.filter((item) =>
-          //   allowedModuleNames.includes(item.name)
-          // );
+          const matchedMenus = menuItems.filter((item) =>
+            allowedModuleNames.includes(item.name)
+          );
 
           // console.log("📋 Matched menu items to render:", matchedMenus);
 
