@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Notification from "./assets/Icons super admin/Nav Bar/Blue/Notification.png";
 import ProfileIcon from "./assets/Icons super admin/ProfileIcon.png";
-import ProfilePage from "./Pages/ProfilePage";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+
 const BREAK_DURATION = 60 * 60; // 60 mins in seconds
 
 const Topbar = () => {
@@ -24,16 +24,16 @@ const Topbar = () => {
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [breakLoading, setBreakLoading] = useState(false);
+  const [meetingLoading, setMeetingLoading] = useState(false);
 
-  // Format mm:ss
-const formatTime = (totalSeconds) => {
-  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
-  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
-  const s = String(totalSeconds % 60).padStart(2, "0");
-  return `${h}:${m}:${s}`;
-};
-  // Login timer
+  const formatTime = (totalSeconds) => {
+    const h = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+    const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+    const s = String(totalSeconds % 60).padStart(2, "0");
+    return `${h}:${m}:${s}`;
+  };
+
   useEffect(() => {
     if (!sessionStorage.getItem("loginTime")) {
       sessionStorage.setItem("loginTime", new Date().toISOString());
@@ -51,7 +51,6 @@ const formatTime = (totalSeconds) => {
     return () => clearInterval(interval);
   }, [loginTime]);
 
-  // Auto-close dropdowns
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest("#break-dropdown")) setDropdownOpen(false);
@@ -61,14 +60,9 @@ const formatTime = (totalSeconds) => {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  // const handleLogout = () => {
-  //   sessionStorage.clear();
-  //   window.location.href = "/";
-  // };
-
   const handleStartBreak = async () => {
     try {
-      setLoading(true);
+      setBreakLoading(true);
       const res = await axios.post(
         "https://vpl-liveproject-1.onrender.com/api/v1/break/start",
         {},
@@ -96,13 +90,13 @@ const formatTime = (totalSeconds) => {
     } catch (err) {
       alert(err.response?.data?.message || "Break start failed");
     } finally {
-      setLoading(false);
+      setBreakLoading(false);
     }
   };
 
   const handleEndBreak = async () => {
     try {
-      setLoading(true);
+      setBreakLoading(true);
       const res = await axios.post(
         "https://vpl-liveproject-1.onrender.com/api/v1/break/end",
         {},
@@ -111,15 +105,11 @@ const formatTime = (totalSeconds) => {
       if (res.data.success) {
         clearInterval(breakIntervalId);
         setOnBreak(false);
-        // alert(
-        //   `Break ended! You had ${res.data.remainingMinutes || 0
-        //   } minutes left.`
-        // );
       }
     } catch (err) {
       alert("Break end failed.");
     } finally {
-      setLoading(false);
+      setBreakLoading(false);
     }
   };
 
@@ -137,6 +127,7 @@ const formatTime = (totalSeconds) => {
     setDropdownOpen(false);
   };
 
+
   return (
     <div className="fixed w-full top-0 right-0 h-20 bg-white shadow z-10 px-6 flex justify-between items-center pl-[220px]">
       <div className="w-1/3"></div>
@@ -150,8 +141,6 @@ const formatTime = (totalSeconds) => {
       </div>
 
       <div className="w-1/3 flex items-center justify-end gap-4">
-
-        {/* Timer */}
         <div className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
           <span className="text-base">🕒</span>
           <span className="font-medium">{elapsedTime}</span>
@@ -168,6 +157,7 @@ const formatTime = (totalSeconds) => {
 
           {dropdownOpen && (
             <div className="absolute right-0 top-12 w-56 bg-white rounded-lg shadow-lg py-2 animate-fade-in z-50">
+              {/* Break Section */}
               <div className="px-4 py-2 hover:bg-gray-100 text-sm text-gray-800 flex justify-between items-center">
                 Break
                 {onBreak ? (
@@ -177,10 +167,16 @@ const formatTime = (totalSeconds) => {
                 ) : (
                   <button
                     onClick={handleStartBreak}
-                    disabled={loading}
-                    className="text-xs bg-yellow-200 px-2 py-1 rounded-full"
+                    disabled={breakLoading}
+                    className="text-xs bg-yellow-200 px-2 py-1 rounded-full flex items-center gap-1"
                   >
-                    Start
+                    {breakLoading ? (
+                      <>
+                        <span className="animate-spin">⏳</span> Starting...
+                      </>
+                    ) : (
+                      "Start"
+                    )}
                   </button>
                 )}
               </div>
@@ -188,13 +184,21 @@ const formatTime = (totalSeconds) => {
                 <div className="px-4 py-1">
                   <button
                     onClick={handleEndBreak}
-                    disabled={loading}
-                    className="w-full bg-red-100 text-red-700 text-xs py-1 rounded"
+                    disabled={breakLoading}
+                    className="w-full bg-red-100 text-red-700 text-xs py-1 rounded flex items-center justify-center gap-1"
                   >
-                    End Break
+                    {breakLoading ? (
+                      <>
+                        <span className="animate-spin">⏳</span> Ending...
+                      </>
+                    ) : (
+                      "End Break"
+                    )}
                   </button>
                 </div>
               )}
+
+              {/* Meeting Section */}
               <div className="px-4 py-2 hover:bg-gray-100 text-sm text-gray-800 flex justify-between items-center">
                 Meeting
                 {onMeeting ? (
@@ -204,9 +208,16 @@ const formatTime = (totalSeconds) => {
                 ) : (
                   <button
                     onClick={handleMeetingToggle}
-                    className="text-xs bg-blue-200 px-2 py-1 rounded-full"
+                    disabled={meetingLoading}
+                    className="text-xs bg-blue-200 px-2 py-1 rounded-full flex items-center gap-1"
                   >
-                    Start
+                    {meetingLoading ? (
+                      <>
+                        <span className="animate-spin">⏳</span> Starting...
+                      </>
+                    ) : (
+                      "Start"
+                    )}
                   </button>
                 )}
               </div>
@@ -249,23 +260,15 @@ const formatTime = (totalSeconds) => {
 
           {profileOpen && (
             <div className="absolute right-0 top-16 w-40 bg-white shadow-lg rounded-lg py-2 z-50 animate-fade-in">
-              {/* <button
-                onClick={() => alert("Go to Profile")}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-gray-700"
-              >
-                👤 Profile
-              </button> */}
               <button
                 onClick={() => {
                   setProfileOpen(false);
-                   navigate("/profile");
+                  navigate("/profile");
                 }}
                 className="w-full text-left px-4 py-2 hover:bg-gray-100 text-gray-700"
               >
                 👤 Profile
               </button>
-
-
             </div>
           )}
         </div>
