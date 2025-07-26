@@ -34,6 +34,7 @@ import ManagerShippersLDocuments from "./Components/Agent-Manager/Manager-Shippe
 import TruckerDocumentsPage from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
 import TruckerLDocuments from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
 import HrCreateTask from "./Components/HRDashboard/HrCreateTask.jsx";
+import RateRequest from "./Components/CMT-Manager/RateRequest.jsx";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -93,6 +94,7 @@ function App() {
         <Route path="/HREmployeeHygine" element={<HREmployeeHygine/>} />
         <Route path="/ManagerShippersLDocuments" element={<ManagerShippersLDocuments/>} />
         <Route path="/TruckerLDocuments" element={<TruckerLDocuments/>} />
+        <Route path="/RateRequest" element={<RateRequest/>} />
         <Route path="/HrCreateTask" element={<HrCreateTask/>} />
         
 

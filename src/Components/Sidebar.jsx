@@ -50,7 +50,7 @@ const menuItems = [
   { name: "Manager L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ManagerShippersLDocuments" },
   { name: "Trucker L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerLDocuments" },
   { name: "Task", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrCreateTask" },
-  { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/rate-request" },
+  { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
 
 ];
 
@@ -130,30 +130,33 @@ const Sidebar = () => {
           </button>
         </div>
 
-        <nav className={`mt-4 flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
-          {filteredMenuItems.map((item, idx) => (
-            <NavLink
-              to={item.path}
-              key={idx}
-              title={!isExpanded ? item.name : ""}
-              className={({ isActive }) =>
-                `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "bg-blue-500 text-white" : "hover:bg-gray-100 text-gray-700"
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <img
-                    src={isActive ? item.whiteIcon || item.icon : item.icon}
-                    alt={item.name}
-                    className="w-5 h-5"
-                  />
-                  <span className={`${isExpanded ? "inline" : "hidden"}`}>{item.name}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
+        {/* Scrollable Menu Section */}
+<div className="overflow-y-auto h-[calc(100vh-160px)] px-1 pr-2 scrollbar-hide">
+  <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
+    {filteredMenuItems.map((item, idx) => (
+      <NavLink
+        to={item.path}
+        key={idx}
+        title={!isExpanded ? item.name : ""}
+        className={({ isActive }) =>
+          `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "bg-blue-500 text-white" : "hover:bg-gray-100 text-gray-700"}`
+        }
+      >
+        {({ isActive }) => (
+          <>
+            <img
+              src={isActive ? item.whiteIcon || item.icon : item.icon}
+              alt={item.name}
+              className="w-5 h-5"
+            />
+            <span className={`${isExpanded ? "inline" : "hidden"}`}>{item.name}</span>
+          </>
+        )}
+      </NavLink>
+    ))}
+  </nav>
+</div>
+
       </div>
 
       <div className="px-4 py-4">
