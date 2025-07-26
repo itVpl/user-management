@@ -22,6 +22,10 @@ const RoleBasedDashboard = () => {
   const role = user?.role;
   const department = user?.department;
 
+  // Debug logging
+  console.log("User department:", department);
+  console.log("User role:", role);
+
   // Temporary fallback for testing
   if (!role && !department) {
     return <AgentDashboard />;
@@ -34,6 +38,12 @@ const RoleBasedDashboard = () => {
         <HRDashboard />
       </>
     );
+  }
+
+  // Sales department should show AgentDashboard
+  if (department === "Sales" || department === "sales") {
+    console.log("Sales department detected, showing AgentDashboard");
+    return <AgentDashboard />;
   }
 
   switch (role) {

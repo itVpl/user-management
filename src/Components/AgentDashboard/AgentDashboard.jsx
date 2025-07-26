@@ -6,6 +6,14 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [attendanceData, setAttendanceData] = useState(null);
   const [presentDaysCount, setPresentDaysCount] = useState(0);
+
+  // Add formatSeconds function
+  const formatSeconds = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
   const [callStats, setCallStats] = useState({
     total: 0,
     answered: 0,
@@ -24,6 +32,16 @@ const Dashboard = () => {
       rejected: 0
     },
     todayTruckers: []
+  });
+
+  const [doData, setDoData] = useState({
+    todayStats: {
+      totalAdded: 0,
+      approved: 0,
+      pending: 0,
+      rejected: 0
+    },
+    todayDOs: []
   });
 
   useEffect(() => {
@@ -152,6 +170,45 @@ const Dashboard = () => {
     fetchCmtData();
   }, []);
 
+  useEffect(() => {
+    const fetchDoData = async () => {
+      try {
+        const response = await axios.get(
+          'https://vpl-liveproject-1.onrender.com/api/v1/do/do',
+          { withCredentials: true }
+        );
+        
+        if (response.data.success) {
+          // Filter today's DOs
+          const today = new Date().toISOString().split('T')[0];
+          const todayDOs = response.data.data.filter(deliveryOrder => 
+            new Date(deliveryOrder.date).toISOString().split('T')[0] === today
+          );
+
+          // Calculate stats
+          const totalAdded = todayDOs.length;
+          const approved = todayDOs.filter(deliveryOrder => deliveryOrder.status === 'approved').length;
+          const pending = todayDOs.filter(deliveryOrder => deliveryOrder.status === 'pending').length;
+          const rejected = todayDOs.filter(deliveryOrder => deliveryOrder.status === 'rejected').length;
+
+          setDoData({
+            todayStats: {
+              totalAdded,
+              approved,
+              pending,
+              rejected
+            },
+            todayDOs: todayDOs.slice(0, 10) // Show first 10 recent DOs for better scrolling
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch DO data", err);
+      }
+    };
+
+    fetchDoData();
+  }, []);
+
   const loadData = [
     { shipperId: 'CNU1234567', loadId: 'L00331', weight: '300 Lbs', vehicle: 'Flatbed' },
     { shipperId: 'CNU1234567', loadId: 'L00331', weight: '300 Lbs', vehicle: 'Flatbed' },
@@ -233,8 +290,12 @@ const Dashboard = () => {
     </div>
   );
 
-  // Add department variable at the top
-  const department = 'CMT'; 
+  // Get department from user data
+  const userData = sessionStorage.getItem("user") || localStorage.getItem("user");
+  const user = userData ? JSON.parse(userData) : {};
+  const department = user?.department || 'CMT';
+  
+  console.log("AgentDashboard - User department:", department); 
 
   // Format today's truckers data for display
   const recentCarriers = cmtData.todayTruckers.map(trucker => ({
@@ -595,147 +656,241 @@ const Dashboard = () => {
           </div>
         </>
       ) : department === 'Sales' ? (
-        // --- Sales Dashboard ---
+        // --- Sales Dashboard (Same design as CMT) ---
         <>
-          {/* Top Stats Cards for Sales */}
+          {/* Top Stats Cards */}
           <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-6 mb-8">
             <StatCard
-              title="Leads Generated"
-              value={120}
-              icon={Users}
+              title="Present Days"
+              value={presentDaysCount}
+              icon={Calendar}
               color="bg-gradient-to-r from-blue-500 to-blue-600"
               gradient="from-blue-500 to-blue-600"
               subtitle="This Month"
             />
             <StatCard
-              title="Deals Closed"
-              value={32}
-              icon={CheckCircle}
-              color="bg-gradient-to-r from-green-500 to-green-600"
-              gradient="from-green-500 to-green-600"
-              subtitle="This Month"
+              title="Today's DO"
+              value={doData.todayStats.totalAdded}
+              icon={Target}
+              color="bg-gradient-to-r from-emerald-500 to-emerald-600"
+              gradient="from-emerald-500 to-emerald-600"
+              subtitle="Added Today"
             />
             <StatCard
-              title="Revenue"
-              value="$85,000"
-              icon={DollarSign}
-              color="bg-gradient-to-r from-orange-500 to-orange-600"
-              gradient="from-orange-500 to-orange-600"
-              subtitle="This Month"
-            />
-            <StatCard
-              title="Calls Made"
+              title="Total Calls"
               value={callStats.total}
               icon={Phone}
+              color="bg-gradient-to-r from-orange-500 to-orange-600"
+              gradient="from-orange-500 to-orange-600"
+              subtitle="Today"
+            />
+            <StatCard
+              title="Approved DO"
+              value={doData.todayStats.approved}
+              icon={Award}
               color="bg-gradient-to-r from-purple-500 to-purple-600"
               gradient="from-purple-500 to-purple-600"
-              subtitle="This Week"
+              subtitle="Today"
             />
           </div>
-          {/* Sales Table: Deals Overview */}
+
+          {/* Main Content Grid */}
+          <div className="grid lg:grid-cols-3 gap-8 mb-8">
+            {/* Call Performance Overview */}
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                    <Phone className="text-white" size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800">Call Performance</h3>
+                </div>
+                <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                    <span className="text-gray-700 font-medium">Answered Calls</span>
+                  </div>
+                  <span className="font-bold text-emerald-600">{callStats.answered}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <span className="text-gray-700 font-medium">Missed Calls</span>
+                  </div>
+                  <span className="font-bold text-red-600">{callStats.noAnswer}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-gray-700 font-medium">Total Calls Today</span>
+                  </div>
+                  <span className="font-bold text-blue-600">{callStats.total}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Call Duration Stats */}
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                    <Clock className="text-white" size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800">Daily Call Target</h3>
+                </div>
+                <div className="text-sm text-gray-500 font-medium">
+                  Target: 3.0 Hours
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                    <span className="text-gray-600">Today's Total</span>
+                    <span className="font-bold text-emerald-600">{formatSeconds(callStats.totalDuration)}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-gray-600">Target Remaining</span>
+                    <span className="font-bold text-blue-600">
+                      {formatSeconds(Math.max(10800 - callStats.totalDuration, 0))}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                    <span className="text-gray-600">Average per Call</span>
+                    <span className="font-bold text-purple-600">
+                      {callStats.total > 0 ? ((callStats.totalDuration / 1000) / callStats.total / 60).toFixed(2) : 0}m
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-6">
+                  <CircularProgress 
+                    percentage={Math.min(100, Math.round((callStats.totalDuration / 10800) * 100)) || 0} 
+                    color={(callStats.totalDuration / 10800) >= 1 ? "green" : "blue"}
+                  />
+                  <div className="text-center mt-2">
+                    <p className="text-xs text-gray-600">Target Progress</p>
+                    <p className="text-sm font-bold text-gray-800">
+                      {Math.round((callStats.totalDuration / 10800) * 100)}% Complete
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent DO (instead of Recent Carrier) */}
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
+                    <Truck className="text-white" size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800">Recent DO</h3>
+                </div>
+                <div className="text-sm text-gray-500 font-medium">
+                  {doData.todayDOs.length} DO today
+                </div>
+              </div>
+              <div className="relative">
+                <div className="max-h-64 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                  <div className="space-y-2 pr-2">
+                    {doData.todayDOs.map((deliveryOrder, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-100 hover:shadow-sm transition-all duration-200">
+                        <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                          {deliveryOrder._id.slice(-2)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 text-sm truncate">{deliveryOrder.customerName}</p>
+                          <p className="text-xs text-gray-600">${deliveryOrder.orderValue.toLocaleString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            deliveryOrder.status === 'approved' ? 'bg-green-100 text-green-700' :
+                            deliveryOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {deliveryOrder.status || 'pending'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {doData.todayDOs.length === 0 && (
+                      <div className="text-center py-6">
+                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Truck className="w-6 h-6 text-gray-400" size={20} />
+                        </div>
+                        <p className="text-gray-500 text-sm">No recent DO</p>
+                        <p className="text-gray-400 text-xs">DO data will appear here</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {doData.todayDOs.length > 3 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* DO Data Table */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
-                  <CheckCircle className="text-white" size={20} />
+                  <Truck className="text-white" size={20} />
                 </div>
-                <h3 className="text-xl font-bold text-gray-800">Deals Overview</h3>
+                <h3 className="text-xl font-bold text-gray-800">DO Data</h3>
               </div>
-              <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
+              <button className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium shadow-lg">
+                Create New DO
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Deal ID</th>
+                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">DO ID</th>
                     <th className="text-left py-4 px-4 text-blue-600 font-semibold">Client</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Value</th>
+                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Product</th>
+                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Amount</th>
                     <th className="text-left py-4 px-4 text-blue-600 font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Example data, replace with real data as needed */}
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors bg-gray-50/50">
-                    <td className="py-4 px-4 text-gray-800 font-medium">DL-1001</td>
-                    <td className="py-4 px-4 text-gray-800">Acme Corp</td>
-                    <td className="py-4 px-4 text-gray-800">$15,000</td>
-                    <td className="py-4 px-4 text-green-600 font-bold">Closed</td>
-                  </tr>
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors bg-white">
-                    <td className="py-4 px-4 text-gray-800 font-medium">DL-1002</td>
-                    <td className="py-4 px-4 text-gray-800">Beta Ltd</td>
-                    <td className="py-4 px-4 text-gray-800">$22,000</td>
-                    <td className="py-4 px-4 text-yellow-600 font-bold">Negotiation</td>
-                  </tr>
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors bg-gray-50/50">
-                    <td className="py-4 px-4 text-gray-800 font-medium">DL-1003</td>
-                    <td className="py-4 px-4 text-gray-800">Gamma Inc</td>
-                    <td className="py-4 px-4 text-gray-800">$48,000</td>
-                    <td className="py-4 px-4 text-red-600 font-bold">Lost</td>
-                  </tr>
+                  {doData.todayDOs.length > 0 ? (
+                    doData.todayDOs.map((deliveryOrder, index) => (
+                      <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
+                        <td className="py-4 px-4 text-gray-800 font-medium">{deliveryOrder._id.slice(-6)}</td>
+                        <td className="py-4 px-4 text-gray-800">{deliveryOrder.customerName}</td>
+                        <td className="py-4 px-4 text-gray-800">{deliveryOrder.productName}</td>
+                        <td className="py-4 px-4 text-gray-800 font-bold text-green-600">${deliveryOrder.orderValue.toLocaleString()}</td>
+                        <td className="py-4 px-4 text-gray-800">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            deliveryOrder.status === 'approved' ? 'bg-green-100 text-green-700' :
+                            deliveryOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {deliveryOrder.status || 'pending'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr className="border-b border-gray-100">
+                      <td colSpan="5" className="py-8 px-4 text-center text-gray-500">
+                        <div className="flex flex-col items-center">
+                          <Truck className="w-8 h-8 text-gray-300 mb-2" />
+                          <p>No DO data available for today</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
-            </div>
-            <div className="mt-6 flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                Showing 3 deals
-              </div>
-              <button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg">
-                View All Deals
-              </button>
-            </div>
-          </div>
-          {/* Sales Table: Leads Overview */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
-                  <Users className="text-white" size={20} />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">Leads Overview</h3>
-              </div>
-              <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Lead ID</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Contact</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Company</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* Example data, replace with real data as needed */}
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors bg-gray-50/50">
-                    <td className="py-4 px-4 text-gray-800 font-medium">LD-2001</td>
-                    <td className="py-4 px-4 text-gray-800">John Doe</td>
-                    <td className="py-4 px-4 text-gray-800">Acme Corp</td>
-                    <td className="py-4 px-4 text-green-600 font-bold">Contacted</td>
-                  </tr>
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors bg-white">
-                    <td className="py-4 px-4 text-gray-800 font-medium">LD-2002</td>
-                    <td className="py-4 px-4 text-gray-800">Jane Smith</td>
-                    <td className="py-4 px-4 text-gray-800">Beta Ltd</td>
-                    <td className="py-4 px-4 text-yellow-600 font-bold">New</td>
-                  </tr>
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors bg-gray-50/50">
-                    <td className="py-4 px-4 text-gray-800 font-medium">LD-2003</td>
-                    <td className="py-4 px-4 text-gray-800">Sam Wilson</td>
-                    <td className="py-4 px-4 text-gray-800">Gamma Inc</td>
-                    <td className="py-4 px-4 text-red-600 font-bold">Unresponsive</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-6 flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                Showing 3 leads
-              </div>
-              <button className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-3 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-200 font-medium shadow-lg">
-                View All Leads
-              </button>
             </div>
           </div>
         </>

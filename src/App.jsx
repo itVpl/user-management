@@ -34,6 +34,7 @@ import ManagerShippersLDocuments from "./Components/Agent-Manager/Manager-Shippe
 import TruckerDocumentsPage from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
 import TruckerLDocuments from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
 import HrCreateTask from "./Components/HRDashboard/HrCreateTask.jsx";
+import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -42,7 +43,10 @@ function App() {
   useEffect(() => {
     const token =
       localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
-    setIsAuthenticated(!!token);
+    const user = localStorage.getItem("user") || sessionStorage.getItem("user");
+    console.log("Auth token found:", !!token);
+    console.log("User data found:", !!user);
+    setIsAuthenticated(!!token && !!user);
     setLoading(false);
   }, []);
 
@@ -94,6 +98,7 @@ function App() {
         <Route path="/ManagerShippersLDocuments" element={<ManagerShippersLDocuments/>} />
         <Route path="/TruckerLDocuments" element={<TruckerLDocuments/>} />
         <Route path="/HrCreateTask" element={<HrCreateTask/>} />
+        <Route path="delivery-order" element={<DeliveryOrder/>} />
         
 
       </Route>
