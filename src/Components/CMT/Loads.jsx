@@ -38,64 +38,268 @@ export default function Loads() {
   const fetchLoads = async () => {
     try {
       setLoading(true);
-      console.log('Fetching loads from:', `${API_CONFIG.BASE_URL}/api/v1/load/available/`);
+      console.log('Fetching loads from:', `${API_CONFIG.BASE_URL}/api/v1/load/inhouse/`);
       
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/available/`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse/`, {
         timeout: 10000, // 10 second timeout
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
+        withCredentials: true // Add this for authentication
       });
       
       console.log('API Response:', response);
       
-      if (response.data && response.data.success) {
+      if (response.data && response.data.success && response.data.loads && Array.isArray(response.data.loads) && response.data.loads.length > 0) {
         // Transform API data to match our component structure
-        const transformedLoads = response.data.loads.map(load => {
-          // Handle origin - could be string or object with city/state
-          let originText = 'N/A';
-          if (load.origin) {
-            if (typeof load.origin === 'string') {
-              originText = load.origin;
-            } else if (load.origin.city && load.origin.state) {
-              originText = `${load.origin.city}, ${load.origin.state}`;
-            } else if (load.origin.city) {
-              originText = load.origin.city;
+        const transformedLoads = response.data.loads.map((load, index) => {
+          try {
+            console.log(`Processing load ${index}:`, load);
+            
+            // Check if load has required properties
+            if (!load || !load._id) {
+              console.warn(`Load ${index} is missing required properties:`, load);
+              return {
+                id: `LD-ERROR-${index}`, 
+                loadNum: 'Invalid Data', 
+                shipmentNumber: 'N/A',
+                origin: 'N/A',
+                destination: 'N/A',
+                rate: 0,
+                truckerName: 'N/A',
+                status: 'error',
+                createdAt: 'N/A',
+                createdBy: 'N/A',
+                docUpload: 'sample-doc.jpg',
+                remarks: 'Invalid load data'
+              };
             }
-          }
 
-          // Handle destination - could be string or object with city/state
-          let destinationText = 'N/A';
-          if (load.destination) {
-            if (typeof load.destination === 'string') {
-              destinationText = load.destination;
-            } else if (load.destination.city && load.destination.state) {
-              destinationText = `${load.destination.city}, ${load.destination.state}`;
-            } else if (load.destination.city) {
-              destinationText = load.destination.city;
+            // Handle origin - could be string or object with city/state
+            let originText = 'N/A';
+            if (load.origin) {
+              if (typeof load.origin === 'string') {
+                originText = load.origin;
+              } else if (load.origin.city && load.origin.state) {
+                originText = `${load.origin.city}, ${load.origin.state}`;
+              } else if (load.origin.city) {
+                originText = load.origin.city;
+              } else if (load.origin.addressLine1) {
+                originText = load.origin.addressLine1;
+              }
             }
-          }
 
-          return {
-            id: `LD-${load._id.slice(-6)}`, 
-            loadNum: load._id, 
-            shipmentNumber: load.shipmentNumber || 'N/A',
-            origin: originText,
-            destination: destinationText,
-            rate: load.rate || 0,
-            truckerName: load.truckerName || load.trucker || 'N/A',
-            status: load.status || 'available',
-            createdAt: new Date(load.createdAt).toISOString().split('T')[0],
-            createdBy: `Employee ${load.empId || '1234'}`,
-            docUpload: load.supportingDocs || 'sample-doc.jpg',
-            remarks: load.remarks || ''
-          };
+            // Handle destination - could be string or object with city/state
+            let destinationText = 'N/A';
+            if (load.destination) {
+              if (typeof load.destination === 'string') {
+                destinationText = load.destination;
+              } else if (load.destination.city && load.destination.state) {
+                destinationText = `${load.destination.city}, ${load.destination.state}`;
+              } else if (load.destination.city) {
+                destinationText = load.destination.city;
+              } else if (load.destination.addressLine1) {
+                destinationText = load.destination.addressLine1;
+              }
+            }
+
+            // Get trucker name from assignedTo or acceptedBid
+            let truckerName = 'N/A';
+            if (load.assignedTo) {
+              if (typeof load.assignedTo === 'string') {
+                truckerName = load.assignedTo;
+              } else if (load.assignedTo.compName) {
+                truckerName = load.assignedTo.compName;
+              }
+            } else if (load.acceptedBid && load.acceptedBid.driverName) {
+              truckerName = load.acceptedBid.driverName;
+            } else if (load.carrier && load.carrier.compName) {
+              truckerName = load.carrier.compName;
+            }
+
+            // Map API status to component status
+            let status = 'available';
+            if (load.status) {
+              switch (load.status.toLowerCase()) {
+                case 'posted':
+                case 'bidding':
+                  status = 'available';
+                  break;
+                case 'assigned':
+                  status = 'assigned';
+                  break;
+                case 'in transit':
+                  status = 'in-transit';
+                  break;
+                case 'completed':
+                case 'delivered':
+                  status = 'completed';
+                  break;
+                default:
+                  status = load.status.toLowerCase();
+              }
+            }
+
+            const transformedLoad = {
+              id: `LD-${load._id?.slice(-6) || '000000'}`, 
+              loadNum: load._id || 'N/A', 
+              shipmentNumber: load.shipmentNumber || 'N/A',
+              origin: originText,
+              destination: destinationText,
+              rate: load.rate || 0,
+              truckerName: truckerName,
+              status: status,
+              createdAt: load.pickupDate ? new Date(load.pickupDate).toISOString().split('T')[0] : 
+                       load.createdAt ? new Date(load.createdAt).toISOString().split('T')[0] : 'N/A',
+              createdBy: `Shipper: ${load.shipper?.compName || 'N/A'}`,
+              docUpload: 'sample-doc.jpg',
+              remarks: load.commodity || load.notes || ''
+            };
+            
+            console.log(`Transformed load ${index}:`, transformedLoad);
+            return transformedLoad;
+          } catch (error) {
+            console.error(`Error processing load ${index}:`, error, load);
+            return {
+              id: `LD-ERROR-${index}`, 
+              loadNum: 'Error', 
+              shipmentNumber: 'Error',
+              origin: 'Error',
+              destination: 'Error',
+              rate: 0,
+              truckerName: 'Error',
+              status: 'error',
+              createdAt: 'Error',
+              createdBy: 'Error',
+              docUpload: 'sample-doc.jpg',
+              remarks: 'Error processing data'
+            };
+          }
         });
         
         console.log('Transformed loads:', transformedLoads);
         setLoads(transformedLoads);
       } else {
         console.error('API response format error:', response.data);
+        console.log('Response data structure:', {
+          success: response.data?.success,
+          hasLoads: !!response.data?.loads,
+          loadsLength: response.data?.loads?.length,
+          loadsType: typeof response.data?.loads,
+          dataKeys: response.data ? Object.keys(response.data) : []
+        });
+        
+        // If API returns empty data, show empty state
+        if (response.data && response.data.success && (!response.data.loads || response.data.loads.length === 0)) {
+          console.log('API returned empty loads array');
+          setLoads([]);
+          return;
+        }
+        // Try alternative data structure
+        if (response.data && response.data.data) {
+          console.log('Trying alternative data structure:', response.data.data);
+          const transformedLoads = response.data.data.map((load, index) => {
+            try {
+              // Handle origin
+              let originText = 'N/A';
+              if (load.origin) {
+                if (typeof load.origin === 'string') {
+                  originText = load.origin;
+                } else if (load.origin.city && load.origin.state) {
+                  originText = `${load.origin.city}, ${load.origin.state}`;
+                } else if (load.origin.city) {
+                  originText = load.origin.city;
+                } else if (load.origin.addressLine1) {
+                  originText = load.origin.addressLine1;
+                }
+              }
+
+              // Handle destination
+              let destinationText = 'N/A';
+              if (load.destination) {
+                if (typeof load.destination === 'string') {
+                  destinationText = load.destination;
+                } else if (load.destination.city && load.destination.state) {
+                  destinationText = `${load.destination.city}, ${load.destination.state}`;
+                } else if (load.destination.city) {
+                  destinationText = load.destination.city;
+                } else if (load.destination.addressLine1) {
+                  destinationText = load.destination.addressLine1;
+                }
+              }
+
+              // Get trucker name
+              let truckerName = 'N/A';
+              if (load.assignedTo) {
+                if (typeof load.assignedTo === 'string') {
+                  truckerName = load.assignedTo;
+                } else if (load.assignedTo.compName) {
+                  truckerName = load.assignedTo.compName;
+                }
+              } else if (load.acceptedBid && load.acceptedBid.driverName) {
+                truckerName = load.acceptedBid.driverName;
+              } else if (load.carrier && load.carrier.compName) {
+                truckerName = load.carrier.compName;
+              }
+
+              // Map status
+              let status = 'available';
+              if (load.status) {
+                switch (load.status.toLowerCase()) {
+                  case 'posted':
+                  case 'bidding':
+                    status = 'available';
+                    break;
+                  case 'assigned':
+                    status = 'assigned';
+                    break;
+                  case 'in transit':
+                    status = 'in-transit';
+                    break;
+                  case 'completed':
+                  case 'delivered':
+                    status = 'completed';
+                    break;
+                  default:
+                    status = load.status.toLowerCase();
+                }
+              }
+
+              return {
+                id: `LD-${load._id?.slice(-6) || '000000'}`, 
+                loadNum: load._id || 'N/A', 
+                shipmentNumber: load.shipmentNumber || 'N/A',
+                origin: originText,
+                destination: destinationText,
+                rate: load.rate || 0,
+                truckerName: truckerName,
+                status: status,
+                createdAt: load.pickupDate ? new Date(load.pickupDate).toISOString().split('T')[0] : 
+                         load.createdAt ? new Date(load.createdAt).toISOString().split('T')[0] : 'N/A',
+                createdBy: `Shipper: ${load.shipper?.compName || 'N/A'}`,
+                docUpload: 'sample-doc.jpg',
+                remarks: load.commodity || load.notes || ''
+              };
+            } catch (error) {
+              console.error(`Error processing alternative load ${index}:`, error);
+              return {
+                id: `LD-ERROR-${index}`, 
+                loadNum: 'Error', 
+                shipmentNumber: 'Error',
+                origin: 'Error',
+                destination: 'Error',
+                rate: 0,
+                truckerName: 'Error',
+                status: 'error',
+                createdAt: 'Error',
+                createdBy: 'Error',
+                docUpload: 'sample-doc.jpg',
+                remarks: 'Error processing data'
+              };
+            }
+          });
+          setLoads(transformedLoads);
+        }
       }
     } catch (error) {
       console.error('Error fetching loads:', error);
@@ -156,10 +360,10 @@ export default function Loads() {
   // Status color helper
   const statusColor = (status) => {
     if (!status) return 'bg-yellow-100 text-yellow-700';
-    if (status === 'available') return 'bg-green-100 text-green-700';
+    if (status === 'available' || status === 'posted' || status === 'bidding') return 'bg-green-100 text-green-700';
     if (status === 'assigned') return 'bg-blue-100 text-blue-700';
-    if (status === 'in-transit') return 'bg-purple-100 text-purple-700';
-    if (status === 'completed') return 'bg-gray-100 text-gray-700';
+    if (status === 'in-transit' || status === 'in transit') return 'bg-purple-100 text-purple-700';
+    if (status === 'completed' || status === 'delivered') return 'bg-gray-100 text-gray-700';
     return 'bg-blue-100 text-blue-700';
   };
 
@@ -370,7 +574,7 @@ export default function Loads() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Available</p>
-                <p className="text-xl font-bold text-blue-600">{loads.filter(load => load.status === 'available').length}</p>
+                <p className="text-xl font-bold text-blue-600">{loads.filter(load => ['available', 'posted', 'bidding'].includes(load.status)).length}</p>
               </div>
             </div>
           </div>
@@ -392,7 +596,7 @@ export default function Loads() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">In Transit</p>
-                <p className="text-xl font-bold text-purple-600">{loads.filter(load => load.status === 'in-transit').length}</p>
+                <p className="text-xl font-bold text-purple-600">{loads.filter(load => ['in-transit', 'in transit'].includes(load.status)).length}</p>
               </div>
             </div>
           </div>
@@ -408,12 +612,7 @@ export default function Loads() {
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
           </div>
-          <button
-            onClick={() => setShowAddLoadForm(true)}
-            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
-          >
-            <PlusCircle size={20} /> Add Load
-          </button>
+
         </div>
       </div>
 
@@ -467,10 +666,15 @@ export default function Loads() {
                 <div className="flex items-center gap-2 text-gray-700"><FileText size={16} /> <span className="font-medium">Remarks:</span> {selectedLoad.remarks}</div>
               )}
               <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold mt-2 ${statusColor(selectedLoad.status)}`}>
-                {selectedLoad.status === 'available' && <CheckCircle size={14} />}
+                {(selectedLoad.status === 'available' || selectedLoad.status === 'posted' || selectedLoad.status === 'bidding') && <CheckCircle size={14} />}
                 {selectedLoad.status === 'assigned' && <Clock size={14} />}
-                {selectedLoad.status === 'in-transit' && <Truck size={14} />}
-                {selectedLoad.status || 'Available'}
+                {(selectedLoad.status === 'in-transit' || selectedLoad.status === 'in transit') && <Truck size={14} />}
+                {selectedLoad.status === 'completed' || selectedLoad.status === 'delivered' ? 'Completed' : 
+                 selectedLoad.status === 'in-transit' || selectedLoad.status === 'in transit' ? 'In Transit' :
+                 selectedLoad.status === 'assigned' ? 'Assigned' :
+                 selectedLoad.status === 'posted' ? 'Posted' :
+                 selectedLoad.status === 'bidding' ? 'Bidding' :
+                 selectedLoad.status || 'Available'}
               </div>
             </div>
             <div className="flex flex-col items-center justify-center">
@@ -529,10 +733,15 @@ export default function Loads() {
                     </td>
                     <td className="py-2 px-3">
                       <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${statusColor(load.status)}`}>
-                        {load.status === 'available' && <CheckCircle size={12} />}
+                        {(load.status === 'available' || load.status === 'posted' || load.status === 'bidding') && <CheckCircle size={12} />}
                         {load.status === 'assigned' && <Clock size={12} />}
-                        {load.status === 'in-transit' && <Truck size={12} />}
-                        {load.status || 'Available'}
+                        {(load.status === 'in-transit' || load.status === 'in transit') && <Truck size={12} />}
+                        {load.status === 'completed' || load.status === 'delivered' ? 'Completed' : 
+                         load.status === 'in-transit' || load.status === 'in transit' ? 'In Transit' :
+                         load.status === 'assigned' ? 'Assigned' :
+                         load.status === 'posted' ? 'Posted' :
+                         load.status === 'bidding' ? 'Bidding' :
+                         load.status || 'Available'}
                       </div>
                     </td>
                     <td className="py-2 px-3">
