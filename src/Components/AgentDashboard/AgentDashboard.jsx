@@ -6,6 +6,11 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [attendanceData, setAttendanceData] = useState(null);
   const [presentDaysCount, setPresentDaysCount] = useState(0);
+   const [search, setSearch] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  
 
   // Add formatSeconds function
   const formatSeconds = (secs) => {
@@ -315,6 +320,32 @@ const Dashboard = () => {
     { id: 'CR-1003', name: 'RoadRunner Freight', status: 'Uploaded', statusColor: 'bg-gradient-to-r from-green-400 to-green-600' },
   ];
 
+  const data = [
+    { id: 'EMP101', name: 'Rahul Sharma', orders: 15, status: 'Completed' },
+    { id: 'EMP102', name: 'Anjali Verma', orders: 8, status: 'Pending' },
+    { id: 'EMP103', name: 'Mohit Kumar', orders: 0, status: 'Not Started' },
+    { id: 'EMP104', name: 'Neha Singh', orders: 21, status: 'Completed' },
+  ];
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Completed':
+        return 'text-green-600';
+      case 'Pending':
+        return 'text-yellow-500';
+      case 'Not Started':
+        return 'text-red-500';
+      default:
+        return 'text-gray-500';
+    }
+  };
+
+  const filteredData = data.filter((row) => {
+    return (
+      row.name.toLowerCase().includes(search.toLowerCase()) ||
+      row.id.toLowerCase().includes(search.toLowerCase())
+    );
+  });
   return (
     <div className="p-6 bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 min-h-screen">
       {department === 'CMT' ? (
@@ -893,6 +924,81 @@ const Dashboard = () => {
               </table>
             </div>
           </div>
+           
+           {/* Team DO Records */}
+          <div className="bg-white rounded-2xl shadow-md p-6">
+      {/* Header */}
+      <div className="flex flex-row md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        {/* Title with Icon */}
+        <div className="flex items-center gap-3">
+          <div className="bg-green-500 p-2 rounded-lg shadow-sm text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none"
+              viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 17v-2h6v2h5v-6.586a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0015.586 6H15V5a1 1 0 00-1-1H5a1 1 0 00-1 1v12h5zm0 0v2a2 2 0 104 0v-2m4-7l3 3" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800">Team DO Records</h2>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <span className="text-gray-500">to</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="text"
+            placeholder="Search by Name or ID"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full border border-gray-200 rounded-md overflow-hidden text-sm">
+          <thead className="bg-gray-100 text-gray-700">
+            <tr>
+              <th className="px-5 py-3 text-left font-medium text-blue-600">Emp ID</th>
+              <th className="px-5 py-3 text-left font-medium text-blue-600">Name</th>
+              <th className="px-5 py-3 text-left font-medium text-blue-600">Total Delivery Orders</th>
+              <th className="px-5 py-3 text-left font-medium text-blue-600">Status</th>
+            </tr>
+          </thead>
+          <tbody className="text-gray-700">
+            {filteredData.map((row, index) => (
+              <tr key={index} className="hover:bg-gray-50 border-t border-gray-100">
+                <td className="px-5 py-3 font-medium">{row.id}</td>
+                <td className="px-5 py-3">{row.name}</td>
+                <td className="px-5 py-3">{row.orders}</td>
+                <td className={`px-5 py-3 font-semibold ${getStatusColor(row.status)}`}>{row.status}</td>
+              </tr>
+            ))}
+            {filteredData.length === 0 && (
+              <tr>
+                <td colSpan="4" className="text-center px-5 py-6 text-gray-400 italic">
+                  No matching records found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
         </>
       ) : null}
     </div>

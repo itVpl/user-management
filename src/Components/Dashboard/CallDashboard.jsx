@@ -211,30 +211,36 @@ const DailyTarget = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 flex flex-col items-center">
-          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mb-2">
-            <Phone className="text-blue-600" size={20} />
-          </div>
-          <p className="text-sm text-gray-600">Total Calls</p>
-          <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 flex flex-col items-center">
-          <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center mb-2">
-            <CheckCircle className="text-green-600" size={20} />
-          </div>
-          <p className="text-sm text-gray-600">Answered</p>
-          <p className="text-2xl font-bold text-green-600">{stats.answered}</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 flex flex-col items-center">
-          <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center mb-2">
-            <XCircle className="text-red-600" size={20} />
-          </div>
-          <p className="text-sm text-gray-600">Missed</p>
-          <p className="text-2xl font-bold text-red-600">{stats.missed}</p>
-        </div>
-      </div>
+      {/* Stats Cards - Single Line */}
+<div className="flex flex-wrap gap-6 mb-8">
+  {/* Total Calls */}
+  <div className="flex-1 min-w-[200px] bg-white rounded-2xl shadow-md p-5 border border-gray-100 flex flex-col items-center text-center hover:shadow-lg transition">
+    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+      <Phone className="text-blue-600" size={22} />
+    </div>
+    <p className="text-sm text-gray-500">Total Calls</p>
+    <p className="text-2xl font-bold text-blue-600 mt-1">{stats.total}</p>
+  </div>
+
+  {/* Answered */}
+  <div className="flex-1 min-w-[200px] bg-white rounded-2xl shadow-md p-5 border border-gray-100 flex flex-col items-center text-center hover:shadow-lg transition">
+    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
+      <CheckCircle className="text-green-600" size={22} />
+    </div>
+    <p className="text-sm text-gray-500">Answered</p>
+    <p className="text-2xl font-bold text-green-600 mt-1">{stats.answered}</p>
+  </div>
+
+  {/* Missed */}
+  <div className="flex-1 min-w-[200px] bg-white rounded-2xl shadow-md p-5 border border-gray-100 flex flex-col items-center text-center hover:shadow-lg transition">
+    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-3">
+      <XCircle className="text-red-600" size={22} />
+    </div>
+    <p className="text-sm text-gray-500">Missed</p>
+    <p className="text-2xl font-bold text-red-600 mt-1">{stats.missed}</p>
+  </div>
+</div>
+
 
       {/* Main Table Section */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
