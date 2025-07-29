@@ -11,6 +11,9 @@ const ManageUser = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [confirmAction, setConfirmAction] = useState('');
   const usersPerPage = 10;
   
 
@@ -23,22 +26,23 @@ const ManageUser = () => {
     axios
       .get('https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser', { withCredentials: true })
       .then(res => {
-        setUsers(res.data.employees || []) 
-      setLoading(false);
+        const fetchedUsers = res.data.employees || [];
+        // Map the actual status from server data
+        const usersWithStatus = fetchedUsers.map(u => ({ 
+          ...u, 
+          isActive: u.status === 'active' || u.status === undefined 
+        }));
+        setUsers(usersWithStatus);
+        setLoading(false);
       })
-      .catch(err => { console.error('Error fetching users:', err)
+      .catch(err => { 
+        console.error('Error fetching users:', err);
         setLoading(false);
       });
   };
+  
   useEffect(() => {
-    axios
-      .get('https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser', { withCredentials: true })
-      .then(res => {
-        const fetchedUsers = res.data.employees || [];
-        const usersWithStatus = fetchedUsers.map(u => ({ ...u, isActive: true }));
-        setUsers(usersWithStatus);
-      })
-      .catch(err => console.error('Error fetching users:', err));
+    fetchUsers();
   }, []);
 
   const toggleExpand = (idx) => {
@@ -49,18 +53,48 @@ const ManageUser = () => {
     const updatedUsers = [...users];
     const user = updatedUsers[idx];
     const newStatus = user.isActive ? 'inactive' : 'active';
+    const actionText = user.isActive ? 'deactivate' : 'activate';
+
+    // Show confirmation modal first
+    setSelectedUser(user);
+    setConfirmAction(actionText);
+    setShowConfirmModal(true);
+  };
+
+  const confirmStatusChange = async () => {
+    if (!selectedUser) return;
+
+    const updatedUsers = [...users];
+    const user = selectedUser;
+    const newStatus = user.isActive ? 'inactive' : 'active';
 
     try {
-      await axios.patch(
+      const response = await axios.patch(
         `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${user.empId}/status`,
         { status: newStatus },
         { withCredentials: true }
       );
-      user.isActive = !user.isActive;
-      setUsers(updatedUsers);
+      
+      console.log('API Response:', response.data);
+      
+      // Update the specific user's status in local state immediately
+      const userToUpdate = updatedUsers.find(u => u.empId === user.empId);
+      if (userToUpdate) {
+        userToUpdate.isActive = !userToUpdate.isActive;
+        setUsers([...updatedUsers]);
+      }
+      
+      // Show success popup
+      const statusText = newStatus === 'active' ? 'ACTIVE' : 'INACTIVE';
+      // alert(`✅ User ${user.employeeName} is now ${statusText}!`);
+      
+      // Close confirmation modal
+      setShowConfirmModal(false);
+      setSelectedUser(null);
+      
     } catch (err) {
       console.error('Failed to update status:', err);
-      alert('Failed to update status. Please try again.');
+      alert('❌ Failed to update status. Please try again.');
     }
   };
 
@@ -294,9 +328,54 @@ const handleRoleChange = async (empId, newRole) => {
             Next
           </button>
         </div>
-      </div>
-      </>
-    )}
+        </div>
+        </>)}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <div className="text-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+              
+              {/* Title */}
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                Confirm Status Change
+              </h3>
+              
+              {/* Message */}
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to <span className="font-semibold text-blue-600">{confirmAction}</span> user{' '}
+                <span className="font-semibold text-gray-800">{selectedUser?.employeeName}</span>?
+              </p>
+              
+              {/* Buttons */}
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    setSelectedUser(null);
+                  }}
+                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmStatusChange}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transform hover:scale-105 transition-all duration-200"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
