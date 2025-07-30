@@ -1137,19 +1137,19 @@ useEffect(() => {
         <div className="col-span-2">
           <label className="block text-sm font-semibold text-gray-700 mb-1">Select Shipper *</label>
           <select
-            name="shipperId"
-            value={loadForm.shipperId}
-            onChange={handleChange}
-            required
-            className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">-- Select Shipper --</option>
-            {shippers.map((shipper) => (
-              <option key={shipper._id} value={shipper._id}>
-                {shipper.compName} ({shipper.email})
-              </option>
-            ))}
-          </select>
+    name="shipperId"
+    value={loadForm.shipperId}
+    onChange={handleChange}
+    required
+    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+  >
+    <option value="">-- Select Shipper --</option>
+    {shippers.map((shipper) => (
+      <option key={shipper.userId} value={shipper.userId}>
+        {shipper.compName} ({shipper.email})
+      </option>
+    ))}
+  </select>
         </div>
 
         {/* FROM/TO LOCATION */}
