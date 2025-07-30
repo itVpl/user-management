@@ -38,6 +38,7 @@ import RateRequest from "./Components/CMT-Manager/RateRequest.jsx";
 
 import RateApproved from "./Components/CMT/RateApproved.jsx";
 import Loads from "./Components/CMT/Loads.jsx";
+import CarrierApproval from "./Components/CMT/CarrierApproval.jsx";
 
 
 import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
@@ -108,6 +109,7 @@ function App() {
         <Route path="/RateRequest" element={<RateRequest/>} />
         <Route path="/RateApproved" element={<RateApproved/>} />
         <Route path="/Loads" element={<Loads/>} />
+        <Route path="/CarrierApproval" element={<CarrierApproval/>} />
         <Route path="/HrCreateTask" element={<HrCreateTask/>} />
         <Route path="delivery-order" element={<DeliveryOrder/>} />
         <Route path="/AddCustomer" element={<AddCustomer/>}/>

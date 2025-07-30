@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar } from 'lucide-react';
+import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye } from 'lucide-react';
 import AddTruckerForm from './AddTruckerform';
 
 export default function TruckerDocuments() {
@@ -14,6 +14,7 @@ export default function TruckerDocuments() {
   const [showAddTruckerForm, setShowAddTruckerForm] = useState(false);
   const [Loading, setLoading] = useState(true);
   const [showTruckerModal, setShowTruckerModal] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -86,6 +87,31 @@ export default function TruckerDocuments() {
     setShowTruckerModal(true);
   };
 
+  // Handle document preview
+  const handleDocumentPreview = (documentUrl, documentName) => {
+    setSelectedDocument({ url: documentUrl, name: documentName });
+  };
+
+  // Get document display name
+  const getDocumentDisplayName = (docKey) => {
+    const displayNames = {
+      brokeragePacket: 'Brokerage Packet',
+      carrierPartnerAgreement: 'Carrier Partner Agreement',
+      w9Form: 'W9 Form',
+      mcAuthority: 'MC Authority',
+      safetyLetter: 'Safety Letter',
+      bankingInfo: 'Banking Information',
+      inspectionLetter: 'Inspection Letter',
+      insurance: 'Insurance'
+    };
+    return displayNames[docKey] || docKey;
+  };
+
+  // Check if file is image
+  const isImageFile = (fileType) => {
+    return ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileType?.toUpperCase());
+  };
+
   if (previewImg) {
     return (
       <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
@@ -97,6 +123,48 @@ export default function TruckerDocuments() {
           >
             <FaArrowLeft />
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedDocument) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4">
+        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh]">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex justify-between items-center">
+            <h3 className="text-lg font-semibold">{selectedDocument.name}</h3>
+            <button
+              onClick={() => setSelectedDocument(null)}
+              className="text-white hover:text-gray-200 text-2xl font-bold"
+            >
+              ×
+            </button>
+          </div>
+          <div className="p-4">
+            {isImageFile(selectedDocument.url.split('.').pop()) ? (
+              <img 
+                src={selectedDocument.url} 
+                alt={selectedDocument.name} 
+                className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg">
+                <div className="text-center">
+                  <FaFileAlt className="text-6xl text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 mb-4">Document preview not available</p>
+                  <a 
+                    href={selectedDocument.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition"
+                  >
+                    Download Document
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -277,7 +345,7 @@ export default function TruckerDocuments() {
       {/* Trucker Details Modal */}
       {showTruckerModal && selectedTrucker && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" style={{
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
             scrollbarWidth: 'none', // Firefox
             msOverflowStyle: 'none', // IE 10+
           }}>
@@ -304,8 +372,6 @@ export default function TruckerDocuments() {
 
             {/* Content */}
             <div className="p-6 space-y-6">
-
-
               {/* Company & Contact Information */}
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6">
                 <div className="flex items-center gap-2 mb-4">
@@ -397,15 +463,6 @@ export default function TruckerDocuments() {
                       <MapPin className="text-purple-600" size={16} />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Company Address</p>
-                      <p className="font-semibold text-gray-800">{selectedTrucker.compAdd}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <MapPin className="text-purple-600" size={16} />
-                    </div>
-                    <div>
                       <p className="text-sm text-gray-600">City</p>
                       <p className="font-semibold text-gray-800">{selectedTrucker.city}</p>
                     </div>
@@ -424,19 +481,95 @@ export default function TruckerDocuments() {
                       <MapPin className="text-purple-600" size={16} />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Zip Code</p>
-                      <p className="font-semibold text-gray-800">{selectedTrucker.zipcode}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <MapPin className="text-purple-600" size={16} />
-                    </div>
-                    <div>
                       <p className="text-sm text-gray-600">Country</p>
                       <p className="font-semibold text-gray-800">{selectedTrucker.country}</p>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Documents Section */}
+              {selectedTrucker.documentPreview && Object.keys(selectedTrucker.documentPreview).length > 0 && (
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="text-green-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Uploaded Documents</h3>
+                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                      {selectedTrucker.documentCount || Object.keys(selectedTrucker.documentPreview).length} documents
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Object.entries(selectedTrucker.documentPreview).map(([docKey, docInfo]) => (
+                      <div key={docKey} className="bg-white rounded-xl p-4 shadow-sm border border-green-100 hover:shadow-md transition">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <FileText className="text-green-600" size={16} />
+                            <span className="font-medium text-sm text-gray-800">
+                              {getDocumentDisplayName(docKey)}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                            {docInfo.fileType}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="text-xs text-gray-600 truncate">
+                            {docInfo.fileName}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDocumentPreview(docInfo.url, getDocumentDisplayName(docKey))}
+                              className="flex items-center gap-1 bg-blue-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-blue-600 transition"
+                            >
+                              <Eye size={12} />
+                              Preview
+                            </button>
+                            <a
+                              href={docInfo.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 bg-green-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-green-600 transition"
+                            >
+                              <FaDownload size={10} />
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Status Information */}
+              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <CheckCircle className="text-orange-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Status Information</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold ${statusColor(selectedTrucker.status)}`}>
+                      {selectedTrucker.status === 'approved' && <CheckCircle size={14} />}
+                      {selectedTrucker.status === 'rejected' && <XCircle size={14} />}
+                      {selectedTrucker.status === 'pending' && <Clock size={14} />}
+                      {selectedTrucker.status || 'Pending'}
+                    </span>
+                  </div>
+                  {selectedTrucker.statusReason && (
+                    <div className="bg-white p-3 rounded-lg border">
+                      <p className="text-sm text-gray-600 mb-1">Status Reason:</p>
+                      <p className="text-sm text-gray-800">{selectedTrucker.statusReason}</p>
+                    </div>
+                  )}
+                  {selectedTrucker.statusUpdatedAt && (
+                    <div className="text-xs text-gray-500">
+                      Last updated: {new Date(selectedTrucker.statusUpdatedAt).toLocaleString()}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
