@@ -19,6 +19,11 @@ export default function RateApproved() {
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
+  const [approvalModal, setApprovalModal] = useState({
+  visible: false,
+  type: null, // 'manual' or 'auto'
+  rate: null, // the selected rate object
+});
 
   // Form state for Add Rate Approved
   const [formData, setFormData] = useState({
@@ -81,26 +86,6 @@ export default function RateApproved() {
         data: error.response?.data,
         url: error.config?.url
       });
-
-      alertify.error(`Failed to load approved rates: ${error.response?.status || 'Network Error'}`);
-      // Fallback to sample data if API fails
-      const sampleRates = [
-        {
-          id: 'RA-001',
-          rateNum: '6884a05c28ae6f73d1db8759',
-          shipmentNumber: 'SH-2024-001',
-          origin: 'New York, NY',
-          destination: 'Los Angeles, CA',
-          rate: 2500,
-          truckerName: 'John Trucker',
-          status: 'approved',
-          createdAt: new Date().toISOString().split('T')[0],
-          createdBy: 'Employee 1234',
-          docUpload: 'sample-doc.jpg',
-          remarks: 'Approved rate for long distance haul'
-        }
-      ];
-      setApprovedRates(sampleRates);
     } finally {
       setLoading(false);
     }
@@ -204,18 +189,18 @@ const fetchAllData = async () => {
 };
 
 // Then update the handleManualApprove and handleAutoApprove functions
-const handleManualApprove = async (bidId) => {
+const handleManualApprove = async (bidId, customRate) => {
   setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
   try {
-    const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {}, {
-      headers: {
-        'Content-Type': 'application/json',
-      }
+    const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
+      rate: customRate
+    }, {
+      headers: { 'Content-Type': 'application/json' }
     });
 
     if (response.data.success) {
       alertify.success('Bid manually approved successfully');
-      await fetchAllData(); // Now this will work
+      await fetchAllData();
     } else {
       alertify.error(response.data.message || 'Failed to approve bid manually');
     }
@@ -226,6 +211,7 @@ const handleManualApprove = async (bidId) => {
     setActionLoading(prev => ({ ...prev, [bidId]: null }));
   }
 };
+
 
 const handleAutoApprove = async (bidId) => {
   setActionLoading(prev => ({ ...prev, [bidId]: 'auto' }));
@@ -668,7 +654,7 @@ const handleAutoApprove = async (bidId) => {
                     <td className="py-2 px-3">
   <div className="flex gap-2">
     <button
-      onClick={() => handleManualApprove(rate.rateNum)}
+      onClick={() => setApprovalModal({ visible: true, type: 'manual', rate })}
       disabled={actionLoading[rate.rateNum]}
       className={`px-3 py-1 text-xs font-semibold text-white rounded-full transition-colors ${
         actionLoading[rate.rateNum] === 'manual'
@@ -686,7 +672,7 @@ const handleAutoApprove = async (bidId) => {
       )}
     </button>
     <button
-      onClick={() => handleAutoApprove(rate.rateNum)}
+      onClick={() => setApprovalModal({ visible: true, type: 'auto', rate })}
       disabled={actionLoading[rate.rateNum]}
       className={`px-3 py-1 text-xs font-semibold text-white rounded-full transition-colors ${
         actionLoading[rate.rateNum] === 'auto'
@@ -942,6 +928,69 @@ const handleAutoApprove = async (bidId) => {
           </div>
         </div>
       )}
+      {approvalModal.visible && (
+  <div className="fixed inset-0 z-50 bg-black bg-opacity-10 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-6 shadow-2xl w-[450px] relative">
+      <button
+        className="absolute top-3 right-4 text-gray-500 text-2xl hover:text-red-500"
+        onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
+      >
+        ×
+      </button>
+
+      <h2 className="text-lg font-bold text-gray-800 mb-4">
+        {approvalModal.type === 'manual' ? 'Manual Approval' : 'Auto Approval'}
+      </h2>
+
+      <div className="space-y-2 text-sm text-gray-700">
+        <p><strong>Shipment:</strong> {approvalModal.rate.shipmentNumber}</p>
+        <p><strong>Trucker:</strong> {approvalModal.rate.truckerName}</p>
+        <p><strong>Origin:</strong> {approvalModal.rate.origin}</p>
+        <p><strong>Destination:</strong> {approvalModal.rate.destination}</p>
+      </div>
+
+      <div className="mt-4">
+        <label className="text-sm font-medium text-gray-700">Rate</label>
+        <input
+          type="number"
+          className="w-full px-4 py-2 mt-1 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
+          value={approvalModal.rate.rate}
+          readOnly={approvalModal.type === 'auto'}
+          onChange={(e) => {
+            if (approvalModal.type === 'manual') {
+              setApprovalModal(prev => ({
+                ...prev,
+                rate: { ...prev.rate, rate: e.target.value }
+              }));
+            }
+          }}
+        />
+      </div>
+
+      <div className="mt-6 flex justify-end gap-4">
+        <button
+          onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
+          className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={async () => {
+            if (approvalModal.type === 'manual') {
+              await handleManualApprove(approvalModal.rate.rateNum, approvalModal.rate.rate);
+            } else {
+              await handleAutoApprove(approvalModal.rate.rateNum);
+            }
+            setApprovalModal({ visible: false, type: null, rate: null });
+          }}
+          className={`px-5 py-2 rounded-lg text-white ${approvalModal.type === 'manual' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+        >
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 } 

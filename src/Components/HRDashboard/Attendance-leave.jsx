@@ -108,14 +108,17 @@ const HRManagementSystem = () => {
   ];
 
   const getStatusBadge = (status) => {
-    const statusClasses = {
-      'Present': 'bg-green-600 text-white',
-      'Absent': 'bg-red-600 text-white',
-      'On-Leave': 'bg-yellow-500 text-white',
-      'Half day': 'bg-blue-500 text-white',
-    };
-    return `px-3 py-1 rounded-full text-sm font-medium ${statusClasses[status] || 'bg-gray-200'}`;
-  };
+  switch (status?.toLowerCase()) {
+    case 'present':
+      return 'bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium';
+    case 'half day':
+      return 'bg-yellow-400 text-white px-3 py-1 rounded-full text-sm font-medium';
+    case 'absent':
+      return 'bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium';
+    default:
+      return 'bg-gray-300 text-black px-3 py-1 rounded-full text-sm font-medium';
+  }
+};
 
   const getActionButtons = (status, leaveId) => {
     const handleLeaveAction = async (newStatus) => {
