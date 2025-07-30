@@ -41,6 +41,7 @@ import Loads from "./Components/CMT/Loads.jsx";
 
 
 import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
+import AddCustomer from "./Components/Sales/AddCustomer.jsx";
 
 
 function App() {
@@ -109,6 +110,7 @@ function App() {
         <Route path="/Loads" element={<Loads/>} />
         <Route path="/HrCreateTask" element={<HrCreateTask/>} />
         <Route path="delivery-order" element={<DeliveryOrder/>} />
+        <Route path="/AddCustomer" element={<AddCustomer/>}/>
         
 
       </Route>

@@ -90,58 +90,72 @@ const EmployeeHygiene = () => {
   if (!score) return <div className="text-center py-10">No data available</div>;
 
   return (
-    <div className="p-6 flex justify-center">
-      <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-4xl">
-        <h2 className="text-2xl font-semibold mb-6">Personal Hygiene</h2>
-        <div className="flex flex-col md:flex-row justify-left items-center gap-8">
-          <div className="space-y-4 w-full md:w-2/3">
-            <div className="flex justify-between">
-              <span>Attendance</span>
-              <span className="text-green-600 font-medium">{score.attendance.value}/{score.attendance.total}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Breaks</span>
-              <span className="text-orange-500 font-medium">{score.breaks.value}/{score.breaks.limit}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Daily Targets</span>
-              <span className="text-green-600 font-medium">{score.dailyTargets.value}/{score.dailyTargets.total}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Time In - Out</span>
-              <span className="text-red-500 font-medium">{score.timeInOut.value}/{score.timeInOut.total}</span>
-            </div>
-          </div>
+    <div className="min-h-screen   flex justify-center items-center px-4 py-10">
+  <div className="bg-white/70 backdrop-blur-lg rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-white/40 p-8 w-full max-w-8xl transform transition duration-300 hover:scale-[1.01]">
 
-          <div className="w-36 h-36 relative">
-            <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-0">
-              <path
-                className="text-gray-200"
-                d="M18 2.0845
-                   a 15.9155 15.9155 0 0 1 0 31.831
-                   a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-              />
-              <path
-                className="text-green-600"
-                strokeDasharray={`${score.totalScore}, 100`}
-                d="M18 2.0845
-                   a 15.9155 15.9155 0 0 1 0 31.831
-                   a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-              />
-              <text x="18" y="20.35" className="fill-current text-gray-800 text-sm" textAnchor="middle">
-                {score.totalScore}%
-              </text>
-            </svg>
+    {/* Header */}
+    <div className="mb-8 text-center">
+      <h2 className="text-3xl font-bold tracking-tight text-gray-800 drop-shadow-md">
+        ✨ Personal Hygiene Summary
+      </h2>
+      
+    </div>
+
+    <div className="flex flex-col md:flex-row justify-between items-center gap-12">
+
+      {/* Metrics */}
+      <div className="space-y-6 w-full md:w-2/3">
+        {[
+          { label: "Attendance", value: score.attendance.value, total: score.attendance.total, color: "text-green-500" },
+          { label: "Breaks", value: score.breaks.value, total: score.breaks.limit, color: "text-orange-500" },
+          { label: "Daily Targets", value: score.dailyTargets.value, total: score.dailyTargets.total, color: "text-green-500" },
+          { label: "Time In - Out", value: score.timeInOut.value, total: score.timeInOut.total, color: "text-red-500" },
+        ].map((item, idx) => (
+          <div key={idx} className="bg-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.05)] rounded-xl px-6 py-4 flex justify-between items-center border border-gray-200 hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] transition">
+            <span className="text-gray-700 font-medium">{item.label}</span>
+            <span className={`text-xl font-bold ${item.color}`}>{item.value}/{item.total}</span>
           </div>
+        ))}
+      </div>
+
+      {/* 3D Score Ring */}
+      <div className="w-44 h-44 relative bg-white/70 shadow-inner rounded-full border border-gray-200 p-2 flex items-center justify-center">
+        <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
+          <defs>
+            <linearGradient id="3dGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#4ade80" />
+              <stop offset="100%" stopColor="#22c55e" />
+            </linearGradient>
+          </defs>
+          <path
+            className="text-gray-300"
+            d="M18 2.0845
+              a 15.9155 15.9155 0 0 1 0 31.831
+              a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3.5"
+          />
+          <path
+            strokeDasharray={`${score.totalScore}, 100`}
+            strokeLinecap="round"
+            stroke="url(#3dGradient)"
+            d="M18 2.0845
+              a 15.9155 15.9155 0 0 1 0 31.831
+              a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            strokeWidth="3.5"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-sm text-gray-500">Total Score</p>
+          <p className="text-3xl font-bold text-gray-800">{score.totalScore}%</p>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
   );
 };
 

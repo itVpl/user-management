@@ -432,9 +432,9 @@ const HRDashboard = () => {
           <div className="text-sm text-gray-600">
             Showing {Math.min(currentMonthLeaves.length, 6)} of {currentMonthLeaves.length} current month leave requests
           </div>
-          <button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg">
+          {/* <button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg">
             View All Requests
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -460,9 +460,9 @@ const HRDashboard = () => {
             </div>
             <div className="text-4xl font-bold text-gray-800 mb-4">{pendingVerifications}</div>
             <p className="text-gray-600 mb-6 text-center">Documents pending verification</p>
-            <button className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 font-medium shadow-lg">
+            {/* <button className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 font-medium shadow-lg">
               Review Documents
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -488,9 +488,9 @@ const HRDashboard = () => {
               <h4 className="text-2xl font-bold text-gray-800 mb-2">Monthly Hygiene Log</h4>
               <p className="text-gray-600 mb-6">Overall compliance rate</p>
             </div>
-            <button className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-6 py-3 rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 font-medium shadow-lg">
+            {/* <button className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-6 py-3 rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 font-medium shadow-lg">
               View Report
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
