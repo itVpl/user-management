@@ -18,6 +18,7 @@ export default function RateApproved() {
   const [showRateModal, setShowRateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [actionLoading, setActionLoading] = useState({});
 
   // Form state for Add Rate Approved
   const [formData, setFormData] = useState({
@@ -39,21 +40,21 @@ export default function RateApproved() {
     try {
       setLoading(true);
       console.log('Fetching approved rates from:', `${API_CONFIG.BASE_URL}/api/v1/bid/approved/`);
-      
+
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/approved/`, {
         timeout: 10000, // 10 second timeout
         headers: {
           'Content-Type': 'application/json',
         }
       });
-      
+
       console.log('API Response:', response);
-      
+
       if (response.data && response.data.success) {
         // Transform API data to match our component structure
         const transformedRates = response.data.data.map(rate => ({
-          id: `RA-${rate._id.slice(-6)}`, 
-          rateNum: rate._id, 
+          id: `RA-${rate._id.slice(-6)}`,
+          rateNum: rate._id,
           shipmentNumber: rate.shipmentNumber || 'N/A',
           origin: rate.origin || 'N/A',
           destination: rate.destination || 'N/A',
@@ -65,7 +66,7 @@ export default function RateApproved() {
           docUpload: rate.supportingDocs || 'sample-doc.jpg',
           remarks: rate.remarks || ''
         }));
-        
+
         console.log('Transformed rates:', transformedRates);
         setApprovedRates(transformedRates);
       } else {
@@ -80,7 +81,7 @@ export default function RateApproved() {
         data: error.response?.data,
         url: error.config?.url
       });
-      
+
       alertify.error(`Failed to load approved rates: ${error.response?.status || 'Network Error'}`);
       // Fallback to sample data if API fails
       const sampleRates = [
@@ -105,6 +106,8 @@ export default function RateApproved() {
     }
   };
 
+  
+
   useEffect(() => {
     fetchApprovedRates();
   }, []);
@@ -114,7 +117,7 @@ export default function RateApproved() {
       const { id } = selectedRate;
       // Simulate API call
       setTimeout(() => {
-        setApprovedRates(approvedRates.map(rate => 
+        setApprovedRates(approvedRates.map(rate =>
           rate.id === id ? { ...rate, status } : rate
         ));
         setModalType(null);
@@ -144,7 +147,108 @@ export default function RateApproved() {
     rate.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
     rate.truckerName.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  // Add after fetchApprovedRates function
+  const fetchPendingApprovals = async () => {
+    try {
+      console.log('Fetching pending approvals from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`);
 
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (response.data && response.data.success) {
+        const transformedRates = response.data.bids.map(bid => ({
+          id: `RA-${bid._id.slice(-6)}`,
+          rateNum: bid._id,
+          shipmentNumber: bid.load.shipmentNumber || 'N/A',
+          origin: `${bid.load.origin.city}, ${bid.load.origin.state}`,
+          destination: `${bid.load.destination.city}, ${bid.load.destination.state}`,
+          rate: bid.rate,
+          truckerName: bid.carrier.compName,
+          status: 'pending',
+          createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
+          createdBy: `Employee ${bid.placedByInhouseUser}`,
+          docUpload: bid.doDocument || 'sample-doc.jpg',
+          remarks: bid.message || ''
+        }));
+
+        return transformedRates;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching pending approvals:', error);
+      return [];
+    }
+  };
+// Define fetchAllData at the component level
+const fetchAllData = async () => {
+  setLoading(true);
+  try {
+    const [approvedData, pendingData] = await Promise.all([
+      fetchApprovedRates(),
+      fetchPendingApprovals()
+    ]);
+    
+    // Combine both datasets
+    const combinedRates = [...(approvedData || []), ...(pendingData || [])];
+    setApprovedRates(combinedRates);
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    alertify.error('Error refreshing data');
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Then update the handleManualApprove and handleAutoApprove functions
+const handleManualApprove = async (bidId) => {
+  setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
+  try {
+    const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {}, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (response.data.success) {
+      alertify.success('Bid manually approved successfully');
+      await fetchAllData(); // Now this will work
+    } else {
+      alertify.error(response.data.message || 'Failed to approve bid manually');
+    }
+  } catch (error) {
+    console.error('Manual approve error:', error);
+    alertify.error(error.response?.data?.message || 'Error in manual approval. Please try again.');
+  } finally {
+    setActionLoading(prev => ({ ...prev, [bidId]: null }));
+  }
+};
+
+const handleAutoApprove = async (bidId) => {
+  setActionLoading(prev => ({ ...prev, [bidId]: 'auto' }));
+  try {
+    const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/auto-approve`, {}, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (response.data.success) {
+      alertify.success('Bid auto-approved successfully');
+      await fetchAllData(); // Now this will work
+    } else {
+      alertify.error(response.data.message || 'Failed to auto-approve bid');
+    }
+  } catch (error) {
+    console.error('Auto approve error:', error);
+    alertify.error(error.response?.data?.message || 'Error in auto approval. Please try again.');
+  } finally {
+    setActionLoading(prev => ({ ...prev, [bidId]: null }));
+  }
+};
   // Pagination calculations
   const totalPages = Math.ceil(filteredRates.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -160,7 +264,23 @@ export default function RateApproved() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+  // Replace the existing useEffect
+  useEffect(() => {
+    const fetchAllData = async () => {
+      setLoading(true);
+      const [approvedData, pendingData] = await Promise.all([
+        fetchApprovedRates(),
+        fetchPendingApprovals()
+      ]);
 
+      // Combine both datasets
+      const combinedRates = [...(approvedData || []), ...(pendingData || [])];
+      setApprovedRates(combinedRates);
+      setLoading(false);
+    };
+
+    fetchAllData();
+  }, []);
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -181,7 +301,7 @@ export default function RateApproved() {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setSubmitting(true);
       // Prepare the data for API submission
@@ -222,7 +342,7 @@ export default function RateApproved() {
         };
 
         setApprovedRates(prevRates => [newRate, ...prevRates]);
-        
+
         // Close modal and reset form
         setShowAddRateForm(false);
         setFormData({
@@ -419,26 +539,70 @@ export default function RateApproved() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            // Replace the existing rate info section in the viewDoc condition with:
             <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50 to-white shadow flex flex-col gap-2">
               <div className="flex items-center gap-2 mb-2">
                 <Building className="text-green-500" size={20} />
                 <h3 className="text-lg font-bold text-green-700">Rate Info</h3>
               </div>
-              <div className="flex items-center gap-2 text-gray-700"><User size={16} /> <span className="font-medium">Trucker:</span> {selectedRate.truckerName}</div>
-              <div className="flex items-center gap-2 text-gray-700"><FileText size={16} /> <span className="font-medium">Rate ID:</span> {selectedRate.id}</div>
-              <div className="flex items-center gap-2 text-gray-700"><Mail size={16} /> <span className="font-medium">Shipment:</span> {selectedRate.shipmentNumber}</div>
-              <div className="flex items-center gap-2 text-gray-700"><Phone size={16} /> <span className="font-medium">Rate:</span> ${selectedRate.rate.toLocaleString()}</div>
-              <div className="flex items-center gap-2 text-gray-700"><Truck size={16} /> <span className="font-medium">Origin:</span> {selectedRate.origin}</div>
-              <div className="flex items-center gap-2 text-gray-700"><DollarSign size={16} /> <span className="font-medium">Destination:</span> {selectedRate.destination}</div>
-              <div className="flex items-center gap-2 text-gray-700"><Calendar size={16} /> <span className="font-medium">Created:</span> {selectedRate.createdAt}</div>
-              {selectedRate.remarks && (
-                <div className="flex items-center gap-2 text-gray-700"><FileText size={16} /> <span className="font-medium">Remarks:</span> {selectedRate.remarks}</div>
-              )}
-              <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold mt-2 ${statusColor(selectedRate.status)}`}>
-                {selectedRate.status === 'approved' && <CheckCircle size={14} />}
-                {selectedRate.status === 'rejected' && <XCircle size={14} />}
-                {selectedRate.status === 'pending' && <Clock size={14} />}
-                {selectedRate.status || 'Pending'}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-2 text-gray-700">
+                  <User size={16} />
+                  <span className="font-medium">Trucker:</span> {selectedRate.truckerName}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <FileText size={16} />
+                  <span className="font-medium">MC/DOT:</span> {selectedRate.carrierInfo?.mcDotNo || 'N/A'}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Mail size={16} />
+                  <span className="font-medium">Email:</span> {selectedRate.carrierInfo?.email || 'N/A'}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Phone size={16} />
+                  <span className="font-medium">Phone:</span> {selectedRate.carrierInfo?.phone || 'N/A'}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Truck size={16} />
+                  <span className="font-medium">Fleet Size:</span> {selectedRate.carrierInfo?.fleetSize || 'N/A'}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <MapPin size={16} />
+                  <span className="font-medium">Origin:</span> {selectedRate.origin}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <MapPin size={16} />
+                  <span className="font-medium">Destination:</span> {selectedRate.destination}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <DollarSign size={16} />
+                  <span className="font-medium">Rate:</span> ${selectedRate.rate.toLocaleString()}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Calendar size={16} />
+                  <span className="font-medium">Est. Pickup:</span> {selectedRate.estimatedPickup || 'N/A'}
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Calendar size={16} />
+                  <span className="font-medium">Est. Delivery:</span> {selectedRate.estimatedDelivery || 'N/A'}
+                </div>
+                {selectedRate.remarks && (
+                  <div className="col-span-2 flex items-start gap-2 text-gray-700">
+                    <FileText size={16} className="mt-1" />
+                    <div>
+                      <span className="font-medium">Remarks:</span>
+                      <p className="mt-1">{selectedRate.remarks}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold mt-2 ${statusColor(selectedRate.status)}`}>
+                    {selectedRate.status === 'approved' && <CheckCircle size={14} />}
+                    {selectedRate.status === 'rejected' && <XCircle size={14} />}
+                    {selectedRate.status === 'pending' && <Clock size={14} />}
+                    {selectedRate.status || 'Pending'}
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex flex-col items-center justify-center">
@@ -466,6 +630,7 @@ export default function RateApproved() {
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Created</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -500,6 +665,47 @@ export default function RateApproved() {
                         <p className="text-xs text-gray-500">by {rate.createdBy}</p>
                       </div>
                     </td>
+                    <td className="py-2 px-3">
+  <div className="flex gap-2">
+    <button
+      onClick={() => handleManualApprove(rate.rateNum)}
+      disabled={actionLoading[rate.rateNum]}
+      className={`px-3 py-1 text-xs font-semibold text-white rounded-full transition-colors ${
+        actionLoading[rate.rateNum] === 'manual'
+          ? 'bg-green-300 cursor-not-allowed'
+          : 'bg-green-500 hover:bg-green-600'
+      }`}
+    >
+      {actionLoading[rate.rateNum] === 'manual' ? (
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+          Approving...
+        </span>
+      ) : (
+        'Manual Approve'
+      )}
+    </button>
+    <button
+      onClick={() => handleAutoApprove(rate.rateNum)}
+      disabled={actionLoading[rate.rateNum]}
+      className={`px-3 py-1 text-xs font-semibold text-white rounded-full transition-colors ${
+        actionLoading[rate.rateNum] === 'auto'
+          ? 'bg-blue-300 cursor-not-allowed'
+          : 'bg-blue-500 hover:bg-blue-600'
+      }`}
+    >
+      {actionLoading[rate.rateNum] === 'auto' ? (
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+          Auto...
+        </span>
+      ) : (
+        'Auto Approve'
+      )}
+    </button>
+  </div>
+</td>
+                    
                   </tr>
                 ))}
               </tbody>
@@ -538,11 +744,10 @@ export default function RateApproved() {
               <button
                 key={page}
                 onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${
-                  currentPage === page
+                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
                     ? 'bg-blue-500 text-white border-blue-500'
                     : 'border-gray-300 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 {page}
               </button>
@@ -708,22 +913,20 @@ export default function RateApproved() {
                   type="button"
                   onClick={handleCloseModal}
                   disabled={submitting}
-                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed text-gray-400' 
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
+                      ? 'opacity-50 cursor-not-allowed text-gray-400'
                       : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed' 
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
+                      ? 'opacity-50 cursor-not-allowed'
                       : 'hover:from-blue-600 hover:to-blue-700'
-                  }`}
+                    }`}
                 >
                   {submitting ? (
                     <div className="flex items-center gap-2">

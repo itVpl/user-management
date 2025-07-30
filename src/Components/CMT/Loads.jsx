@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search,Plus } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -18,6 +18,111 @@ export default function Loads() {
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // ✅ NEW STATES
+const [showLoadCreationModal, setShowLoadCreationModal] = useState(false);
+const [loadType, setLoadType] = useState("OTR");
+const [shippers, setShippers] = useState([]);
+const [loadForm, setLoadForm] = useState({
+  shipperId: "", // Dynamic if needed
+  fromCity: "",
+  fromState: "",
+  toCity: "",
+  toState: "",
+  weight: "",
+  commodity: "",
+  vehicleType: "",
+  pickupDate: "",
+  deliveryDate: "",
+  returnDate: "",
+  drayageLocation: "",
+  rate: "",
+  // rateType: "Flat Rate",
+  bidDeadline: "",
+  containerNo: "",
+  poNumber: "",
+  bolNumber: ""
+});
+
+// ✅ HANDLE CHANGE
+const handleChange = (e) => {
+  const { name, value } = e.target;
+  setLoadForm((prev) => ({ ...prev, [name]: value }));
+};
+
+// ✅ HANDLE SUBMIT
+const handleLoadSubmit = async (e) => {
+  e.preventDefault();
+
+  const token = sessionStorage.getItem("token"); // ✅ get from sessionStorage
+
+  if (!token) {
+    alertify.error("You're not logged in. Please login to continue.");
+    return;
+  }
+
+  const payload = {
+    ...loadForm,
+    weight: parseInt(loadForm.weight),
+    rate: parseInt(loadForm.rate),
+    rateType: "Flat Rate",
+    loadType,
+  };
+
+  console.log("🚀 Submitting Payload:", payload);
+
+  try {
+    const res = await axios.post(
+      `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`,
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // ✅ token from session
+        },
+      }
+    );
+
+    if (res.data.success) {
+      alertify.success("✅ Load created successfully!");
+      setShowLoadCreationModal(false);
+      fetchLoads(); // Refresh list
+    } else {
+      alertify.error(res.data.message || "❌ Load creation failed.");
+    }
+  } catch (err) {
+    console.error("❌ Error creating load:", err);
+    alertify.error(err.response?.data?.message || "❌ API Error. Please try again.");
+  }
+};
+useEffect(() => {
+  const fetchShippers = async () => {
+    const token = sessionStorage.getItem("token");
+    if (!token) {
+      console.error("No token found");
+      return;
+    }
+
+    try {
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log("Shippers:", res.data);
+
+      setShippers(res.data?.customers || []); // 👈 adjust based on actual key
+    } catch (err) {
+      console.error("❌ Error fetching shippers:", err.response?.data || err.message || err);
+    }
+  };
+
+  fetchShippers();
+}, []);
+
+
+
+
+
 
   // Form state for Add Load
   const [formData, setFormData] = useState({
@@ -38,9 +143,9 @@ export default function Loads() {
   const fetchLoads = async () => {
     try {
       setLoading(true);
-      console.log('Fetching loads from:', `${API_CONFIG.BASE_URL}/api/v1/load/inhouse/`);
+      console.log('Fetching loads from:', `${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`);
       
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse/`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
         timeout: 10000, // 10 second timeout
         headers: {
           'Content-Type': 'application/json',
@@ -612,8 +717,19 @@ export default function Loads() {
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
           </div>
-
+          {/* // ✅ BUTTON TO OPEN MODAL */}
+<button
+  onClick={() => {
+    setLoadType("OTR");
+    setShowLoadCreationModal(true);
+  }}
+  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+>
+  <PlusCircle className="w-4 h-4" />
+  Add Loads
+</button>
         </div>
+        
       </div>
 
       {viewDoc && selectedLoad ? (
@@ -989,6 +1105,179 @@ export default function Loads() {
           </div>
         </div>
       )}
+       {/* ✅ MODAL UI */}
+{showLoadCreationModal && (
+  <div className="fixed inset-0 z-50 bg-black/40 flex justify-center items-center p-4">
+    <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-8 border border-blue-300">
+
+      {/* Header */}
+      <div className="flex justify-between items-center mb-8">
+        <h2 className="text-2xl font-bold text-blue-700">🚚 Create New Load</h2>
+        <div className="flex gap-2 bg-blue-100 p-1 rounded-full">
+          {["OTR", "DRAYAGE"].map((type) => (
+            <button
+              key={type}
+              onClick={() => setLoadType(type)}
+              className={`px-6 py-2 rounded-full font-medium transition-all ${
+                loadType === type
+                  ? "bg-blue-600 text-white"
+                  : "text-blue-700 hover:bg-blue-200"
+              }`}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Form */}
+      <form onSubmit={handleLoadSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {/* Shipper Dropdown */}
+        <div className="col-span-2">
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Select Shipper *</label>
+          <select
+            name="shipperId"
+            value={loadForm.shipperId}
+            onChange={handleChange}
+            required
+            className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">-- Select Shipper --</option>
+            {shippers.map((shipper) => (
+              <option key={shipper._id} value={shipper._id}>
+                {shipper.compName} ({shipper.email})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* FROM/TO LOCATION */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">From City *</label>
+          <input name="fromCity" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">From State *</label>
+          <input name="fromState" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">To City *</label>
+          <input name="toCity" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">To State *</label>
+          <input name="toState" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        {/* VEHICLE & COMMODITY */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Type *</label>
+          <input name="vehicleType" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Commodity *</label>
+          <input name="commodity" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        {/* WEIGHT & RATE */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg) *</label>
+          <input type="number" name="weight" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Expected Price *</label>
+          <input type="number" name="rate" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        {/* CONTAINER / PO / BOL */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Container No</label>
+          <input name="containerNo" onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">PO Number</label>
+          <input name="poNumber" onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">BOL Number</label>
+          <input name="bolNumber" onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
+          <input value="Flat Rate" readOnly disabled
+            className="w-full px-4 py-2 bg-gray-100 text-gray-600 border rounded-md border-gray-300" />
+        </div>
+
+        {/* DATES */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date *</label>
+          <input type="date" name="pickupDate" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Date *</label>
+          <input type="date" name="deliveryDate" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Bid Deadline *</label>
+          <input type="date" name="bidDeadline" required onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        {/* DRAYAGE EXTRA FIELDS */}
+        {loadType === "DRAYAGE" && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
+              <input type="date" name="returnDate" onChange={handleChange}
+                className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Drayage Location</label>
+              <input name="drayageLocation" onChange={handleChange}
+                className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </>
+        )}
+
+        {/* ACTION BUTTONS */}
+        <div className="col-span-2 flex justify-end gap-4 pt-8">
+          <button
+            type="button"
+            onClick={() => setShowLoadCreationModal(false)}
+            className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow"
+          >
+            Submit
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
+
+
+
+
     </div>
   );
 } 

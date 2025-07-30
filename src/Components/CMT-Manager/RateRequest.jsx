@@ -23,29 +23,29 @@ const RateRequest = () => {
   const [selectedTrucker, setSelectedTrucker] = useState('');
   const [isFetching, setIsFetching] = useState(true);
 
+  const fetchRateRequests = async () => {
+    try {
+      const res = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/load/available/');
+      setRateRequests(res.data?.loads || []);
+    } catch (error) {
+      toast.error('Failed to fetch load data');
+      console.error(error);
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  const fetchTruckers = async () => {
+    try {
+      const res = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/truckers/');
+      setTruckers(res.data?.data || []);
+    } catch (error) {
+      toast.error('Failed to fetch trucker data');
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
-    const fetchRateRequests = async () => {
-      try {
-        const res = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/load/available/');
-        setRateRequests(res.data?.loads || []);
-      } catch (error) {
-        toast.error('Failed to fetch load data');
-        console.error(error);
-      } finally {
-        setIsFetching(false);
-      }
-    };
-
-    const fetchTruckers = async () => {
-      try {
-        const res = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/truckers/');
-        setTruckers(res.data?.data || []);
-      } catch (error) {
-        toast.error('Failed to fetch trucker data');
-        console.error(error);
-      }
-    };
-
     fetchRateRequests();
     fetchTruckers();
   }, []);
@@ -65,28 +65,56 @@ const RateRequest = () => {
     setSelectedTrucker('');
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    console.log('🟡 Submit button clicked');
+
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
+
+    if (!token || !empId) {
+      toast.error('Missing token or empId. Please log in again.');
+      console.log('🚫 Token or empId missing');
+      return;
+    }
+
     if (!rate || !message || !pickupDate || !deliveryDate || !selectedTrucker) {
       toast.error('Please fill all fields');
       return;
     }
 
+    const payload = {
+      loadId: selectedRequest?._id,
+      truckerId: selectedTrucker,
+      empId,
+      rate: parseInt(rate),
+      message,
+      estimatedPickupDate: pickupDate,
+      estimatedDeliveryDate: deliveryDate,
+    };
+
+    console.log('📦 Submitting payload:', payload);
+
     try {
       setSubmitting(true);
-      await axios.post('https://vpl-liveproject-1.onrender.com/api/v1/bid/place-by-inhouse/', {
-        loadId: selectedRequest?._id,
-        rate: parseInt(rate),
-        message,
-        estimatedPickupDate: pickupDate,
-        estimatedDeliveryDate: deliveryDate,
-        truckerId: selectedTrucker, // Assuming your backend accepts this
-      });
+      const res = await axios.post(
+        'https://vpl-liveproject-1.onrender.com/api/v1/bid/place-by-inhouse/',
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      toast.success('Rate Request submitted!');
+      console.log('✅ Response:', res.data);
+      toast.success('Bid submitted!');
+      await fetchRateRequests(); // 🔁 Refresh list
       closeModal();
     } catch (error) {
-      toast.error('Submission failed');
-      console.error(error);
+      console.error('❌ Submission Error:', error.response?.data || error.message);
+      toast.error(error.response?.data?.message || 'Submission failed');
     } finally {
       setSubmitting(false);
     }
@@ -167,128 +195,83 @@ const RateRequest = () => {
             </tbody>
           </table>
         )}
-        {!isFetching && (
-          <div className="flex justify-between items-center p-4 text-sm">
-            <span>Rows per page: 10</span>
-            <span>1–{filteredRequests.length} of {filteredRequests.length}</span>
-          </div>
-        )}
       </div>
 
       {/* Modal */}
-    {isModalOpen && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
-    <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-3xl p-8 border border-blue-100 animate-fade-in scale-100">
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
+          <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-3xl p-8 border border-blue-100 animate-fade-in scale-100">
+            <form onSubmit={handleSubmit}>
+              <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-semibold flex items-center gap-2">🚛 Rate Request Form</h2>
+                  <p className="text-sm text-blue-100 mt-1">Enter your bid and trucker details below</p>
+                </div>
+                <button onClick={closeModal} type="button" className="text-white text-3xl hover:text-gray-200">&times;</button>
+              </div>
 
-      {/* Modal Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-semibold flex items-center gap-2">
-            🚛 Rate Request Form
-          </h2>
-          <p className="text-sm text-blue-100 mt-1">Enter your bid and trucker details below</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-700 bg-blue-50 px-4 py-3 rounded-lg mb-6 shadow-inner">
+                <div><strong>Pickup:</strong><br />{selectedRequest?.origin?.city || '—'}</div>
+                <div><strong>Drop:</strong><br />{selectedRequest?.destination?.city || '—'}</div>
+                <div><strong>Weight:</strong><br />{selectedRequest?.weight} Kg</div>
+                <div><strong>Vehicle Type:</strong><br />{selectedRequest?.vehicleType || '—'}</div>
+                <div><strong>Commodity:</strong><br />{selectedRequest?.commodity || 'N/A'}</div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="col-span-2">
+                  <label className="block text-gray-700 text-sm font-medium mb-1">Select Trucker</label>
+                  <select value={selectedTrucker} onChange={(e) => setSelectedTrucker(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-400">
+                    <option value="">Choose Trucker (compName)</option>
+                    {truckers.map((t) => (
+                      <option key={t._id} value={t._id}>{t.compName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 text-sm font-medium mb-1">📅 Pickup Date</label>
+                  <input type="datetime-local" value={pickupDate} onChange={(e) => setPickupDate(e.target.value)}
+                    className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-400" />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 text-sm font-medium mb-1">🚚 Delivery Date</label>
+                  <input type="datetime-local" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)}
+                    className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-400" />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 text-sm font-medium mb-1">💰 Rate (₹)</label>
+                  <input type="number" value={rate} onChange={(e) => setRate(e.target.value)}
+                    className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-400" placeholder="e.g. 32000" />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-gray-700 text-sm font-medium mb-1">✉️ Message</label>
+                  <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3}
+                    placeholder="Mention availability, timeline, or instructions"
+                    className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm resize-none focus:ring-2 focus:ring-indigo-400"></textarea>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-4">
+                <button type="button" onClick={closeModal}
+                  className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 shadow">
+                  Cancel
+                </button>
+                <button type="submit" disabled={submitting}
+                  className={`px-5 py-2.5 rounded-lg font-semibold text-white shadow transition ${
+                    submitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}>
+                  {submitting ? 'Submitting...' : 'Submit Bid'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-        <button
-          onClick={closeModal}
-          className="text-white text-3xl hover:text-gray-200"
-        >
-          &times;
-        </button>
-      </div>
-
-      {/* Shipment Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-700 bg-blue-50 px-4 py-3 rounded-lg mb-6 shadow-inner">
-        
-        <div><strong>Pickup:</strong><br />{selectedRequest?.origin?.city || '—'}</div>
-        <div><strong>Drop:</strong><br />{selectedRequest?.destination?.city || '—'}</div>
-        <div><strong>weight:</strong><br />{selectedRequest?.weight} Kg</div>
-        <div><strong>Vehicle Type:</strong><br />{selectedRequest?.vehicleType || '—'}</div>
-        <div><strong>Commodity:</strong><br />{selectedRequest?.commodity || 'N/A'}</div>
-      </div>
-
-      {/* Form */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="col-span-2">
-          <label className="block text-gray-700 text-sm font-medium mb-1">Select Trucker</label>
-          <select
-            value={selectedTrucker}
-            onChange={(e) => setSelectedTrucker(e.target.value)}
-            className="w-full border border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-indigo-400"
-          >
-            <option value="">Choose Trucker (compName)</option>
-            {truckers.map((t) => (
-              <option key={t._id} value={t._id}>{t.compName}</option>
-            ))}
-          </select>
-        </div>
-
-        
-        <div>
-          <label className="block text-gray-700 text-sm font-medium mb-1">📅 Pickup Date</label>
-          <input
-            type="datetime-local"
-            value={pickupDate}
-            onChange={(e) => setPickupDate(e.target.value)}
-            className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-400"
-          />
-        </div>
-
-        <div>
-          <label className="block text-gray-700 text-sm font-medium mb-1">🚚 Delivery Date</label>
-          <input
-            type="datetime-local"
-            value={deliveryDate}
-            onChange={(e) => setDeliveryDate(e.target.value)}
-            className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-400"
-          />
-        </div>
-        <div>
-          <label className="block text-gray-700 text-sm font-medium mb-1">💰 Rate (₹)</label>
-          <input
-            type="number"
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-            className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-400"
-            placeholder="e.g. 32000"
-          />
-        </div>
-
-
-        <div className="col-span-2">
-          <label className="block text-gray-700 text-sm font-medium mb-1">✉️ Message</label>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            rows={3}
-            placeholder="Mention availability, timeline, or instructions"
-            className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm resize-none focus:ring-2 focus:ring-indigo-400"
-          ></textarea>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="mt-6 flex justify-end gap-4">
-        <button
-          onClick={closeModal}
-          className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 shadow"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={submitting}
-          className={`px-5 py-2.5 rounded-lg font-semibold text-white shadow transition ${
-            submitting
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-indigo-600 hover:bg-indigo-700'
-          }`}
-        >
-          {submitting ? 'Submitting...' : 'Submit Bid'}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
     </div>
   );
 };
