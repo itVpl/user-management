@@ -96,8 +96,9 @@ export default function CarrierApproval() {
         }
       } else if (status === 'rejected') {
         // Use the rejection API
-        const response = await axios.patch(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/approval/reject/${userId}`, {
-          rejectionReason: reason || "Incomplete documents provided",
+        const response = await axios.patch(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/update-status/${selectedCarrier._id}`, {
+          status: 'rejected',
+          statusReason: reason || null,
         }, {
           headers: { 
             'Content-Type': 'application/json'
@@ -303,7 +304,7 @@ export default function CarrierApproval() {
               >
                 <CheckCircle size={18} /> Approve
               </button>
-              {/* <button
+              <button
                 onClick={() => setModalType('rejection')}
                 className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full shadow hover:from-red-600 hover:to-red-800 transition"
               >
@@ -314,7 +315,7 @@ export default function CarrierApproval() {
                 className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full shadow hover:from-blue-600 hover:to-purple-700 transition"
               >
                 <Clock size={18} /> Re-submission
-              </button> */}
+              </button>
             </div>
             <a
               href={`https://vpl-liveproject-1.onrender.com/${selectedCarrier.docUpload}`}
@@ -717,13 +718,13 @@ export default function CarrierApproval() {
                   <CheckCircle size={18} />
                   Approve
                 </button>
-                {/* <button
+                <button
                   onClick={() => setModalType('rejection')}
                   className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg shadow-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 font-semibold"
                 >
                   <XCircle size={18} />
                   Reject
-                </button> */}
+                </button>
               </div>
             </div>
           </div>

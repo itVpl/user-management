@@ -108,6 +108,7 @@ const HRManagementSystem = () => {
   ];
 
   const getStatusBadge = (status) => {
+
   switch (status?.toLowerCase()) {
     case 'present':
       return 'bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium';
@@ -119,6 +120,8 @@ const HRManagementSystem = () => {
       return 'bg-gray-300 text-black px-3 py-1 rounded-full text-sm font-medium';
   }
 };
+
+ 
 
   const getActionButtons = (status, leaveId) => {
     const handleLeaveAction = async (newStatus) => {
