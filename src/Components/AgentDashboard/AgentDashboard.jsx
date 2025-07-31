@@ -465,12 +465,12 @@ const Dashboard = () => {
                     percentage={Math.min(100, Math.round(((callStats.totalDuration / 1000) / 60 / 90) * 100)) || 0} 
                     color={((callStats.totalDuration / 1000) / 60 / 90) >= 1 ? "green" : "blue"}
                   />
-                  <div className="text-center mt-2">
+                  {/* <div className="text-center mt-2">
                     <p className="text-xs text-gray-600">Target Progress</p>
                     <p className="text-sm font-bold text-gray-800">
                       {Math.round(((callStats.totalDuration / 1000) / 60 / 90) * 100)}% Complete
                     </p>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>
