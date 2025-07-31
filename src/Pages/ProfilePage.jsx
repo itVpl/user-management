@@ -78,11 +78,17 @@ const ProfilePage = () => {
         }
 
         try {
+            // Create dates in local timezone to avoid UTC conversion issues
+            const createLocalDate = (dateStr) => {
+                const [year, month, day] = dateStr.split('-');
+                return new Date(year, month - 1, day, 12, 0, 0).toISOString();
+            };
+            
             const payload = {
                 empId,
                 leaveType: leaveType.toLowerCase().replace(" ", ""),
-                fromDate: new Date(fromDate).toISOString(),
-                toDate: new Date(toDate).toISOString(),
+                fromDate: createLocalDate(fromDate),
+                toDate: createLocalDate(toDate),
                 reason,
             };
 

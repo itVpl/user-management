@@ -49,9 +49,9 @@ export default function AddTruckerForm({ onSuccess }) {
     { key: 'carrierPartnerAgreement', label: 'Carrier Partner Agreement', required: true },
     { key: 'w9Form', label: 'W9 Form', required: true },
     { key: 'mcAuthority', label: 'MC Authority', required: true },
-    { key: 'safetyLetter', label: 'Safety Letter', required: true },
+    { key: 'safetyLetter', label: 'Safety Letter', required: false },
     { key: 'bankingInfo', label: 'Banking Information', required: true },
-    { key: 'inspectionLetter', label: 'Inspection Letter', required: true },
+    { key: 'inspectionLetter', label: 'Inspection Letter', required: false },
     { key: 'insurance', label: 'Insurance', required: true },
   ];
 
