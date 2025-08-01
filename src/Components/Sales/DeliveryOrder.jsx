@@ -21,11 +21,56 @@ export default function DeliveryOrder() {
 
   // Form state for Add Delivery Order
   const [formData, setFormData] = useState({
-    customerName: '',
-    productName: '',
-    orderValue: '',
-    orderDetails: '',
-    quantity: '',
+    // Customer Information - Array for multiple customers
+    customers: [
+      {
+        loadNo: '',
+        billTo: '',
+        dispatcherName: '',
+        workOrderNo: '',
+        lineHaul: '',
+        fsc: '',
+        other: '',
+        totalAmount: 0
+      }
+    ],
+    
+    // Carrier Information
+    carrierName: '',
+    equipmentType: '',
+    carrierFees: '',
+    
+    // Shipper Information
+    shipperName: '',
+    containerNo: '',
+    containerType: '',
+    weight: '',
+    
+    // Pickup Locations - Array for multiple locations
+    pickupLocations: [
+      {
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        date: ''
+      }
+    ],
+    
+    // Drop Locations - Array for multiple locations
+    dropLocations: [
+      {
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        date: ''
+      }
+    ],
+    
+    // General
     remarks: '',
     docs: null
   });
@@ -38,12 +83,31 @@ export default function DeliveryOrder() {
   const fetchOrders = async () => {
       try {
         setLoading(true);
-        console.log('Fetching orders from:', `${API_CONFIG.BASE_URL}/api/v1/do/do`);
         
-        const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do`, {
+        // Get user data to extract empId
+        const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+        if (!userStr) {
+          console.log('No user found in sessionStorage/localStorage');
+          return;
+        }
+        
+        const user = JSON.parse(userStr);
+        const empId = user.empId;
+        
+        if (!empId) {
+          console.log('No empId found in user object');
+          return;
+        }
+        
+        console.log('Fetching orders for employee:', empId);
+        console.log('Fetching orders from:', `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`);
+        
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+        const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`, {
           timeout: 10000, // 10 second timeout
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           }
         });
         
@@ -54,21 +118,23 @@ export default function DeliveryOrder() {
           const transformedOrders = response.data.data.map(order => ({
             id: `DO-${order._id.slice(-6)}`, 
             doNum: order._id, 
-            clientName: order.customerName,
-            clientPhone: '+1-555-0000', 
-            clientEmail: `${order.customerName.toLowerCase().replace(/\s+/g, '')}@example.com`, 
-            pickupLocation: 'Pickup Location', 
-            deliveryLocation: 'Delivery Location', 
-            amount: order.orderValue,
-            description: order.orderDetails,
+            clientName: order.customers?.[0]?.billTo || 'N/A',
+            // clientPhone: '+1-555-0000', 
+            clientEmail: `${(order.customers?.[0]?.billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`, 
+            pickupLocation: order.shipper?.pickUpLocations?.[0]?.name || 'Pickup Location', 
+            deliveryLocation: order.shipper?.dropLocations?.[0]?.name || 'Delivery Location', 
+            amount: order.customers?.[0]?.totalAmount || 0,
+            description: `Load: ${order.customers?.[0]?.loadNo || 'N/A'}`,
             priority: 'normal', 
             status: 'pending', 
             createdAt: new Date(order.date).toISOString().split('T')[0],
-            createdBy: `Employee ${order.empId}`,
-            docUpload: order.supportingDocs || 'sample-doc.jpg',
-            productName: order.productName,
-            quantity: order.quantity,
-            remarks: order.remarks
+            createdBy: `Employee ${order.empId || 'N/A'}`,
+            docUpload: 'sample-doc.jpg',
+            productName: order.shipper?.containerType || 'N/A',
+            quantity: order.shipper?.weight || 0,
+            remarks: order.remarks || '',
+            shipperName: order.shipper?.name || 'N/A',
+            carrierName: order.carrier?.carrierName || 'N/A'
           }));
           
           console.log('Transformed orders:', transformedOrders);
@@ -187,6 +253,135 @@ export default function DeliveryOrder() {
     }));
   };
 
+  // Handle customer input changes
+  const handleCustomerChange = (index, field, value) => {
+    setFormData(prev => {
+      const updatedCustomers = [...prev.customers];
+      updatedCustomers[index] = {
+        ...updatedCustomers[index],
+        [field]: value
+      };
+      
+      // Calculate total amount for this customer
+      const lineHaul = parseInt(updatedCustomers[index].lineHaul) || 0;
+      const fsc = parseInt(updatedCustomers[index].fsc) || 0;
+      const other = parseInt(updatedCustomers[index].other) || 0;
+      updatedCustomers[index].totalAmount = lineHaul + fsc + other;
+      
+      return {
+        ...prev,
+        customers: updatedCustomers
+      };
+    });
+  };
+
+  // Handle pickup location input changes
+  const handlePickupLocationChange = (index, field, value) => {
+    setFormData(prev => {
+      const updatedPickupLocations = [...prev.pickupLocations];
+      updatedPickupLocations[index] = {
+        ...updatedPickupLocations[index],
+        [field]: value
+      };
+      return {
+        ...prev,
+        pickupLocations: updatedPickupLocations
+      };
+    });
+  };
+
+  // Handle drop location input changes
+  const handleDropLocationChange = (index, field, value) => {
+    setFormData(prev => {
+      const updatedDropLocations = [...prev.dropLocations];
+      updatedDropLocations[index] = {
+        ...updatedDropLocations[index],
+        [field]: value
+      };
+      return {
+        ...prev,
+        dropLocations: updatedDropLocations
+      };
+    });
+  };
+
+  // Add new customer
+  const addCustomer = () => {
+    setFormData(prev => ({
+      ...prev,
+      customers: [...prev.customers, {
+        loadNo: '',
+        billTo: '',
+        dispatcherName: '',
+        workOrderNo: '',
+        lineHaul: '',
+        fsc: '',
+        other: '',
+        totalAmount: 0
+      }]
+    }));
+  };
+
+  // Remove customer
+  const removeCustomer = (index) => {
+    if (formData.customers.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        customers: prev.customers.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
+  // Add new pickup location
+  const addPickupLocation = () => {
+    setFormData(prev => ({
+      ...prev,
+      pickupLocations: [...prev.pickupLocations, {
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        date: ''
+      }]
+    }));
+  };
+
+  // Remove pickup location
+  const removePickupLocation = (index) => {
+    if (formData.pickupLocations.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        pickupLocations: prev.pickupLocations.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
+  // Add new drop location
+  const addDropLocation = () => {
+    setFormData(prev => ({
+      ...prev,
+      dropLocations: [...prev.dropLocations, {
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        date: ''
+      }]
+    }));
+  };
+
+  // Remove drop location
+  const removeDropLocation = (index) => {
+    if (formData.dropLocations.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        dropLocations: prev.dropLocations.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
   // Handle file upload
   const handleFileChange = (e) => {
     setFormData(prev => ({
@@ -201,23 +396,63 @@ export default function DeliveryOrder() {
     
     try {
       setSubmitting(true);
+      // Get user data to extract empId
+      const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+      const user = JSON.parse(userStr);
+      const empId = user.empId || "EMP001";
+      
+      // Calculate total amounts for each customer
+      const customersWithTotals = formData.customers.map(customer => ({
+        loadNo: customer.loadNo,
+        billTo: customer.billTo,
+        dispatcherName: customer.dispatcherName,
+        workOrderNo: customer.workOrderNo,
+        lineHaul: parseInt(customer.lineHaul) || 0,
+        fsc: parseInt(customer.fsc) || 0,
+        other: parseInt(customer.other) || 0,
+        totalAmount: (parseInt(customer.lineHaul) || 0) + (parseInt(customer.fsc) || 0) + (parseInt(customer.other) || 0)
+      }));
+
       // Prepare the data for API submission
       const submitData = {
-        empId: "1234", // You can make this dynamic based on logged-in user
-        date: new Date().toISOString().split('T')[0], // Current date
-        customerName: formData.customerName,
-        orderValue: parseInt(formData.orderValue),
-        orderDetails: formData.orderDetails,
-        productName: formData.productName,
-        quantity: parseInt(formData.quantity),
-        remarks: formData.remarks,
-        supportingDocs: formData.docs ? formData.docs.name : ""
+        empId: empId,
+        customers: customersWithTotals,
+        carrier: {
+          carrierName: formData.carrierName,
+          equipmentType: formData.equipmentType,
+          carrierFees: parseInt(formData.carrierFees) || 0
+        },
+        shipper: {
+          name: formData.shipperName,
+          pickUpLocations: formData.pickupLocations.map(location => ({
+            name: location.name,
+            address: location.address,
+            city: location.city,
+            state: location.state,
+            zipCode: location.zipCode
+          })),
+          pickUpDate: formData.pickupLocations[0]?.date || '',
+          containerNo: formData.containerNo,
+          containerType: formData.containerType,
+          weight: parseInt(formData.weight) || 0,
+          dropLocations: formData.dropLocations.map(location => ({
+            name: location.name,
+            address: location.address,
+            city: location.city,
+            state: location.state,
+            zipCode: location.zipCode
+          })),
+          dropDate: formData.dropLocations[0]?.date || ''
+        },
+        remarks: formData.remarks
       };
 
       // Submit to API
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, submitData, {
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -226,21 +461,21 @@ export default function DeliveryOrder() {
         const newOrder = {
           id: `DO-${response.data.data._id.slice(-6)}`,
           doNum: response.data.data._id,
-          clientName: response.data.data.customerName,
+          clientName: response.data.data.customers?.[0]?.billTo || 'N/A',
           clientPhone: '+1-555-0000',
-          clientEmail: `${response.data.data.customerName.toLowerCase().replace(/\s+/g, '')}@example.com`,
-          pickupLocation: 'Pickup Location',
-          deliveryLocation: 'Delivery Location',
-          amount: response.data.data.orderValue,
-          description: response.data.data.orderDetails,
+          clientEmail: `${(response.data.data.customers?.[0]?.billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
+          pickupLocation: response.data.data.shipper?.pickUpLocations?.[0]?.name || 'Pickup Location',
+          deliveryLocation: response.data.data.shipper?.dropLocations?.[0]?.name || 'Delivery Location',
+          amount: response.data.data.customers?.[0]?.totalAmount || 0,
+          description: `Load: ${response.data.data.customers?.[0]?.loadNo || 'N/A'}`,
           priority: 'normal',
           status: 'pending',
           createdAt: new Date(response.data.data.date).toISOString().split('T')[0],
           createdBy: `Employee ${response.data.data.empId}`,
-          docUpload: response.data.data.supportingDocs || 'sample-doc.jpg',
-          productName: response.data.data.productName,
-          quantity: response.data.data.quantity,
-          remarks: response.data.data.remarks
+          docUpload: 'sample-doc.jpg',
+          productName: response.data.data.shipper?.containerType || 'N/A',
+          quantity: response.data.data.shipper?.weight || 0,
+          remarks: response.data.data.remarks || ''
         };
 
         setOrders(prevOrders => [newOrder, ...prevOrders]);
@@ -248,11 +483,56 @@ export default function DeliveryOrder() {
         // Close modal and reset form
         setShowAddOrderForm(false);
         setFormData({
-          customerName: '',
-          productName: '',
-          orderValue: '',
-          orderDetails: '',
-          quantity: '',
+          // Customer Information - Array for multiple customers
+          customers: [
+            {
+              loadNo: '',
+              billTo: '',
+              dispatcherName: '',
+              workOrderNo: '',
+              lineHaul: '',
+              fsc: '',
+              other: '',
+              totalAmount: 0
+            }
+          ],
+          
+          // Carrier Information
+          carrierName: '',
+          equipmentType: '',
+          carrierFees: '',
+          
+          // Shipper Information
+          shipperName: '',
+          containerNo: '',
+          containerType: '',
+          weight: '',
+          
+          // Pickup Locations - Array for multiple locations
+          pickupLocations: [
+            {
+              name: '',
+              address: '',
+              city: '',
+              state: '',
+              zipCode: '',
+              date: ''
+            }
+          ],
+          
+          // Drop Locations - Array for multiple locations
+          dropLocations: [
+            {
+              name: '',
+              address: '',
+              city: '',
+              state: '',
+              zipCode: '',
+              date: ''
+            }
+          ],
+          
+          // General
           remarks: '',
           docs: null
         });
@@ -274,11 +554,56 @@ export default function DeliveryOrder() {
   const handleCloseModal = () => {
     setShowAddOrderForm(false);
     setFormData({
-      customerName: '',
-      productName: '',
-      orderValue: '',
-      orderDetails: '',
-      quantity: '',
+      // Customer Information - Array for multiple customers
+      customers: [
+        {
+          loadNo: '',
+          billTo: '',
+          dispatcherName: '',
+          workOrderNo: '',
+          lineHaul: '',
+          fsc: '',
+          other: '',
+          totalAmount: 0
+        }
+      ],
+      
+      // Carrier Information
+      carrierName: '',
+      equipmentType: '',
+      carrierFees: '',
+      
+      // Shipper Information
+      shipperName: '',
+      containerNo: '',
+      containerType: '',
+      weight: '',
+      
+      // Pickup Locations - Array for multiple locations
+      pickupLocations: [
+        {
+          name: '',
+          address: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          date: ''
+        }
+      ],
+      
+      // Drop Locations - Array for multiple locations
+      dropLocations: [
+        {
+          name: '',
+          address: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          date: ''
+        }
+      ],
+      
+      // General
       remarks: '',
       docs: null
     });
@@ -459,7 +784,7 @@ export default function DeliveryOrder() {
               <div className="flex items-center gap-2 text-gray-700"><Mail size={16} /> <span className="font-medium">Email:</span> {selectedOrder.clientEmail}</div>
               <div className="flex items-center gap-2 text-gray-700"><Phone size={16} /> <span className="font-medium">Phone:</span> {selectedOrder.clientPhone}</div>
               <div className="flex items-center gap-2 text-gray-700"><Truck size={16} /> <span className="font-medium">Product:</span> {selectedOrder.productName}</div>
-              <div className="flex items-center gap-2 text-gray-700"><DollarSign size={16} /> <span className="font-medium">Amount:</span> ${selectedOrder.amount.toLocaleString()}</div>
+              <div className="flex items-center gap-2 text-gray-700"><DollarSign size={16} /> <span className="font-medium">Amount:</span> ${(selectedOrder.amount || 0).toLocaleString()}</div>
               <div className="flex items-center gap-2 text-gray-700"><Calendar size={16} /> <span className="font-medium">Created:</span> {selectedOrder.createdAt}</div>
               <div className="flex items-center gap-2 text-gray-700"><FileText size={16} /> <span className="font-medium">Details:</span> {selectedOrder.description}</div>
               {selectedOrder.remarks && (
@@ -490,13 +815,10 @@ export default function DeliveryOrder() {
                               <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                 <tr>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO Num</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Customer</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Product</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Quantity</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Order Value</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Order Details</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Created</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO NUM</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPPER NAME</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
                 </tr>
               </thead>
               <tbody>
@@ -509,37 +831,13 @@ export default function DeliveryOrder() {
                       <span className="font-mono text-sm text-gray-600">{order.doNum}</span>
                     </td>
                     <td className="py-2 px-3">
-                      <div>
-                        <p className="font-medium text-gray-700">{order.clientName}</p>
-                        <p className="text-sm text-gray-600">{order.clientPhone}</p>
-                      </div>
+                      <span className="font-medium text-gray-700">{order.clientName}</span>
                     </td>
                     <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.productName}</span>
+                      <span className="font-medium text-gray-700">{order.shipperName}</span>
                     </td>
                     <td className="py-2 px-3">
-                      <span className="font-bold text-blue-600">{order.quantity}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-bold text-green-600">${order.amount.toLocaleString()}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="max-w-xs">
-                        <p className="text-sm text-gray-800 truncate" title={order.description}>
-                          {order.description}
-                        </p>
-                        {order.remarks && (
-                          <p className="text-xs text-gray-500 truncate" title={order.remarks}>
-                            Remarks: {order.remarks}
-                          </p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <p className="text-sm text-gray-800">{order.createdAt}</p>
-                        <p className="text-xs text-gray-500">by {order.createdBy}</p>
-                      </div>
+                      <span className="font-medium text-gray-700">{order.carrierName}</span>
                     </td>
                   </tr>
                 ))}
@@ -608,7 +906,7 @@ export default function DeliveryOrder() {
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto hide-scrollbar"
+            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {/* Header */}
@@ -632,116 +930,354 @@ export default function DeliveryOrder() {
               </div>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              {/* First Row - Customer Name & Product Name */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Customer Name */}
+                         {/* Form */}
+             <form onSubmit={handleSubmit} className="p-6 space-y-6">
+               {/* Customer Information Section */}
+               <div className="bg-blue-50 p-4 rounded-lg">
+                 <div className="flex justify-between items-center mb-4">
+                   <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
+                   <button
+                     type="button"
+                     onClick={addCustomer}
+                     className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
+                   >
+                     + Add Customer
+                   </button>
+                 </div>
+                 
+                 {formData.customers.map((customer, customerIndex) => (
+                   <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
+                     <div className="flex justify-between items-center mb-3">
+                       <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
+                       {formData.customers.length > 1 && (
+                         <button
+                           type="button"
+                           onClick={() => removeCustomer(customerIndex)}
+                           className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                         >
+                           Remove
+                         </button>
+                       )}
+                     </div>
+                     
+                      {/* All 8 fields in one grid - 4 fields per line */}
+                      <div className="grid grid-cols-4 gap-4">
+                        <input
+                          type="text"
+                          value={customer.loadNo}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'loadNo', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Load No *"
+                        />
+                        <input
+                          type="text"
+                          value={customer.billTo}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Bill To *"
+                        />
+                        <input
+                          type="text"
+                          value={customer.dispatcherName}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Dispatcher Name *"
+                        />
+                        <input
+                          type="text"
+                          value={customer.workOrderNo}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Work Order No *"
+                        />
+                        <input
+                          type="number"
+                          value={customer.lineHaul}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Line Haul *"
+                        />
+                        <input
+                          type="number"
+                          value={customer.fsc}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="FSC *"
+                        />
+                        <input
+                          type="number"
+                          value={customer.other}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Other *"
+                        />
+                        <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
+                          <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                        </div>
+                      </div>
+                   </div>
+                 ))}
+               </div>
+
+               {/* Carrier Information Section */}
+               <div className="bg-green-50 p-4 rounded-lg">
+                 <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
+                 <div className="grid grid-cols-3 gap-4">
+                   <input
+                     type="text"
+                     name="carrierName"
+                     value={formData.carrierName}
+                     onChange={handleInputChange}
+                     required
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                     placeholder="Carrier Name *"
+                   />
+                   <input
+                     type="text"
+                     name="equipmentType"
+                     value={formData.equipmentType}
+                     onChange={handleInputChange}
+                     required
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                     placeholder="Equipment Type *"
+                   />
+                   <input
+                     type="number"
+                     name="carrierFees"
+                     value={formData.carrierFees}
+                     onChange={handleInputChange}
+                     required
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                     placeholder="Carrier Fees *"
+                   />
+                 </div>
+               </div>
+
+               {/* Shipper Information Section */}
+               <div className="bg-purple-50 p-4 rounded-lg">
+                 <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
+                 
+                 {/* Shipper Basic Info */}
+                 <div className="grid grid-cols-4 gap-4 mb-4">
+                   <input
+                     type="text"
+                     name="shipperName"
+                     value={formData.shipperName}
+                     onChange={handleInputChange}
+                     required
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                     placeholder="Shipper Name *"
+                   />
+                   <input
+                     type="text"
+                     name="containerNo"
+                     value={formData.containerNo}
+                     onChange={handleInputChange}
+                     required
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                     placeholder="Container No *"
+                   />
+                   <input
+                     type="text"
+                     name="containerType"
+                     value={formData.containerType}
+                     onChange={handleInputChange}
+                     required
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                     placeholder="Container Type *"
+                   />
+                   <input
+                     type="number"
+                     name="weight"
+                     value={formData.weight}
+                     onChange={handleInputChange}
+                     required
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                     placeholder="Weight (lbs) *"
+                   />
+                 </div>
+
+                 {/* Pickup Locations */}
+                 <div className="bg-white p-4 rounded-lg mb-4">
+                   <div className="flex justify-between items-center mb-3">
+                     <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
+                     <button
+                       type="button"
+                       onClick={addPickupLocation}
+                       className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                     >
+                       + Add Location
+                     </button>
+                   </div>
+                   
+                   {formData.pickupLocations.map((location, locationIndex) => (
+                     <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                       <div className="flex justify-between items-center mb-3">
+                         <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
+                         {formData.pickupLocations.length > 1 && (
+                           <button
+                             type="button"
+                             onClick={() => removePickupLocation(locationIndex)}
+                             className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                           >
+                             Remove
+                           </button>
+                         )}
+                       </div>
+                       
+                       <div className="grid grid-cols-3 gap-4">
+                         <input
+                           type="text"
+                           value={location.name}
+                           onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="Location Name *"
+                         />
+                         <input
+                           type="text"
+                           value={location.address}
+                           onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="Address *"
+                         />
+                         <input
+                           type="text"
+                           value={location.city}
+                           onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="City *"
+                         />
+                         <input
+                           type="text"
+                           value={location.state}
+                           onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="State *"
+                         />
+                         <input
+                           type="text"
+                           value={location.zipCode}
+                           onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="Zip Code *"
+                         />
+                         <input
+                           type="datetime-local"
+                           value={location.date}
+                           onChange={(e) => handlePickupLocationChange(locationIndex, 'date', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                         />
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+
+                 {/* Drop Locations */}
+                 <div className="bg-white p-4 rounded-lg">
+                   <div className="flex justify-between items-center mb-3">
+                     <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
+                     <button
+                       type="button"
+                       onClick={addDropLocation}
+                       className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                     >
+                       + Add Location
+                     </button>
+                   </div>
+                   
+                   {formData.dropLocations.map((location, locationIndex) => (
+                     <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                       <div className="flex justify-between items-center mb-3">
+                         <h5 className="text-sm font-semibold text-gray-700">Drop Location {locationIndex + 1}</h5>
+                         {formData.dropLocations.length > 1 && (
+                           <button
+                             type="button"
+                             onClick={() => removeDropLocation(locationIndex)}
+                             className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                           >
+                             Remove
+                           </button>
+                         )}
+                       </div>
+                       
+                       <div className="grid grid-cols-3 gap-4">
+                         <input
+                           type="text"
+                           value={location.name}
+                           onChange={(e) => handleDropLocationChange(locationIndex, 'name', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="Location Name *"
+                         />
+                         <input
+                           type="text"
+                           value={location.address}
+                           onChange={(e) => handleDropLocationChange(locationIndex, 'address', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="Address *"
+                         />
+                         <input
+                           type="text"
+                           value={location.city}
+                           onChange={(e) => handleDropLocationChange(locationIndex, 'city', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="City *"
+                         />
+                         <input
+                           type="text"
+                           value={location.state}
+                           onChange={(e) => handleDropLocationChange(locationIndex, 'state', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="State *"
+                         />
+                         <input
+                           type="text"
+                           value={location.zipCode}
+                           onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                           placeholder="Zip Code *"
+                         />
+                         <input
+                           type="datetime-local"
+                           value={location.date}
+                           onChange={(e) => handleDropLocationChange(locationIndex, 'date', e.target.value)}
+                           required
+                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                         />
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+
+                {/* Remarks */}
                 <div>
-                  <input
-                    type="text"
-                    name="customerName"
-                    value={formData.customerName}
+                  <textarea
+                    name="remarks"
+                    value={formData.remarks}
                     onChange={handleInputChange}
-                    required
+                    rows="3"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Customer Name *"
+                    placeholder="Remarks (optional)"
                   />
                 </div>
-
-                {/* Product Name */}
-                <div>
-                  <input
-                    type="text"
-                    name="productName"
-                    value={formData.productName}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Product Name *"
-                  />
-                </div>
-              </div>
-
-              {/* Second Row - Order Value & Quantity */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Order Value */}
-                <div>
-                  <input
-                    type="number"
-                    name="orderValue"
-                    value={formData.orderValue}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Order Value *"
-                  />
-                </div>
-
-                {/* Quantity */}
-                <div>
-                  <input
-                    type="number"
-                    name="quantity"
-                    value={formData.quantity}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Quantity *"
-                  />
-                </div>
-              </div>
-
-              {/* Order Details */}
-              <div>
-                <textarea
-                  name="orderDetails"
-                  value={formData.orderDetails}
-                  onChange={handleInputChange}
-                  required
-                  rows="3"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Order Details *"
-                />
-              </div>
-
-              {/* Remarks */}
-              <div>
-                <textarea
-                  name="remarks"
-                  value={formData.remarks}
-                  onChange={handleInputChange}
-                  rows="3"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Remarks (optional)"
-                />
-              </div>
-
-              {/* Documents */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Documents
-                </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-                  <input
-                    type="file"
-                    name="docs"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="file-upload"
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  />
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-2">
-                      {formData.docs ? formData.docs.name : 'Click to upload documents'}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)
-                    </p>
-                  </label>
-                </div>
-              </div>
 
               {/* Form Actions */}
               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">

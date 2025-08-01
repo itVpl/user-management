@@ -188,9 +188,26 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDoData = async () => {
       try {
+        // Get user data to extract empId
+        const userStr = sessionStorage.getItem('user');
+        if (!userStr) {
+          console.log('No user found in sessionStorage');
+          return;
+        }
+        
+        const user = JSON.parse(userStr);
+        const empId = user.empId;
+        
+        if (!empId) {
+          console.log('No empId found in user object');
+          return;
+        }
+        
+        console.log('Fetching DO data for employee:', empId);
+
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
-          'https://vpl-liveproject-1.onrender.com/api/v1/do/do',
+          `https://vpl-liveproject-1.onrender.com/api/v1/do/do/employee/${empId}`,
           { 
             withCredentials: true,
             headers: { Authorization: `Bearer ${token}` }
