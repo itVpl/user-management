@@ -1,338 +1,540 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { Phone, Clock, Target, TrendingUp, BarChart3, Users, Activity, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import {
+  Target,
+  TrendingUp,
+  BarChart3,
+  Users,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Clock,
+} from "lucide-react";
 
-// Get alias and role from storage
+/* ============ AXIOS INSTANCE (JWT attach) ============ */
+const api = axios.create({
+  baseURL: "https://vpl-liveproject-1.onrender.com",
+  withCredentials: false,
+});
+
+api.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+/* ============ DEBUG HELPERS ============ */
+const DEBUG = true;
+const dbg = (...args) => DEBUG && console.log("%c[DailyTarget]", "color:#2563eb;font-weight:bold", ...args);
+const dberr = (...args) => DEBUG && console.error("%c[DailyTarget]", "color:#dc2626;font-weight:bold", ...args);
+
+/* ============ STORAGE HELPERS ============ */
+const getUserInfoRaw = () => localStorage.getItem("user") || sessionStorage.getItem("user");
 const getUserInfo = () => {
   try {
-    const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
+    const userStr = getUserInfoRaw();
     if (!userStr) return {};
     const user = JSON.parse(userStr);
-    return {
-      role: user.role || null,
-      alias: user.aliasName || null,
+    const out = {
+      empId: user.empId || user.employeeId || user.userId || null,
+      department: user.department?.name || user.department || null,
+      employeeName: user.employeeName || user.name || null,
+      designation: user.designation || null,
     };
-  } catch {
+    return out;
+  } catch (e) {
+    dberr("Failed to parse user from storage:", e);
     return {};
   }
 };
 
-const formatDateTime = (date) => {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const min = String(date.getMinutes()).padStart(2, "0");
-  const ss = String(date.getSeconds()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+/* ============ UTILS ============ */
+const normalizeDept = (d) => {
+  const v = (d || "").toString().trim().toLowerCase();
+  if (v === "sales") return "Sales";
+  if (v === "cmt") return "CMT";
+  return null; // only allow Sales/CMT; others => no report
 };
 
-const formatSeconds = (secs) => {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+const toDateInputValue = (d = new Date()) => {
+  const dt = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return dt.toISOString().slice(0, 10); // YYYY-MM-DD
 };
 
+const prettyName = (key) => {
+  const map = { talkTime: "Talk Time (hrs)", deliveryOrders: "Delivery Orders", truckers: "Truckers Added" };
+  return map[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
+};
+
+const percent = (current, required) => {
+  if (!required || required <= 0) return 0;
+  return Math.min(100, Math.round((Number(current || 0) / Number(required)) * 100));
+};
+
+const StatusBadge = ({ status }) => {
+  const completed = String(status).toLowerCase() === "completed";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide
+        ring-1 ring-inset
+        ${completed ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}
+      aria-label={`Status: ${completed ? "Completed" : "Incomplete"}`}
+    >
+      {completed ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+      {completed ? "Completed" : "Incomplete"}
+    </span>
+  );
+};
+
+/* ============ SKELETON ============ */
+const SkeletonCard = () => (
+  <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 p-5">
+    <div className="w-12 h-12 rounded-full bg-gray-100 animate-pulse mb-3" />
+    <div className="h-3 w-20 bg-gray-100 animate-pulse rounded mb-2" />
+    <div className="h-6 w-24 bg-gray-200 animate-pulse rounded" />
+  </div>
+);
+
+/* ============ CARD WRAPPER ============ */
+const Card = ({ children, className = "" }) => (
+  <div
+    className={`bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow ${className}`}
+  >
+    {children}
+  </div>
+);
+
+/* ============ COMPONENT ============ */
 const DailyTarget = () => {
-  const [records, setRecords] = useState([]);
-  const [stats, setStats] = useState({ total: 0, answered: 0, missed: 0 });
+  const { empId, department: deptFromUser } = getUserInfo();
+
+  const [date, setDate] = useState(toDateInputValue());
+  const department = useMemo(() => normalizeDept(deptFromUser), [deptFromUser]); // LOCKED to user's dept
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [rateRequests, setRateRequests] = useState(0);
-  const [totalTalkTime, setTotalTalkTime] = useState(0);
+  const [serverMsg, setServerMsg] = useState(null);
+  const [report, setReport] = useState(null);
+   // Reason modal state
+  const [isReasonOpen, setIsReasonOpen] = useState(false);
+  const [reasonText, setReasonText] = useState("");
+  const [reasonLoading, setReasonLoading] = useState(false);
+  const [reasonError, setReasonError] = useState(null);
 
-  const [mode, setMode] = useState("daily"); // daily, weekly, monthly
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const endpoint = useMemo(() => {
+    if (department === "Sales") return "/api/v1/inhouseUser/sales/report";
+    if (department === "CMT") return "/api/v1/inhouseUser/cmt/report";
+    return null;
+  }, [department]);
 
-  const { role, alias } = getUserInfo();
+  const canRequest = endpoint && empId && date;
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchReport = async () => {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      if (!token) {
+        setLoading(false);
+        setError("Login token missing. Please login again.");
+        setServerMsg("No token found in sessionStorage/localStorage.");
+        setReport(null);
+        dberr("Token not found. Add token to storage as 'token'.");
+        return;
+      }
+
+      if (!canRequest) {
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
+        setError(null);
+        setServerMsg(null);
 
-        if (!alias) {
-          setError("User alias not found.");
-          setLoading(false);
-          return;
-        }
-
-        const today = new Date();
-        let from, to;
-
-        if (mode === "daily") {
-          from = formatDateTime(new Date(today.setHours(0, 0, 0, 0)));
-          to = formatDateTime(new Date());
-        } else if (mode === "weekly") {
-          const lastWeek = new Date(today);
-          lastWeek.setDate(today.getDate() - 6);
-          from = formatDateTime(lastWeek);
-          to = formatDateTime(new Date());
-        } else if (mode === "monthly") {
-          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-          from = formatDateTime(startOfMonth);
-          to = formatDateTime(new Date());
-        }
-
-        const response = await axios.get(
-          "https://vpl-liveproject-1.onrender.com/api/v1/analytics/8x8/call-records/filter",
-          { params: { callerName: alias, calleeName: alias, from, to } }
-        );
-
-        const rawData = response.data?.data || [];
-        let talkTimeSum = 0;
-        let rateReqCount = 0;
-
-        const transformed = rawData.map((record) => {
-          const dateObj = new Date(record.startTime);
-          const date = dateObj.toLocaleDateString("en-GB");
-          const time = dateObj.toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          });
-
-          const duration = record.talkTime || "00:00:00";
-          const callStatus = record.lastLegDisposition || "Unknown";
-          const conversionStatus = (record.talkTimeMS || 0) < 20000 ? "Open" : "Converted";
-
-          if (record.talkTime) {
-            const [h, m, s] = record.talkTime.split(":").map(Number);
-            talkTimeSum += h * 3600 + m * 60 + s;
-          }
-
-          if (record.rateRequest) rateReqCount++;
-
-          return {
-            date,
-            callee: record.callee,
-            callTime: time,
-            callDuration: duration,
-            callStatus,
-            conversionStatus,
-          };
-        });
-
-        const total = transformed.length;
-        const answered = transformed.filter((r) => r.callStatus === "Connected").length;
-        const missed = total - answered;
-
-        setRecords(transformed);
-        setStats({ total, answered, missed });
-        setTotalTalkTime(talkTimeSum);
-        setRateRequests(rateReqCount);
-        setLoading(false);
-      } catch (err) {
-        console.error("API error:", err);
-        setError("Failed to fetch call records");
+        const params = { date, empId };
+        const res = await api.get(endpoint, { params });
+        setReport(res.data?.data || null);
+      } catch (e) {
+        const data = e?.response?.data;
+        const msg = data?.message || data?.error || e?.message || "Request failed";
+        setServerMsg(msg);
+        setError("Failed to fetch department report.");
+        setReport(null);
+      } finally {
         setLoading(false);
       }
     };
+    fetchReport();
+  }, [endpoint, empId, date, canRequest, department]);
 
-    fetchData();
-  }, [alias, mode]);
+   const handleSubmitReason = async () => {
+    try {
+      setReasonError(null);
+      if (!reasonText.trim()) {
+        setReasonError("Reason is required.");
+        return;
+      }
+      setReasonLoading(true);
 
-  let callTarget = 100;
-  let rateRequestTarget = 2;
-  let talkTimeTarget = 3 * 3600;
-  let showEmployeeTargets = role === "employee";
-  const percentage = Math.round((stats.total / callTarget) * 100);
+      // POST reason
+      await api.post("/api/v1/inhouseUser/target/reason", {
+        empId,
+        date,
+        reason: reasonText.trim(),
+      });
 
-  const paginatedRecords =
-    mode === "monthly"
-      ? records.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-      : records;
+      // Optimistically reflect in UI
+      setReport((prev) =>
+        prev ? { ...prev, reason: reasonText.trim(), statusMessage: prev.statusMessage || "" } : prev
+      );
 
-  if (loading) {
+      setIsReasonOpen(false);
+      setReasonText("");
+    } catch (e) {
+      const data = e?.response?.data;
+      const msg = data?.message || data?.error || e?.message || "Failed to submit reason";
+      setReasonError(msg);
+    } finally {
+      setReasonLoading(false);
+    }
+  };
+
+  // No empId stored
+  if (!empId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading call records...</p>
-        </div>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6">
+        <Card className="text-center max-w-md mx-auto p-8">
+          <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-amber-600" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">Missing Employee ID</h3>
+          <p className="text-gray-600">
+            Storage me <b>empId</b> hona chahiye.
+          </p>
+          <pre className="mt-4 text-left text-xs bg-gray-50 p-3 rounded-xl border border-gray-100 overflow-auto">{getUserInfoRaw()}</pre>
+        </Card>
       </div>
     );
   }
 
-  if (error) {
+  // Dept not allowed (e.g., HR/Admin)
+  if (!department) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-8">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-red-600" />
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6">
+        <Card className="text-center max-w-md mx-auto p-8">
+          <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-amber-600" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">Something went wrong</h3>
-          <p className="text-red-600 mb-6">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Report not available</h3>
+          <p className="text-gray-600">
+            Aapki department (<b>{String(deptFromUser || "N/A")}</b>) ke liye Daily Target report enabled nahi hai.
+          </p>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
       {/* Header */}
-      <div className="mb-8 flex items-center gap-3">
-        <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
-          <Phone className="w-6 h-6 text-white" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Call Dashboard</h1>
-          <p className="text-gray-600">Track your call performance</p>
-        </div>
-      </div>
-
-      {/* Mode Selector */}
-      <div className="flex justify-end mb-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1">
-          {["daily", "weekly", "monthly"].map((m) => (
-            <button
-              key={m}
-              onClick={() => {
-                setMode(m);
-                setCurrentPage(1);
-              }}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                mode === m
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
-              }`}
-            >
-              {m.charAt(0).toUpperCase() + m.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Stats Cards - Single Line */}
-<div className="flex flex-wrap gap-6 mb-8">
-  {/* Total Calls */}
-  <div className="flex-1 min-w-[200px] bg-white rounded-2xl shadow-md p-5 border border-gray-100 flex flex-col items-center text-center hover:shadow-lg transition">
-    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-      <Phone className="text-blue-600" size={22} />
-    </div>
-    <p className="text-sm text-gray-500">Total Calls</p>
-    <p className="text-2xl font-bold text-blue-600 mt-1">{stats.total}</p>
-  </div>
-
-  {/* Answered */}
-  <div className="flex-1 min-w-[200px] bg-white rounded-2xl shadow-md p-5 border border-gray-100 flex flex-col items-center text-center hover:shadow-lg transition">
-    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
-      <CheckCircle className="text-green-600" size={22} />
-    </div>
-    <p className="text-sm text-gray-500">Answered</p>
-    <p className="text-2xl font-bold text-green-600 mt-1">{stats.answered}</p>
-  </div>
-
-  {/* Missed */}
-  <div className="flex-1 min-w-[200px] bg-white rounded-2xl shadow-md p-5 border border-gray-100 flex flex-col items-center text-center hover:shadow-lg transition">
-    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-3">
-      <XCircle className="text-red-600" size={22} />
-    </div>
-    <p className="text-sm text-gray-500">Missed</p>
-    <p className="text-2xl font-bold text-red-600 mt-1">{stats.missed}</p>
-  </div>
-</div>
-
-
-      {/* Main Table Section */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="bg-gradient-to-r from-gray-100 to-gray-200 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-gray-600" />
-            <h2 className="text-lg font-semibold text-gray-800">Call Records</h2>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
+            <Target className="w-6 h-6 text-white" />
           </div>
-          <span className="text-sm text-gray-600">{paginatedRecords.length} records</span>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Daily Targets</h1>
+            <p className="text-gray-600">{department} department report </p>
+          </div>
         </div>
-        <div className="overflow-x-auto" style={{ maxHeight: '24rem', overflowY: 'auto' }}>
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-              <tr>
-                {["Date", "Called No", "Call Time", "Call Duration", "Call Status", "Conversion Status"].map((header) => (
-                  <th key={header} className="px-6 py-3 text-left text-sm font-bold text-gray-700 uppercase tracking-wide border-b border-gray-200">
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedRecords.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center">
-                      <Phone className="w-12 h-12 text-gray-300 mb-3" />
-                      <p className="text-gray-500 font-medium">No call records found</p>
-                      <p className="text-gray-400 text-sm">Try changing the time period</p>
-                    </div>
-                  </td>
-                </tr>
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={date}
+            max={toDateInputValue(new Date())}
+            onChange={(e) => setDate(e.target.value)}
+            className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700"
+          />
+        </div>
+      </div>
+
+      {/* ===== TOP ROW ===== */}
+      {!error && (
+        <>
+          {loading ? (
+            <div className="mb-8 grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-6 overflow-x-auto pb-1">
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </div>
+          ) : report ? (
+            <div className="mb-8 grid grid-flow-col auto-cols-[minmax(260px,1fr)] gap-6 overflow-x-auto pb-1">
+              {/* Talk Time */}
+              <Card className="p-5 text-center">
+                <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-blue-100">
+                  <Clock size={20} className="text-blue-600" />
+                </div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">Talk Time</p>
+                <p className="text-2xl font-bold text-blue-700 mt-1">
+                  {report?.talkTime?.formatted || `${(report?.talkTime?.hours || 0).toFixed(2)}h`}
+                </p>
+              </Card>
+
+              {/* Dept-specific metric */}
+              {String(report.department).toLowerCase() === "sales" ? (
+                <Card className="p-5 text-center">
+                  <div className="w-11 h-11 bg-indigo-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-indigo-100">
+                    <TrendingUp size={20} className="text-indigo-600" />
+                  </div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500">Delivery Orders</p>
+                  <p className="text-2xl font-bold text-indigo-700 mt-1">{report.deliveryOrdersCount ?? 0}</p>
+                </Card>
               ) : (
-                paginatedRecords.map((r, i) => (
-                  <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50 transition-colors`}>
-                    <td className="px-6 py-4 text-gray-800 font-medium">{r.date}</td>
-                    <td className="px-6 py-4 text-gray-700">{r.callee}</td>
-                    <td className="px-6 py-4 text-gray-700">{r.callTime}</td>
-                    <td className="px-6 py-4 text-gray-700">{r.callDuration}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
-                        r.callStatus === "Connected" 
-                          ? "bg-green-100 text-green-800" 
-                          : "bg-red-100 text-red-800"
-                      }`}>
-                        {r.callStatus === "Connected" ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                        {r.callStatus}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
-                        r.conversionStatus === "Converted" 
-                          ? "bg-blue-100 text-blue-800" 
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}>
-                        {r.conversionStatus === "Converted" ? <TrendingUp className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
-                        {r.conversionStatus}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                <Card className="p-5 text-center">
+                  <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-emerald-100">
+                    <Users size={20} className="text-emerald-600" />
+                  </div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500">Truckers Added</p>
+                  <p className="text-2xl font-bold text-emerald-700 mt-1">{report.truckerCount ?? 0}</p>
+                </Card>
               )}
-            </tbody>
-          </table>
-        </div>
-        {/* Pagination */}
-        {mode === "monthly" && (
-          <div className="bg-gray-50 px-6 py-4 flex justify-center items-center gap-3">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
-            <span className="px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-700 font-medium">
-              Page {currentPage}
-            </span>
-            <button
-              onClick={() =>
-                setCurrentPage((p) =>
-                  p * pageSize < records.length ? p + 1 : p
-                )
-              }
-              disabled={currentPage * pageSize >= records.length}
-              className="px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Next
-            </button>
+
+              {/* Status */}
+              <Card className="p-5 text-center">
+                <div className="w-11 h-11 bg-green-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-green-100">
+                  <BarChart3 size={20} className="text-green-600" />
+                </div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">Status</p>
+                <p className="text-2xl font-bold mt-1">
+                  <span className={String(report.status).toLowerCase() === "completed" ? "text-emerald-700" : "text-amber-700"}>
+                    {report.status}
+                  </span>
+                </p>
+              </Card>
+
+              {/* Designation */}
+              <Card className="p-5 text-center">
+                <div className="w-11 h-11 bg-gray-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-gray-100">
+                  <Target size={20} className="text-gray-700" />
+                </div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">Designation</p>
+                <p className="text-2xl font-bold text-gray-800 mt-1">{report.designation || "-"}</p>
+              </Card>
+            </div>
+          ) : null}
+        </>
+      )}
+
+      {/* Loading inline (fallback spinner) */}
+      {loading && (
+        <div className="min-h-[100px] flex items-center justify-center mb-8">
+          <div className="text-center">
+            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+            <p className="mt-3 text-gray-600">Fetching {department} report...</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {!loading && error && (
+        <Card className="p-8 text-center max-w-xl mx-auto border-red-200">
+          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4 ring-1 ring-red-100">
+            <XCircle className="w-8 h-8 text-red-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">Something went wrong</h3>
+          <p className="text-red-600 mb-3">{error}</p>
+          {serverMsg && (
+            <p className="text-sm text-gray-600 mb-4">
+              <span className="font-semibold">Server:</span> {serverMsg}
+            </p>
+          )}
+          <button
+            onClick={() => setDate((d) => d)}
+            className="bg-blue-600 text-white px-6 py-2 rounded-xl shadow hover:bg-blue-700 active:scale-[0.99] transition"
+          >
+            Retry
+          </button>
+        </Card>
+      )}
+
+      {/* Summary + Targets */}
+       {!loading && !error && report && (
+        <div className="space-y-8">
+          {/* Top Summary */}
+          <Card className="p-6">
+            <div className="flex flex-wrap items-center gap-4 justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {report.department} Report — {report.employeeName} ({report.empId})
+                </h2>
+                <p className="text-sm text-gray-600">Date: {report.date}</p>
+              </div>
+
+              {/* Right side: status + updated + Reason button */}
+              <div className="flex items-center gap-3">
+                <StatusBadge status={report.status} />
+                {report.createdAt && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                    <Clock className="w-4 h-4" />
+                    Updated: {new Date(report.createdAt).toLocaleString()}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReasonError(null);
+                    setReasonText(report?.reason ? String(report.reason) : "");
+                    setIsReasonOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium bg-blue-600 text-white px-3 py-2 rounded-lg shadow hover:bg-blue-700 active:scale-[0.99] transition"
+                  aria-label="Add / update reason"
+                >
+                  Reason
+                </button>
+              </div>
+            </div>
+
+            {report.statusMessage && (
+              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700">
+                {report.statusMessage}
+              </div>
+            )}
+            {report.reason && (
+              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                <strong>Reason:</strong> {report.reason || "Not provided"}
+              </div>
+            )}
+          </Card>
+
+          {/* Targets Progress */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Targets</h3>
+            <div className="space-y-5">
+              {report.targets &&
+                Object.entries(report.targets).map(([key, tgt]) => {
+                  const p = percent(tgt?.current, tgt?.required);
+                  return (
+                    <div
+                      key={key}
+                      className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {key === "talkTime" ? (
+                            <Clock className="w-4 h-4 text-blue-600" />
+                          ) : key === "deliveryOrders" ? (
+                            <TrendingUp className="w-4 h-4 text-indigo-600" />
+                          ) : (
+                            <Users className="w-4 h-4 text-emerald-600" />
+                          )}
+                          <span className="text-sm font-semibold text-gray-900">{prettyName(key)}</span>
+                        </div>
+                        <span className="text-xs text-gray-600">
+                          Required: <b>{tgt?.required}</b>&nbsp;|&nbsp;Current: <b>{tgt?.current}</b>&nbsp;|&nbsp;Remaining:{" "}
+                          <b>{tgt?.remaining}</b>
+                        </span>
+                      </div>
+                      <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden ring-1 ring-inset ring-gray-100">
+                        <div
+                          className={`h-3 transition-all duration-500 ease-out ${p >= 100 ? "bg-emerald-500" : p >= 60 ? "bg-blue-500" : "bg-amber-400"}`}
+                          style={{ width: `${p}%` }}
+                          aria-valuenow={p}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          role="progressbar"
+                        />
+                      </div>
+                      <div className="mt-2 text-right text-xs font-medium text-gray-600">{p}%</div>
+                    </div>
+                  );
+                })}
+              {!report.targets && (
+                <div className="text-sm text-gray-600">No targets configured for this department.</div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && !report && (
+        <Card className="p-8 text-center">
+          <p className="text-gray-600">
+            No data available for <b>{department}</b> on <b>{date}</b>.
+          </p>
+        </Card>
+      )}
+
+       {/* Reason Modal */}
+      {isReasonOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          aria-modal="true"
+          role="dialog"
+        >
+          <div className="absolute inset-0 bg-black/40" onClick={() => !reasonLoading && setIsReasonOpen(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 z-10">
+            <div className="flex items-start justify-between">
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900">Add / Update Reason</h4>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  This will be saved for <b>{empId}</b> on <b>{date}</b>.
+                </p>
+              </div>
+              <button
+                onClick={() => !reasonLoading && setIsReasonOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <label className="text-sm font-medium text-gray-700" htmlFor="reasonText">
+                Reason
+              </label>
+              <textarea
+                id="reasonText"
+                rows={4}
+                value={reasonText}
+                onChange={(e) => setReasonText(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                placeholder="e.g. System was down for 2 hours in the morning, couldn't make calls during that time"
+                disabled={reasonLoading}
+              />
+              {reasonError && <p className="text-xs text-red-600">{reasonError}</p>}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsReasonOpen(false)}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                disabled={reasonLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReason}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow disabled:opacity-60"
+                disabled={reasonLoading}
+              >
+                {reasonLoading && (
+                  <span className="inline-block w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin" />
+                )}
+                Save Reason
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
