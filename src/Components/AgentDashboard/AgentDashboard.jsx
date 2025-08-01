@@ -52,9 +52,13 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchMonthlyPresentCount = async () => {
       try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
           'https://vpl-liveproject-1.onrender.com/api/v1/attendance/my/present-count-current-month',
-          { withCredentials: true }
+          { 
+            withCredentials: true,
+            headers: { Authorization: `Bearer ${token}` }
+          }
         );
         const totalPresent = response.data.attendance?.totalPresentDays || 0;
         setPresentDaysCount(totalPresent);
@@ -107,11 +111,13 @@ const Dashboard = () => {
       console.log('Date range:', { from, to });
 
       try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
           'https://vpl-liveproject-1.onrender.com/api/v1/analytics/8x8/call-records/filter',
           {
             params: { callerName: alias, calleeName: alias, from, to },
             withCredentials: true,
+            headers: { Authorization: `Bearer ${token}` }
           }
         );
 
@@ -156,9 +162,13 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchCmtData = async () => {
       try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
           'https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/cmt/today-count',
-          { withCredentials: true }
+          { 
+            withCredentials: true,
+            headers: { Authorization: `Bearer ${token}` }
+          }
         );
         
         if (response.data.success) {
@@ -178,9 +188,13 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDoData = async () => {
       try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
           'https://vpl-liveproject-1.onrender.com/api/v1/do/do',
-          { withCredentials: true }
+          { 
+            withCredentials: true,
+            headers: { Authorization: `Bearer ${token}` }
+          }
         );
         
         if (response.data.success) {
@@ -832,11 +846,11 @@ const Dashboard = () => {
                     {doData.todayDOs.map((deliveryOrder, index) => (
                       <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-100 hover:shadow-sm transition-all duration-200">
                         <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                          {deliveryOrder._id.slice(-2)}
+                          {(deliveryOrder._id || '').slice(-2)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-800 text-sm truncate">{deliveryOrder.customerName}</p>
-                          <p className="text-xs text-gray-600">${deliveryOrder.orderValue.toLocaleString()}</p>
+                          <p className="font-medium text-gray-800 text-sm truncate">{deliveryOrder.customerName || 'N/A'}</p>
+                          <p className="text-xs text-gray-600">${(deliveryOrder.orderValue || 0).toLocaleString()}</p>
                         </div>
                         <div className="text-right">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -895,10 +909,10 @@ const Dashboard = () => {
                   {doData.todayDOs.length > 0 ? (
                     doData.todayDOs.map((deliveryOrder, index) => (
                       <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
-                        <td className="py-4 px-4 text-gray-800 font-medium">{deliveryOrder._id.slice(-6)}</td>
-                        <td className="py-4 px-4 text-gray-800">{deliveryOrder.customerName}</td>
-                        <td className="py-4 px-4 text-gray-800">{deliveryOrder.productName}</td>
-                        <td className="py-4 px-4 text-gray-800 font-bold text-green-600">${deliveryOrder.orderValue.toLocaleString()}</td>
+                        <td className="py-4 px-4 text-gray-800 font-medium">{(deliveryOrder._id || '').slice(-6)}</td>
+                        <td className="py-4 px-4 text-gray-800">{deliveryOrder.customerName || 'N/A'}</td>
+                        <td className="py-4 px-4 text-gray-800">{deliveryOrder.productName || 'N/A'}</td>
+                        <td className="py-4 px-4 text-gray-800 font-bold text-green-600">${(deliveryOrder.orderValue || 0).toLocaleString()}</td>
                         <td className="py-4 px-4 text-gray-800">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                             deliveryOrder.status === 'approved' ? 'bg-green-100 text-green-700' :

@@ -43,9 +43,13 @@ const ProfilePage = () => {
 const fetchCallLogs = async (date) => {
   try {
     if (!date) return;
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     const res = await axios.get(
       `https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/date?date=${date}`,
-      { withCredentials: true }
+      { 
+        withCredentials: true,
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
 
     console.log("📞 Full Call Response JSON:", JSON.stringify(res.data, null, 2));
@@ -64,9 +68,13 @@ const fetchCallLogs = async (date) => {
 const fetchEmailLogs = async (date) => {
   try {
     if (!date) return;
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     const res = await axios.get(
       `https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/email/date/all?date=${date}`,
-      { withCredentials: true }
+      { 
+        withCredentials: true,
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
 
     console.log("📧 Full Email Response JSON:", JSON.stringify(res.data, null, 2));
@@ -94,10 +102,14 @@ const submitCallActivity = async (e) => {
     };
     console.log("📤 Submitting call activity:", payload);
 
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     const res = await axios.post(
       "https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/create",
       payload,
-      { withCredentials: true }
+      { 
+        withCredentials: true,
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
     console.log("✅ Call Activity Submission Response:", res.data);
 
@@ -123,10 +135,14 @@ const submitEmailActivity = async (e) => {
     };
     console.log("📤 Submitting email activity:", payload);
 
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     const res = await axios.post(
       "https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/email/create",
       payload,
-      { withCredentials: true }
+      { 
+        withCredentials: true,
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
     console.log("✅ Email Activity Submission Response:", res.data);
 
@@ -158,8 +174,11 @@ useEffect(() => {
 
     useEffect(() => {
         if (!empId) return;
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         axios
-            .get(`https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${empId}`)
+            .get(`https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${empId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
             .then((res) => {
                 if (res.data.success) {
                     setEmployee(res.data.employee);
@@ -172,8 +191,10 @@ useEffect(() => {
 
     const fetchLeaveHistory = async () => {
         try {
+            const token = sessionStorage.getItem("token") || localStorage.getItem("token");
             const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/my", {
-                withCredentials: true
+                withCredentials: true,
+                headers: { Authorization: `Bearer ${token}` }
             });
             if (res.data.success) {
                 setLeaveHistory(res.data.leaves || []);
@@ -186,7 +207,11 @@ useEffect(() => {
     const fetchAttendanceData = async (date = attendanceDate) => {
         if (!date) return;
         try {
-            const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/attendance/my?date=${date}`, { withCredentials: true });
+            const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+            const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/attendance/my?date=${date}`, { 
+                withCredentials: true,
+                headers: { Authorization: `Bearer ${token}` }
+            });
             if (res.data.success) {
                 setAttendanceRecord(res.data);
             } else {
@@ -209,23 +234,22 @@ useEffect(() => {
         }
 
         try {
-            // Create dates in local timezone to avoid UTC conversion issues
-            const createLocalDate = (dateStr) => {
-                const [year, month, day] = dateStr.split('-');
-                return new Date(year, month - 1, day, 12, 0, 0).toISOString();
-            };
-            
+            // Send dates as simple strings to avoid timezone conversion issues
             const payload = {
                 empId,
                 leaveType: leaveType.toLowerCase().replace(" ", ""),
-                fromDate: createLocalDate(fromDate),
-                toDate: createLocalDate(toDate),
+                fromDate: fromDate,
+                toDate: toDate,
                 reason,
             };
 
             console.log(payload);
 
-            const res = await axios.post("https://vpl-liveproject-1.onrender.com/api/v1/leave/apply", payload, { withCredentials: true });
+            const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+            const res = await axios.post("https://vpl-liveproject-1.onrender.com/api/v1/leave/apply", payload, { 
+                withCredentials: true,
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
             if (res.data.success) {
                 setLeaveMessage("Leave request submitted successfully.");
