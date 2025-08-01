@@ -1,151 +1,173 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import API_CONFIG from '../../config/api';
 
-const AssignAgent = () => {
-  const [showModal, setShowModal] = useState(false);
-  const [customers, setCustomers] = useState([]);
-  const [formData, setFormData] = useState({
-    customerName: '',
-    contactNumber: '',
-    email: '',
-    assignedAgent: '',
-  });
+const customerIds = ['6888def30737e011a312afec']; // 👈 yahan apni customer IDs daal
 
-  const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+const AssignAgentTable = () => {
+  const [data, setData] = useState([]);
+  const [empIdInput, setEmpIdInput] = useState('');
+  const [modalCustomerId, setModalCustomerId] = useState(null);
+  const token = sessionStorage.getItem('token'); // ✅ FIXED: sessionStorage used
+
+  // ✅ Fetch all assigned-users by customerId
+  const fetchAll = async () => {
+    try {
+      const results = [];
+
+      for (const id of customerIds) {
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/customer/${id}/assigned-users`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        results.push(res.data);
+      }
+
+      setData(results);
+    } catch (error) {
+      console.error('❌ Error fetching:', error.response?.data || error.message);
+    }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setCustomers((prev) => [...prev, formData]);
-    setFormData({
-      customerName: '',
-      contactNumber: '',
-      email: '',
-      assignedAgent: '',
-    });
-    setShowModal(false);
+  // ✅ PUT: assign agent
+  const handleAssign = async () => {
+    if (!empIdInput || !modalCustomerId) return alert('Please enter empId');
+
+    try {
+      await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/customer/assign-users`,
+        {
+          customerId: modalCustomerId,
+          userIds: [empIdInput],
+          action: 'add',
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      alert('✅ Agent assigned');
+      setEmpIdInput('');
+      setModalCustomerId(null);
+      fetchAll(); // Refresh data
+    } catch (error) {
+      console.error('❌ Error assigning:', error.response?.data || error.message);
+      alert('Failed to assign');
+    }
   };
+
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
   return (
-    <div className="min-h-screen  from-blue-50 to-white p-8">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Customer Assignments</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-2 rounded-full shadow-lg font-medium transition-all duration-300"
-        >
-          ➕ Assign Agent
-        </button>
-      </div>
+    <div className="p-6">
+  <h2 className="text-4xl font-bold mb-8 text-blue-800 drop-shadow-sm tracking-wide">
+    🧾 Customer & Agent Assignment
+  </h2>
 
-      {/* Table */}
-      <div className="grid gap-4">
-        {customers.length === 0 ? (
-          <div className="text-center text-gray-500 text-lg">No customers assigned yet.</div>
-        ) : (
-          customers.map((cust, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-xl shadow-md p-6 hover:shadow-xl transition-all border-l-4 border-blue-500"
-            >
-              <div className="grid md:grid-cols-4 sm:grid-cols-2 gap-3 text-gray-700">
-                <div>
-                  <p className="font-semibold text-sm text-gray-500">Customer</p>
-                  <p className="text-lg">{cust.customerName}</p>
+  <div className="overflow-x-auto rounded-2xl shadow-xl border border-gray-200 bg-white/90 backdrop-blur-md">
+    <table className="min-w-full text-sm text-gray-800">
+      <thead className="bg-gradient-to-r from-blue-100 to-blue-300 text-left">
+        <tr>
+          <th className="px-6 py-4 font-semibold">Customer</th>
+          <th className="px-6 py-4 font-semibold">Assigned Agents</th>
+          <th className="px-6 py-4 font-semibold text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-gray-100">
+        {data.map((entry) => (
+          <tr key={entry.customer._id} className="hover:bg-blue-50 transition-all duration-150">
+            <td className="px-6 py-4 font-medium text-lg text-blue-900">{entry.customer.compName}</td>
+            <td className="px-6 py-4">
+              {entry.assignedUsers.users.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {entry.assignedUsers.users.map((u) => (
+                    <div
+                      key={u.empId}
+                      className="flex items-center gap-2 bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full shadow-sm"
+                    >
+                      <div className="bg-blue-600 text-white w-5 h-5 flex items-center justify-center rounded-full text-[10px] uppercase shadow">
+                        {u.employeeName?.[0]}
+                      </div>
+                      <span className="font-semibold">{u.employeeName} ({u.empId})</span>
+                      <span
+                        className={`ml-1 text-white text-[10px] px-2 py-0.5 rounded-full ${
+                          u.department === 'Sales' ? 'bg-green-500' :
+                          u.department === 'HR' ? 'bg-purple-500' :
+                          'bg-gray-500'
+                        }`}
+                      >
+                        {u.department}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-500">Contact</p>
-                  <p className="text-lg">{cust.contactNumber}</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-500">Email</p>
-                  <p className="text-lg">{cust.email}</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-500">Agent</p>
-                  <p className="text-lg font-medium text-blue-600">{cust.assignedAgent}</p>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+              ) : (
+                <span className="text-gray-400 italic">No agents</span>
+              )}
+            </td>
+            <td className="px-6 py-4 text-center">
+              <button
+                onClick={() => setModalCustomerId(entry.customer._id)}
+                className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-medium py-2 px-4 rounded-full transition-all duration-200 shadow-md"
+              >
+                + Assign Agent
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex justify-center items-center px-4">
-          <div className="bg-white w-full max-w-xl p-8 rounded-2xl shadow-2xl relative transition-all duration-300 scale-100 animate-[fadeIn_0.3s_ease-out]">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Assign Agent to Customer</h2>
+  {/* Modal */}
+  {modalCustomerId && (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white/90 backdrop-blur-xl border border-blue-300 p-6 rounded-3xl shadow-2xl w-96 scale-100 animate-fadeIn">
+        <h3 className="text-xl font-bold mb-5 text-blue-800 drop-shadow">Assign New Agent</h3>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <input
-                type="text"
-                name="customerName"
-                placeholder="Customer Name"
-                value={formData.customerName}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 outline-none"
-                required
-              />
-              <input
-                type="text"
-                name="contactNumber"
-                placeholder="Contact Number"
-                value={formData.contactNumber}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 outline-none"
-                required
-              />
-              <input
-                type="email"
-                name="email"
-                placeholder="Email Address"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 outline-none"
-                required
-              />
-              <input
-                type="text"
-                name="assignedAgent"
-                placeholder="Assigned Agent Name"
-                value={formData.assignedAgent}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 outline-none"
-                required
-              />
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-5 py-2 rounded-lg transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow font-medium transition-all"
-                >
-                  Submit
-                </button>
-              </div>
-            </form>
-
-            {/* Close Icon */}
-            <button
-              onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-red-500 text-2xl font-bold focus:outline-none"
-              title="Close"
-            >
-              &times;
-            </button>
-          </div>
+        <div className="relative w-full mb-6">
+          <input
+            type="text"
+            id="empId"
+            placeholder=" "
+            value={empIdInput}
+            onChange={(e) => setEmpIdInput(e.target.value)}
+            className="peer border border-gray-300 px-4 pt-5 pb-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <label
+            htmlFor="empId"
+            className="absolute left-4 top-2 text-gray-500 text-xs transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-focus:top-2 peer-focus:text-xs"
+          >
+            Enter Employee ID
+          </label>
         </div>
-      )}
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => setModalCustomerId(null)}
+            className="px-4 py-2 border border-gray-300 text-gray-600 rounded hover:bg-gray-100 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleAssign}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-md transition"
+          >
+            Submit
+          </button>
+        </div>
+      </div>
     </div>
+  )}
+</div>
+
+
+
   );
 };
 
-export default AssignAgent;
+export default AssignAgentTable;
+ 

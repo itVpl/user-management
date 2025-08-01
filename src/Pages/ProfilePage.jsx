@@ -24,6 +24,137 @@ const ProfilePage = () => {
 
     const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
     const empId = userStr ? JSON.parse(userStr).empId : null;
+     const [activityDate, setActivityDate] = useState("");
+  const [callLogs, setCallLogs] = useState([]);
+  const [activityName, setActivityName] = useState("");
+  const [activityMobile, setActivityMobile] = useState("");
+  const [activityDuration, setActivityDuration] = useState("");
+  const [activityPurpose, setActivityPurpose] = useState("");
+  const [activityNotes, setActivityNotes] = useState("");
+
+  const [emailDate, setEmailDate] = useState("");
+  const [emailLogs, setEmailLogs] = useState([]);
+  const [email, setEmail] = useState("");
+  const [emailType, setEmailType] = useState("");
+  const [emailPurpose, setEmailPurpose] = useState("");
+  const [emailNotes, setEmailNotes] = useState("");
+  
+
+const fetchCallLogs = async (date) => {
+  try {
+    if (!date) return;
+    const res = await axios.get(
+      `https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/date?date=${date}`,
+      { withCredentials: true }
+    );
+
+    console.log("📞 Full Call Response JSON:", JSON.stringify(res.data, null, 2));
+
+    if (res.data.success && Array.isArray(res.data.data)) {
+      setCallLogs(res.data.data);
+    } else {
+      setCallLogs([]);
+    }
+  } catch (err) {
+    console.error("❌ Error fetching call logs:", err.message, err?.response?.data);
+  }
+};
+
+
+const fetchEmailLogs = async (date) => {
+  try {
+    if (!date) return;
+    const res = await axios.get(
+      `https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/email/date/all?date=${date}`,
+      { withCredentials: true }
+    );
+
+    console.log("📧 Full Email Response JSON:", JSON.stringify(res.data, null, 2));
+
+    if (res.data.success && Array.isArray(res.data.data)) {
+      setEmailLogs(res.data.data);
+    } else {
+      setEmailLogs([]);
+    }
+  } catch (err) {
+    console.error("❌ Error fetching email logs:", err.message, err?.response?.data);
+  }
+};
+
+
+const submitCallActivity = async (e) => {
+  e.preventDefault();
+  try {
+    const payload = {
+      name: activityName,
+      mobileNo: activityMobile,
+      duration: Number(activityDuration),
+      purpose: activityPurpose,
+      notes: activityNotes,
+    };
+    console.log("📤 Submitting call activity:", payload);
+
+    const res = await axios.post(
+      "https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/create",
+      payload,
+      { withCredentials: true }
+    );
+    console.log("✅ Call Activity Submission Response:", res.data);
+
+    fetchCallLogs(activityDate);
+    setActivityName("");
+    setActivityMobile("");
+    setActivityDuration("");
+    setActivityPurpose("");
+    setActivityNotes("");
+  } catch (err) {
+    console.error("❌ Submit Call Error:", err.message, err?.response?.data);
+  }
+};
+
+const submitEmailActivity = async (e) => {
+  e.preventDefault();
+  try {
+    const payload = {
+      email,
+      emailType,
+      purpose: emailPurpose,
+      notes: emailNotes,
+    };
+    console.log("📤 Submitting email activity:", payload);
+
+    const res = await axios.post(
+      "https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/email/create",
+      payload,
+      { withCredentials: true }
+    );
+    console.log("✅ Email Activity Submission Response:", res.data);
+
+    fetchEmailLogs(emailDate);
+    setEmail("");
+    setEmailType("");
+    setEmailPurpose("");
+    setEmailNotes("");
+  } catch (err) {
+    console.error("❌ Submit Email Error:", err.message, err?.response?.data);
+  }
+};
+const getTodayDate = () => {
+  return new Date().toISOString().split("T")[0];
+};
+
+useEffect(() => {
+  const today = getTodayDate();
+  setActivityDate(today);
+  setEmailDate(today);
+  fetchCallLogs(today);
+  fetchEmailLogs(today);
+}, []);
+
+
+
+
+
 
     useEffect(() => {
         if (!empId) return;
@@ -117,16 +248,16 @@ const ProfilePage = () => {
         )
         : [];
     const loginTime = filteredSessions[0]?.loginTime || "--";
-    const logoutTime = filteredSessions[filteredSessions.length-1]?.logoutTime || "--";
+    const logoutTime = filteredSessions[filteredSessions.length - 1]?.logoutTime || "--";
 
     // if (!employee) return <div className="p-6">Loading profile...</div>;
     if (!employee) {
-  return (
-    <div className="flex justify-center items-center h-screen">
-      <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-    </div>
-  );
-}
+        return (
+            <div className="flex justify-center items-center h-screen">
+                <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
 
     return (
@@ -201,6 +332,19 @@ const ProfilePage = () => {
                     >
                         Leave
                     </button>
+                    {/* Show this tab only if HR */}
+                    {employee?.department === "HR" && (
+                        <button
+                            onClick={() => setActiveTab("hrActivity")}
+                            className={`px-4 py-2 cursor-pointer rounded-md font-semibold ${activeTab === "hrActivity"
+                                ? "bg-indigo-600 text-white"
+                                : "bg-white text-indigo-600 border border-indigo-300"
+                                }`}
+                        >
+                            HR Daily Activity
+                        </button>
+                    )}
+
                 </div>
 
                 <div className="grid grid-cols-1 gap-6">
@@ -398,6 +542,118 @@ const ProfilePage = () => {
                             )}
                         </div>
                     )}
+                    {activeTab === "hrActivity" && employee?.department === "HR" && (
+                        <div className="grid grid-cols-1 gap-10">
+      {/* HR Call Section */}
+      <div className="grid grid-cols-3 gap-6">
+        {/* Call Form */}
+        <div className="col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
+          <h2 className="text-lg font-semibold mb-4 text-indigo-700">Log HR Call</h2>
+          <form onSubmit={submitCallActivity} className="space-y-4">
+            <input type="text" placeholder="Name" className="w-full px-4 py-2 border rounded-lg" value={activityName} onChange={(e) => setActivityName(e.target.value)} />
+            <input type="text" placeholder="Mobile No" className="w-full px-4 py-2 border rounded-lg" value={activityMobile} onChange={(e) => setActivityMobile(e.target.value)} />
+            <input type="number" placeholder="Call Duration (mins)" className="w-full px-4 py-2 border rounded-lg" value={activityDuration} onChange={(e) => setActivityDuration(e.target.value)} />
+            <input type="text" placeholder="Purpose" className="w-full px-4 py-2 border rounded-lg" value={activityPurpose} onChange={(e) => setActivityPurpose(e.target.value)} />
+            <textarea placeholder="Notes" className="w-full px-4 py-2 border rounded-lg" value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} />
+            <button type="submit" className="bg-indigo-600 text-white w-full py-2 rounded-lg">Submit</button>
+          </form>
+        </div>
+
+        {/* Call Logs */}
+        <div className="col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
+          <div className="flex justify-between items-end mb-4">
+            <h2 className="text-lg font-semibold text-indigo-700">Call Logs</h2>
+            <div className="relative w-fit">
+              <label className="absolute -top-2.5 left-3 px-1 text-sm text-indigo-600 font-semibold bg-white z-10">Select Date</label>
+              <input type="date" className="px-3 py-2 rounded-lg border border-gray-300" value={activityDate} onChange={(e) => { const d = e.target.value; setActivityDate(d); fetchCallLogs(d); }} />
+            </div>
+          </div>
+          <table className="w-full text-sm text-left border-t border-gray-200">
+            <thead className="bg-indigo-50 text-indigo-700">
+              <tr>
+                <th className="py-3 px-4">Name</th>
+                <th className="px-4">Mobile</th>
+                <th className="px-4">Duration</th>
+                <th className="px-4">Purpose</th>
+                <th className="px-4">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+  {callLogs.length ? callLogs.map((log, idx) => (
+    <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+      <td className="py-2 px-4">{log.callDetails?.name || "-"}</td>
+      <td className="px-4">{log.callDetails?.mobileNo || "-"}</td>
+      <td className="px-4">{log.callDetails?.duration} min</td>
+      <td className="px-4">{log.callDetails?.purpose}</td>
+      <td className="px-4">{log.notes || "-"}</td>
+    </tr>
+  )) : (
+    <tr>
+      <td colSpan={5} className="text-center py-4 text-gray-500">No Call Logs</td>
+    </tr>
+  )}
+</tbody>
+
+          </table>
+        </div>
+      </div>
+
+      {/* HR Email Section */}
+      <div className="grid grid-cols-3 gap-6">
+        {/* Email Form */}
+        <div className="col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
+          <h2 className="text-lg font-semibold mb-4 text-indigo-700">Log HR Email</h2>
+          <form onSubmit={submitEmailActivity} className="space-y-4">
+            <input type="email" placeholder="Email" className="w-full px-4 py-2 border rounded-lg" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <select className="w-full px-4 py-2 border rounded-lg" value={emailType} onChange={(e) => setEmailType(e.target.value)}>
+              <option value="">Select Type</option>
+              <option value="send">Send</option>
+              <option value="receive">Receive</option>
+            </select>
+            <input type="text" placeholder="Purpose" className="w-full px-4 py-2 border rounded-lg" value={emailPurpose} onChange={(e) => setEmailPurpose(e.target.value)} />
+            <textarea placeholder="Notes" className="w-full px-4 py-2 border rounded-lg" value={emailNotes} onChange={(e) => setEmailNotes(e.target.value)} />
+            <button type="submit" className="bg-indigo-600 text-white w-full py-2 rounded-lg">Submit</button>
+          </form>
+        </div>
+
+        {/* Email Logs */}
+        <div className="col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
+          <div className="flex justify-between items-end mb-4">
+            <h2 className="text-lg font-semibold text-indigo-700">Email Logs</h2>
+            <div className="relative w-fit">
+              <label className="absolute -top-2.5 left-3 px-1 text-sm text-indigo-600 font-semibold bg-white z-10">Select Date</label>
+              <input type="date" className="px-3 py-2 rounded-lg border border-gray-300" value={emailDate} onChange={(e) => { const d = e.target.value; setEmailDate(d); fetchEmailLogs(d); }} />
+            </div>
+          </div>
+          <table className="w-full text-sm text-left border-t border-gray-200">
+            <thead className="bg-indigo-50 text-indigo-700">
+              <tr>
+                <th className="py-3 px-4">Email</th>
+                <th className="px-4">Type</th>
+                <th className="px-4">Purpose</th>
+                <th className="px-4">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {emailLogs.length ? emailLogs.map((log, i) => (
+                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                  <td>{log.emailDetails?.email}</td>
+<td>{log.emailDetails?.emailType}</td>
+<td>{log.emailDetails?.purpose}</td>
+<td>{log.emailDetails?.notes || log.notes}</td>
+
+                </tr>
+              )) : <tr><td colSpan={4} className="text-center py-4 text-gray-500">No Email Logs</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+                    )}
+
+
+
+
                 </div>
             </div>
         </div>
