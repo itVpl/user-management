@@ -28,7 +28,7 @@ api.interceptors.request.use((config) => {
 
 /* ============ DEBUG HELPERS ============ */
 const DEBUG = true;
-const dbg = (...args) => DEBUG && console.log("%c[DailyTarget]", "color:#2563eb;font-weight:bold", ...args);
+// const dbg = (...args) => DEBUG && console.log("%c[DailyTarget]", "color:#2563eb;font-weight:bold", ...args);
 const dberr = (...args) => DEBUG && console.error("%c[DailyTarget]", "color:#dc2626;font-weight:bold", ...args);
 
 /* ============ STORAGE HELPERS ============ */
@@ -123,6 +123,41 @@ const DailyTarget = () => {
   const [reasonText, setReasonText] = useState("");
   const [reasonLoading, setReasonLoading] = useState(false);
   const [reasonError, setReasonError] = useState(null);
+  // ===== Dept-wide data for HR/Admin =====
+const [deptAllLoading, setDeptAllLoading] = useState(false);
+const [deptAllError, setDeptAllError] = useState(null);
+const [salesDept, setSalesDept] = useState(null); // full object => { date, summary, employees[] }
+const [cmtDept, setCmtDept] = useState(null);
+
+// Fetch BOTH dept reports for selected date (NO empId)
+useEffect(() => {
+  if (department) return; // ye block sirf HR/Admin ke liye
+
+  const run = async () => {
+    setDeptAllLoading(true);
+    setDeptAllError(null);
+    try {
+      const [salesRes, cmtRes] = await Promise.all([
+        api.get("/api/v1/inhouseUser/sales/report", { params: { date } }),
+        api.get("/api/v1/inhouseUser/cmt/report",   { params: { date } }),
+      ]);
+
+      // Exact shape (as you sent):
+      // res.data = { success, message, data: { date, summary, employees: [...] } }
+      setSalesDept(salesRes?.data?.data || null);
+      setCmtDept(cmtRes?.data?.data || null);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e.message || "Failed to load department reports";
+      setDeptAllError(msg);
+      setSalesDept(null);
+      setCmtDept(null);
+    } finally {
+      setDeptAllLoading(false);
+    }
+  };
+  run();
+}, [date, department]);
+
 
   const endpoint = useMemo(() => {
     if (department === "Sales") return "/api/v1/inhouseUser/sales/report";
@@ -131,6 +166,53 @@ const DailyTarget = () => {
   }, [department]);
 
   const canRequest = endpoint && empId && date;
+  const SummaryCard = ({ title, value, sub }) => (
+  <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 p-4">
+    <p className="text-xs uppercase tracking-wide text-gray-500">{title}</p>
+    <p className="text-xl font-bold text-gray-800 mt-1">{value}</p>
+    {sub ? <p className="text-xs text-gray-500 mt-0.5">{sub}</p> : null}
+  </div>
+);
+
+const EmployeesTable = ({ rows, type }) => (
+  <div className="overflow-auto rounded-xl border border-gray-100">
+    <table className="min-w-[880px] w-full text-sm">
+      <thead className="bg-gray-50 text-gray-700">
+        <tr>
+          <th className="text-left px-4 py-3 font-semibold">Emp ID</th>
+          <th className="text-left px-4 py-3 font-semibold">Name</th>
+          <th className="text-left px-4 py-3 font-semibold">Designation</th>
+          <th className="text-left px-4 py-3 font-semibold">Talk Time</th>
+          {type === "sales" ? (
+            <th className="text-left px-4 py-3 font-semibold">Delivery Orders</th>
+          ) : (
+            <th className="text-left px-4 py-3 font-semibold">Truckers Added</th>
+          )}
+          <th className="text-left px-4 py-3 font-semibold">Status</th>
+          <th className="text-left px-4 py-3 font-semibold">Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        {(rows || []).map((r, i) => (
+          <tr key={i} className="odd:bg-white even:bg-gray-50">
+            <td className="px-4 py-3">{r.empId}</td>
+            <td className="px-4 py-3">{r.employeeName}</td>
+            <td className="px-4 py-3">{r.designation || "-"}</td>
+            <td className="px-4 py-3">{r?.talkTime?.formatted || "-"}</td>
+            {type === "sales" ? (
+              <td className="px-4 py-3">{r?.deliveryOrdersCount ?? 0}</td>
+            ) : (
+              <td className="px-4 py-3">{r?.truckerCount ?? 0}</td>
+            )}
+            <td className="px-4 py-3"><StatusBadge status={r?.status || "-"} /></td>
+            <td className="px-4 py-3 text-gray-700">{r?.reason || ""}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -221,22 +303,111 @@ const DailyTarget = () => {
     );
   }
 
-  // Dept not allowed (e.g., HR/Admin)
-  if (!department) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6">
-        <Card className="text-center max-w-md mx-auto p-8">
-          <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-amber-600" />
+  // Dept not allowed (e.g., HR/Admin) — Show consolidated Sales + CMT with summary + employees
+if (!department) {
+  const salesSummary = salesDept?.summary;
+  const cmtSummary = cmtDept?.summary;
+
+  return (
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
+            <Target className="w-6 h-6 text-white" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Report not available</h3>
-          <p className="text-gray-600">
-            Aapki department (<b>{String(deptFromUser || "N/A")}</b>) ke liye Daily Target report enabled nahi hai.
-          </p>
-        </Card>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Department Reports</h1>
+            <p className="text-gray-600">Sales & CMT — {date}</p>
+          </div>
+        </div>
+
+        <input
+          type="date"
+          value={date}
+          max={toDateInputValue(new Date())}
+          onChange={(e) => setDate(e.target.value)}
+          className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700"
+        />
       </div>
-    );
-  }
+
+      {/* Loading / Error */}
+      {deptAllLoading && (
+        <div className="min-h-[120px] flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+        </div>
+      )}
+      {!deptAllLoading && deptAllError && (
+        <Card className="p-8 text-center max-w-xl mx-auto border-red-200">
+          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4 ring-1 ring-red-100">
+            <XCircle className="w-8 h-8 text-red-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">Couldn’t load reports</h3>
+          <p className="text-red-600">{deptAllError}</p>
+        </Card>
+      )}
+
+      {/* SALES */}
+      {!deptAllLoading && !deptAllError && (
+        <div className="space-y-8">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Sales — All Users</h3>
+              <span className="text-sm text-gray-600">
+                Total: <b>{salesDept?.employees?.length || 0}</b>
+              </span>
+            </div>
+
+            {/* Sales Summary */}
+            {salesSummary ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                <SummaryCard title="Dept Status" value={salesSummary.departmentStatus} />
+                <SummaryCard title="Employees" value={`${salesSummary.totalEmployees}`} sub={`Completed ${salesSummary.completedEmployees} / Incomplete ${salesSummary.incompleteEmployees}`} />
+                <SummaryCard title="Total Talk Time" value={salesSummary.totalTalkTime?.formatted} sub={`Avg ${salesSummary.avgTalkTime?.formatted}`} />
+                <SummaryCard title="Delivery Orders" value={`${salesSummary.totalDeliveryOrders}`} sub={`Req ${salesSummary.targets?.deliveryOrders?.required}/user`} />
+              </div>
+            ) : null}
+
+            {/* Sales Employees */}
+            {salesDept?.employees?.length ? (
+              <EmployeesTable rows={salesDept.employees} type="sales" />
+            ) : (
+              <div className="text-sm text-gray-600">No Sales data for this date.</div>
+            )}
+          </Card>
+
+          {/* CMT */}
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">CMT — All Users</h3>
+              <span className="text-sm text-gray-600">
+                Total: <b>{cmtDept?.employees?.length || 0}</b>
+              </span>
+            </div>
+
+            {/* CMT Summary */}
+            {cmtSummary ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                <SummaryCard title="Dept Status" value={cmtSummary.departmentStatus} />
+                <SummaryCard title="Employees" value={`${cmtSummary.totalEmployees}`} sub={`Completed ${cmtSummary.completedEmployees} / Incomplete ${cmtSummary.incompleteEmployees}`} />
+                <SummaryCard title="Total Talk Time" value={cmtSummary.totalTalkTime?.formatted} sub={`Avg ${cmtSummary.avgTalkTime?.formatted}`} />
+                <SummaryCard title="Truckers Added" value={`${cmtSummary.totalTruckerCount}`} sub={`Req ${cmtSummary.targets?.truckers?.required}/user`} />
+              </div>
+            ) : null}
+
+            {/* CMT Employees */}
+            {cmtDept?.employees?.length ? (
+              <EmployeesTable rows={cmtDept.employees} type="cmt" />
+            ) : (
+              <div className="text-sm text-gray-600">No CMT data for this date.</div>
+            )}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">

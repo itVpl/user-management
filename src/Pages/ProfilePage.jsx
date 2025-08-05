@@ -11,162 +11,157 @@ const ProfilePage = () => {
     const [reason, setReason] = useState("");
     const [leaveMessage, setLeaveMessage] = useState("");
     const [leaveHistory, setLeaveHistory] = useState("");
-    const [attendanceData, setAttendanceData] = useState([]);
-    const [attendancePage, setAttendancePage] = useState(1);
+
     const [leavePage, setLeavePage] = useState(1);
     const recordsPerPage = 5;
-    const [selectedMonth, setSelectedMonth] = useState(() => {
-        const now = new Date();
-        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    });
-    const [attendanceMonth, setAttendanceMonth] = useState("");
+    // const [selectedMonth, setSelectedMonth] = useState(() => {
+    //     const now = new Date();
+    //     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    // });
+
     const [attendanceDate, setAttendanceDate] = useState("");
     const [attendanceRecord, setAttendanceRecord] = useState(null);
 
     const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
     const empId = userStr ? JSON.parse(userStr).empId : null;
-     const [activityDate, setActivityDate] = useState("");
-  const [callLogs, setCallLogs] = useState([]);
-  const [activityName, setActivityName] = useState("");
-  const [activityMobile, setActivityMobile] = useState("");
-  const [activityDuration, setActivityDuration] = useState("");
-  const [activityPurpose, setActivityPurpose] = useState("");
-  const [activityNotes, setActivityNotes] = useState("");
+    //  const [activityDate, setActivityDate] = useState("");
+    const [callLogs, setCallLogs] = useState([]);
+    // --- State (all prefixed with activity) ---
+    const [activityName, setActivityName] = useState("");
+    const [activityMobileNo, setActivityMobileNo] = useState("");
+    const [activityTotalExp, setActivityTotalExp] = useState("");
+    const [activityCurrentLocation, setActivityCurrentLocation] = useState("");
+    const [activityCurrentCompany, setActivityCurrentCompany] = useState("");
+    const [activityCurrentSalary, setActivityCurrentSalary] = useState("");
+    const [activityNoticePeriod, setActivityNoticePeriod] = useState("");
+    const [activityEmail, setActivityEmail] = useState("");
+    const [activityComment, setActivityComment] = useState("");
+    const [activityPurpose, setActivityPurpose] = useState("");
+    const [activityDuration, setActivityDuration] = useState("");
+    const [activityNotes, setActivityNotes] = useState("");
+    // NEW: color enum ke liye
+    const [activityColor, setActivityColor] = useState("blue");
 
-  const [emailDate, setEmailDate] = useState("");
-  const [emailLogs, setEmailLogs] = useState([]);
-  const [email, setEmail] = useState("");
-  const [emailType, setEmailType] = useState("");
-  const [emailPurpose, setEmailPurpose] = useState("");
-  const [emailNotes, setEmailNotes] = useState("");
-  
+    // (optional) UI preview ke liye fixed list — apne backend enum ke hisaab se edit kar sakte ho
+    const COLOR_OPTIONS = ['red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink', 'gray', 'black', 'white'];
 
-const fetchCallLogs = async (date) => {
-  try {
-    if (!date) return;
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    const res = await axios.get(
-      `https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/date?date=${date}`,
-      { 
-        withCredentials: true,
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    );
-
-    console.log("📞 Full Call Response JSON:", JSON.stringify(res.data, null, 2));
-
-    if (res.data.success && Array.isArray(res.data.data)) {
-      setCallLogs(res.data.data);
-    } else {
-      setCallLogs([]);
-    }
-  } catch (err) {
-    console.error("❌ Error fetching call logs:", err.message, err?.response?.data);
-  }
-};
+    const [activityDate, setActivityDate] = useState(() => {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    });
+    const [submitting, setSubmitting] = useState(false);
 
 
-const fetchEmailLogs = async (date) => {
-  try {
-    if (!date) return;
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    const res = await axios.get(
-      `https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/email/date/all?date=${date}`,
-      { 
-        withCredentials: true,
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    );
 
-    console.log("📧 Full Email Response JSON:", JSON.stringify(res.data, null, 2));
+    const fetchCallLogs = async (date) => {
+        try {
+            if (!date) return;
+            const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+            const res = await axios.get(
+                `https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/date?date=${date}`,
+                {
+                    withCredentials: true,
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
 
-    if (res.data.success && Array.isArray(res.data.data)) {
-      setEmailLogs(res.data.data);
-    } else {
-      setEmailLogs([]);
-    }
-  } catch (err) {
-    console.error("❌ Error fetching email logs:", err.message, err?.response?.data);
-  }
-};
+            console.log("📞 Full Call Response JSON:", JSON.stringify(res.data, null, 2));
 
-
-const submitCallActivity = async (e) => {
-  e.preventDefault();
-  try {
-    const payload = {
-      name: activityName,
-      mobileNo: activityMobile,
-      duration: Number(activityDuration),
-      purpose: activityPurpose,
-      notes: activityNotes,
+            if (res.data.success && Array.isArray(res.data.data)) {
+                setCallLogs(res.data.data);
+            } else {
+                setCallLogs([]);
+            }
+        } catch (err) {
+            console.error("❌ Error fetching call logs:", err.message, err?.response?.data);
+        }
     };
-    console.log("📤 Submitting call activity:", payload);
 
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    const res = await axios.post(
-      "https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/create",
-      payload,
-      { 
-        withCredentials: true,
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    );
-    console.log("✅ Call Activity Submission Response:", res.data);
 
-    fetchCallLogs(activityDate);
-    setActivityName("");
-    setActivityMobile("");
-    setActivityDuration("");
-    setActivityPurpose("");
-    setActivityNotes("");
-  } catch (err) {
-    console.error("❌ Submit Call Error:", err.message, err?.response?.data);
-  }
-};
 
-const submitEmailActivity = async (e) => {
-  e.preventDefault();
-  try {
-    const payload = {
-      email,
-      emailType,
-      purpose: emailPurpose,
-      notes: emailNotes,
+
+
+
+    const submitCallActivity = async (e) => {
+        e.preventDefault();
+
+        if (!activityName.trim()) return alert("Name is required");
+        if (!activityMobileNo.trim()) return alert("Mobile No is required");
+        if (!activityPurpose.trim()) return alert("Purpose is required");
+        if (!activityDuration || Number(activityDuration) <= 0)
+            return alert("Duration (mins) must be > 0");
+        if (!activityDate) return alert("Activity date is required");
+
+        try {
+            setSubmitting(true);
+
+            const payload = {
+                name: activityName.trim(),
+                mobileNo: activityMobileNo.trim(),
+                totalExp: activityTotalExp.trim(),
+                currentLocation: activityCurrentLocation.trim(),
+                currentCompany: activityCurrentCompany.trim(),
+                currentSalary: activityCurrentSalary.trim(),
+                noticePeriod: activityNoticePeriod.trim(),
+                email: activityEmail.trim(),
+                comment: activityComment.trim(),
+                purpose: activityPurpose.trim(),
+                duration: Number(activityDuration),
+                activityDate,
+                notes: activityNotes.trim(),
+                color: activityColor,
+            };
+
+            console.log("📤 Submitting call activity:", payload);
+
+            const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+            const res = await axios.post(
+                "https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/create",
+                payload,
+                {
+                    withCredentials: true,
+                    headers: { Authorization: `Bearer ${token}` },
+                }
+            );
+
+            console.log("✅ Response:", res.data);
+
+            fetchCallLogs?.(activityDate);
+
+            setActivityName("");
+            setActivityMobileNo("");
+            setActivityTotalExp("");
+            setActivityCurrentLocation("");
+            setActivityCurrentCompany("");
+            setActivityCurrentSalary("");
+            setActivityNoticePeriod("");
+            setActivityEmail("");
+            setActivityComment("");
+            setActivityPurpose("");
+            setActivityDuration("");
+            setActivityNotes("");
+            setActivityColor("red");
+        } catch (err) {
+            console.error("❌ Submit Call Error:", err.message, err?.response?.data);
+            alert(err?.response?.data?.message || "Failed to submit call activity");
+        } finally {
+            setSubmitting(false);
+        }
     };
-    console.log("📤 Submitting email activity:", payload);
 
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    const res = await axios.post(
-      "https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/email/create",
-      payload,
-      { 
-        withCredentials: true,
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    );
-    console.log("✅ Email Activity Submission Response:", res.data);
 
-    fetchEmailLogs(emailDate);
-    setEmail("");
-    setEmailType("");
-    setEmailPurpose("");
-    setEmailNotes("");
-  } catch (err) {
-    console.error("❌ Submit Email Error:", err.message, err?.response?.data);
-  }
-};
-const getTodayDate = () => {
-  return new Date().toISOString().split("T")[0];
-};
+    const getTodayDate = () => {
+        return new Date().toISOString().split("T")[0];
+    };
 
-useEffect(() => {
-  const today = getTodayDate();
-  setActivityDate(today);
-  setEmailDate(today);
-  fetchCallLogs(today);
-  fetchEmailLogs(today);
-}, []);
+    useEffect(() => {
+        const today = getTodayDate();
+        setActivityDate(today);
+
+        fetchCallLogs(today);
+
+    }, []);
 
 
 
@@ -209,7 +204,7 @@ useEffect(() => {
         if (!date) return;
         try {
             const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-            const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/attendance/my?date=${date}`, { 
+            const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/attendance/my?date=${date}`, {
                 withCredentials: true,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -254,7 +249,7 @@ useEffect(() => {
             console.log(payload);
 
             const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-            const res = await axios.post("https://vpl-liveproject-1.onrender.com/api/v1/leave/apply", payload, { 
+            const res = await axios.post("https://vpl-liveproject-1.onrender.com/api/v1/leave/apply", payload, {
                 withCredentials: true,
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -917,112 +912,258 @@ useEffect(() => {
                     )}
                     {activeTab === "hrActivity" && employee?.department === "HR" && (
                         <div className="grid grid-cols-1 gap-10">
-      {/* HR Call Section */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Call Form */}
-        <div className="col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
-          <h2 className="text-lg font-semibold mb-4 text-indigo-700">Log HR Call</h2>
-          <form onSubmit={submitCallActivity} className="space-y-4">
-            <input type="text" placeholder="Name" className="w-full px-4 py-2 border rounded-lg" value={activityName} onChange={(e) => setActivityName(e.target.value)} />
-            <input type="text" placeholder="Mobile No" className="w-full px-4 py-2 border rounded-lg" value={activityMobile} onChange={(e) => setActivityMobile(e.target.value)} />
-            <input type="number" placeholder="Call Duration (mins)" className="w-full px-4 py-2 border rounded-lg" value={activityDuration} onChange={(e) => setActivityDuration(e.target.value)} />
-            <input type="text" placeholder="Purpose" className="w-full px-4 py-2 border rounded-lg" value={activityPurpose} onChange={(e) => setActivityPurpose(e.target.value)} />
-            <textarea placeholder="Notes" className="w-full px-4 py-2 border rounded-lg" value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} />
-            <button type="submit" className="bg-indigo-600 text-white w-full py-2 rounded-lg">Submit</button>
-          </form>
-        </div>
+                            {/* HR Call Section */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Call Form */}
+                                <div className="bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
+                                    <h2 className="text-lg font-semibold mb-4 text-indigo-700">
+                                        Log HR Call
+                                    </h2>
 
-        {/* Call Logs */}
-        <div className="col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
-          <div className="flex justify-between items-end mb-4">
-            <h2 className="text-lg font-semibold text-indigo-700">Call Logs</h2>
-            <div className="relative w-fit">
-              <label className="absolute -top-2.5 left-3 px-1 text-sm text-indigo-600 font-semibold bg-white z-10">Select Date</label>
-              <input type="date" className="px-3 py-2 rounded-lg border border-gray-300" value={activityDate} onChange={(e) => { const d = e.target.value; setActivityDate(d); fetchCallLogs(d); }} />
-            </div>
-          </div>
-          <table className="w-full text-sm text-left border-t border-gray-200">
-            <thead className="bg-indigo-50 text-indigo-700">
-              <tr>
-                <th className="py-3 px-4">Name</th>
-                <th className="px-4">Mobile</th>
-                <th className="px-4">Duration</th>
-                <th className="px-4">Purpose</th>
-                <th className="px-4">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-  {callLogs.length ? callLogs.map((log, idx) => (
-    <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-      <td className="py-2 px-4">{log.callDetails?.name || "-"}</td>
-      <td className="px-4">{log.callDetails?.mobileNo || "-"}</td>
-      <td className="px-4">{log.callDetails?.duration} min</td>
-      <td className="px-4">{log.callDetails?.purpose}</td>
-      <td className="px-4">{log.notes || "-"}</td>
-    </tr>
-  )) : (
-    <tr>
-      <td colSpan={5} className="text-center py-4 text-gray-500">No Call Logs</td>
-    </tr>
-  )}
-</tbody>
+                                    <form onSubmit={submitCallActivity} className="grid gap-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <input
+                                                type="text"
+                                                placeholder="Name *"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityName}
+                                                onChange={(e) => setActivityName(e.target.value)}
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Mobile No *"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityMobileNo}
+                                                onChange={(e) => setActivityMobileNo(e.target.value)}
+                                            />
+                                        </div>
 
-          </table>
-        </div>
-      </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <input
+                                                type="text"
+                                                placeholder="Total Experience (e.g., 5 years)"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityTotalExp}
+                                                onChange={(e) => setActivityTotalExp(e.target.value)}
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Current Location"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityCurrentLocation}
+                                                onChange={(e) => setActivityCurrentLocation(e.target.value)}
+                                            />
+                                        </div>
 
-      {/* HR Email Section */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Email Form */}
-        <div className="col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
-          <h2 className="text-lg font-semibold mb-4 text-indigo-700">Log HR Email</h2>
-          <form onSubmit={submitEmailActivity} className="space-y-4">
-            <input type="email" placeholder="Email" className="w-full px-4 py-2 border rounded-lg" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <select className="w-full px-4 py-2 border rounded-lg" value={emailType} onChange={(e) => setEmailType(e.target.value)}>
-              <option value="">Select Type</option>
-              <option value="send">Send</option>
-              <option value="receive">Receive</option>
-            </select>
-            <input type="text" placeholder="Purpose" className="w-full px-4 py-2 border rounded-lg" value={emailPurpose} onChange={(e) => setEmailPurpose(e.target.value)} />
-            <textarea placeholder="Notes" className="w-full px-4 py-2 border rounded-lg" value={emailNotes} onChange={(e) => setEmailNotes(e.target.value)} />
-            <button type="submit" className="bg-indigo-600 text-white w-full py-2 rounded-lg">Submit</button>
-          </form>
-        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <input
+                                                type="text"
+                                                placeholder="Current Company"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityCurrentCompany}
+                                                onChange={(e) => setActivityCurrentCompany(e.target.value)}
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Current Salary (e.g., 8 LPA)"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityCurrentSalary}
+                                                onChange={(e) => setActivityCurrentSalary(e.target.value)}
+                                            />
+                                        </div>
 
-        {/* Email Logs */}
-        <div className="col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
-          <div className="flex justify-between items-end mb-4">
-            <h2 className="text-lg font-semibold text-indigo-700">Email Logs</h2>
-            <div className="relative w-fit">
-              <label className="absolute -top-2.5 left-3 px-1 text-sm text-indigo-600 font-semibold bg-white z-10">Select Date</label>
-              <input type="date" className="px-3 py-2 rounded-lg border border-gray-300" value={emailDate} onChange={(e) => { const d = e.target.value; setEmailDate(d); fetchEmailLogs(d); }} />
-            </div>
-          </div>
-          <table className="w-full text-sm text-left border-t border-gray-200">
-            <thead className="bg-indigo-50 text-indigo-700">
-              <tr>
-                <th className="py-3 px-4">Email</th>
-                <th className="px-4">Type</th>
-                <th className="px-4">Purpose</th>
-                <th className="px-4">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {emailLogs.length ? emailLogs.map((log, i) => (
-                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                  <td>{log.emailDetails?.email}</td>
-<td>{log.emailDetails?.emailType}</td>
-<td>{log.emailDetails?.purpose}</td>
-<td>{log.emailDetails?.notes || log.notes}</td>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <input
+                                                type="text"
+                                                placeholder="Notice Period (e.g., 30 days)"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityNoticePeriod}
+                                                onChange={(e) => setActivityNoticePeriod(e.target.value)}
+                                            />
+                                            <input
+                                                type="email"
+                                                placeholder="Email"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityEmail}
+                                                onChange={(e) => setActivityEmail(e.target.value)}
+                                            />
+                                        </div>
 
-                </tr>
-              )) : <tr><td colSpan={4} className="text-center py-4 text-gray-500">No Email Logs</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] items-start gap-4">
+                                            <textarea
+                                                placeholder="Comment"
+                                                className="w-full px-4 py-2 border rounded-lg min-h-[80px] focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityComment}
+                                                onChange={(e) => setActivityComment(e.target.value)}
+                                            />
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Comment Color</label>
+                                                <select
+                                                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                    value={activityColor}
+                                                    onChange={(e) => setActivityColor(e.target.value)}
+                                                >
+                                                    {COLOR_OPTIONS.map(c => (
+                                                        <option key={c} value={c}>{c}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+
+                                        <input
+                                            type="text"
+                                            placeholder="Purpose *"
+                                            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                            value={activityPurpose}
+                                            onChange={(e) => setActivityPurpose(e.target.value)}
+                                        />
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <input
+                                                type="number"
+                                                placeholder="Call Duration (mins) *"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityDuration}
+                                                onChange={(e) => setActivityDuration(e.target.value)}
+                                            />
+                                            <input
+                                                type="date"
+                                                placeholder="Activity Date *"
+                                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                value={activityDate}
+                                                onChange={(e) => setActivityDate(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <textarea
+                                            placeholder="Notes"
+                                            className="w-full px-4 py-2 border rounded-lg min-h-[80px] focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                            value={activityNotes}
+                                            onChange={(e) => setActivityNotes(e.target.value)}
+                                        />
+
+                                        <button
+                                            type="submit"
+                                            disabled={submitting}
+                                            className="bg-indigo-600 disabled:opacity-50 text-white w-full py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                                        >
+                                            {submitting ? "Submitting..." : "Submit"}
+                                        </button>
+                                    </form>
+                                </div>
+
+                                {/* Call Logs */}
+                                <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
+                                    {/* Header: grid only, no flex */}
+                                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end mb-4">
+                                        <h2 className="text-lg font-semibold text-indigo-700">Call Logs</h2>
+
+                                        <div className="relative w-full md:w-auto md:justify-self-end">
+                                            <label className="absolute -top-2.5 left-3 px-1 text-sm text-indigo-600 font-semibold bg-white z-10">
+                                                Select Date
+                                            </label>
+                                            <input
+                                                type="date"
+                                                className="px-3 py-2 rounded-lg border border-gray-300 w-full"
+                                                value={activityDate}
+                                                onChange={(e) => {
+                                                    const d = e.target.value;
+                                                    setActivityDate(d);
+                                                    fetchCallLogs(d);
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-indigo-50 text-indigo-700">
+                                                <tr className="grid grid-cols-[160px_130px_120px_160px_160px_140px_140px_180px_200px_160px_110px_130px_220px] min-w-[1500px]">
+                                                    <th className="py-3 px-4">Name</th>
+                                                    <th className="py-3 px-4">Mobile No</th>
+                                                    <th className="py-3 px-4">Total Exp</th>
+                                                    <th className="py-3 px-4">Current Location</th>
+                                                    <th className="py-3 px-4">Current Company</th>
+                                                    <th className="py-3 px-4">Current Salary</th>
+                                                    <th className="py-3 px-4">Notice Period</th>
+                                                    <th className="py-3 px-4">Email</th>
+                                                    <th className="py-3 px-4">Comment</th>
+                                                    <th className="py-3 px-4">Purpose</th>
+                                                    <th className="py-3 px-4">Duration</th>
+                                                    <th className="py-3 px-4">Date</th>
+                                                    <th className="py-3 px-4">Notes</th>
+                                                </tr>
+                                            </thead>
+
+                                            <tbody className="divide-y divide-gray-100">
+                                                {callLogs.length ? (
+                                                    callLogs.map((log, idx) => {
+                                                        const cd = log.callDetails || {};
+                                                        const get = (k) => cd[k] ?? log[k] ?? "-";
+                                                        const dur = cd.duration ?? log.duration;
+                                                        const date = cd.activityDate ?? log.activityDate ?? log.date;
+
+                                                        return (
+                                                            <tr
+                                                                key={idx}
+                                                                className={`grid grid-cols-[160px_130px_120px_160px_160px_140px_140px_180px_200px_160px_110px_130px_220px] min-w-[1500px] ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                                                                    }`}
+                                                            >
+                                                                <td className="py-2 px-4">{get("name")}</td>
+                                                                <td className="py-2 px-4">{get("mobileNo")}</td>
+                                                                <td className="py-2 px-4">{get("totalExp")}</td>
+                                                                <td className="py-2 px-4">{get("currentLocation")}</td>
+                                                                <td className="py-2 px-4">{get("currentCompany")}</td>
+                                                                <td className="py-2 px-4">{get("currentSalary")}</td>
+                                                                <td className="py-2 px-4">{get("noticePeriod")}</td>
+                                                                <td className="py-2 px-4">{get("email")}</td>
+                                                                <td className="py-2 px-4">
+                                                                    {(() => {
+                                                                        const commentText = get("comment");
+                                                                        // backend se color ya to callDetails.color me aayega ya root pe
+                                                                        const colorEnum = cd.color ?? log.color ?? "red";
+
+                                                                        return commentText && commentText !== "-" ? (
+                                                                            <span className="inline-flex items-center gap-2" style={{ color: colorEnum }}>
+                                                                                <span
+                                                                                    className="inline-block w-2.5 h-2.5 rounded-full"
+                                                                                    style={{ backgroundColor: colorEnum }}
+                                                                                />
+                                                                                {commentText}
+                                                                            </span>
+                                                                        ) : "-";
+                                                                    })()}
+                                                                </td>
+
+                                                                <td className="py-2 px-4">{get("purpose")}</td>
+                                                                <td className="py-2 px-4">
+                                                                    {dur === 0 || dur ? `${dur} min` : "-"}
+                                                                </td>
+                                                                <td className="py-2 px-4">
+                                                                    {date && date !== "-"
+                                                                        ? new Date(date).toISOString().slice(0, 10)
+                                                                        : "-"}
+                                                                </td>
+                                                                <td className="py-2 px-4">{cd.notes ?? log.notes ?? "-"}</td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <tr className="grid grid-cols-1">
+                                                        <td className="text-center py-4 text-gray-500">
+                                                            No Call Logs
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     )}
+
                 </div>
             </div>
         </div>

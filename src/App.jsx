@@ -45,6 +45,7 @@ import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
 import AddCustomer from "./Components/Sales/AddCustomer.jsx";
 import AssignAgent from "./Components/Dashboard/AssignAgent.jsx";
 import CarrierDocs from "./Components/CMT/CarrierDocs.jsx";
+import DoDetails from "./Components/CMT/DoDetails.jsx";
 
 
 function App() {
@@ -117,6 +118,7 @@ function App() {
         <Route path="/AddCustomer" element={<AddCustomer/>}/>
         <Route path="/AssignAgent" element={<AssignAgent/>}/>
         <Route path="/CarrierDocs" element={<CarrierDocs/>}/>
+        <Route path="/DODetails" element={<DoDetails/>}/>
 
         
 
