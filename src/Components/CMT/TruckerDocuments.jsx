@@ -18,7 +18,10 @@ export default function TruckerDocuments() {
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 8;
+
+  // Search state
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchTruckers();
@@ -70,11 +73,28 @@ export default function TruckerDocuments() {
     return 'bg-blue-100 text-blue-700';
   };
 
+  // Search and filter functionality
+  const filteredTruckers = truckers.filter(trucker => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      trucker.compName?.toLowerCase().includes(searchLower) ||
+      trucker.email?.toLowerCase().includes(searchLower) ||
+      trucker.mc_dot_no?.toLowerCase().includes(searchLower) ||
+      trucker.phoneNo?.toLowerCase().includes(searchLower)
+    );
+  });
+
   // Pagination calculations
-  const totalPages = Math.ceil(truckers.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredTruckers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentTruckers = truckers.slice(startIndex, endIndex);
+  const currentTruckers = filteredTruckers.slice(startIndex, endIndex);
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -195,10 +215,38 @@ export default function TruckerDocuments() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-end mb-6">
+      {/* Search and Add Trucker Section */}
+      <div className="flex justify-between items-center gap-4 mb-6">
+        {/* Search Bar */}
+        <div className="relative flex-1 max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder="Search truckers by name, email, MC/DOT number..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500 transition-all duration-200 hover:border-gray-400"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            >
+              <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Add Trucker Button */}
         <button
           onClick={() => setShowAddTruckerForm(true)}
-          className="flex items-center gap-2 px-5 py-2 bg-blue-500 text-white rounded-full font-semibold shadow hover:from-blue-700 hover:to-purple-700 transition"
+          className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 whitespace-nowrap"
         >
           <PlusCircle size={20} /> Add Trucker
         </button>
@@ -268,16 +316,17 @@ export default function TruckerDocuments() {
       ) : (
         <>
           <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-            <table className="w-full table-auto">
-              <thead className="bg-gradient-to-r from-blue-50 to-purple-100">
-                <tr>
-                  <th className="p-4 text-left font-semibold text-blue-700">Date</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">Trucker Name</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">Email</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">Status</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">Action</th>
-                </tr>
-              </thead>
+                         <table className="w-full table-auto">
+               <thead className="bg-gradient-to-r from-blue-50 to-purple-100">
+                 <tr>
+                   <th className="p-4 text-left font-semibold text-blue-700">Date</th>
+                   <th className="p-4 text-left font-semibold text-blue-700">Trucker Name</th>
+                   <th className="p-4 text-left font-semibold text-blue-700">MC/DOT No</th>
+                   <th className="p-4 text-left font-semibold text-blue-700">Email</th>
+                   <th className="p-4 text-left font-semibold text-blue-700">Status</th>
+                   <th className="p-4 text-left font-semibold text-blue-700">Action</th>
+                 </tr>
+               </thead>
               <tbody>
                 {Loading ? (
                   <tr>
@@ -287,55 +336,132 @@ export default function TruckerDocuments() {
                   </tr>
                 ) : (
                   <>
-                    {currentTruckers.map((t, idx) => (
-                      <tr key={t.userId || idx} className="border-t text-sm hover:bg-blue-50 transition">
-                        <td className="p-4">{new Date(t.addedAt).toLocaleDateString()}</td>
-                        <td className="p-4">{t.compName}</td>
-                        <td className="p-4">{t.email}</td>
-                        <td className="p-4">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(t.status)}`}>
-                            {t.status === 'approved' && <CheckCircle size={14} />}
-                            {t.status === 'rejected' && <XCircle size={14} />}
-                            {t.status === 'pending' && <Clock size={14} />}
-                            {t.status || 'Pending'}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <button
-                            onClick={() => handleViewTrucker(t)}
-                            className="bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                                         {currentTruckers.map((t, idx) => (
+                       <tr key={t.userId || idx} className="border-t text-sm hover:bg-blue-50 transition">
+                         <td className="p-4">{new Date(t.addedAt).toLocaleDateString()}</td>
+                         <td className="p-4">{t.compName}</td>
+                                                   <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <span className="text-sm font-medium text-gray-700">
+                                {t.mc_dot_no || 'N/A'}
+                              </span>
+                            </div>
+                          </td>
+                         <td className="p-4">{t.email}</td>
+                         <td className="p-4">
+                           <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(t.status)}`}>
+                             {t.status === 'approved' && <CheckCircle size={14} />}
+                             {t.status === 'rejected' && <XCircle size={14} />}
+                             {t.status === 'pending' && <Clock size={14} />}
+                             {t.status || 'Pending'}
+                           </span>
+                         </td>
+                         <td className="p-4">
+                           <button
+                             onClick={() => handleViewTrucker(t)}
+                             className="bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
+                           >
+                             View
+                           </button>
+                         </td>
+                       </tr>
+                     ))}
                   </>
                 )}
               </tbody>
             </table>
           </div>
 
-          {/* Simple Pagination */}
-          {!Loading && truckers.length > 0 && (
-            <div className="mt-4 flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                Showing {startIndex + 1}-{Math.min(endIndex, truckers.length)} of {truckers.length} results
-              </div>
+          {/* Enhanced Pagination */}
+          {!Loading && filteredTruckers.length > 0 && (
+            <div className="mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex justify-between items-center">
+                                 <div className="text-sm text-gray-600">
+                   Showing {startIndex + 1}-{Math.min(endIndex, filteredTruckers.length)} of {filteredTruckers.length} results
+                   {searchTerm && ` (filtered from ${truckers.length} total)`}
+                 </div>
 
-              <div className="flex gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <div className="flex items-center gap-2">
+                  {/* Previous Button */}
                   <button
-                    key={page}
-                    onClick={() => handlePageChange(page)}
-                    className={`px-3 py-1 rounded text-sm font-medium transition ${page === currentPage
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors flex items-center gap-1"
                   >
-                    {page}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Previous
                   </button>
-                ))}
+
+                  {/* Page Numbers */}
+                  <div className="flex gap-1">
+                    {/* First Page */}
+                    {currentPage > 3 && (
+                      <button
+                        onClick={() => handlePageChange(1)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        1
+                      </button>
+                    )}
+
+                    {/* Ellipsis after first page */}
+                    {currentPage > 4 && (
+                      <span className="px-2 py-2 text-gray-500">...</span>
+                    )}
+
+                    {/* Pages around current page */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(page => {
+                        if (totalPages <= 7) return true;
+                        return page === 1 || 
+                               page === totalPages || 
+                               (page >= currentPage - 1 && page <= currentPage + 1);
+                      })
+                      .map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-3 py-2 border rounded-lg transition-colors ${
+                            currentPage === page
+                              ? 'bg-blue-500 text-white border-blue-500'
+                              : 'border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+
+                    {/* Ellipsis before last page */}
+                    {currentPage < totalPages - 3 && (
+                      <span className="px-2 py-2 text-gray-500">...</span>
+                    )}
+
+                    {/* Last Page */}
+                    {currentPage < totalPages - 2 && totalPages > 1 && (
+                      <button
+                        onClick={() => handlePageChange(totalPages)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        {totalPages}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors flex items-center gap-1"
+                  >
+                    Next
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           )}

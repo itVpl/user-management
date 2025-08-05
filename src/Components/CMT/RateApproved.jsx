@@ -651,46 +651,52 @@ const handleAutoApprove = async (bidId) => {
                         <p className="text-xs text-gray-500">by {rate.createdBy}</p>
                       </div>
                     </td>
-                    <td className="py-2 px-3">
-  <div className="flex gap-2">
-    <button
-      onClick={() => setApprovalModal({ visible: true, type: 'manual', rate })}
-      disabled={actionLoading[rate.rateNum]}
-      className={`px-3 py-1 text-xs font-semibold text-white rounded-full transition-colors ${
-        actionLoading[rate.rateNum] === 'manual'
-          ? 'bg-green-300 cursor-not-allowed'
-          : 'bg-green-500 hover:bg-green-600'
-      }`}
-    >
-      {actionLoading[rate.rateNum] === 'manual' ? (
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-          Approving...
-        </span>
-      ) : (
-        'Manual Approve'
-      )}
-    </button>
-    <button
-      onClick={() => setApprovalModal({ visible: true, type: 'auto', rate })}
-      disabled={actionLoading[rate.rateNum]}
-      className={`px-3 py-1 text-xs font-semibold text-white rounded-full transition-colors ${
-        actionLoading[rate.rateNum] === 'auto'
-          ? 'bg-blue-300 cursor-not-allowed'
-          : 'bg-blue-500 hover:bg-blue-600'
-      }`}
-    >
-      {actionLoading[rate.rateNum] === 'auto' ? (
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-          Auto...
-        </span>
-      ) : (
-        'Auto Approve'
-      )}
-    </button>
-  </div>
-</td>
+                                         <td className="py-2 px-3">
+   <div className="flex gap-2">
+     <button
+       onClick={() => setApprovalModal({ visible: true, type: 'manual', rate })}
+       disabled={actionLoading[rate.rateNum]}
+       className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${
+         actionLoading[rate.rateNum] === 'manual'
+           ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+           : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
+       }`}
+     >
+       {actionLoading[rate.rateNum] === 'manual' ? (
+         <span className="flex items-center gap-2">
+           <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+           <span>Approving...</span>
+         </span>
+       ) : (
+         <>
+           <CheckCircle size={12} className="animate-pulse" />
+           <span>Manual Approve</span>
+         </>
+       )}
+     </button>
+     <button
+       onClick={() => setApprovalModal({ visible: true, type: 'auto', rate })}
+       disabled={actionLoading[rate.rateNum]}
+       className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${
+         actionLoading[rate.rateNum] === 'auto'
+           ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+           : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg hover:from-blue-600 hover:to-purple-700 hover:shadow-xl'
+       }`}
+     >
+       {actionLoading[rate.rateNum] === 'auto' ? (
+         <span className="flex items-center gap-2">
+           <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+           <span>Auto...</span>
+         </span>
+       ) : (
+         <>
+           <Clock size={12} className="animate-pulse" />
+           <span>Auto Approve</span>
+         </>
+       )}
+     </button>
+   </div>
+ </td>
                     
                   </tr>
                 ))}
@@ -711,43 +717,96 @@ const handleAutoApprove = async (bidId) => {
         </div>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && filteredRates.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} rates
-            {searchTerm && ` (filtered from ${approvedRates.length} total)`}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              Previous
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'border-gray-300 hover:bg-gray-50'
-                  }`}
-              >
-                {page}
-              </button>
-            ))}
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+             {/* Enhanced Pagination */}
+       {totalPages > 1 && filteredRates.length > 0 && (
+         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+           <div className="text-sm text-gray-600">
+             Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} rates
+             {searchTerm && ` (filtered from ${approvedRates.length} total)`}
+           </div>
+           
+           <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+             {/* Previous Button */}
+             <button
+               onClick={() => handlePageChange(currentPage - 1)}
+               disabled={currentPage === 1}
+               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+             >
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+               </svg>
+               Previous
+             </button>
+
+             {/* Page Numbers */}
+             <div className="flex items-center gap-1">
+               {/* First Page */}
+               {currentPage > 3 && (
+                 <>
+                   <button
+                     onClick={() => handlePageChange(1)}
+                     className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                   >
+                     1
+                   </button>
+                   {currentPage > 4 && (
+                     <span className="px-2 text-gray-400">...</span>
+                   )}
+                 </>
+               )}
+
+               {/* Current Page Range */}
+               {Array.from({ length: totalPages }, (_, i) => i + 1)
+                 .filter(page => {
+                   if (totalPages <= 7) return true;
+                   if (currentPage <= 4) return page <= 5;
+                   if (currentPage >= totalPages - 3) return page >= totalPages - 4;
+                   return page >= currentPage - 2 && page <= currentPage + 2;
+                 })
+                 .map((page) => (
+                   <button
+                     key={page}
+                     onClick={() => handlePageChange(page)}
+                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                       currentPage === page
+                         ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                         : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                     }`}
+                   >
+                     {page}
+                   </button>
+                 ))}
+
+               {/* Last Page */}
+               {currentPage < totalPages - 2 && totalPages > 7 && (
+                 <>
+                   {currentPage < totalPages - 3 && (
+                     <span className="px-2 text-gray-400">...</span>
+                   )}
+                   <button
+                     onClick={() => handlePageChange(totalPages)}
+                     className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                   >
+                     {totalPages}
+                   </button>
+                 </>
+               )}
+             </div>
+
+             {/* Next Button */}
+             <button
+               onClick={() => handlePageChange(currentPage + 1)}
+               disabled={currentPage === totalPages}
+               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+             >
+               Next
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+               </svg>
+             </button>
+           </div>
+         </div>
+       )}
 
       {/* Add Rate Approved Modal */}
       {showAddRateForm && (
@@ -928,65 +987,139 @@ const handleAutoApprove = async (bidId) => {
           </div>
         </div>
       )}
-      {approvalModal.visible && (
-  <div className="fixed inset-0 z-50 bg-black bg-opacity-10 flex items-center justify-center">
-    <div className="bg-white rounded-2xl p-6 shadow-2xl w-[450px] relative">
-      <button
-        className="absolute top-3 right-4 text-gray-500 text-2xl hover:text-red-500"
-        onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
-      >
-        ×
-      </button>
-
-      <h2 className="text-lg font-bold text-gray-800 mb-4">
-        {approvalModal.type === 'manual' ? 'Manual Approval' : 'Auto Approval'}
-      </h2>
-
-      <div className="space-y-2 text-sm text-gray-700">
-        <p><strong>Shipment:</strong> {approvalModal.rate.shipmentNumber}</p>
-        <p><strong>Trucker:</strong> {approvalModal.rate.truckerName}</p>
-        <p><strong>Origin:</strong> {approvalModal.rate.origin}</p>
-        <p><strong>Destination:</strong> {approvalModal.rate.destination}</p>
+             {approvalModal.visible && (
+  <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center p-4">
+    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden">
+      {/* Header with gradient */}
+      <div className={`p-6 text-white ${approvalModal.type === 'manual' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-purple-600'}`}>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+              {approvalModal.type === 'manual' ? (
+                <CheckCircle className="text-white" size={24} />
+              ) : (
+                <Clock className="text-white" size={24} />
+              )}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">
+                {approvalModal.type === 'manual' ? 'Manual Approval' : 'Auto Approval'}
+              </h2>
+              <p className="text-white/80 text-sm">
+                {approvalModal.type === 'manual' ? 'Set custom rate for approval' : 'Approve with original rate'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
+            className="text-white hover:text-gray-200 text-2xl font-bold transition-colors"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
-      <div className="mt-4">
-        <label className="text-sm font-medium text-gray-700">Rate</label>
-        <input
-          type="number"
-          className="w-full px-4 py-2 mt-1 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
-          value={approvalModal.rate.rate}
-          readOnly={approvalModal.type === 'auto'}
-          onChange={(e) => {
-            if (approvalModal.type === 'manual') {
-              setApprovalModal(prev => ({
-                ...prev,
-                rate: { ...prev.rate, rate: e.target.value }
-              }));
-            }
-          }}
-        />
-      </div>
+      {/* Content */}
+      <div className="p-6 space-y-6">
+        {/* Rate Information Cards */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Shipment</span>
+            </div>
+            <p className="text-sm font-medium text-gray-800">{approvalModal.rate.shipmentNumber}</p>
+          </div>
+          
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Trucker</span>
+            </div>
+            <p className="text-sm font-medium text-gray-800">{approvalModal.rate.truckerName}</p>
+          </div>
+          
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+              <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Origin</span>
+            </div>
+            <p className="text-sm font-medium text-gray-800">{approvalModal.rate.origin}</p>
+          </div>
+          
+          <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-orange-100">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+              <span className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Destination</span>
+            </div>
+            <p className="text-sm font-medium text-gray-800">{approvalModal.rate.destination}</p>
+          </div>
+        </div>
 
-      <div className="mt-6 flex justify-end gap-4">
-        <button
-          onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
-          className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={async () => {
-            if (approvalModal.type === 'manual') {
-              await handleManualApprove(approvalModal.rate.rateNum, approvalModal.rate.rate);
-            } else {
-              await handleAutoApprove(approvalModal.rate.rateNum);
-            }
-            setApprovalModal({ visible: false, type: null, rate: null });
-          }}
-          className={`px-5 py-2 rounded-lg text-white ${approvalModal.type === 'manual' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-        >
-          Confirm
-        </button>
+        {/* Rate Input Section */}
+        <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+          <div className="flex items-center gap-2 mb-3">
+            <DollarSign className="text-green-600" size={18} />
+            <label className="text-sm font-semibold text-gray-700">
+              {approvalModal.type === 'manual' ? 'Custom Rate Amount' : 'Original Rate Amount'}
+            </label>
+          </div>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+            <input
+              type="number"
+              className={`w-full pl-8 pr-4 py-3 border-2 rounded-lg text-lg font-semibold transition-all duration-200 ${
+                approvalModal.type === 'manual' 
+                  ? 'border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-100' 
+                  : 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-gray-50'
+              }`}
+              value={approvalModal.rate.rate}
+              readOnly={approvalModal.type === 'auto'}
+              onChange={(e) => {
+                if (approvalModal.type === 'manual') {
+                  setApprovalModal(prev => ({
+                    ...prev,
+                    rate: { ...prev.rate, rate: e.target.value }
+                  }));
+                }
+              }}
+              placeholder="Enter rate amount"
+            />
+          </div>
+          {approvalModal.type === 'auto' && (
+            <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+              <Clock size={12} />
+              Auto-approval uses the original bid rate
+            </p>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 pt-4">
+          <button
+            onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
+            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all duration-200 hover:border-gray-400"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              if (approvalModal.type === 'manual') {
+                await handleManualApprove(approvalModal.rate.rateNum, approvalModal.rate.rate);
+              } else {
+                await handleAutoApprove(approvalModal.rate.rateNum);
+              }
+              setApprovalModal({ visible: false, type: null, rate: null });
+            }}
+            className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
+              approvalModal.type === 'manual' 
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl' 
+                : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
+            }`}
+          >
+            {approvalModal.type === 'manual' ? 'Manual Approve' : 'Auto Approve'}
+          </button>
+        </div>
       </div>
     </div>
   </div>
