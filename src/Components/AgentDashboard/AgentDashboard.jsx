@@ -907,9 +907,9 @@ const Dashboard = () => {
                 </div>
                 <h3 className="text-xl font-bold text-gray-800">DO Data</h3>
               </div>
-              <button className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium shadow-lg">
+              {/* <button className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium shadow-lg">
                 Create New DO
-              </button>
+              </button> */}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -957,10 +957,10 @@ const Dashboard = () => {
           </div>
            
            {/* Team DO Records */}
-          <div className="bg-white rounded-2xl shadow-md p-6">
-      {/* Header */}
+          {/* <div className="bg-white rounded-2xl shadow-md p-6">
+      
       <div className="flex flex-row md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        {/* Title with Icon */}
+       
         <div className="flex items-center gap-3">
           <div className="bg-green-500 p-2 rounded-lg shadow-sm text-white">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none"
@@ -972,7 +972,7 @@ const Dashboard = () => {
           <h2 className="text-xl font-bold text-gray-800">Team DO Records</h2>
         </div>
 
-        {/* Filters */}
+       
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="date"
@@ -997,7 +997,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Table */}
+     
       <div className="overflow-x-auto">
         <table className="min-w-full border border-gray-200 rounded-md overflow-hidden text-sm">
           <thead className="bg-gray-100 text-gray-700">
@@ -1027,7 +1027,7 @@ const Dashboard = () => {
           </tbody>
         </table>
       </div>
-    </div>
+    </div> */}
 
 
         </>
