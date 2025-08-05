@@ -834,12 +834,12 @@ const Dashboard = () => {
                     percentage={Math.min(100, Math.round((callStats.totalDuration / 10800) * 100)) || 0} 
                     color={(callStats.totalDuration / 10800) >= 1 ? "green" : "blue"}
                   />
-                  <div className="text-center mt-2">
+                  {/* <div className="text-center mt-2">
                     <p className="text-xs text-gray-600">Target Progress</p>
                     <p className="text-sm font-bold text-gray-800">
                       {Math.round((callStats.totalDuration / 10800) * 100)}% Complete
                     </p>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>
@@ -860,26 +860,25 @@ const Dashboard = () => {
               <div className="relative">
                 <div className="max-h-64 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                   <div className="space-y-2 pr-2">
-                    {doData.todayDOs.map((deliveryOrder, index) => (
-                      <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-100 hover:shadow-sm transition-all duration-200">
-                        <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                          {(deliveryOrder._id || '').slice(-2)}
+                    {doData.todayDOs.map((deliveryOrder, index) => {
+                      // Extract data from nested structure for Recent DO section
+                      const firstCustomer = deliveryOrder.customers && deliveryOrder.customers.length > 0 ? deliveryOrder.customers[0] : null;
+                      const loadNo = firstCustomer ? firstCustomer.loadNo : 'N/A';
+                      const billTo = firstCustomer ? firstCustomer.billTo : 'N/A';
+                      const shipperName = deliveryOrder.shipper ? deliveryOrder.shipper.name : 'N/A';
+                      
+                      return (
+                        <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-100 hover:shadow-sm transition-all duration-200">
+                          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                            {loadNo ? loadNo.slice(-2) : (deliveryOrder._id || '').slice(-2)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-800 text-sm truncate">{loadNo}</p>
+                            <p className="text-xs text-gray-600">{billTo}</p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-800 text-sm truncate">{deliveryOrder.customerName || 'N/A'}</p>
-                          <p className="text-xs text-gray-600">${(deliveryOrder.orderValue || 0).toLocaleString()}</p>
-                        </div>
-                        <div className="text-right">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            deliveryOrder.status === 'approved' ? 'bg-green-100 text-green-700' :
-                            deliveryOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {deliveryOrder.status || 'pending'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {doData.todayDOs.length === 0 && (
                       <div className="text-center py-6">
                         <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -915,32 +914,34 @@ const Dashboard = () => {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">DO ID</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Client</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Product</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Amount</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Status</th>
+                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Load No</th>
+                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Bill To</th>
+                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Shipper Name</th>
+                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Carrier Name</th>
+                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Carrier Fees</th>
                   </tr>
                 </thead>
                 <tbody>
                   {doData.todayDOs.length > 0 ? (
-                    doData.todayDOs.map((deliveryOrder, index) => (
-                      <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
-                        <td className="py-4 px-4 text-gray-800 font-medium">{(deliveryOrder._id || '').slice(-6)}</td>
-                        <td className="py-4 px-4 text-gray-800">{deliveryOrder.customerName || 'N/A'}</td>
-                        <td className="py-4 px-4 text-gray-800">{deliveryOrder.productName || 'N/A'}</td>
-                        <td className="py-4 px-4 text-gray-800 font-bold text-green-600">${(deliveryOrder.orderValue || 0).toLocaleString()}</td>
-                        <td className="py-4 px-4 text-gray-800">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            deliveryOrder.status === 'approved' ? 'bg-green-100 text-green-700' :
-                            deliveryOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {deliveryOrder.status || 'pending'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    doData.todayDOs.map((deliveryOrder, index) => {
+                      // Extract data from nested structure
+                      const firstCustomer = deliveryOrder.customers && deliveryOrder.customers.length > 0 ? deliveryOrder.customers[0] : null;
+                      const loadNo = firstCustomer ? firstCustomer.loadNo : 'N/A';
+                      const billTo = firstCustomer ? firstCustomer.billTo : 'N/A';
+                      const shipperName = deliveryOrder.shipper ? deliveryOrder.shipper.name : 'N/A';
+                      const carrierName = deliveryOrder.carrier ? deliveryOrder.carrier.carrierName : 'N/A';
+                      const carrierFees = deliveryOrder.carrier ? deliveryOrder.carrier.totalCarrierFees : 0;
+                      
+                      return (
+                        <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
+                          <td className="py-4 px-4 text-gray-800 font-medium">{loadNo}</td>
+                          <td className="py-4 px-4 text-gray-800">{billTo}</td>
+                          <td className="py-4 px-4 text-gray-800">{shipperName}</td>
+                          <td className="py-4 px-4 text-gray-800">{carrierName}</td>
+                          <td className="py-4 px-4 text-gray-800 font-bold text-green-600">${carrierFees.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr className="border-b border-gray-100">
                       <td colSpan="5" className="py-8 px-4 text-center text-gray-500">
