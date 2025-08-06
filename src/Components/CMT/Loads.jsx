@@ -53,20 +53,33 @@ const handleChange = (e) => {
 const handleLoadSubmit = async (e) => {
   e.preventDefault();
 
-  const token = sessionStorage.getItem("token"); // ✅ get from sessionStorage
-
+  const token = sessionStorage.getItem("token");
   if (!token) {
-    alertify.error("You're not logged in. Please login to continue.");
+    alertify.error("You're not logged in.");
     return;
   }
 
   const payload = {
     ...loadForm,
-    weight: parseInt(loadForm.weight),
-    rate: parseInt(loadForm.rate),
+    weight: parseInt(loadForm.weight, 10),
+    rate: parseInt(loadForm.rate, 10),
     rateType: "Flat Rate",
     loadType,
   };
+
+  // ✅ Client-side validation for required fields
+  const requiredFields = [
+    "shipperId", "fromCity", "fromState", "toCity", "toState",
+    "weight", "commodity", "vehicleType", "pickupDate",
+    "deliveryDate", "bidDeadline", "rate", "rateType", "loadType"
+  ];
+
+  for (const field of requiredFields) {
+    if (!payload[field]) {
+      alertify.error(`Please fill in required field: ${field}`);
+      return;
+    }
+  }
 
   console.log("🚀 Submitting Payload:", payload);
 
@@ -77,7 +90,7 @@ const handleLoadSubmit = async (e) => {
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // ✅ token from session
+          Authorization: `Bearer ${token}`,
         },
       }
     );
@@ -85,15 +98,25 @@ const handleLoadSubmit = async (e) => {
     if (res.data.success) {
       alertify.success("✅ Load created successfully!");
       setShowLoadCreationModal(false);
-      fetchLoads(); // Refresh list
+      fetchLoads();
     } else {
       alertify.error(res.data.message || "❌ Load creation failed.");
     }
   } catch (err) {
     console.error("❌ Error creating load:", err);
-    alertify.error(err.response?.data?.message || "❌ API Error. Please try again.");
+    if (err.response) {
+      console.error("Server responded with:", err.response.status, err.response.data);
+      alertify.error(err.response.data.message || "❌ Backend validation failed.");
+    } else if (err.request) {
+      console.error("No response received:", err.request);
+      alertify.error("❌ No response from server.");
+    } else {
+      console.error("Request setup error:", err.message);
+      alertify.error("❌ Error setting up request.");
+    }
   }
 };
+
 useEffect(() => {
   const fetchShippers = async () => {
     const token = sessionStorage.getItem("token");
@@ -1145,9 +1168,10 @@ useEffect(() => {
   >
     <option value="">-- Select Shipper --</option>
     {shippers.map((shipper) => (
-      <option key={shipper.userId} value={shipper.userId}>
-        {shipper.compName} ({shipper.email})
-      </option>
+      <option key={shipper._id} value={shipper._id}>        
+  {shipper.compName} ({shipper.email})
+</option>
+
     ))}
   </select>
         </div>
