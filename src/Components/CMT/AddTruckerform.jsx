@@ -46,7 +46,7 @@ export default function AddTruckerForm({ onSuccess }) {
 
   const documentFields = [
     { key: 'brokeragePacket', label: 'Brokerage Packet', required: true },
-    { key: 'carrierPartnerAgreement', label: 'Carrier Partner Agreement', required: true },
+    { key: 'carrierPartnerAgreement', label: 'Carrier Partner Agreement' },
     { key: 'w9Form', label: 'W9 Form', required: true },
     { key: 'mcAuthority', label: 'MC Authority', required: true },
     { key: 'safetyLetter', label: 'Safety Letter', required: false },
