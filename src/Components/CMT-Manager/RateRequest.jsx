@@ -243,7 +243,7 @@ const RateRequest = () => {
                 </div>
 
                 <div>
-                  <label className="block text-gray-700 text-sm font-medium mb-1">💰 Rate (₹)</label>
+                  <label className="block text-gray-700 text-sm font-medium mb-1">💰 Rate ($)</label>
                   <input type="number" value={rate} onChange={(e) => setRate(e.target.value)}
                     className="w-full border border-gray-300 px-4 py-2 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-400" placeholder="e.g. 32000" />
                 </div>

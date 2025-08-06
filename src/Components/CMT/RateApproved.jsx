@@ -193,7 +193,7 @@ const handleManualApprove = async (bidId, customRate) => {
   setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
   try {
     const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
-      rate: customRate
+      intermediateRate: customRate
     }, {
       headers: { 'Content-Type': 'application/json' }
     });
