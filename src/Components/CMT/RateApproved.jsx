@@ -5,6 +5,7 @@ import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, Plu
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import PendingBids from './PendingBids.jsx';
 
 export default function RateApproved() {
   const [approvedRates, setApprovedRates] = useState([]);
@@ -25,6 +26,28 @@ export default function RateApproved() {
   rate: null, // the selected rate object
 });
 
+  // Accept Bid Modal State
+  const [acceptBidModal, setAcceptBidModal] = useState({
+    visible: false,
+    rate: null
+  });
+
+  // Accept Bid Form Data
+  const [acceptBidForm, setAcceptBidForm] = useState({
+    customerName: '',
+    fullAddress: '',
+    status: 'Accepted', // Automatic
+    shipmentNumber: '',
+    poNumber: '',
+    bolNumber: '',
+    message: ''
+  });
+
+  const [customers, setCustomers] = useState([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [salesUserId, setSalesUserId] = useState('1234'); // Default sales user ID
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'completed', or 'accepted'
+
   // Form state for Add Rate Approved
   const [formData, setFormData] = useState({
     shipmentNumber: '',
@@ -40,45 +63,112 @@ export default function RateApproved() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
-  // Fetch data from API
+  // Fetch data from API - REMOVED DEFAULT API CALL
   const fetchApprovedRates = async () => {
-    try {
-      setLoading(true);
-      console.log('Fetching approved rates from:', `${API_CONFIG.BASE_URL}/api/v1/bid/approved/`);
+    // This function is no longer used for the default API call
+    // Keeping it for potential future use but not calling the default API
+    console.log('fetchApprovedRates function called but default API call removed');
+    return [];
+  };
 
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/approved/`, {
-        timeout: 10000, // 10 second timeout
-        headers: {
-          'Content-Type': 'application/json',
-        }
+  // Fetch completed rates from new API endpoint
+  const fetchCustomers = async () => {
+    try {
+      setCustomersLoading(true);
+      console.log('Fetching customers from:', `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers/1234`);
+
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers/1234`, {
+        timeout: 10000,
+        headers: API_CONFIG.getAuthHeaders()
       });
 
-      console.log('API Response:', response);
+      console.log('Customers API Response:', response);
+
+      if (response.data && response.data.success) {
+        const customerOptions = response.data.customers.map(customer => ({
+          value: customer._id,
+          label: `${customer.compName} (${customer.mc_dot_no})`,
+          customer: customer
+        }));
+        setCustomers(customerOptions);
+        console.log('Customer options:', customerOptions);
+      } else {
+        console.error('Customers API response format error:', response.data);
+        setCustomers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      setCustomers([]);
+    } finally {
+      setCustomersLoading(false);
+    }
+  };
+
+  const fetchCompletedRates = async () => {
+    try {
+      setLoading(true);
+      console.log('Fetching completed rates from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/1234`);
+
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/1234`, {
+        timeout: 10000,
+        headers: API_CONFIG.getAuthHeaders()
+      });
+
+      console.log('Completed Rates API Response:', response);
 
       if (response.data && response.data.success) {
         // Transform API data to match our component structure
-        const transformedRates = response.data.data.map(rate => ({
-          id: `RA-${rate._id.slice(-6)}`,
-          rateNum: rate._id,
-          shipmentNumber: rate.shipmentNumber || 'N/A',
-          origin: rate.origin || 'N/A',
-          destination: rate.destination || 'N/A',
-          rate: rate.approvedRate || rate.rate || 0,
-          truckerName: rate.truckerName || rate.trucker || 'N/A',
-          status: 'approved',
-          createdAt: new Date(rate.approvedDate || rate.createdAt).toISOString().split('T')[0],
-          createdBy: `Employee ${rate.empId || '1234'}`,
-          docUpload: rate.supportingDocs || 'sample-doc.jpg',
-          remarks: rate.remarks || ''
+        const transformedRates = response.data.bids.map(bid => ({
+          id: `BID-${bid._id.slice(-6)}`,
+          rateNum: bid._id,
+          shipmentNumber: bid.load.shipmentNumber || 'N/A',
+          origin: `${bid.load.origin.city}, ${bid.load.origin.state}`,
+          destination: `${bid.load.destination.city}, ${bid.load.destination.state}`,
+          originalRate: bid.originalRate || bid.load.rate || 0,
+          intermediateRate: bid.intermediateRate || 0,
+          rate: bid.intermediateRate || bid.originalRate || 0,
+          truckerName: bid.carrier.compName || 'N/A',
+          status: bid.status || 'pending',
+          createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
+          createdBy: `Employee ${bid.approvedByinhouseUser?.empId || '1234'}`,
+          docUpload: bid.doDocument || 'sample-doc.jpg',
+          remarks: bid.message || '',
+          // Additional fields from the new API
+          carrierInfo: {
+            mcDotNo: bid.carrier.mc_dot_no,
+            email: bid.carrier.email,
+            phone: bid.carrier.phoneNo,
+            state: bid.carrier.state,
+            city: bid.carrier.city
+          },
+          loadInfo: {
+            weight: bid.load.weight,
+            commodity: bid.load.commodity,
+            vehicleType: bid.load.vehicleType,
+            pickupDate: bid.load.pickupDate,
+            deliveryDate: bid.load.deliveryDate,
+            originalRate: bid.load.rate
+          },
+          estimatedPickup: new Date(bid.estimatedPickupDate).toLocaleDateString(),
+          estimatedDelivery: new Date(bid.estimatedDeliveryDate).toLocaleDateString(),
+          placedByInhouseUser: bid.placedByInhouseUser,
+          approvedByInhouseUser: bid.approvedByinhouseUser,
+          approvalStatus: bid.approvalStatus,
+          intermediateApprovedAt: bid.intermediateApprovedAt
         }));
 
-        console.log('Transformed rates:', transformedRates);
+        console.log('Transformed completed rates:', transformedRates);
+        console.log('Setting approvedRates with length:', transformedRates.length);
         setApprovedRates(transformedRates);
+        
+        // Force a re-render by updating the search term
+        setSearchTerm('');
       } else {
-        console.error('API response format error:', response.data);
+        console.error('Completed rates API response format error:', response.data);
+        setApprovedRates([]);
       }
     } catch (error) {
-      console.error('Error fetching approved rates:', error);
+      console.error('Error fetching completed rates:', error);
       console.error('Error details:', {
         message: error.message,
         status: error.response?.status,
@@ -86,12 +176,96 @@ export default function RateApproved() {
         data: error.response?.data,
         url: error.config?.url
       });
+      setApprovedRates([]);
     } finally {
       setLoading(false);
     }
   };
 
-  
+  // Fetch accepted bids
+  const fetchAcceptedBids = async () => {
+    try {
+      setLoading(true);
+      console.log('Fetching accepted bids from:', `${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=1234`);
+
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=1234`, {
+        timeout: 10000,
+        headers: API_CONFIG.getAuthHeaders()
+      });
+
+      console.log('Accepted Bids API Response:', response);
+
+      if (response.data && response.data.success) {
+        // Transform API data to match our component structure
+        const transformedBids = response.data.bids.map(bid => ({
+          id: `BID-${bid._id.slice(-6)}`,
+          rateNum: bid._id,
+          shipmentNumber: bid.load.shipmentNumber || 'N/A',
+          origin: `${bid.load.origin.city}, ${bid.load.origin.state}`,
+          destination: `${bid.load.destination.city}, ${bid.load.destination.state}`,
+          originalRate: bid.originalRate || bid.load.rate || 0,
+          intermediateRate: bid.intermediateRate || 0,
+          rate: bid.intermediateRate || bid.originalRate || 0,
+          truckerName: bid.carrier.compName || 'N/A',
+          status: 'accepted',
+          createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
+          acceptedAt: bid.acceptedAt ? new Date(bid.acceptedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          createdBy: `${bid.acceptedByInhouseUser?.empName || 'Unknown'} (${bid.acceptedByInhouseUser?.empId || '1234'})`,
+          docUpload: bid.doDocument || 'sample-doc.jpg',
+          remarks: bid.message || '',
+          // Additional fields from the new API
+          carrierInfo: {
+            mcDotNo: bid.carrier.mc_dot_no,
+            email: bid.carrier.email,
+            phone: bid.carrier.phoneNo,
+            state: bid.carrier.state,
+            city: bid.carrier.city
+          },
+          loadInfo: {
+            weight: bid.load.weight,
+            commodity: bid.load.commodity,
+            vehicleType: bid.load.vehicleType,
+            pickupDate: bid.load.pickupDate,
+            deliveryDate: bid.load.deliveryDate,
+            originalRate: bid.load.rate
+          },
+          estimatedPickup: new Date(bid.estimatedPickupDate).toLocaleDateString(),
+          estimatedDelivery: new Date(bid.estimatedDeliveryDate).toLocaleDateString(),
+          acceptedByInhouseUser: bid.acceptedByInhouseUser,
+          rateDifference: bid.rateDifference,
+          rateDifferencePercentage: bid.rateDifferencePercentage,
+          driverInfo: {
+            name: bid.driverName,
+            phone: bid.driverPhone,
+            vehicleNumber: bid.vehicleNumber,
+            vehicleType: bid.vehicleType
+          }
+        }));
+
+        console.log('Transformed accepted bids:', transformedBids);
+        console.log('Setting approvedRates with length:', transformedBids.length);
+        setApprovedRates(transformedBids);
+        
+        // Force a re-render by updating the search term
+        setSearchTerm('');
+      } else {
+        console.error('Accepted bids API response format error:', response.data);
+        setApprovedRates([]);
+      }
+    } catch (error) {
+      console.error('Error fetching accepted bids:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      setApprovedRates([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchApprovedRates();
@@ -125,13 +299,20 @@ export default function RateApproved() {
   };
 
   // Filter rates based on search term
-  const filteredRates = approvedRates.filter(rate =>
-    rate.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rate.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rate.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rate.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rate.truckerName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  console.log('Filtering rates. Total approvedRates:', approvedRates.length, 'Search term:', searchTerm);
+  const filteredRates = approvedRates.filter(rate => {
+    const matches = rate.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rate.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rate.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rate.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rate.truckerName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (searchTerm && matches) {
+      console.log('Rate matches search:', rate.id, rate.truckerName);
+    }
+    return matches;
+  });
+  console.log('Filtered rates count:', filteredRates.length);
   // Add after fetchApprovedRates function
   const fetchPendingApprovals = async () => {
     try {
@@ -139,9 +320,7 @@ export default function RateApproved() {
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
         timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: API_CONFIG.getAuthHeaders()
       });
 
       if (response.data && response.data.success) {
@@ -168,17 +347,79 @@ export default function RateApproved() {
       return [];
     }
   };
+
+  // Add after fetchPendingApprovals function
+  const fetchPendingBidsBySalesUser = async (salesUserId = '1234') => {
+    try {
+      console.log('Fetching pending bids for sales user:', salesUserId);
+      
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${salesUserId}`, {
+        timeout: 10000,
+        headers: API_CONFIG.getAuthHeaders()
+      });
+
+      if (response.data && response.data.success) {
+        const transformedBids = response.data.bids.map(bid => ({
+          id: `BID-${bid._id.slice(-6)}`,
+          rateNum: bid._id,
+          shipmentNumber: bid.load.shipmentNumber || 'N/A',
+          origin: `${bid.load.origin.city}, ${bid.load.origin.state}`,
+          destination: `${bid.load.destination.city}, ${bid.load.destination.state}`,
+          rate: bid.rate,
+          truckerName: bid.carrier.compName,
+          status: 'pending',
+          createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
+          createdBy: `Sales User ${bid.load.createdBySalesUser.empName} (${bid.load.createdBySalesUser.empId})`,
+          docUpload: bid.doDocument || 'sample-doc.jpg',
+          remarks: bid.message || '',
+          // Additional fields from the new API
+          carrierInfo: {
+            mcDotNo: bid.carrier.mc_dot_no,
+            email: bid.carrier.email,
+            phone: bid.carrier.phoneNo,
+            fleetSize: bid.carrier.fleetsize,
+            state: bid.carrier.state,
+            city: bid.carrier.city
+          },
+          loadInfo: {
+            weight: bid.load.weight,
+            commodity: bid.load.commodity,
+            vehicleType: bid.load.vehicleType,
+            pickupDate: bid.load.pickupDate,
+            deliveryDate: bid.load.deliveryDate,
+            originalRate: bid.load.rate
+          },
+          estimatedPickup: new Date(bid.estimatedPickupDate).toLocaleDateString(),
+          estimatedDelivery: new Date(bid.estimatedDeliveryDate).toLocaleDateString(),
+          placedByInhouseUser: bid.placedByInhouseUser,
+          salesUserInfo: bid.load.createdBySalesUser
+        }));
+
+        console.log('Transformed pending bids:', transformedBids);
+        return transformedBids;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching pending bids by sales user:', error);
+      return [];
+    }
+  };
 // Define fetchAllData at the component level
 const fetchAllData = async () => {
   setLoading(true);
   try {
-    const [approvedData, pendingData] = await Promise.all([
+    const [approvedData, pendingData, salesUserBids] = await Promise.all([
       fetchApprovedRates(),
-      fetchPendingApprovals()
+      fetchPendingApprovals(),
+      fetchPendingBidsBySalesUser(salesUserId) // Use state variable
     ]);
     
-    // Combine both datasets
-    const combinedRates = [...(approvedData || []), ...(pendingData || [])];
+    // Combine all datasets
+    const combinedRates = [
+      ...(approvedData || []), 
+      ...(pendingData || []), 
+      ...(salesUserBids || [])
+    ];
     setApprovedRates(combinedRates);
   } catch (error) {
     console.error('Error fetching data:', error);
@@ -192,21 +433,31 @@ const fetchAllData = async () => {
 const handleManualApprove = async (bidId, customRate) => {
   setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
   try {
+    console.log('Approving bid with custom rate:', { bidId, customRate });
+    
     const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
-      intermediateRate: customRate
+      intermediateRate: parseInt(customRate)
     }, {
-      headers: { 'Content-Type': 'application/json' }
+      headers: API_CONFIG.getAuthHeaders()
     });
 
+    console.log('Manual approval response:', response.data);
+
     if (response.data.success) {
-      alertify.success('Bid manually approved successfully');
-      await fetchAllData();
+      alertify.success('✅ Bid approved successfully with custom rate!');
+      await fetchAllData(); // Refresh the data
     } else {
-      alertify.error(response.data.message || 'Failed to approve bid manually');
+      alertify.error(response.data.message || 'Failed to approve bid');
     }
   } catch (error) {
     console.error('Manual approve error:', error);
-    alertify.error(error.response?.data?.message || 'Error in manual approval. Please try again.');
+    console.error('Error details:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    });
+    alertify.error(error.response?.data?.message || 'Error approving bid. Please try again.');
   } finally {
     setActionLoading(prev => ({ ...prev, [bidId]: null }));
   }
@@ -217,9 +468,7 @@ const handleAutoApprove = async (bidId) => {
   setActionLoading(prev => ({ ...prev, [bidId]: 'auto' }));
   try {
     const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/auto-approve`, {}, {
-      headers: {
-        'Content-Type': 'application/json',
-      }
+      headers: API_CONFIG.getAuthHeaders()
     });
 
     if (response.data.success) {
@@ -252,21 +501,14 @@ const handleAutoApprove = async (bidId) => {
   }, [searchTerm]);
   // Replace the existing useEffect
   useEffect(() => {
-    const fetchAllData = async () => {
-      setLoading(true);
-      const [approvedData, pendingData] = await Promise.all([
-        fetchApprovedRates(),
-        fetchPendingApprovals()
-      ]);
-
-      // Combine both datasets
-      const combinedRates = [...(approvedData || []), ...(pendingData || [])];
-      setApprovedRates(combinedRates);
-      setLoading(false);
-    };
-
-    fetchAllData();
-  }, []);
+    if (activeTab === 'pending') {
+      fetchAllData();
+    } else if (activeTab === 'completed') {
+      fetchCompletedRates();
+    } else if (activeTab === 'accepted') {
+      fetchAcceptedBids();
+    }
+  }, [activeTab]);
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -276,12 +518,112 @@ const handleAutoApprove = async (bidId) => {
     }));
   };
 
+  // Handle accept bid form input changes
+  const handleAcceptBidInputChange = (e) => {
+    const { name, value } = e.target;
+    setAcceptBidForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleCustomerSelect = (e) => {
+    const selectedCustomerId = e.target.value;
+    const selectedCustomer = customers.find(c => c.value === selectedCustomerId);
+    
+    if (selectedCustomer) {
+      const customer = selectedCustomer.customer;
+      setAcceptBidForm(prev => ({
+        ...prev,
+        customerName: selectedCustomerId,
+        fullAddress: `${customer.city}, ${customer.state}, ${customer.country}`
+      }));
+    }
+  };
+
   // Handle file upload
   const handleFileChange = (e) => {
     setFormData(prev => ({
       ...prev,
       docs: e.target.files[0]
     }));
+  };
+
+  // Handle accept bid form submission
+  const handleAcceptBidSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      console.log('Submitting accept bid form:', acceptBidForm);
+      
+      // Get the selected customer details for logging
+      const selectedCustomer = customers.find(c => c.value === acceptBidForm.customerName);
+      console.log('Selected customer ID:', acceptBidForm.customerName);
+      console.log('Selected customer details:', selectedCustomer);
+      
+      // Prepare data for API submission according to the API specification
+      const submitData = {
+        status: acceptBidForm.status, // "Accepted" or "Rejected"
+        shipperId: acceptBidForm.customerName, // ID of the shipper (customer ID)
+        shipmentNumber: acceptBidForm.shipmentNumber || undefined, // Optional
+        poNumber: acceptBidForm.poNumber || undefined, // Optional
+        bolNumber: acceptBidForm.bolNumber || undefined, // Optional
+        reason: acceptBidForm.message || undefined // Send message as reason if available
+      };
+      
+      // Remove undefined values
+      Object.keys(submitData).forEach(key => {
+        if (submitData[key] === undefined) {
+          delete submitData[key];
+        }
+      });
+      
+      console.log('Data to be sent to API:', submitData);
+      console.log('Bid ID:', acceptBidModal.rate.rateNum);
+      
+      // Call the API endpoint
+      const response = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/bid/${acceptBidModal.rate.rateNum}/accept-by-inhouse`, 
+        submitData, 
+        {
+          headers: API_CONFIG.getAuthHeaders(),
+          timeout: 10000
+        }
+      );
+      
+      console.log('API Response:', response.data);
+      
+      if (response.data && response.data.success) {
+        alertify.success('✅ Bid accepted successfully!');
+        
+        // Close modal and reset form
+        setAcceptBidModal({ visible: false, rate: null });
+        setAcceptBidForm({
+          customerName: '',
+          fullAddress: '',
+          status: 'Accepted',
+          shipmentNumber: '',
+          poNumber: '',
+          bolNumber: '',
+          message: ''
+        });
+        
+        // Refresh the data
+        await fetchCompletedRates();
+      } else {
+        alertify.error(response.data?.message || 'Failed to accept bid. Please try again.');
+      }
+      
+    } catch (error) {
+      console.error('Error submitting accept bid:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
+      alertify.error(error.response?.data?.message || 'Error accepting bid. Please try again.');
+    }
   };
 
   // Handle form submission
@@ -305,9 +647,7 @@ const handleAutoApprove = async (bidId) => {
 
       // Submit to API
       const response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/bid/approved/`, submitData, {
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: API_CONFIG.getAuthHeaders()
       });
 
       if (response.data.success) {
@@ -374,6 +714,38 @@ const handleAutoApprove = async (bidId) => {
     setShowRateModal(true);
   };
 
+  // Handle view bid details
+  const handleViewBid = (rate) => {
+    setSelectedRate(rate);
+    setViewDoc(true);
+  };
+
+  // Handle accept bid
+    const handleAcceptBid = async (rate) => {
+    try {
+      console.log('Opening accept bid modal for:', rate);
+      setAcceptBidModal({ visible: true, rate });
+
+      // Fetch customers when modal opens
+      await fetchCustomers();
+
+      // Pre-fill form with rate data
+      setAcceptBidForm({
+        customerName: '',
+        fullAddress: '',
+        status: 'Accepted',
+        shipmentNumber: rate.shipmentNumber || '',
+        poNumber: '',
+        bolNumber: '',
+        message: rate.remarks || ''
+      });
+
+    } catch (error) {
+      console.error('Error opening accept bid modal:', error);
+      alertify.error('Error opening accept bid form. Please try again.');
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -381,7 +753,7 @@ const handleAutoApprove = async (bidId) => {
         <div className="flex justify-center items-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading approved rates...</p>
+            <p className="text-gray-600">Loading bids and rates...</p>
           </div>
         </div>
       </div>
@@ -427,301 +799,851 @@ const handleAutoApprove = async (bidId) => {
     );
   }
 
-  return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <Truck className="text-green-600" size={20} />
+  // Accept Bid Modal
+  if (acceptBidModal.visible) {
+    return (
+      <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
+          {/* Header */}
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6 rounded-t-3xl">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <CheckCircle className="text-white" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Accept Bid</h2>
+                  <p className="text-green-100">Accept and process the selected bid</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Approved Rates</p>
-                <p className="text-xl font-bold text-gray-800">{approvedRates.length}</p>
-              </div>
+              <button
+                onClick={() => setAcceptBidModal({ visible: false, rate: null })}
+                className="text-white hover:text-gray-200 text-2xl font-bold"
+              >
+                ×
+              </button>
             </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-xl font-bold text-blue-600">{approvedRates.filter(rate => rate.status === 'approved').length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Clock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-xl font-bold text-yellow-600">{approvedRates.filter(rate => rate.status === 'pending').length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <Calendar className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search rates..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
           </div>
 
+          {/* Form */}
+          <form onSubmit={handleAcceptBidSubmit} className="p-6 space-y-6">
+            {/* Customer Information Section */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Customer Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Customer Name *
+                  </label>
+                  <select
+                    name="customerName"
+                    value={acceptBidForm.customerName}
+                    onChange={handleCustomerSelect}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  >
+                    <option value="">Select a customer</option>
+                    {customersLoading ? (
+                      <option value="" disabled>Loading customers...</option>
+                    ) : (
+                      customers.map(customer => (
+                        <option key={customer.value} value={customer.value}>
+                          {customer.label}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Address *
+                  </label>
+                  <input
+                    type="text"
+                    name="fullAddress"
+                    value={acceptBidForm.fullAddress}
+                    onChange={handleAcceptBidInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter full address"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Order Details Section */}
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-purple-800 mb-4">Order Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Status
+                  </label>
+                  <input
+                    type="text"
+                    name="status"
+                    value={acceptBidForm.status}
+                    readOnly
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                    placeholder="Status"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Shipment Number
+                  </label>
+                  <input
+                    type="text"
+                    name="shipmentNumber"
+                    value={acceptBidForm.shipmentNumber}
+                    onChange={handleAcceptBidInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter shipment number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    PO Number
+                  </label>
+                  <input
+                    type="text"
+                    name="poNumber"
+                    value={acceptBidForm.poNumber}
+                    onChange={handleAcceptBidInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter PO number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    BOL Number
+                  </label>
+                  <input
+                    type="text"
+                    name="bolNumber"
+                    value={acceptBidForm.bolNumber}
+                    onChange={handleAcceptBidInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter BOL number"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Additional Information Section */}
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-green-800 mb-4">Additional Information</h3>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Message
+                </label>
+                <textarea
+                  name="message"
+                  value={acceptBidForm.message}
+                  onChange={handleAcceptBidInputChange}
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter any additional message or notes"
+                />
+              </div>
+            </div>
+
+            {/* Submit Buttons */}
+            <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setAcceptBidModal({ visible: false, rate: null })}
+                className="px-6 py-3 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold"
+              >
+                Accept Bid
+              </button>
+            </div>
+          </form>
         </div>
       </div>
+    );
+  }
 
-      {viewDoc && selectedRate ? (
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <div className="flex gap-4">
-              <button
-                onClick={() => setModalType('approval')}
-                className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full shadow hover:from-green-600 hover:to-green-800 transition"
-              >
-                <CheckCircle size={18} /> Approve
-              </button>
-              <button
-                onClick={() => setModalType('rejection')}
-                className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full shadow hover:from-red-600 hover:to-red-800 transition"
-              >
-                <XCircle size={18} /> Reject
-              </button>
-              <button
-                onClick={() => setModalType('resubmit')}
-                className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full shadow hover:from-blue-600 hover:to-purple-700 transition"
-              >
-                <Clock size={18} /> Re-submission
-              </button>
+  return (
+    <div className="p-6">
+      {/* Tabs */}
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+            activeTab === 'pending'
+              ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
+              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Clock size={18} />
+            <span>Pending Bids</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('completed')}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+            activeTab === 'completed'
+              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
+              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} />
+            <span>Approved Rates</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('accepted')}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+            activeTab === 'accepted'
+              ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} />
+            <span>Accepted Bids</span>
+          </div>
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'pending' && (
+        <div>
+          {/* Pending Bids Content */}
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-6">
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+                    <Clock className="text-yellow-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Pending Bids</p>
+                    <p className="text-xl font-bold text-gray-800">{approvedRates.filter(rate => rate.status === 'pending').length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <CheckCircle className="text-blue-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Approved</p>
+                    <p className="text-xl font-bold text-blue-600">{approvedRates.filter(rate => rate.status === 'approved').length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <Calendar className="text-purple-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Today</p>
+                    <p className="text-xl font-bold text-purple-600">{approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <a
-              href={`${API_CONFIG.BASE_URL}/${selectedRate.docUpload}`}
-              target="_blank"
-              rel="noreferrer"
-              className="hover:scale-110 transition-transform"
-            >
-              <FaDownload className="text-blue-500 text-2xl cursor-pointer" />
-            </a>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search pending bids..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            // Replace the existing rate info section in the viewDoc condition with:
-            <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50 to-white shadow flex flex-col gap-2">
-              <div className="flex items-center gap-2 mb-2">
-                <Building className="text-green-500" size={20} />
-                <h3 className="text-lg font-bold text-green-700">Rate Info</h3>
+          {viewDoc && selectedRate ? (
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
+              <div className="flex justify-between items-center mb-8">
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setModalType('approval')}
+                    className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full shadow hover:from-green-600 hover:to-green-800 transition"
+                  >
+                    <CheckCircle size={18} /> Approve
+                  </button>
+                  <button
+                    onClick={() => setModalType('rejection')}
+                    className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full shadow hover:from-red-600 hover:to-red-800 transition"
+                  >
+                    <XCircle size={18} /> Reject
+                  </button>
+                  <button
+                    onClick={() => setModalType('resubmit')}
+                    className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full shadow hover:from-blue-600 hover:to-purple-700 transition"
+                  >
+                    <Clock size={18} /> Re-submission
+                  </button>
+                </div>
+                <a
+                  href={`${API_CONFIG.BASE_URL}/${selectedRate.docUpload}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:scale-110 transition-transform"
+                >
+                  <FaDownload className="text-blue-500 text-2xl cursor-pointer" />
+                </a>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <User size={16} />
-                  <span className="font-medium">Trucker:</span> {selectedRate.truckerName}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <FileText size={16} />
-                  <span className="font-medium">MC/DOT:</span> {selectedRate.carrierInfo?.mcDotNo || 'N/A'}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Mail size={16} />
-                  <span className="font-medium">Email:</span> {selectedRate.carrierInfo?.email || 'N/A'}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Phone size={16} />
-                  <span className="font-medium">Phone:</span> {selectedRate.carrierInfo?.phone || 'N/A'}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Truck size={16} />
-                  <span className="font-medium">Fleet Size:</span> {selectedRate.carrierInfo?.fleetSize || 'N/A'}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <MapPin size={16} />
-                  <span className="font-medium">Origin:</span> {selectedRate.origin}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <MapPin size={16} />
-                  <span className="font-medium">Destination:</span> {selectedRate.destination}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <DollarSign size={16} />
-                  <span className="font-medium">Rate:</span> ${selectedRate.rate.toLocaleString()}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Calendar size={16} />
-                  <span className="font-medium">Est. Pickup:</span> {selectedRate.estimatedPickup || 'N/A'}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Calendar size={16} />
-                  <span className="font-medium">Est. Delivery:</span> {selectedRate.estimatedDelivery || 'N/A'}
-                </div>
-                {selectedRate.remarks && (
-                  <div className="col-span-2 flex items-start gap-2 text-gray-700">
-                    <FileText size={16} className="mt-1" />
-                    <div>
-                      <span className="font-medium">Remarks:</span>
-                      <p className="mt-1">{selectedRate.remarks}</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50 to-white shadow flex flex-col gap-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Building className="text-green-500" size={20} />
+                    <h3 className="text-lg font-bold text-green-700">Rate Info</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <User size={16} />
+                      <span className="font-medium">Trucker:</span> {selectedRate.truckerName}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <FileText size={16} />
+                      <span className="font-medium">MC/DOT:</span> {selectedRate.carrierInfo?.mcDotNo || 'N/A'}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <Mail size={16} />
+                      <span className="font-medium">Email:</span> {selectedRate.carrierInfo?.email || 'N/A'}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <Phone size={16} />
+                      <span className="font-medium">Phone:</span> {selectedRate.carrierInfo?.phone || 'N/A'}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <Truck size={16} />
+                      <span className="font-medium">Fleet Size:</span> {selectedRate.carrierInfo?.fleetSize || 'N/A'}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <MapPin size={16} />
+                      <span className="font-medium">Origin:</span> {selectedRate.origin}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <MapPin size={16} />
+                      <span className="font-medium">Destination:</span> {selectedRate.destination}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <DollarSign size={16} />
+                      <span className="font-medium">Rate:</span> ${selectedRate.rate.toLocaleString()}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <Calendar size={16} />
+                      <span className="font-medium">Est. Pickup:</span> {selectedRate.estimatedPickup || 'N/A'}
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <Calendar size={16} />
+                      <span className="font-medium">Est. Delivery:</span> {selectedRate.estimatedDelivery || 'N/A'}
+                    </div>
+                    {selectedRate.remarks && (
+                      <div className="col-span-2 flex items-start gap-2 text-gray-700">
+                        <FileText size={16} className="mt-1" />
+                        <div>
+                          <span className="font-medium">Remarks:</span>
+                          <p className="mt-1">{selectedRate.remarks}</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="col-span-2">
+                      <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold mt-2 ${statusColor(selectedRate.status)}`}>
+                        {selectedRate.status === 'approved' && <CheckCircle size={14} />}
+                        {selectedRate.status === 'rejected' && <XCircle size={14} />}
+                        {selectedRate.status === 'pending' && <Clock size={14} />}
+                        {selectedRate.status || 'Pending'}
+                      </div>
                     </div>
                   </div>
-                )}
-                <div className="col-span-2">
-                  <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold mt-2 ${statusColor(selectedRate.status)}`}>
-                    {selectedRate.status === 'approved' && <CheckCircle size={14} />}
-                    {selectedRate.status === 'rejected' && <XCircle size={14} />}
-                    {selectedRate.status === 'pending' && <Clock size={14} />}
-                    {selectedRate.status || 'Pending'}
-                  </div>
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <img
+                    src={`${API_CONFIG.BASE_URL}/${selectedRate.docUpload}`}
+                    alt="Uploaded Doc"
+                    className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
+                    onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedRate.docUpload}`)}
+                  />
+                  <div className="text-xs text-gray-400 mt-2">Click image to preview</div>
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-center justify-center">
-              <img
-                src={`${API_CONFIG.BASE_URL}/${selectedRate.docUpload}`}
-                alt="Uploaded Doc"
-                className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
-                onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedRate.docUpload}`)}
-              />
-              <div className="text-xs text-gray-400 mt-2">Click image to preview</div>
+          ) : (
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                    <tr>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentRates.map((rate, index) => (
+                      <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{rate.id}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <span className="font-medium text-gray-700">{rate.origin}</span>
+                            <p className="text-xs text-gray-500">{rate.origin.split(', ')[1] || ''}</p>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <span className="font-medium text-gray-700">{rate.destination}</span>
+                            <p className="text-xs text-gray-500">{rate.destination.split(', ')[1] || ''}</p>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-bold text-green-600">${rate.rate.toLocaleString()}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <p className="font-medium text-gray-700">{rate.truckerName}</p>
+                            {rate.carrierInfo && (
+                              <p className="text-xs text-gray-500">MC: {rate.carrierInfo.mcDotNo}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${statusColor(rate.status)}`}>
+                            {rate.status === 'approved' && <CheckCircle size={12} />}
+                            {rate.status === 'rejected' && <XCircle size={12} />}
+                            {rate.status === 'pending' && <Clock size={12} />}
+                            {rate.status || 'Pending'}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex gap-2">
+                            {/* Manual Approve Button */}
+                            <button
+                              onClick={() => {
+                                console.log('Approve button clicked for rate:', rate);
+                                setApprovalModal({ visible: true, type: 'manual', rate });
+                              }}
+                              disabled={actionLoading[rate.rateNum]}
+                              className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${
+                                actionLoading[rate.rateNum] === 'manual'
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                  : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
+                              }`}
+                            >
+                              {actionLoading[rate.rateNum] === 'manual' ? (
+                                <span className="flex items-center gap-2">
+                                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  <span>Approving...</span>
+                                </span>
+                              ) : (
+                                <>
+                                  <CheckCircle size={12} className="animate-pulse" />
+                                  <span>Approve</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {filteredRates.length === 0 && (
+                <div className="text-center py-12">
+                  <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">
+                    {searchTerm ? 'No pending bids found matching your search' : 'No pending bids found'}
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    {searchTerm ? 'Try adjusting your search terms' : 'All bids have been processed'}
+                  </p>
+                </div>
+              )}
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate ID</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate Num</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Created</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentRates.map((rate, index) => (
-                  <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{rate.id}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-sm text-gray-600">{rate.rateNum}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{rate.shipmentNumber}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{rate.origin}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{rate.destination}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-bold text-green-600">${rate.rate.toLocaleString()}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <p className="font-medium text-gray-700">{rate.truckerName}</p>
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <p className="text-sm text-gray-800">{rate.createdAt}</p>
-                        <p className="text-xs text-gray-500">by {rate.createdBy}</p>
-                      </div>
-                    </td>
-                                         <td className="py-2 px-3">
-   <div className="flex gap-2">
-     <button
-       onClick={() => setApprovalModal({ visible: true, type: 'manual', rate })}
-       disabled={actionLoading[rate.rateNum]}
-       className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${
-         actionLoading[rate.rateNum] === 'manual'
-           ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-           : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
-       }`}
-     >
-       {actionLoading[rate.rateNum] === 'manual' ? (
-         <span className="flex items-center gap-2">
-           <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-           <span>Approving...</span>
-         </span>
-       ) : (
-         <>
-           <CheckCircle size={12} className="animate-pulse" />
-           <span>Manual Approve</span>
-         </>
-       )}
-     </button>
-     <button
-       onClick={() => setApprovalModal({ visible: true, type: 'auto', rate })}
-       disabled={actionLoading[rate.rateNum]}
-       className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${
-         actionLoading[rate.rateNum] === 'auto'
-           ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-           : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg hover:from-blue-600 hover:to-purple-700 hover:shadow-xl'
-       }`}
-     >
-       {actionLoading[rate.rateNum] === 'auto' ? (
-         <span className="flex items-center gap-2">
-           <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-           <span>Auto...</span>
-         </span>
-       ) : (
-         <>
-           <Clock size={12} className="animate-pulse" />
-           <span>Auto Approve</span>
-         </>
-       )}
-     </button>
-   </div>
- </td>
-                    
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {filteredRates.length === 0 && (
-            <div className="text-center py-12">
-              <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">
-                {searchTerm ? 'No approved rates found matching your search' : 'No approved rates found'}
-              </p>
-              <p className="text-gray-400 text-sm">
-                {searchTerm ? 'Try adjusting your search terms' : 'Create your first approved rate to get started'}
-              </p>
+          )}
+
+
+
+          {/* Enhanced Pagination */}
+          {totalPages > 1 && filteredRates.length > 0 && (
+            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="text-sm text-gray-600">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} pending bids
+                {searchTerm && ` (filtered from ${approvedRates.length} total)`}
+              </div>
+              
+              <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+                {/* Previous Button */}
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Previous
+                </button>
+
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1">
+                  {/* First Page */}
+                  {currentPage > 3 && (
+                    <>
+                      <button
+                        onClick={() => handlePageChange(1)}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                      >
+                        1
+                      </button>
+                      {currentPage > 4 && (
+                        <span className="px-2 text-gray-400">...</span>
+                      )}
+                    </>
+                  )}
+
+                  {/* Current Page Range */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(page => {
+                      if (totalPages <= 7) return true;
+                      if (currentPage <= 4) return page <= 5;
+                      if (currentPage >= totalPages - 3) return page >= totalPages - 4;
+                      return page >= currentPage - 2 && page <= currentPage + 2;
+                    })
+                    .map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                          currentPage === page
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                            : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                  {/* Last Page */}
+                  {currentPage < totalPages - 2 && totalPages > 7 && (
+                    <>
+                      {currentPage < totalPages - 3 && (
+                        <span className="px-2 text-gray-400">...</span>
+                      )}
+                      <button
+                        onClick={() => handlePageChange(totalPages)}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                      >
+                        {totalPages}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Next Button */}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                >
+                  Next
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
 
-             {/* Enhanced Pagination */}
+      {/* Completed Rates Tab Content */}
+      {activeTab === 'completed' && (
+        <div>
+          {/* Completed Rates Content */}
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-6">
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="text-green-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Completed</p>
+                    <p className="text-xl font-bold text-gray-800">{approvedRates.length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <Calendar className="text-blue-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Today's Completed</p>
+                    <p className="text-xl font-bold text-blue-600">{approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search completed rates..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+                              <table className="w-full">
+                  <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                    <tr>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentRates.map((rate, index) => (
+                      <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{rate.id}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <span className="font-medium text-gray-700">{rate.origin}</span>
+                            <p className="text-xs text-gray-500">{rate.origin.split(', ')[1] || ''}</p>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <span className="font-medium text-gray-700">{rate.destination}</span>
+                            <p className="text-xs text-gray-500">{rate.destination.split(', ')[1] || ''}</p>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-bold text-blue-600">${rate.originalRate?.toLocaleString() || '0'}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <span className="font-bold text-green-600">${rate.intermediateRate?.toLocaleString() || '0'}</span>
+                            {rate.approvalStatus && (
+                              <p className="text-xs text-gray-500">
+                                Diff: ${rate.approvalStatus.rateDifference} ({rate.approvalStatus.rateDifferencePercentage}%)
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <p className="font-medium text-gray-700">{rate.truckerName}</p>
+                            {rate.carrierInfo && (
+                              <p className="text-xs text-gray-500">MC: {rate.carrierInfo.mcDotNo}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleAcceptBid(rate)}
+                              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl"
+                            >
+                              <CheckCircle size={12} />
+                              <span>Accept Bid</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+            </div>
+            {filteredRates.length === 0 && (
+              <div className="text-center py-12">
+                <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg">
+                  {searchTerm ? 'No completed rates found matching your search' : 'No completed rates found'}
+                </p>
+                <p className="text-gray-400 text-sm">
+                  {searchTerm ? 'Try adjusting your search terms' : 'No rates have been completed yet'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Accepted Bids Tab Content */}
+      {activeTab === 'accepted' && (
+        <div>
+          {/* Accepted Bids Content */}
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-6">
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="text-blue-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Accepted</p>
+                    <p className="text-xl font-bold text-gray-800">{approvedRates.length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                    <Calendar className="text-green-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Today's Accepted</p>
+                    <p className="text-xl font-bold text-green-600">{approvedRates.filter(rate => rate.acceptedAt === new Date().toISOString().split('T')[0]).length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <DollarSign className="text-purple-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Value</p>
+                    <p className="text-xl font-bold text-purple-600">${approvedRates.reduce((sum, rate) => sum + (rate.rate || 0), 0).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search accepted bids..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                  <tr>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Accepted By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentRates.map((rate, index) => (
+                    <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{rate.id}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <span className="font-medium text-gray-700">{rate.origin}</span>
+                          <p className="text-xs text-gray-500">{rate.origin.split(', ')[1] || ''}</p>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <span className="font-medium text-gray-700">{rate.destination}</span>
+                          <p className="text-xs text-gray-500">{rate.destination.split(', ')[1] || ''}</p>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-bold text-blue-600">${rate.originalRate?.toLocaleString() || '0'}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <span className="font-bold text-green-600">${rate.intermediateRate?.toLocaleString() || '0'}</span>
+                          {rate.rateDifference && (
+                            <p className="text-xs text-gray-500">
+                              Diff: ${rate.rateDifference} ({rate.rateDifferencePercentage}%)
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <p className="font-medium text-gray-700">{rate.truckerName}</p>
+                          {rate.carrierInfo && (
+                            <p className="text-xs text-gray-500">MC: {rate.carrierInfo.mcDotNo}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <p className="font-medium text-gray-700">{rate.createdBy}</p>
+                          <p className="text-xs text-gray-500">{rate.acceptedAt || rate.createdAt}</p>
+                        </div>
+                      </td>
+
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {filteredRates.length === 0 && (
+              <div className="text-center py-12">
+                <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg">
+                  {searchTerm ? 'No accepted bids found matching your search' : 'No accepted bids found'}
+                </p>
+                <p className="text-gray-400 text-sm">
+                  {searchTerm ? 'Try adjusting your search terms' : 'No bids have been accepted yet'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Pagination */}
        {totalPages > 1 && filteredRates.length > 0 && (
          <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
            <div className="text-sm text-gray-600">
-             Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} rates
+             Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} bids/rates
              {searchTerm && ` (filtered from ${approvedRates.length} total)`}
            </div>
            
@@ -987,143 +1909,328 @@ const handleAutoApprove = async (bidId) => {
           </div>
         </div>
       )}
-             {approvalModal.visible && (
-  <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center p-4">
-    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden">
-      {/* Header with gradient */}
-      <div className={`p-6 text-white ${approvalModal.type === 'manual' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-purple-600'}`}>
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-              {approvalModal.type === 'manual' ? (
-                <CheckCircle className="text-white" size={24} />
-              ) : (
-                <Clock className="text-white" size={24} />
-              )}
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">
-                {approvalModal.type === 'manual' ? 'Manual Approval' : 'Auto Approval'}
-              </h2>
-              <p className="text-white/80 text-sm">
-                {approvalModal.type === 'manual' ? 'Set custom rate for approval' : 'Approve with original rate'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
-            className="text-white hover:text-gray-200 text-2xl font-bold transition-colors"
-          >
-            ×
-          </button>
-        </div>
-      </div>
 
-      {/* Content */}
-      <div className="p-6 space-y-6">
-        {/* Rate Information Cards */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Shipment</span>
+      {/* Approval Modal - Moved to root level */}
+      {console.log('Modal state:', approvalModal)}
+      {approvalModal.visible && (
+        <div className="fixed inset-0 z-[9999] backdrop-blur-sm bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden">
+            {/* Header with gradient */}
+            <div className={`p-6 text-white ${approvalModal.type === 'manual' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-purple-600'}`}>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    {approvalModal.type === 'manual' ? (
+                      <CheckCircle className="text-white" size={24} />
+                    ) : (
+                      <Clock className="text-white" size={24} />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">
+                      {approvalModal.type === 'manual' ? 'Bid Approval' : 'Auto Approval'}
+                    </h2>
+                    <p className="text-white/80 text-sm">
+                      {approvalModal.type === 'manual' ? 'Set custom rate for approval' : 'Approve with original rate'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
+                  className="text-white hover:text-gray-200 text-2xl font-bold transition-colors"
+                >
+                  ×
+                </button>
+              </div>
             </div>
-            <p className="text-sm font-medium text-gray-800">{approvalModal.rate.shipmentNumber}</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Trucker</span>
-            </div>
-            <p className="text-sm font-medium text-gray-800">{approvalModal.rate.truckerName}</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-              <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Origin</span>
-            </div>
-            <p className="text-sm font-medium text-gray-800">{approvalModal.rate.origin}</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-orange-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-              <span className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Destination</span>
-            </div>
-            <p className="text-sm font-medium text-gray-800">{approvalModal.rate.destination}</p>
-          </div>
-        </div>
 
-        {/* Rate Input Section */}
-        <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
-          <div className="flex items-center gap-2 mb-3">
-            <DollarSign className="text-green-600" size={18} />
-            <label className="text-sm font-semibold text-gray-700">
-              {approvalModal.type === 'manual' ? 'Custom Rate Amount' : 'Original Rate Amount'}
-            </label>
-          </div>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
-            <input
-              type="number"
-              className={`w-full pl-8 pr-4 py-3 border-2 rounded-lg text-lg font-semibold transition-all duration-200 ${
-                approvalModal.type === 'manual' 
-                  ? 'border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-100' 
-                  : 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-gray-50'
-              }`}
-              value={approvalModal.rate.rate}
-              readOnly={approvalModal.type === 'auto'}
-              onChange={(e) => {
-                if (approvalModal.type === 'manual') {
-                  setApprovalModal(prev => ({
-                    ...prev,
-                    rate: { ...prev.rate, rate: e.target.value }
-                  }));
-                }
-              }}
-              placeholder="Enter rate amount"
-            />
-          </div>
-          {approvalModal.type === 'auto' && (
-            <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-              <Clock size={12} />
-              Auto-approval uses the original bid rate
-            </p>
-          )}
-        </div>
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Rate Information Cards */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Bid ID</span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-800">{approvalModal.rate.id}</p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-xs font-semibold text-green-700 uppercase tracking-wide">Trucker</span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-800">{approvalModal.rate.truckerName}</p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                    <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Origin</span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-800">{approvalModal.rate.origin}</p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-orange-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <span className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Destination</span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-800">{approvalModal.rate.destination}</p>
+                </div>
+              </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-3 pt-4">
-          <button
-            onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
-            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all duration-200 hover:border-gray-400"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              if (approvalModal.type === 'manual') {
-                await handleManualApprove(approvalModal.rate.rateNum, approvalModal.rate.rate);
-              } else {
-                await handleAutoApprove(approvalModal.rate.rateNum);
-              }
-              setApprovalModal({ visible: false, type: null, rate: null });
-            }}
-            className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
-              approvalModal.type === 'manual' 
-                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl' 
-                : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
-            }`}
-          >
-            {approvalModal.type === 'manual' ? 'Manual Approve' : 'Auto Approve'}
-          </button>
+              {/* Rate Input Section */}
+              <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <DollarSign className="text-green-600" size={18} />
+                  <label className="text-sm font-semibold text-gray-700">
+                    {approvalModal.type === 'manual' ? 'Custom Rate Amount' : 'Original Rate Amount'}
+                  </label>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                  <input
+                    type="number"
+                    className={`w-full pl-8 pr-4 py-3 border-2 rounded-lg text-lg font-semibold transition-all duration-200 ${
+                      approvalModal.type === 'manual' 
+                        ? 'border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-100' 
+                        : 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-gray-50'
+                    }`}
+                    value={approvalModal.rate.rate}
+                    readOnly={approvalModal.type === 'auto'}
+                    onChange={(e) => {
+                      if (approvalModal.type === 'manual') {
+                        setApprovalModal(prev => ({
+                          ...prev,
+                          rate: { ...prev.rate, rate: parseFloat(e.target.value) || 0 }
+                        }));
+                      }
+                    }}
+                    placeholder="Enter rate amount"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                {approvalModal.type === 'auto' && (
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                    <Clock size={12} />
+                    Auto-approval uses the original bid rate
+                  </p>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all duration-200 hover:border-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (approvalModal.type === 'manual') {
+                      await handleManualApprove(approvalModal.rate.rateNum, approvalModal.rate.rate);
+                    } else {
+                      await handleAutoApprove(approvalModal.rate.rateNum);
+                    }
+                    setApprovalModal({ visible: false, type: null, rate: null });
+                  }}
+                  className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
+                    approvalModal.type === 'manual' 
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl' 
+                      : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
+                  }`}
+                >
+                  {approvalModal.type === 'manual' ? 'Approve Bid' : 'Auto Approve'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
+
+      {/* Add Rate Approved Modal */}
+      {showAddRateForm && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          {/* Hide scrollbar for modal content */}
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto hide-scrollbar"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <PlusCircle className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Add Rate Approved</h2>
+                    <p className="text-blue-100">Create a new approved rate</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* First Row - Shipment Number & Trucker Name */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Shipment Number */}
+                <div>
+                  <input
+                    type="text"
+                    name="shipmentNumber"
+                    value={formData.shipmentNumber}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="Shipment Number *"
+                  />
+                </div>
+
+                {/* Trucker Name */}
+                <div>
+                  <input
+                    type="text"
+                    name="truckerName"
+                    value={formData.truckerName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="Trucker Name *"
+                  />
+                </div>
+              </div>
+
+              {/* Second Row - Origin & Destination */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Origin */}
+                <div>
+                  <input
+                    type="text"
+                    name="origin"
+                    value={formData.origin}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="Origin *"
+                  />
+                </div>
+
+                {/* Destination */}
+                <div>
+                  <input
+                    type="text"
+                    name="destination"
+                    value={formData.destination}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="Destination *"
+                  />
+                </div>
+              </div>
+
+              {/* Rate */}
+              <div>
+                <input
+                  type="number"
+                  name="rate"
+                  value={formData.rate}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Rate Amount *"
+                />
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <textarea
+                  name="remarks"
+                  value={formData.remarks}
+                  onChange={handleInputChange}
+                  rows="3"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Remarks (optional)"
+                />
+              </div>
+
+              {/* Documents */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Documents
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                  <input
+                    type="file"
+                    name="docs"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="file-upload"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  />
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-2">
+                      {formData.docs ? formData.docs.name : 'Click to upload documents'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)
+                    </p>
+                  </label>
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  disabled={submitting}
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
+                      ? 'opacity-50 cursor-not-allowed text-gray-400'
+                      : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:from-blue-600 hover:to-blue-700'
+                    }`}
+                >
+                  {submitting ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Creating...
+                    </div>
+                  ) : (
+                    'Create Rate Approved'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
-} 
+}

@@ -18,6 +18,8 @@ export default function DeliveryOrder() {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
 
   // Charges popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
@@ -149,6 +151,7 @@ export default function DeliveryOrder() {
             
             return {
               id: `DO-${order._id.slice(-6)}`, 
+              originalId: order._id, // Store the full original _id
               doNum: loadNo, 
               clientName: order.customers?.[0]?.billTo || 'N/A',
               // clientPhone: '+1-555-0000', 
@@ -436,6 +439,7 @@ export default function DeliveryOrder() {
 
   // Handle charges popup
   const handleChargesClick = () => {
+    console.log('Charges popup opened, current charges state:', charges);
     setShowChargesPopup(true);
   };
 
@@ -923,6 +927,504 @@ export default function DeliveryOrder() {
     }
   };
 
+  // Handle edit order
+  const handleEditOrder = async (order) => {
+    try {
+      console.log('Edit order clicked:', order);
+      console.log('Order object keys:', Object.keys(order));
+      console.log('Order originalId:', order.originalId);
+      console.log('Order id:', order.id);
+      
+      // Use the stored original _id instead of extracting from the display ID
+      const originalId = order.originalId || order.id.replace('DO-', '');
+      console.log('Original ID to use:', originalId);
+      console.log('Full order ID:', order.id);
+      
+      // Fetch the complete order data from the API
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      console.log('Token:', token ? 'Token exists' : 'No token found');
+      
+      const apiUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${originalId}`;
+      console.log('API URL:', apiUrl);
+      
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.data && response.data.success) {
+        const fullOrderData = response.data.data;
+        console.log('Full order data for editing:', fullOrderData);
+        console.log('Pickup locations from API:', fullOrderData.shipper?.pickUpLocations);
+        console.log('Drop locations from API:', fullOrderData.shipper?.dropLocations);
+        
+        // Helper function to format date for datetime-local input
+        const formatDateForInput = (dateString) => {
+          console.log('formatDateForInput called with:', dateString);
+          if (!dateString) {
+            console.log('No date string provided, returning empty string');
+            return '';
+          }
+          try {
+            const date = new Date(dateString);
+            console.log('Created date object:', date);
+            if (isNaN(date.getTime())) {
+              console.log('Invalid date, returning empty string');
+              return '';
+            }
+            const formattedDate = date.toISOString().slice(0, 16); // Format: YYYY-MM-DDTHH:MM
+            console.log('Formatted date:', formattedDate);
+            return formattedDate;
+          } catch (error) {
+            console.log('Error formatting date:', dateString, error);
+            return '';
+          }
+        };
+
+        // Convert the full order data to match the form structure
+        console.log('Raw customers data from API:', fullOrderData.customers);
+        console.log('Customers type:', typeof fullOrderData.customers);
+        console.log('Customers is array:', Array.isArray(fullOrderData.customers));
+        if (fullOrderData.customers && fullOrderData.customers.length > 0) {
+          console.log('First customer from API:', fullOrderData.customers[0]);
+          console.log('First customer keys:', Object.keys(fullOrderData.customers[0]));
+        }
+        
+        const editFormData = {
+          customers: fullOrderData.customers || [{
+            billTo: '',
+            dispatcherName: '',
+            workOrderNo: '',
+            lineHaul: '',
+            fsc: '',
+            other: '',
+            totalAmount: 0
+          }],
+          carrierName: fullOrderData.carrier?.carrierName || '',
+          equipmentType: fullOrderData.carrier?.equipmentType || '',
+          carrierFees: fullOrderData.carrier?.totalCarrierFees || '',
+          shipperName: fullOrderData.shipper?.name || '',
+          containerNo: fullOrderData.shipper?.containerNo || '',
+          containerType: fullOrderData.shipper?.containerType || '',
+          weight: fullOrderData.shipper?.weight || '',
+          pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{
+            name: '',
+            address: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            date: ''
+          }]).map(location => {
+            console.log('Processing pickup location:', location);
+            // Use the pickUpDate from shipper object for all pickup locations
+            const formattedDate = formatDateForInput(fullOrderData.shipper?.pickUpDate);
+            console.log('Original pickUpDate:', fullOrderData.shipper?.pickUpDate, 'Formatted date:', formattedDate);
+            return {
+              ...location,
+              date: formattedDate
+            };
+          }),
+          dropLocations: (fullOrderData.shipper?.dropLocations || [{
+            name: '',
+            address: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            date: ''
+          }]).map(location => {
+            console.log('Processing drop location:', location);
+            // Use the dropDate from shipper object for all drop locations
+            const formattedDate = formatDateForInput(fullOrderData.shipper?.dropDate);
+            console.log('Original dropDate:', fullOrderData.shipper?.dropDate, 'Formatted date:', formattedDate);
+            return {
+              ...location,
+              date: formattedDate
+            };
+          }),
+          remarks: fullOrderData.remarks || '',
+          docs: null
+        };
+        
+        console.log('Edit form data prepared:', editFormData);
+        console.log('Formatted pickup locations:', editFormData.pickupLocations);
+        console.log('Formatted drop locations:', editFormData.dropLocations);
+        
+        // Set the form data
+        setFormData(editFormData);
+        console.log('Form data set successfully');
+        
+        // Log the form data after a short delay to see if it was set correctly
+        setTimeout(() => {
+          console.log('Form data after setting:', formData);
+        }, 100);
+        
+        // Set charges if they exist
+        console.log('Raw charges data from API:', fullOrderData.charges);
+        console.log('Charges type:', typeof fullOrderData.charges);
+        console.log('Charges is array:', Array.isArray(fullOrderData.charges));
+        console.log('Full order data keys:', Object.keys(fullOrderData));
+        console.log('Carrier data:', fullOrderData.carrier);
+        console.log('Shipper data:', fullOrderData.shipper);
+        
+        // Check for charges in different possible locations
+        let chargesData = fullOrderData.charges;
+        if (!chargesData && fullOrderData.carrier && fullOrderData.carrier.carrierFees) {
+          chargesData = fullOrderData.carrier.carrierFees;
+          console.log('Found charges in carrier.carrierFees:', chargesData);
+        }
+        if (!chargesData && fullOrderData.carrier && fullOrderData.carrier.charges) {
+          chargesData = fullOrderData.carrier.charges;
+          console.log('Found charges in carrier object:', chargesData);
+        }
+        if (!chargesData && fullOrderData.shipper && fullOrderData.shipper.charges) {
+          chargesData = fullOrderData.shipper.charges;
+          console.log('Found charges in shipper object:', chargesData);
+        }
+        
+        if (chargesData && Array.isArray(chargesData) && chargesData.length > 0) {
+          // Ensure each charge has the correct structure and calculate totals
+          const processedCharges = chargesData.map(charge => {
+            console.log('Processing charge:', charge);
+            return {
+              name: charge.name || charge.chargeName || charge.description || '',
+              quantity: charge.quantity || charge.qty || '',
+              amt: charge.amount || charge.amt || charge.rate || charge.price || '',
+              total: charge.total || (parseFloat(charge.quantity || charge.qty || 0)) * (parseFloat(charge.amount || charge.amt || charge.rate || charge.price || 0))
+            };
+          });
+          console.log('Processed charges for edit:', processedCharges);
+          setCharges(processedCharges);
+        } else {
+          console.log('No charges found, setting default charge');
+          setCharges([{
+            name: '',
+            quantity: '',
+            amt: '',
+            total: 0
+          }]);
+        }
+        
+        setFormData(editFormData);
+        setEditingOrder({ ...order, _id: originalId, fullData: fullOrderData });
+        setShowEditModal(true);
+      } else {
+        alertify.error('Failed to fetch order details for editing');
+      }
+    } catch (error) {
+      console.error('Error fetching order for editing:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      
+      // Fallback: Try to use the data from the orders state
+      console.log('Trying fallback approach with order data from state');
+      
+      // Helper function to format date for datetime-local input
+      const formatDateForInput = (dateString) => {
+        console.log('Fallback formatDateForInput called with:', dateString);
+        if (!dateString) {
+          console.log('No date string provided in fallback, returning empty string');
+          return '';
+        }
+        try {
+          const date = new Date(dateString);
+          console.log('Fallback created date object:', date);
+          if (isNaN(date.getTime())) {
+            console.log('Invalid date in fallback, returning empty string');
+            return '';
+          }
+          const formattedDate = date.toISOString().slice(0, 16); // Format: YYYY-MM-DDTHH:MM
+          console.log('Fallback formatted date:', formattedDate);
+          return formattedDate;
+        } catch (error) {
+          console.log('Error formatting date in fallback:', dateString, error);
+          return '';
+        }
+      };
+      
+      const fallbackFormData = {
+        customers: [{
+          billTo: order.clientName || '',
+          dispatcherName: '',
+          workOrderNo: order.doNum || '',
+          lineHaul: '',
+          fsc: '',
+          other: '',
+          totalAmount: order.amount || 0
+        }],
+        carrierName: order.carrierName || '',
+        equipmentType: '',
+        carrierFees: order.carrierFees || '',
+        shipperName: order.shipperName || '',
+        containerNo: '',
+        containerType: order.productName || '',
+        weight: order.quantity || '',
+        pickupLocations: [{
+          name: order.pickupLocation || '',
+          address: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          date: (() => {
+            const pickupDate = order.pickUpDate || order.pickupDate || '';
+            console.log('Fallback pickup date:', pickupDate);
+            const formattedPickupDate = formatDateForInput(pickupDate);
+            console.log('Fallback formatted pickup date:', formattedPickupDate);
+            return formattedPickupDate;
+          })()
+        }],
+        dropLocations: [{
+          name: order.deliveryLocation || '',
+          address: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          date: (() => {
+            const dropDate = order.dropDate || '';
+            console.log('Fallback drop date:', dropDate);
+            const formattedDropDate = formatDateForInput(dropDate);
+            console.log('Fallback formatted drop date:', formattedDropDate);
+            return formattedDropDate;
+          })()
+        }],
+        remarks: order.remarks || '',
+        docs: null
+      };
+      
+      console.log('Fallback form data:', fallbackFormData);
+      setFormData(fallbackFormData);
+      console.log('Fallback form data set successfully');
+      
+      // Log the form data after a short delay to see if it was set correctly
+      setTimeout(() => {
+        console.log('Fallback form data after setting:', formData);
+      }, 100);
+      setCharges([{
+        name: '',
+        quantity: '',
+        amt: '',
+        total: 0
+      }]);
+      setEditingOrder({ ...order, _id: originalId });
+      setShowEditModal(true);
+      alertify.warning('Using limited data for editing. Some fields may be empty.');
+    }
+  };
+
+  // Handle close edit modal
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setEditingOrder(null);
+    // Reset form data to original state
+    setFormData({
+      customers: [{
+        billTo: '',
+        dispatcherName: '',
+        workOrderNo: '',
+        lineHaul: '',
+        fsc: '',
+        other: '',
+        totalAmount: 0
+      }],
+      carrierName: '',
+      equipmentType: '',
+      carrierFees: '',
+      shipperName: '',
+      containerNo: '',
+      containerType: '',
+      weight: '',
+      pickupLocations: [{
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        date: ''
+      }],
+      dropLocations: [{
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        date: ''
+      }],
+      remarks: '',
+      docs: null
+    });
+  };
+
+  // Handle update order
+  const handleUpdateOrder = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      
+      // Get user data to extract empId (same as handleSubmit)
+      const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+      const user = JSON.parse(userStr);
+      const empId = user.empId || "EMP001";
+      
+      // Calculate total amounts for each customer (same as handleSubmit)
+      const customersWithTotals = formData.customers.map(customer => ({
+        billTo: customer.billTo,
+        dispatcherName: customer.dispatcherName,
+        workOrderNo: customer.workOrderNo,
+        lineHaul: parseInt(customer.lineHaul) || 0,
+        fsc: parseInt(customer.fsc) || 0,
+        other: parseInt(customer.other) || 0,
+        totalAmount: (parseInt(customer.lineHaul) || 0) + (parseInt(customer.fsc) || 0) + (parseInt(customer.other) || 0)
+      }));
+
+      // Validate that all required customer fields are present
+      console.log('Validating customers before update:');
+      customersWithTotals.forEach((customer, index) => {
+        console.log(`Customer ${index + 1}:`, customer);
+        console.log(`Customer ${index + 1} billTo:`, customer.billTo);
+        console.log(`Customer ${index + 1} dispatcherName:`, customer.dispatcherName);
+        console.log(`Customer ${index + 1} workOrderNo:`, customer.workOrderNo);
+        
+        // Check if any required fields are missing or empty
+        if (!customer.billTo || customer.billTo.trim() === '') {
+          console.warn(`Customer ${index + 1} billTo is missing or empty`);
+        }
+        if (!customer.dispatcherName || customer.dispatcherName.trim() === '') {
+          console.warn(`Customer ${index + 1} dispatcherName is missing or empty`);
+        }
+        if (!customer.workOrderNo || customer.workOrderNo.trim() === '') {
+          console.warn(`Customer ${index + 1} workOrderNo is missing or empty`);
+        }
+      });
+
+      // Prepare carrier data with charges array and total (same as handleSubmit)
+      const carrierData = {
+        carrierName: formData.carrierName,
+        equipmentType: formData.equipmentType,
+        carrierFees: charges.map(charge => ({
+          name: charge.name,
+          quantity: parseInt(charge.quantity) || 0,
+          amount: parseInt(charge.amt) || 0,
+          total: (parseFloat(charge.quantity) || 0) * (parseFloat(charge.amt) || 0)
+        })),
+        totalCarrierFees: charges.reduce((sum, charge) => sum + (charge.total || 0), 0)
+      };
+
+      // Prepare the update payload - match the structure used in handleSubmit
+      const updatePayload = {
+        empId: empId, // Add empId field (same as handleSubmit)
+        customers: customersWithTotals,
+        carrier: carrierData,
+        shipper: {
+          name: formData.shipperName,
+          pickUpLocations: formData.pickupLocations.map(location => ({
+            name: location.name,
+            address: location.address,
+            city: location.city,
+            state: location.state,
+            zipCode: location.zipCode
+          })),
+          pickUpDate: formData.pickupLocations[0]?.date || '',
+          containerNo: formData.containerNo,
+          containerType: formData.containerType,
+          weight: parseInt(formData.weight) || 0,
+          dropLocations: formData.dropLocations.map(location => ({
+            name: location.name,
+            address: location.address,
+            city: location.city,
+            state: location.state,
+            zipCode: location.zipCode
+          })),
+          dropDate: formData.dropLocations[0]?.date || ''
+        },
+        remarks: formData.remarks
+      };
+
+      // Additional validation - check if any customer has empty required fields
+      const hasEmptyRequiredFields = customersWithTotals.some(customer => 
+        !customer.billTo || customer.billTo.trim() === '' ||
+        !customer.dispatcherName || customer.dispatcherName.trim() === '' ||
+        !customer.workOrderNo || customer.workOrderNo.trim() === ''
+      );
+
+      if (hasEmptyRequiredFields) {
+        console.error('Some customers have empty required fields. Please fill in all required fields.');
+        alertify.error('Please fill in all required customer fields before updating.');
+        setSubmitting(false);
+        return;
+      }
+      
+      // Additional validation - ensure all required fields are properly formatted
+      customersWithTotals.forEach((customer, index) => {
+        if (!customer.billTo || customer.billTo.trim() === '') {
+          console.error(`Customer ${index + 1} billTo is empty or missing`);
+        }
+        if (!customer.dispatcherName || customer.dispatcherName.trim() === '') {
+          console.error(`Customer ${index + 1} dispatcherName is empty or missing`);
+        }
+        if (!customer.workOrderNo || customer.workOrderNo.trim() === '') {
+          console.error(`Customer ${index + 1} workOrderNo is empty or missing`);
+        }
+      });
+      
+      console.log('Sending update payload:', updatePayload);
+      console.log('Update payload customers:', updatePayload.customers);
+      console.log('Update payload customers[0]:', updatePayload.customers[0]);
+      console.log('Update payload customers[0].billTo:', updatePayload.customers[0]?.billTo);
+      console.log('Update payload customers[0].dispatcherName:', updatePayload.customers[0]?.dispatcherName);
+      console.log('Update payload customers[0].workOrderNo:', updatePayload.customers[0]?.workOrderNo);
+      console.log('Update payload customers[0].lineHaul:', updatePayload.customers[0]?.lineHaul);
+      console.log('Update payload customers[0].fsc:', updatePayload.customers[0]?.fsc);
+      console.log('Update payload customers[0].other:', updatePayload.customers[0]?.other);
+      console.log('Update payload customers[0].totalAmount:', updatePayload.customers[0]?.totalAmount);
+      console.log('Update payload carrier:', updatePayload.carrier);
+      console.log('Update payload shipper:', updatePayload.shipper);
+      console.log('Editing order ID:', editingOrder._id);
+      
+      // Additional debugging - check data types
+      console.log('=== DATA TYPE DEBUG ===');
+      console.log('billTo type:', typeof updatePayload.customers[0]?.billTo);
+      console.log('dispatcherName type:', typeof updatePayload.customers[0]?.dispatcherName);
+      console.log('workOrderNo type:', typeof updatePayload.customers[0]?.workOrderNo);
+      console.log('lineHaul type:', typeof updatePayload.customers[0]?.lineHaul);
+      console.log('fsc type:', typeof updatePayload.customers[0]?.fsc);
+      console.log('other type:', typeof updatePayload.customers[0]?.other);
+      console.log('totalAmount type:', typeof updatePayload.customers[0]?.totalAmount);
+      console.log('=== END DATA TYPE DEBUG ===');
+      
+      // Try using the same structure as the working POST request
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${editingOrder._id}`, updatePayload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+      });
+      
+      if (response.data && response.data.success) {
+        alertify.success('Delivery order updated successfully!');
+        handleCloseEditModal();
+        fetchOrders(); // Refresh the orders list
+      } else {
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update delivery order');
+      }
+    } catch (error) {
+      console.error('Error updating delivery order:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update delivery order. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -1205,12 +1707,20 @@ export default function DeliveryOrder() {
                       <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>
                     </td>
                     <td className="py-2 px-3">
-                      <button
-                        onClick={() => handleViewEmployeeData(order.createdBySalesUser?.empId || '1234')}
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        View
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleViewEmployeeData(order.createdBySalesUser?.empId || '1234')}
+                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleEditOrder(order)}
+                          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -2169,7 +2679,7 @@ export default function DeliveryOrder() {
 
       {/* Charges Popup */}
       {showChargesPopup && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
+        <div className="fixed inset-0 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
             {/* Header with gradient background */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 -m-8 mb-6 p-6 rounded-t-xl">
@@ -2307,6 +2817,473 @@ export default function DeliveryOrder() {
           </div>
         </div>
       )}
+
+      {/* Edit Order Modal */}
+      {showEditModal && editingOrder && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          {/* Hide scrollbar for modal content */}
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Edit Delivery Order</h2>
+                    <p className="text-green-100">Update delivery order details</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCloseEditModal}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleUpdateOrder} className="p-6 space-y-6">
+              {/* Customer Information Section */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
+                  <button
+                    type="button"
+                    onClick={addCustomer}
+                    className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
+                  >
+                    + Add Customer
+                  </button>
+                </div>
+                
+                {formData.customers.map((customer, customerIndex) => (
+                  <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
+                      {formData.customers.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeCustomer(customerIndex)}
+                          className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    
+                     {/* All 7 fields in one grid - 4 fields per line */}
+                     <div className="grid grid-cols-4 gap-4">
+                       <input
+                         type="text"
+                         value={customer.billTo}
+                         onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                         required
+                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="Bill To *"
+                       />
+                       <input
+                         type="text"
+                         value={customer.dispatcherName}
+                         onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
+                         required
+                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="Dispatcher Name *"
+                       />
+                       <input
+                         type="text"
+                         value={customer.workOrderNo}
+                         onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
+                         required
+                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="Work Order No *"
+                       />
+                       <input
+                         type="number"
+                         value={customer.lineHaul}
+                         onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
+                         required
+                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="Line Haul *"
+                       />
+                       <input
+                         type="number"
+                         value={customer.fsc}
+                         onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
+                         required
+                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="FSC *"
+                       />
+                       <input
+                         type="number"
+                         value={customer.other}
+                         onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
+                         required
+                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="Other *"
+                       />
+                       <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
+                         <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                       </div>
+                     </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Carrier Information Section */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <input
+                    type="text"
+                    name="carrierName"
+                    value={formData.carrierName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Carrier Name *"
+                  />
+                  <input
+                    type="text"
+                    name="equipmentType"
+                    value={formData.equipmentType}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Equipment Type *"
+                  />
+                  <input
+                    type="number"
+                    name="carrierFees"
+                    value={formData.carrierFees}
+                    onChange={handleInputChange}
+                    onClick={handleChargesClick}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-pointer"
+                    placeholder="Carrier Fees * (Click to add charges)"
+                    readOnly
+                  />
+                </div>
+              </div>
+
+              {/* Shipper Information Section */}
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
+                
+                {/* Shipper Basic Info */}
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <input
+                    type="text"
+                    name="shipperName"
+                    value={formData.shipperName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Shipper Name *"
+                  />
+                  <input
+                    type="text"
+                    name="containerNo"
+                    value={formData.containerNo}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Container No *"
+                  />
+                  <input
+                    type="text"
+                    name="containerType"
+                    value={formData.containerType}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Container Type *"
+                  />
+                  <input
+                    type="number"
+                    name="weight"
+                    value={formData.weight}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Weight (lbs) *"
+                  />
+                </div>
+
+                {/* Pickup Locations */}
+                <div className="bg-white p-4 rounded-lg mb-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
+                    <button
+                      type="button"
+                      onClick={addPickupLocation}
+                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                    >
+                      + Add Location
+                    </button>
+                  </div>
+                  
+                  {formData.pickupLocations.map((location, locationIndex) => (
+                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                      <div className="flex justify-between items-center mb-3">
+                        <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
+                        {formData.pickupLocations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePickupLocation(locationIndex)}
+                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4">
+                        <input
+                          type="text"
+                          value={location.name}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Location Name *"
+                        />
+                        <input
+                          type="text"
+                          value={location.address}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Address *"
+                        />
+                        <input
+                          type="text"
+                          value={location.city}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="City *"
+                        />
+                        <input
+                          type="text"
+                          value={location.state}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="State *"
+                        />
+                        <input
+                          type="text"
+                          value={location.zipCode}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Zip Code *"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={location.date}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'date', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Drop Locations */}
+                <div className="bg-white p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
+                    <button
+                      type="button"
+                      onClick={addDropLocation}
+                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                    >
+                      + Add Location
+                    </button>
+                  </div>
+                  
+                  {formData.dropLocations.map((location, locationIndex) => (
+                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                      <div className="flex justify-between items-center mb-3">
+                        <h5 className="text-sm font-semibold text-gray-700">Drop Location {locationIndex + 1}</h5>
+                        {formData.dropLocations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeDropLocation(locationIndex)}
+                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4">
+                        <input
+                          type="text"
+                          value={location.name}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'name', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Location Name *"
+                        />
+                        <input
+                          type="text"
+                          value={location.address}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'address', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Address *"
+                        />
+                        <input
+                          type="text"
+                          value={location.city}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'city', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="City *"
+                        />
+                        <input
+                          type="text"
+                          value={location.state}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'state', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="State *"
+                        />
+                        <input
+                          type="text"
+                          value={location.zipCode}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Zip Code *"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={location.date}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'date', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>  
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+                {/* Document Upload */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Document Upload</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center w-full">
+                      <label htmlFor="file-upload-edit" className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                          </svg>
+                          <p className="mb-2 text-sm text-gray-500">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
+                        </div>
+                        <input 
+                          id="file-upload-edit" 
+                          type="file" 
+                          className="hidden" 
+                          onChange={handleFileChange}
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        />
+                      </label>
+                    </div>
+                    {formData.docs && (
+                      <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                          </svg>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
+                            <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Remarks */}
+                <div>
+                  <textarea
+                    name="remarks"
+                    value={formData.remarks}
+                    onChange={handleInputChange}
+                    rows="3"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="Remarks (optional)"
+                  />
+                </div>
+
+              {/* Form Actions */}
+              <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={handleCloseEditModal}
+                  disabled={submitting}
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${
+                    submitting 
+                      ? 'opacity-50 cursor-not-allowed text-gray-400' 
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${
+                    submitting 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : 'hover:from-green-600 hover:to-green-700'
+                  }`}
+                >
+                  {submitting ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Updating...
+                    </div>
+                  ) : (
+                    'Update Delivery Order'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 } 
