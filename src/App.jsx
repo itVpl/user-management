@@ -35,7 +35,7 @@ import TruckerDocumentsPage from "./Components/CMT-Manager/TruckerDocumetCMT-Man
 import TruckerLDocuments from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
 import HrCreateTask from "./Components/HRDashboard/HrCreateTask.jsx";
 import RateRequest from "./Components/CMT-Manager/RateRequest.jsx";
-import LeaveApproval from "./Components/HRDashboard/LeaveApproval.jsx";
+// import LeaveApproval from "./Components/HRDashboard/LeaveApproval.jsx";
 
 import RateApproved from "./Components/CMT/RateApproved.jsx";
 import Loads from "./Components/CMT/Loads.jsx";
@@ -118,7 +118,7 @@ function App() {
         <Route path="/Loads" element={<Loads/>} />
         <Route path="/CarrierApproval" element={<CarrierApproval/>} />
         <Route path="/HrCreateTask" element={<HrCreateTask/>} />
-        <Route path="/LeaveApproval" element={<LeaveApproval/>} />
+        {/* <Route path="/LeaveApproval" element={<LeaveApproval/>} /> */}
         <Route path="delivery-order" element={<DeliveryOrder/>} />
         <Route path="/daily-follow-up" element={<DailyFollowUp/>} />
         <Route path="/AddCustomer" element={<AddCustomer/>}/>
