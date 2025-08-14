@@ -51,12 +51,16 @@ const menuItems = [
   { name: "Manager L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ManagerShippersLDocuments" },
   { name: "Trucker L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerLDocuments" },
   { name: "Task", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrCreateTask" },
+  { name: "Leave Approval", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/LeaveApproval" },
+  { name: "Candidate Shortlist", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/candidate-shortlist" },
+  { name: "Target Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/target-reports" },
 
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
   { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },
-          { name: "Carrier Approval", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CarrierApproval" },
-        { name: "Carrier Docs", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CarrierDocs" },
+  { name: "Carrier Approval", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CarrierApproval" },
+  { name: "Carrier Docs", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CarrierDocs" },
   { name: "Delivery Order", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/delivery-order" },
+  { name: "Daily Follow-Up", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/daily-follow-up" },
   { name: "Add Customer", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddCustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },
   { name: "DO Details", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/DODetails" },
@@ -94,37 +98,48 @@ const Sidebar = () => {
     const fetchModules = async () => {
       try {
         const user = JSON.parse(localStorage.getItem("user") || sessionStorage.getItem("user"));
+        
+        if (!user) {
+          console.error("❌ No user data found");
+          setFilteredMenuItems([]);
+          return;
+        }
+
         const allowedModuleIds = user?.allowedModules?.map(String) || [];
 
-        // console.log("👤 Logged in user:", user);
-        // console.log("✅ allowedModuleIds:", allowedModuleIds);
-
-        // const token = localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
+        console.log("👤 Logged in user:", user);
+        console.log("✅ allowedModuleIds:", allowedModuleIds);
 
         const res = await fetch("https://vpl-liveproject-1.onrender.com/api/v1/module", {
           credentials: "include", // ✅ needed for cross-origin
         });
 
         const data = await res.json();
-        // console.log("📦 All Modules from API:", data.modules);
+        console.log("📦 All Modules from API:", data.modules);
 
         if (data.success) {
           const allowedModuleNames = data.modules
             .filter((mod) => allowedModuleIds.includes(mod._id.toString()))
             .map((mod) => mod.name);
 
-          // console.log("🎯 Allowed module names for sidebar:", allowedModuleNames);
+          console.log("🎯 Allowed module names for sidebar:", allowedModuleNames);
 
           const matchedMenus = menuItems.filter((item) =>
             allowedModuleNames.includes(item.name)
           );
 
-          // console.log("📋 Matched menu items to render:", matchedMenus);
+          console.log("📋 Matched menu items to render:", matchedMenus);
 
+          // Set filtered menu items based on user permissions
           setFilteredMenuItems(matchedMenus);
         }
       } catch (err) {
         console.error("❌ Failed to fetch modules:", err);
+        // Fallback: show only basic menu items if API fails
+        const basicMenus = menuItems.filter(item => 
+          ['Dashboard', 'Profile'].includes(item.name)
+        );
+        setFilteredMenuItems(basicMenus);
       }
     };
 

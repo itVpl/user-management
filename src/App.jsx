@@ -35,6 +35,7 @@ import TruckerDocumentsPage from "./Components/CMT-Manager/TruckerDocumetCMT-Man
 import TruckerLDocuments from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
 import HrCreateTask from "./Components/HRDashboard/HrCreateTask.jsx";
 import RateRequest from "./Components/CMT-Manager/RateRequest.jsx";
+import LeaveApproval from "./Components/HRDashboard/LeaveApproval.jsx";
 
 import RateApproved from "./Components/CMT/RateApproved.jsx";
 import Loads from "./Components/CMT/Loads.jsx";
@@ -42,10 +43,13 @@ import CarrierApproval from "./Components/CMT/CarrierApproval.jsx";
 
 
 import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
+import DailyFollowUp from "./Pages/DailyFollowUp.jsx";
 import AddCustomer from "./Components/Sales/AddCustomer.jsx";
 import AssignAgent from "./Components/Dashboard/AssignAgent.jsx";
 import CarrierDocs from "./Components/CMT/CarrierDocs.jsx";
 import DoDetails from "./Components/CMT/DODetails.jsx";
+import CandidateShortlist from "./Components/HRDashboard/CandidateShortlist.jsx";
+import TargetReports from "./Components/HRDashboard/TargetReports.jsx";
 
 
 function App() {
@@ -114,11 +118,15 @@ function App() {
         <Route path="/Loads" element={<Loads/>} />
         <Route path="/CarrierApproval" element={<CarrierApproval/>} />
         <Route path="/HrCreateTask" element={<HrCreateTask/>} />
+        <Route path="/LeaveApproval" element={<LeaveApproval/>} />
         <Route path="delivery-order" element={<DeliveryOrder/>} />
+        <Route path="/daily-follow-up" element={<DailyFollowUp/>} />
         <Route path="/AddCustomer" element={<AddCustomer/>}/>
         <Route path="/AssignAgent" element={<AssignAgent/>}/>
         <Route path="/CarrierDocs" element={<CarrierDocs/>}/>
         <Route path="/DODetails" element={<DoDetails/>}/>
+        <Route path="/candidate-shortlist" element={<CandidateShortlist/>}/>
+        <Route path="/target-reports" element={<TargetReports/>}/>
 
         
 
