@@ -50,6 +50,8 @@ import CarrierDocs from "./Components/CMT/CarrierDocs.jsx";
 import DoDetails from "./Components/CMT/DODetails.jsx";
 import CandidateShortlist from "./Components/HRDashboard/CandidateShortlist.jsx";
 import TargetReports from "./Components/HRDashboard/TargetReports.jsx";
+import Consignment from "./Pages/Consignment.jsx";
+import CustomerLoads from "./Pages/CustomerLoads.jsx";
 
 
 function App() {
@@ -60,8 +62,8 @@ function App() {
     const token =
       localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
     const user = localStorage.getItem("user") || sessionStorage.getItem("user");
-    console.log("Auth token found:", !!token);
-    console.log("User data found:", !!user);
+    // console.log("Auth token found:", !!token);
+    // console.log("User data found:", !!user);
     setIsAuthenticated(!!token && !!user);
     setLoading(false);
   }, []);
@@ -127,6 +129,8 @@ function App() {
         <Route path="/DODetails" element={<DoDetails/>}/>
         <Route path="/candidate-shortlist" element={<CandidateShortlist/>}/>
         <Route path="/target-reports" element={<TargetReports/>}/>
+        <Route path="/Consignment" element={<Consignment/>}/>
+        <Route path="/CustomerLoads" element={<CustomerLoads/>}/>
 
         
 

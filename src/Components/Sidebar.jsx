@@ -64,7 +64,8 @@ const menuItems = [
   { name: "Add Customer", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddCustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },
   { name: "DO Details", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/DODetails" },
- 
+  { name: "Consignment", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/Consignment" },
+  { name: "Customer Loads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CustomerLoads" },
 
 
 ];
@@ -101,34 +102,34 @@ const Sidebar = () => {
         
         if (!user) {
           console.error("❌ No user data found");
-          setFilteredMenuItems([]);
+          setFilteredMenuItems([]);daily-follow-up
           return;
         }
 
         const allowedModuleIds = user?.allowedModules?.map(String) || [];
 
-        console.log("👤 Logged in user:", user);
-        console.log("✅ allowedModuleIds:", allowedModuleIds);
+        // console.log("👤 Logged in user:", user);
+        // console.log("✅ allowedModuleIds:", allowedModuleIds);
 
         const res = await fetch("https://vpl-liveproject-1.onrender.com/api/v1/module", {
           credentials: "include", // ✅ needed for cross-origin
         });
 
         const data = await res.json();
-        console.log("📦 All Modules from API:", data.modules);
+        // console.log("📦 All Modules from API:", data.modules);
 
         if (data.success) {
           const allowedModuleNames = data.modules
             .filter((mod) => allowedModuleIds.includes(mod._id.toString()))
             .map((mod) => mod.name);
 
-          console.log("🎯 Allowed module names for sidebar:", allowedModuleNames);
+          // console.log("🎯 Allowed module names for sidebar:", allowedModuleNames);
 
           const matchedMenus = menuItems.filter((item) =>
             allowedModuleNames.includes(item.name)
           );
 
-          console.log("📋 Matched menu items to render:", matchedMenus);
+          // console.log("📋 Matched menu items to render:", matchedMenus);
 
           // Set filtered menu items based on user permissions
           setFilteredMenuItems(matchedMenus);

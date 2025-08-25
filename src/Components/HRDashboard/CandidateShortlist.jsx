@@ -684,7 +684,7 @@ export default function CandidateShortlist() {
                     <span className="font-medium text-gray-700">{candidate.experience}</span>
                   </td>
                   <td className="py-3 px-4">
-                    <span className="font-medium text-gray-700">${candidate.expectedSalary}</span>
+                    <span className="font-medium text-gray-700">₹{candidate.expectedSalary}</span>
                   </td>
                   <td className="py-3 px-4">
                     <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(candidate.status)}`}>
