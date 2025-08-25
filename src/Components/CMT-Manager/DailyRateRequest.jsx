@@ -16,7 +16,7 @@ const statusColors = {
   delivered: 'bg-indigo-500'
 };
 
-const RateRequest = () => {
+const DailyRateRequest = () => {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -378,6 +378,12 @@ const RateRequest = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">Daily Rate Request</h1>
+        <p className="text-gray-600">Manage daily rate requests and approvals</p>
+      </div>
+
       {/* Tabs */}
       <div className="flex items-center gap-4 mb-6">
         <button
@@ -403,7 +409,7 @@ const RateRequest = () => {
         >
           <div className="flex items-center gap-2">
             <CheckCircle size={18} />
-            <span>Rate Request</span>
+            <span>Daily Rate Request</span>
           </div>
         </button>
       </div>
@@ -616,7 +622,7 @@ const RateRequest = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  placeholder="Search completed requests..."
+                  placeholder="Search daily rate requests..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -715,7 +721,7 @@ const RateRequest = () => {
             <form onSubmit={handleSubmit} className="flex flex-col h-full">
               <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-4 rounded-t-3xl shadow flex justify-between items-center flex-shrink-0">
                 <div>
-                  <h2 className="text-2xl font-semibold flex items-center gap-2">🚛 Rate Request Form</h2>
+                  <h2 className="text-2xl font-semibold flex items-center gap-2">🚛 Daily Rate Request Form</h2>
                   <p className="text-sm text-blue-100 mt-1">Enter your bid and trucker details below</p>
                 </div>
                 <button onClick={closeModal} type="button" className="text-white text-3xl hover:text-gray-200">&times;</button>
@@ -900,4 +906,4 @@ const RateRequest = () => {
   );
 };
 
-export default RateRequest;
+export default DailyRateRequest;

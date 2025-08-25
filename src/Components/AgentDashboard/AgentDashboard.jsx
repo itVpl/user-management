@@ -49,6 +49,8 @@ const Dashboard = () => {
     todayDOs: []
   });
 
+  const [pendingLoads, setPendingLoads] = useState([]);
+
   useEffect(() => {
     const fetchMonthlyPresentCount = async () => {
       try {
@@ -243,6 +245,29 @@ const Dashboard = () => {
     };
 
     fetchDoData();
+  }, []);
+
+  useEffect(() => {
+    const fetchPendingLoads = async () => {
+      try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+        const response = await axios.get(
+          'https://vpl-liveproject-1.onrender.com/api/v1/load-approval/pending',
+          { 
+            withCredentials: true,
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        
+        if (response.data.success) {
+          setPendingLoads(response.data.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch pending loads", err);
+      }
+    };
+
+    fetchPendingLoads();
   }, []);
 
   const loadData = [
@@ -551,171 +576,58 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Shippers Load Data Table */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
-                  <Truck className="text-white" size={20} />
+                     {/* Pending Load Table */}
+           <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+             <div className="flex items-center justify-between mb-6">
+               <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
+                   <Truck className="text-white" size={20} />
+                 </div>
+                 <h3 className="text-xl font-bold text-gray-800">Pending Load</h3>
+               </div>
+               <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
+             </div>
+             <div className="overflow-x-auto">
+               <table className="w-full">
+                 <thead>
+                   <tr className="border-b border-gray-200">
+                     <th className="text-left py-4 px-4 text-blue-600 font-semibold">Shipper ID</th>
+                     <th className="text-left py-4 px-4 text-blue-600 font-semibold">Load ID</th>
+                     <th className="text-left py-4 px-4 text-blue-600 font-semibold">Weight</th>
+                     <th className="text-left py-4 px-4 text-blue-600 font-semibold">Vehicle</th>
+                   </tr>
+                 </thead>
+                                   <tbody>
+                    {pendingLoads.length > 0 ? (
+                      pendingLoads.slice(0, 6).map((load, index) => (
+                        <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
+                          <td className="py-4 px-4 text-gray-800 font-medium">{load.shipperId || 'N/A'}</td>
+                          <td className="py-4 px-4 text-gray-800">{load.loadId || 'N/A'}</td>
+                          <td className="py-4 px-4 text-gray-800">{load.weight || 'N/A'}</td>
+                          <td className="py-4 px-4 text-gray-800">{load.vehicle || 'N/A'}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr className="border-b border-gray-100">
+                        <td colSpan="4" className="py-8 px-4 text-center text-gray-500">
+                          <div className="flex flex-col items-center">
+                            <Truck className="w-8 h-8 text-gray-300 mb-2" />
+                            <p>No pending loads available</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+               </table>
+             </div>
+                           <div className="mt-6">
+                <div className="text-sm text-gray-600">
+                  Showing {Math.min(pendingLoads.length, 6)} of {pendingLoads.length} pending load records
                 </div>
-                <h3 className="text-xl font-bold text-gray-800">Load Data</h3>
               </div>
-              <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Shipper ID</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Load ID</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Weight</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Vehicle</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadData.slice(0, 6).map((item, index) => (
-                    <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
-                      <td className="py-4 px-4 text-gray-800 font-medium">{item.shipperId}</td>
-                      <td className="py-4 px-4 text-gray-800">{item.loadId}</td>
-                      <td className="py-4 px-4 text-gray-800">{item.weight}</td>
-                      <td className="py-4 px-4 text-gray-800">{item.vehicle}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-6 flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                Showing {Math.min(loadData.length, 6)} of {loadData.length} load records
-              </div>
-              <button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg">
-                View All Loads
-              </button>
-            </div>
-          </div>
+           </div>
 
-          {/* Bottom Row */}
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* Carriers Documents (instead of Shippers Documents) */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
-                    <FileText className="text-white" size={20} />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800">Carriers Documents</h3>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {carrierDocs.map((doc, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100 hover:shadow-md transition-all duration-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                        {doc.id.slice(-2)}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-800">{doc.name}</p>
-                        <p className="text-sm text-gray-600">Carrier ID: {doc.id}</p>
-                      </div>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${doc.statusColor} shadow-sm`}>
-                      {doc.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 text-center">
-                <button className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-3 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-200 font-medium shadow-lg">
-                  View All Documents
-                </button>
-              </div>
-            </div>
 
-            {/* Revenue Statistics */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                    <DollarSign className="text-white" size={20} />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800">Revenue Statistics</h3>
-                </div>
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="mb-6">
-                  <CircularProgress 
-                    percentage={68.2} 
-                    size={120} 
-                    color="blue" 
-                  />
-                </div>
-                <div className="text-center">
-                  <h4 className="text-2xl font-bold text-gray-800 mb-2">Total Revenue</h4>
-                  <p className="text-gray-600 mb-6">Current month performance</p>
-                </div>
-                <div className="flex justify-center space-x-6 text-sm mb-6">
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full mr-2"></div>
-                    <span className="font-medium">68.2%</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-gradient-to-r from-red-500 to-red-600 rounded-full mr-2"></div>
-                    <span className="font-medium">9.8%</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-gradient-to-r from-green-500 to-green-600 rounded-full mr-2"></div>
-                    <span className="font-medium">10%</span>
-                  </div>
-                </div>
-                <button className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-6 py-3 rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 font-medium shadow-lg">
-                  View Revenue Details
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Billing Table */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mt-8 border border-gray-100">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
-                  <DollarSign className="text-white" size={20} />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">Billing Overview</h3>
-              </div>
-              <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Invoice No.</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Shipper</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Date</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {billingData.map((bill, index) => (
-                    <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
-                      <td className="py-4 px-4 text-gray-800 font-medium">{bill.invoice}</td>
-                      <td className="py-4 px-4 text-gray-800">{bill.shipper}</td>
-                      <td className="py-4 px-4 text-gray-800">{bill.date}</td>
-                      <td className="py-4 px-4 text-gray-800 font-bold text-green-600">{bill.amount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-6 flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                Showing {billingData.length} billing records
-              </div>
-              <button className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-3 rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg">
-                View All Billings
-              </button>
-            </div>
-          </div>
         </>
       ) : department === 'Sales' ? (
         // --- Sales Dashboard (Same design as CMT) ---

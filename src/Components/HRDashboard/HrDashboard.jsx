@@ -438,62 +438,7 @@ const HRDashboard = () => {
         </div>
       </div>
 
-      {/* Bottom Row */}
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* Pending Verification */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-red-500 to-red-600 rounded-xl flex items-center justify-center">
-                <AlertCircle className="text-white" size={20} />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Pending Verification</h3>
-            </div>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="mb-6">
-              <CircularProgress 
-                percentage={Math.round(((employees.length - pendingVerifications) / employees.length) * 100) || 0} 
-                size={120} 
-                color="blue"
-              />
-            </div>
-            <div className="text-4xl font-bold text-gray-800 mb-4">{pendingVerifications}</div>
-            <p className="text-gray-600 mb-6 text-center">Documents pending verification</p>
-            {/* <button className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 font-medium shadow-lg">
-              Review Documents
-            </button> */}
-          </div>
-        </div>
 
-        {/* Hygiene Compliance */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                <Award className="text-white" size={20} />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Hygiene Compliance</h3>
-            </div>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="mb-6">
-              <CircularProgress 
-                percentage={hygienePercentage} 
-                size={120} 
-                color={hygienePercentage >= 80 ? 'green' : 'red'} 
-              />
-            </div>
-            <div className="text-center">
-              <h4 className="text-2xl font-bold text-gray-800 mb-2">Monthly Hygiene Log</h4>
-              <p className="text-gray-600 mb-6">Overall compliance rate</p>
-            </div>
-            {/* <button className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-6 py-3 rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 font-medium shadow-lg">
-              View Report
-            </button> */}
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

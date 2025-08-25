@@ -39,37 +39,37 @@ export default function PendingBids() {
         const transformedBids = response.data.bids.map(bid => ({
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
-          shipmentNumber: bid.load.shipmentNumber || 'N/A',
-          origin: `${bid.load.origin.city}, ${bid.load.origin.state}`,
-          destination: `${bid.load.destination.city}, ${bid.load.destination.state}`,
+          shipmentNumber: bid.load?.shipmentNumber || 'N/A',
+          origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
+          destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
           rate: bid.rate,
-          truckerName: bid.carrier.compName,
+          truckerName: bid.carrier?.compName || 'N/A',
           status: 'pending',
           createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
-          createdBy: `Sales User ${bid.load.createdBySalesUser.empName} (${bid.load.createdBySalesUser.empId})`,
+          createdBy: `Sales User ${bid.load?.createdBySalesUser?.empName || 'Unknown'} (${bid.load?.createdBySalesUser?.empId || 'N/A'})`,
           docUpload: bid.doDocument || 'sample-doc.jpg',
           remarks: bid.message || '',
           // Additional fields from the new API
           carrierInfo: {
-            mcDotNo: bid.carrier.mc_dot_no,
-            email: bid.carrier.email,
-            phone: bid.carrier.phoneNo,
-            fleetSize: bid.carrier.fleetsize,
-            state: bid.carrier.state,
-            city: bid.carrier.city
+            mcDotNo: bid.carrier?.mc_dot_no || 'N/A',
+            email: bid.carrier?.email || 'N/A',
+            phone: bid.carrier?.phoneNo || 'N/A',
+            fleetSize: bid.carrier?.fleetsize || 'N/A',
+            state: bid.carrier?.state || 'N/A',
+            city: bid.carrier?.city || 'N/A'
           },
           loadInfo: {
-            weight: bid.load.weight,
-            commodity: bid.load.commodity,
-            vehicleType: bid.load.vehicleType,
-            pickupDate: bid.load.pickupDate,
-            deliveryDate: bid.load.deliveryDate,
-            originalRate: bid.load.rate
+            weight: bid.load?.weight || 0,
+            commodity: bid.load?.commodity || 'N/A',
+            vehicleType: bid.load?.vehicleType || 'N/A',
+            pickupDate: bid.load?.pickupDate || 'N/A',
+            deliveryDate: bid.load?.deliveryDate || 'N/A',
+            originalRate: bid.load?.rate || 0
           },
           estimatedPickup: new Date(bid.estimatedPickupDate).toLocaleDateString(),
           estimatedDelivery: new Date(bid.estimatedDeliveryDate).toLocaleDateString(),
           placedByInhouseUser: bid.placedByInhouseUser,
-          salesUserInfo: bid.load.createdBySalesUser
+          salesUserInfo: bid.load?.createdBySalesUser
         }));
 
         console.log('Transformed pending bids:', transformedBids);
@@ -97,11 +97,11 @@ export default function PendingBids() {
         const transformedBids = response.data.bids.map(bid => ({
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
-          shipmentNumber: bid.load.shipmentNumber || 'N/A',
-          origin: `${bid.load.origin.city}, ${bid.load.origin.state}`,
-          destination: `${bid.load.destination.city}, ${bid.load.destination.state}`,
+          shipmentNumber: bid.load?.shipmentNumber || 'N/A',
+          origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
+          destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
           rate: bid.rate,
-          truckerName: bid.carrier.compName,
+          truckerName: bid.carrier?.compName || 'N/A',
           status: 'pending',
           createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
           createdBy: `Employee ${bid.placedByInhouseUser}`,

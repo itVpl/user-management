@@ -1,50 +1,46 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import {
   Box,
   Card,
   CardContent,
-  Chip,
-  Grid,
   Typography,
   Button,
   TextField,
   LinearProgress,
-  CircularProgress,
-  Stack,
-  Divider,
+  Grid,
+  Chip,
   Avatar,
   List,
   ListItem,
   ListItemAvatar,
   ListItemText,
-  Tooltip,
-  Skeleton,
-  Fade,
-  Grow,
+  Paper,
+  Divider,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 import {
-  CheckCircleRounded,
-  ReportProblemRounded,
-  EventRounded,
-  FlagRounded,
-  DirectionsWalkRounded,
-  ScheduleRounded,
-  RefreshRounded,
-  InfoRounded,
+  CheckCircle,
+  Warning,
+  Schedule,
+  Refresh,
+  Event,
+  TrendingUp,
+  Person,
+  Flag,
 } from "@mui/icons-material";
 
 const API_BASE = "https://vpl-liveproject-1.onrender.com";
 
-/* -------------------------- utils -------------------------- */
-function getEmpIdFromSession() {
+/* -------------------- Utilities -------------------- */
+const getEmpIdFromSession = () => {
   if (typeof window === "undefined") return null;
   const direct = sessionStorage.getItem("empId");
   if (direct) return direct;
-
-  const candidates = ["user", "employee", "profile", "authUser"];
-  for (const key of candidates) {
-    const raw = sessionStorage.getItem(key);
+  const keys = ["user", "employee", "profile", "authUser"];
+  for (const k of keys) {
+    const raw = sessionStorage.getItem(k);
     if (!raw) continue;
     try {
       const obj = JSON.parse(raw);
@@ -53,226 +49,221 @@ function getEmpIdFromSession() {
     } catch {}
   }
   return null;
-}
-const clampPct = (n) => Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
-const safePct = (num, den) => (den ? clampPct((num / den) * 100) : 0);
+};
 
-/* ----------------------- UI subcomponents ----------------------- */
-const StatCard = ({
-  title,
-  value,
-  total,
-  icon,
-  helper,
-  gradient = "blue",
-  hint,
-  delay = 0,
-}) => {
-  const showBar = typeof total === "number";
-  const pct = showBar ? safePct(value, total) : 0;
+const pct = (v, t) => (!t ? 0 : Math.round((v / t) * 100));
 
-  const gradients = {
-    blue: "linear-gradient(135deg,#f9fafb,#eef2ff)",
-    green: "linear-gradient(135deg,#f9fafb,#ecfdf5)",
-    orange: "linear-gradient(135deg,#f9fafb,#fff7ed)",
-    gray: "linear-gradient(135deg,#f9fafb,#f3f4f6)",
-  };
-  const barGradient = {
-    blue: "linear-gradient(90deg,#3b82f6,#06b6d4)",
-    green: "linear-gradient(90deg,#22c55e,#14b8a6)",
-    orange: "linear-gradient(90deg,#f59e0b,#f97316)",
-    gray: "linear-gradient(90deg,#9ca3af,#6b7280)",
-  }[gradient];
+/* -------------------- Styled Small Card -------------------- */
+const CardShell = ({ children }) => (
+  <Card
+    sx={{
+      height: "100%",
+      borderRadius: 3,
+      boxShadow: 3,
+      transition: "transform .2s ease, box-shadow .2s ease",
+      "&:hover": { transform: "translateY(-2px)", boxShadow: 6 },
+      background: "linear-gradient(180deg,#ffffff, #f7faff)",
+      border: "1px solid",
+      borderColor: "rgba(2,119,189,0.08)",
+    }}
+  >
+    <CardContent>{children}</CardContent>
+  </Card>
+);
 
-  const avatarStyle = {
-    blue: { bg: "rgba(59,130,246,.15)", fg: "#2563eb" },
-    green: { bg: "rgba(34,197,94,.15)", fg: "#16a34a" },
-    orange: { bg: "rgba(245,158,11,.15)", fg: "#c2410c" },
-    gray: { bg: "rgba(107,114,128,.15)", fg: "#374151" },
-  }[gradient];
-
+const StatCard = ({ title, value, total, icon, color = "primary" }) => {
+  const percentage = pct(value, total);
   return (
-    <Grow in timeout={500} style={{ transformOrigin: "0 0 0", transitionDelay: `${delay}ms` }}>
-      <Card
-        elevation={0}
-        sx={{
-          borderRadius: 4,
-          p: 2.5,
-          height: "100%",
-          background: gradients[gradient],
-          border: "1px solid",
-          borderColor: "divider",
-          boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
-          transition: "all .25s ease",
-          "&:hover": {
-            transform: "translateY(-4px)",
-            boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
-          },
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={2} mb={1}>
-          <Avatar
-            variant="rounded"
-            sx={{
-              bgcolor: avatarStyle.bg,
-              color: avatarStyle.fg,
-              width: 46,
-              height: 46,
-            }}
-          >
-            {icon}
-          </Avatar>
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }} color="text.secondary">
-                {title}
-              </Typography>
-              {hint && (
-                <Tooltip title={hint}>
-                  <InfoRounded fontSize="small" color="disabled" />
-                </Tooltip>
-              )}
-            </Stack>
-            <Typography variant="h4" sx={{ fontWeight: 900, lineHeight: 1.15 }}>
-              {value}
-              {typeof total === "number" && (
-                <Typography component="span" sx={{ ml: 0.5 }} color="text.secondary">
-                  / {total}
-                </Typography>
-              )}
-            </Typography>
-          </Box>
-        </Stack>
+    <CardShell>
+      <Box display="flex" alignItems="center" mb={1.5}>
+        <Avatar sx={{ bgcolor: `${color}.main`, mr: 1.5, boxShadow: 1 }}>{icon}</Avatar>
+        <Typography variant="h6" fontWeight={800}>
+          {title}
+        </Typography>
+      </Box>
 
-        {showBar && (
-          <>
-            <LinearProgress
-              variant="determinate"
-              value={pct}
-              sx={{
-                height: 10,
-                borderRadius: 3,
-                bgcolor: "#e5e7eb",
-                "& .MuiLinearProgress-bar": {
-                  borderRadius: 3,
-                  background: barGradient,
-                },
-              }}
-            />
-            <Stack direction="row" justifyContent="space-between" mt={0.75}>
-              <Typography variant="caption" color="text.secondary">
-                Progress
-              </Typography>
-              <Typography variant="caption" fontWeight={700}>
-                {pct}%
-              </Typography>
-            </Stack>
-          </>
-        )}
-
-        {helper && (
-          <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-            {helper}
+      <Box display="flex" alignItems="baseline" mb={1}>
+        <Typography variant="h3" fontWeight={800} lineHeight={1}>
+          {value}
+        </Typography>
+        {total != null && (
+          <Typography variant="h6" color="text.secondary" ml={1}>
+            / {total}
           </Typography>
         )}
-      </Card>
-    </Grow>
-  );
-};
+      </Box>
 
-const ScoreRing = ({ score = 0, status = "—", delay = 200 }) => {
-  const pct = clampPct(score);
-  const ringColor = pct >= 85 ? "#16a34a" : pct >= 60 ? "#f59e0b" : "#dc2626";
-  const chipColor = pct >= 85 ? "success" : pct >= 60 ? "warning" : "error";
-
-  return (
-    <Grow in timeout={600} style={{ transformOrigin: "50% 0", transitionDelay: `${delay}ms` }}>
-      <Card
-        elevation={0}
-        sx={{
-          borderRadius: 4,
-          p: 3,
-          textAlign: "center",
-          background: "linear-gradient(135deg,#f8fafc,#f1f5f9)",
-          border: "1px solid",
-          borderColor: "divider",
-          boxShadow: "0 8px 28px rgba(0,0,0,.08)",
-        }}
-      >
-        <Typography variant="subtitle2" color="text.secondary" mb={1}>
-          Total Score
-        </Typography>
-
-        <Box sx={{ position: "relative", display: "inline-flex", mb: 1 }}>
-          <CircularProgress variant="determinate" value={100} thickness={7} size={168} sx={{ color: "#e5e7eb" }} />
-          <CircularProgress
+      {total != null && (
+        <>
+          <LinearProgress
             variant="determinate"
-            value={pct}
-            thickness={7}
-            size={168}
+            value={percentage}
             sx={{
-              position: "absolute",
-              left: 0,
-              color: ringColor,
-              filter: "drop-shadow(0 4px 8px rgba(0,0,0,.15))",
-              transition: "all .4s ease",
+              height: 8,
+              borderRadius: 4,
+              mb: 0.75,
+              bgcolor: "action.hover",
+              "& .MuiLinearProgress-bar": { borderRadius: 4 },
             }}
           />
-          <Box
-            sx={{
-              inset: 0,
-              position: "absolute",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexDirection: "column",
-            }}
-          >
-            <Typography variant="h4" fontWeight={900}>
-              {pct}%
-            </Typography>
-            <Chip label={status} color={chipColor} size="small" sx={{ mt: 0.6, fontWeight: 800 }} />
-          </Box>
-        </Box>
-
-        <Typography variant="caption" color="text.secondary">
-          Aim for <strong>&gt; 85%</strong> to stay in green.
-        </Typography>
-      </Card>
-    </Grow>
+          <Typography variant="body2" color="text.secondary">
+            {percentage}% complete
+          </Typography>
+        </>
+      )}
+    </CardShell>
   );
 };
 
-const SummaryRow = ({ label, value = 0 }) => {
-  const pct = clampPct(value);
+const PerformanceScore = ({ score, status }) => {
+  const getScoreColor = (n) => (n >= 85 ? "success" : n >= 60 ? "warning" : "error");
+  const col = getScoreColor(score);
   return (
-    <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="body2">{label}</Typography>
-        <Typography variant="body2" fontWeight={800}>
-          {pct}%
-        </Typography>
-      </Stack>
-      <LinearProgress
-        variant="determinate"
-        value={pct}
-        sx={{
-          height: 9,
-          borderRadius: 2,
-          mt: 0.75,
-          bgcolor: "#eef2f7",
-          "& .MuiLinearProgress-bar": { borderRadius: 2, background: "linear-gradient(90deg,#60a5fa,#34d399)" },
-        }}
-      />
-    </Box>
+    <CardShell>
+      <Typography variant="h6" fontWeight={800} mb={2}>
+        Overall Performance
+      </Typography>
+
+      <Box position="relative" display="inline-flex" mb={2}>
+        <CircularProgress variant="determinate" value={100} size={140} thickness={5} sx={{ color: "grey.300" }} />
+        <CircularProgress
+          variant="determinate"
+          value={score}
+          size={140}
+          thickness={5}
+          sx={{ position: "absolute", color: `${col}.main` }}
+        />
+        <Box
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+        >
+          <Typography variant="h3" fontWeight={900}>
+            {score}%
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box>
+        <Chip
+          label={status || "—"}
+          color={col}
+          variant="outlined"
+          size="medium"
+          sx={{ fontWeight: 700, textTransform: "capitalize" }}
+        />
+      </Box>
+    </CardShell>
   );
 };
 
-/* -------------------------- main -------------------------- */
+const BreakManagement = ({ overdueBreaks, hasOverdue, overdueDetails }) => {
+  return (
+    <CardShell>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+        <Box display="flex" alignItems="center">
+          <Avatar sx={{ bgcolor: "info.main", mr: 1.5 }}>
+            <Schedule />
+          </Avatar>
+          <Typography variant="h6" fontWeight={800}>
+            Break Management
+          </Typography>
+        </Box>
+        <Chip
+          icon={hasOverdue ? <Warning /> : <CheckCircle />}
+          label={hasOverdue ? `${overdueBreaks} overdue` : "On time"}
+          color={hasOverdue ? "warning" : "success"}
+          size="small"
+          sx={{ fontWeight: 700 }}
+        />
+      </Box>
+
+      <Divider sx={{ my: 1.5 }} />
+
+      {overdueDetails?.length ? (
+        <List dense>
+          {overdueDetails.slice(0, 3).map((b, i) => (
+            <ListItem key={i} sx={{ px: 0 }}>
+              <ListItemAvatar>
+                <Avatar sx={{ bgcolor: "warning.main", width: 34, height: 34 }}>
+                  <Schedule fontSize="small" />
+                </Avatar>
+              </ListItemAvatar>
+              <ListItemText
+                primaryTypographyProps={{ fontWeight: 700 }}
+                primary={b?.date || "Unknown date"}
+                secondary={`Duration: ${b?.duration || "—"} minutes`}
+              />
+            </ListItem>
+          ))}
+          {overdueDetails.length > 3 && (
+            <Typography variant="body2" color="text.secondary" textAlign="center">
+              +{overdueDetails.length - 3} more overdue breaks
+            </Typography>
+          )}
+        </List>
+      ) : (
+        <Box textAlign="center" py={3}>
+          <CheckCircle sx={{ fontSize: 46, color: "success.main", mb: 1 }} />
+          <Typography variant="subtitle1" fontWeight={800}>
+            Excellent! All breaks on time
+          </Typography>
+        </Box>
+      )}
+    </CardShell>
+  );
+};
+
+const PerformanceBreakdown = ({ breakdown }) => {
+  const items = [
+    { label: "Attendance Score", value: breakdown?.attendanceScore || 0 },
+    { label: "Target Score", value: breakdown?.targetScore || 0 },
+    { label: "Break Score", value: breakdown?.breakScore || 0 },
+  ];
+  return (
+    <CardShell>
+      <Box display="flex" alignItems="center" mb={2}>
+        <Avatar sx={{ bgcolor: "primary.main", mr: 1.5 }}>
+          <TrendingUp />
+        </Avatar>
+        <Typography variant="h6" fontWeight={800}>
+          Performance Breakdown
+        </Typography>
+      </Box>
+
+      {items.map((it, idx) => (
+        <Box key={idx} mb={2}>
+          <Box display="flex" justifyContent="space-between" mb={0.5}>
+            <Typography variant="body2">{it.label}</Typography>
+            <Typography variant="body2" fontWeight={800}>
+              {it.value}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={it.value}
+            sx={{
+              height: 8,
+              borderRadius: 4,
+              bgcolor: "action.hover",
+              "& .MuiLinearProgress-bar": { borderRadius: 4 },
+            }}
+          />
+        </Box>
+      ))}
+    </CardShell>
+  );
+};
+
+/* -------------------- Main Component -------------------- */
 const EmployeeHygiene = () => {
-  const today = useMemo(() => new Date(), []);
   const [monthYear, setMonthYear] = useState(
-    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`
+    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -290,16 +281,13 @@ const EmployeeHygiene = () => {
     try {
       setLoading(true);
       setError("");
-
       const [y, m] = monthYear.split("-").map(Number);
       const url = `${API_BASE}/api/v1/inhouseUser/${empId}/monthly-progress`;
-
       const res = await axios.get(url, {
         params: { month: m, year: y },
         withCredentials: true,
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-
       setReport(res?.data?.data || null);
     } catch (e) {
       console.error(e);
@@ -315,163 +303,112 @@ const EmployeeHygiene = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthYear]);
 
-  const onMonthChange = (e) => setMonthYear(e.target.value);
-
-  // derived metrics (safe)
+  // Derived data
   const presentDays = report?.attendanceAnalysis?.presentDays ?? 0;
   const workingDays = report?.period?.workingDaysInMonth ?? 0;
-
+  const completedTargets = report?.targetAnalysis?.completedTargets ?? 0;
+  const totalTargets = report?.targetAnalysis?.totalTargets ?? 0;
   const overdueBreaks = report?.breakAnalysis?.overdueBreaksCount ?? 0;
   const hasOverdue = report?.breakAnalysis?.hasOverdueBreaks ?? false;
   const overdueDetails = report?.breakAnalysis?.details || [];
-
-  const completedTargets = report?.targetAnalysis?.completedTargets ?? 0;
-  const totalTargets = report?.targetAnalysis?.totalTargets ?? 0;
-
-  const statusText = (report?.overallProgress?.status ?? "—").toUpperCase();
-  const scorePct = clampPct(report?.overallProgress?.score ?? 0);
+  const scorePct = Math.round(report?.overallProgress?.score ?? 0);
+  const statusText = report?.overallProgress?.status ?? "—";
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        px: { xs: 2, md: 4 },
-        py: { xs: 3, md: 5 },
-        bgcolor: (t) => (t.palette.mode === "light" ? "grey.50" : "background.default"),
-      }}
-    >
+    <Box sx={{ p: 3, minHeight: "100vh", bgcolor: "linear-gradient(180deg,#f5f9ff,#ffffff)" }}>
       {/* Header */}
-      <Fade in timeout={500}>
+      <Paper
+        sx={{
+          p: 3,
+          mb: 3,
+          borderRadius: 3,
+          color: "white",
+          background: "linear-gradient(135deg, #0ea5e9 0%, #1976d2 60%)",
+          boxShadow: 3,
+        }}
+      >
         <Box
-          sx={{
-            borderRadius: 5,
-            p: { xs: 3, md: 4 },
-            mb: 4,
-            background:
-              "linear-gradient(135deg, rgba(59,130,246,.12) 0%, rgba(16,185,129,.12) 100%)",
-            border: "1px solid",
-            borderColor: "divider",
-            position: "relative",
-            overflow: "hidden",
-            boxShadow: "0 12px 36px rgba(0,0,0,.06)",
-            backdropFilter: "saturate(180%) blur(2px)",
-          }}
+          display="flex"
+          flexDirection={{ xs: "column", md: "row" }}
+          alignItems={{ xs: "flex-start", md: "center" }}
+          justifyContent="space-between"
+          gap={2}
         >
-          <Box
-            sx={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "radial-gradient(700px 200px at 100% -20%, rgba(59,130,246,.10), transparent 60%), radial-gradient(700px 200px at -10% 100%, rgba(16,185,129,.10), transparent 60%)",
-              pointerEvents: "none",
-            }}
-          />
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            alignItems={{ xs: "flex-start", md: "center" }}
-            justifyContent="space-between"
-            spacing={2}
-            sx={{ position: "relative" }}
-          >
-            <Box>
-              <Typography variant="h4" fontWeight={900} gutterBottom>
-                ✨ Personal Hygiene Summary
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {report?.employeeName ?? "—"} • {report?.department ?? "—"} •{" "}
-                Period: {report?.period?.startDate ?? "—"} → {report?.period?.endDate ?? "—"}
-              </Typography>
-            </Box>
+          <Box>
+            <Typography variant="h4" fontWeight={900} letterSpacing={0.3} mb={0.5}>
+              Employee Performance Dashboard
+            </Typography>
+            <Typography variant="body1" sx={{ opacity: 0.95 }}>
+              {report?.employeeName || "Employee"} • {report?.department || "Department"}
+            </Typography>
+            <Typography variant="body2" mt={0.5} sx={{ opacity: 0.9 }}>
+              Period: {report?.period?.startDate || "—"} to {report?.period?.endDate || "—"}
+            </Typography>
+          </Box>
 
-            <Stack direction="row" spacing={1.25} alignItems="center">
-              <TextField
-                type="month"
-                size="small"
-                value={monthYear}
-                onChange={onMonthChange}
-                InputProps={{
-                  startAdornment: (
-                    <EventRounded fontSize="small" sx={{ mr: 1, color: "text.secondary" }} />
-                  ),
-                }}
-              />
-              <Button
-                variant="contained"
-                onClick={fetchReport}
-                startIcon={<RefreshRounded />}
-                sx={{ borderRadius: 2, fontWeight: 800 }}
-              >
-                Refresh
-              </Button>
-            </Stack>
-          </Stack>
+          <Box display="flex" alignItems="center" gap={1.5}>
+            <TextField
+              type="month"
+              size="small"
+              value={monthYear}
+              onChange={(e) => setMonthYear(e.target.value)}
+              sx={{
+                minWidth: 220,
+                bgcolor: "rgba(255,255,255,0.15)",
+                borderRadius: 2,
+                backdropFilter: "blur(6px)",
+                "& .MuiOutlinedInput-root": {
+                  color: "white",
+                  "& fieldset": { borderColor: "rgba(255,255,255,0.35)" },
+                  "&:hover fieldset": { borderColor: "rgba(255,255,255,0.6)" },
+                },
+                "& input": { color: "white", fontWeight: 700 },
+              }}
+              InputProps={{
+                startAdornment: <Event sx={{ mr: 1, color: "rgba(255,255,255,0.9)" }} />,
+              }}
+            />
+            <Button
+              variant="contained"
+              onClick={fetchReport}
+              startIcon={<Refresh />}
+              sx={{
+                bgcolor: "rgba(0,0,0,0.2)",
+                color: "white",
+                borderRadius: 2,
+                px: 2.5,
+                "&:hover": { bgcolor: "rgba(0,0,0,0.3)" },
+              }}
+            >
+              REFRESH
+            </Button>
+          </Box>
         </Box>
-      </Fade>
+      </Paper>
 
       {/* Loading */}
       {loading && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={8}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} sm={6}>
-                <Skeleton variant="rounded" height={150} />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Skeleton variant="rounded" height={150} />
-              </Grid>
-              <Grid item xs={12}>
-                <Skeleton variant="rounded" height={190} />
-              </Grid>
-            </Grid>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Skeleton variant="rounded" height={290} />
-            <Box mt={3}>
-              <Skeleton variant="rounded" height={200} />
-            </Box>
-          </Grid>
-        </Grid>
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="380px">
+          <CircularProgress size={60} />
+        </Box>
       )}
 
       {/* Error */}
       {!loading && error && (
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: 4,
-            border: "1px solid",
-            borderColor: "divider",
-            p: 3,
-            textAlign: "center",
-            background: "linear-gradient(135deg,#fff1f2,#fee2e2)",
-          }}
-        >
-          <Typography color="error" fontWeight={800} gutterBottom>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+          <Typography variant="h6" mb={1}>
             {error}
           </Typography>
-          <Typography variant="body2" color="text.secondary" mb={2}>
-            Please try again or pick another month.
-          </Typography>
-          <Button variant="contained" onClick={fetchReport} startIcon={<RefreshRounded />}>
+          <Button variant="contained" onClick={fetchReport} startIcon={<Refresh />}>
             Retry
           </Button>
-        </Card>
+        </Alert>
       )}
 
       {/* Empty */}
       {!loading && !error && !report && (
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: 4,
-            border: "1px solid",
-            borderColor: "divider",
-            p: 4,
-            textAlign: "center",
-            background: "linear-gradient(135deg,#f8fafc,#f1f5f9)",
-          }}
-        >
-          <Typography fontWeight={900} gutterBottom>
+        <CardShell>
+          <Typography variant="h6" mb={1.5}>
             No data available
           </Typography>
           <Typography variant="body2" color="text.secondary" mb={2}>
@@ -480,169 +417,51 @@ const EmployeeHygiene = () => {
           <Button variant="outlined" onClick={fetchReport}>
             Refresh
           </Button>
-        </Card>
+        </CardShell>
       )}
 
       {/* Content */}
       {!loading && !error && report && (
-        <Grid container spacing={3}>
-          {/* Left column */}
-          <Grid item xs={12} md={8}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} sm={6}>
-                <StatCard
-                  title="Attendance (Present / Working Days)"
-                  value={presentDays}
-                  total={workingDays}
-                  icon={<DirectionsWalkRounded />}
-                  helper={`Attendance Rate: ${safePct(presentDays, workingDays)}%`}
-                  hint="Days marked present over working days."
-                  gradient="green"
-                  delay={0}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <StatCard
-                  title="Daily Targets (Completed / Total)"
-                  value={completedTargets}
-                  total={totalTargets}
-                  icon={<FlagRounded />}
-                  helper={`Completion: ${safePct(completedTargets, totalTargets)}%`}
-                  hint="Completed tasks vs assigned tasks."
-                  gradient="orange"
-                  delay={80}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Grow in timeout={600} style={{ transitionDelay: "120ms", transformOrigin: "0 0" }}>
-                  <Card
-                    elevation={0}
-                    sx={{
-                      borderRadius: 4,
-                      border: "1px solid",
-                      borderColor: "divider",
-                      background: "linear-gradient(135deg,#ffffff,#f8fafc)",
-                      boxShadow: "0 6px 24px rgba(0,0,0,.06)",
-                    }}
-                  >
-                    <CardContent sx={{ p: 2.5 }}>
-                      <Stack
-                        direction="row"
-                        alignItems="center"
-                        justifyContent="space-between"
-                        mb={1.5}
-                      >
-                        <Typography variant="subtitle1" fontWeight={900}>
-                          Breaks
-                        </Typography>
-                        <Chip
-                          size="small"
-                          color={hasOverdue ? "warning" : "success"}
-                          icon={hasOverdue ? <ReportProblemRounded /> : <CheckCircleRounded />}
-                          label={hasOverdue ? `${overdueBreaks} overdue` : "No overdue breaks"}
-                          sx={{ fontWeight: 800 }}
-                        />
-                      </Stack>
-
-                      <Divider sx={{ mb: 2 }} />
-
-                      {overdueDetails.length > 0 ? (
-                        <List dense disablePadding>
-                          {overdueDetails.map((b, idx) => (
-                            <ListItem
-                              key={`${b?.date}-${idx}`}
-                              sx={{
-                                px: 0,
-                                "&:not(:last-of-type)": {
-                                  borderBottom: "1px dashed",
-                                  borderColor: "divider",
-                                },
-                              }}
-                            >
-                              <ListItemAvatar>
-                                <Avatar sx={{ bgcolor: "warning.light", color: "warning.dark" }}>
-                                  <ScheduleRounded />
-                                </Avatar>
-                              </ListItemAvatar>
-                              <ListItemText
-                                primary={
-                                  <Stack direction="row" spacing={1} alignItems="center">
-                                    <Typography variant="body2" fontWeight={800}>
-                                      {b?.date ?? "—"}
-                                    </Typography>
-                                    <Chip size="small" color="warning" variant="outlined" label="Overdue" />
-                                  </Stack>
-                                }
-                                secondary={
-                                  <Typography variant="body2" color="text.secondary">
-                                    Duration: {b?.duration ?? "—"} min
-                                  </Typography>
-                                }
-                              />
-                            </ListItem>
-                          ))}
-                        </List>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          Great! No overdue breaks recorded this month.
-                        </Typography>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Grow>
-              </Grid>
+        <>
+          {/* ROW 1: Attendance | Daily Targets | Break Management */}
+          <Grid container spacing={2.5} alignItems="stretch" sx={{ mb: 2.5 }}>
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard
+                title="Attendance"
+                value={presentDays}
+                total={workingDays}
+                icon={<Person />}
+                color="success"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard
+                title="Daily Targets"
+                value={completedTargets}
+                total={totalTargets}
+                icon={<Flag />}
+                color="warning"
+              />
+            </Grid>
+            <Grid item xs={12} sm={12} md={4}>
+              <BreakManagement
+                overdueBreaks={overdueBreaks}
+                hasOverdue={hasOverdue}
+                overdueDetails={overdueDetails}
+              />
             </Grid>
           </Grid>
 
-          {/* Right column */}
-          <Grid item xs={12} md={4}>
-            <ScoreRing score={scorePct} status={statusText} />
-
-            <Grow in timeout={600} style={{ transitionDelay: "220ms", transformOrigin: "0 0" }}>
-              <Card
-                elevation={0}
-                sx={{
-                  borderRadius: 4,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  mt: 3,
-                  background: "linear-gradient(135deg,#f9fafb,#eef2ff)",
-                  boxShadow: "0 6px 24px rgba(0,0,0,.06)",
-                }}
-              >
-                <CardContent sx={{ p: 2.5 }}>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Summary
-                  </Typography>
-                  <Stack spacing={1.25}>
-                    <SummaryRow
-                      label="Attendance Score"
-                      value={report?.overallProgress?.breakdown?.attendanceScore}
-                    />
-                    <SummaryRow
-                      label="Target Score"
-                      value={report?.overallProgress?.breakdown?.targetScore}
-                    />
-                    <SummaryRow
-                      label="Break Score"
-                      value={report?.overallProgress?.breakdown?.breakScore}
-                    />
-                  </Stack>
-
-                  {report?.overallProgress?.statusMessage && (
-                    <Tooltip title="From backend assessment">
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-                        Note: {report.overallProgress.statusMessage}
-                      </Typography>
-                    </Tooltip>
-                  )}
-                </CardContent>
-              </Card>
-            </Grow>
+          {/* ROW 2: Overall Performance | Performance Breakdown */}
+          <Grid container spacing={2.5} alignItems="stretch">
+            <Grid item xs={12} md={6}>
+              <PerformanceScore score={scorePct} status={statusText} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <PerformanceBreakdown breakdown={report?.overallProgress?.breakdown} />
+            </Grid>
           </Grid>
-        </Grid>
+        </>
       )}
     </Box>
   );
