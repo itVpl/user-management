@@ -20,6 +20,10 @@ export default function DeliveryOrder() {
   const [submitting, setSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  const [carrierFeesJustUpdated, setCarrierFeesJustUpdated] = useState(false);
+  // PATCH: add this
+  const [isEditForm, setIsEditForm] = useState(false);
+
 
   // Charges popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
@@ -46,18 +50,18 @@ export default function DeliveryOrder() {
         totalAmount: 0
       }
     ],
-    
+
     // Carrier Information
     carrierName: '',
     equipmentType: '',
     carrierFees: '',
-    
+
     // Shipper Information
     shipperName: '',
     containerNo: '',
     containerType: '',
     weight: '',
-    
+
     // Pickup Locations - Array for multiple locations
     pickupLocations: [
       {
@@ -69,7 +73,7 @@ export default function DeliveryOrder() {
         date: ''
       }
     ],
-    
+
     // Drop Locations - Array for multiple locations
     dropLocations: [
       {
@@ -81,7 +85,7 @@ export default function DeliveryOrder() {
         date: ''
       }
     ],
-    
+
     // General
     remarks: '',
     docs: null
@@ -112,113 +116,113 @@ export default function DeliveryOrder() {
 
   // Fetch data from API
   const fetchOrders = async () => {
-      try {
-        setLoading(true);
-        
-        // Get user data to extract empId
-        const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
-        if (!userStr) {
-          console.log('No user found in sessionStorage/localStorage');
-          return;
-        }
-        
-        const user = JSON.parse(userStr);
-        const empId = user.empId;
-        
-        if (!empId) {
-          console.log('No empId found in user object');
-          return;
-        }
-        
-        console.log('Fetching orders for employee:', empId);
-        console.log('Fetching orders from:', `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`);
-        
-        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-        const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`, {
-          timeout: 10000, // 10 second timeout
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        console.log('API Response:', response);
-        
-        if (response.data && response.data.success) {
-          // Transform API data to match our component structure
-          const transformedOrders = response.data.data.map(order => {
-            const loadNo = order.customers?.[0]?.loadNo || 'N/A';
-            
-            return {
-              id: `DO-${order._id.slice(-6)}`, 
-              originalId: order._id, // Store the full original _id
-              doNum: loadNo, 
-              clientName: order.customers?.[0]?.billTo || 'N/A',
-              // clientPhone: '+1-555-0000', 
-              clientEmail: `${(order.customers?.[0]?.billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`, 
-              pickupLocation: order.shipper?.pickUpLocations?.[0]?.name || 'Pickup Location', 
-              deliveryLocation: order.shipper?.dropLocations?.[0]?.name || 'Delivery Location', 
-              amount: order.customers?.[0]?.totalAmount || 0,
-              description: `Load: ${loadNo}`,
-              priority: 'normal', 
-              status: 'pending', 
-              createdAt: new Date(order.date).toISOString().split('T')[0],
-              createdBy: `Employee ${order.empId || 'N/A'}`,
-              docUpload: 'sample-doc.jpg',
-              productName: order.shipper?.containerType || 'N/A',
-              quantity: order.shipper?.weight || 0,
-              remarks: order.remarks || '',
-              shipperName: order.shipper?.name || 'N/A',
-              carrierName: order.carrier?.carrierName || 'N/A',
-              carrierFees: order.carrier?.totalCarrierFees || 0,
-              createdBySalesUser: order.createdBySalesUser || 'N/A',
-              supportingDocs: order.supportingDocs || []
-            };
-          });
-          
-          console.log('Transformed orders:', transformedOrders);
-          setOrders(transformedOrders);
-        } else {
-          console.error('API response format error:', response.data);
-        }
-              } catch (error) {
-          console.error('Error fetching orders:', error);
-          console.error('Error details:', {
-            message: error.message,
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data,
-            url: error.config?.url
-          });
-          
-          alertify.error(`Failed to load orders: ${error.response?.status || 'Network Error'}`);
-                 // Fallback to sample data if API fails
-                 const sampleOrders = [
-          {
-            id: 'DO-001',
-            doNum: 'LOAD001',
-             clientName: 'MSC',
-             clientPhone: '+1-555-0123',
-             clientEmail: 'contact@msc.com',
-             pickupLocation: 'New York, NY',
-             deliveryLocation: 'Los Angeles, CA',
-             amount: 13500,
-             description: 'Load: LOAD001',
-             priority: 'high',
-             status: 'approved',
-             createdAt: new Date().toISOString().split('T')[0],
-             createdBy: 'Employee 1234',
-             docUpload: 'sample-doc.jpg',
-             productName: 'Bullets',
-             quantity: 5,
-             remarks: 'Good'
-           }
-         ];
-        setOrders(sampleOrders);
-      } finally {
-        setLoading(false);
+    try {
+      setLoading(true);
+
+      // Get user data to extract empId
+      const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+      if (!userStr) {
+        console.log('No user found in sessionStorage/localStorage');
+        return;
       }
-    };
+
+      const user = JSON.parse(userStr);
+      const empId = user.empId;
+
+      if (!empId) {
+        console.log('No empId found in user object');
+        return;
+      }
+
+      console.log('Fetching orders for employee:', empId);
+      console.log('Fetching orders from:', `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`);
+
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`, {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      console.log('API Response:', response);
+
+      if (response.data && response.data.success) {
+        // Transform API data to match our component structure
+        const transformedOrders = response.data.data.map(order => {
+          const loadNo = order.customers?.[0]?.loadNo || 'N/A';
+
+          return {
+            id: `DO-${order._id.slice(-6)}`,
+            originalId: order._id, // Store the full original _id
+            doNum: loadNo,
+            clientName: order.customers?.[0]?.billTo || 'N/A',
+            // clientPhone: '+1-555-0000', 
+            clientEmail: `${(order.customers?.[0]?.billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
+            pickupLocation: order.shipper?.pickUpLocations?.[0]?.name || 'Pickup Location',
+            deliveryLocation: order.shipper?.dropLocations?.[0]?.name || 'Delivery Location',
+            amount: order.customers?.[0]?.totalAmount || 0,
+            description: `Load: ${loadNo}`,
+            priority: 'normal',
+            status: order.status || 'open',
+            createdAt: new Date(order.date).toISOString().split('T')[0],
+            createdBy: `Employee ${order.empId || 'N/A'}`,
+            docUpload: 'sample-doc.jpg',
+            productName: order.shipper?.containerType || 'N/A',
+            quantity: order.shipper?.weight || 0,
+            remarks: order.remarks || '',
+            shipperName: order.shipper?.name || 'N/A',
+            carrierName: order.carrier?.carrierName || 'N/A',
+            carrierFees: order.carrier?.totalCarrierFees || 0,
+            createdBySalesUser: order.createdBySalesUser || 'N/A',
+            supportingDocs: order.supportingDocs || []
+          };
+        });
+
+        console.log('Transformed orders:', transformedOrders);
+        setOrders(transformedOrders);
+      } else {
+        console.error('API response format error:', response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+
+      alertify.error(`Failed to load orders: ${error.response?.status || 'Network Error'}`);
+      // Fallback to sample data if API fails
+      const sampleOrders = [
+        {
+          id: 'DO-001',
+          doNum: 'LOAD001',
+          clientName: 'MSC',
+          clientPhone: '+1-555-0123',
+          clientEmail: 'contact@msc.com',
+          pickupLocation: 'New York, NY',
+          deliveryLocation: 'Los Angeles, CA',
+          amount: 13500,
+          description: 'Load: LOAD001',
+          priority: 'high',
+          status: 'approved',
+          createdAt: new Date().toISOString().split('T')[0],
+          createdBy: 'Employee 1234',
+          docUpload: 'sample-doc.jpg',
+          productName: 'Bullets',
+          quantity: 5,
+          remarks: 'Good'
+        }
+      ];
+      setOrders(sampleOrders);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -229,7 +233,7 @@ export default function DeliveryOrder() {
       const { id } = selectedOrder;
       // Simulate API call
       setTimeout(() => {
-        setOrders(orders.map(order => 
+        setOrders(orders.map(order =>
           order.id === id ? { ...order, status } : order
         ));
         setModalType(null);
@@ -251,13 +255,7 @@ export default function DeliveryOrder() {
     return 'bg-blue-100 text-blue-700';
   };
 
-  // Priority color helper
-  const priorityColor = (priority) => {
-    if (priority === 'high') return 'bg-red-100 text-red-700';
-    if (priority === 'normal') return 'bg-blue-100 text-blue-700';
-    if (priority === 'low') return 'bg-gray-100 text-gray-700';
-    return 'bg-gray-100 text-gray-700';
-  };
+
 
   // Filter orders based on search term
   const filteredOrders = orders.filter(order =>
@@ -300,13 +298,13 @@ export default function DeliveryOrder() {
         ...updatedCustomers[index],
         [field]: value
       };
-      
+
       // Calculate total amount for this customer
       const lineHaul = parseInt(updatedCustomers[index].lineHaul) || 0;
       const fsc = parseInt(updatedCustomers[index].fsc) || 0;
       const other = parseInt(updatedCustomers[index].other) || 0;
       updatedCustomers[index].totalAmount = lineHaul + fsc + other;
-      
+
       return {
         ...prev,
         customers: updatedCustomers
@@ -450,14 +448,14 @@ export default function DeliveryOrder() {
       ...updatedCharges[index],
       [field]: value
     };
-    
+
     // Calculate total for this charge
     if (field === 'quantity' || field === 'amt') {
       const quantity = field === 'quantity' ? value : updatedCharges[index].quantity;
       const amt = field === 'amt' ? value : updatedCharges[index].amt;
       updatedCharges[index].total = (parseFloat(quantity) || 0) * (parseFloat(amt) || 0);
     }
-    
+
     setCharges(updatedCharges);
   };
 
@@ -479,12 +477,40 @@ export default function DeliveryOrder() {
   };
 
   // Apply charges to carrier fees
-  const applyCharges = () => {
+  const applyCharges = async () => {
     const totalCharges = charges.reduce((sum, charge) => sum + (charge.total || 0), 0);
     setFormData(prev => ({
       ...prev,
       carrierFees: totalCharges.toString()
     }));
+
+    // Also update the charges state to ensure it's properly set for updates
+    console.log('Applying charges:', charges);
+    console.log('Total charges:', totalCharges);
+
+    // If we're in edit mode, immediately update the carrier fees
+    if (editingOrder && editingOrder._id) {
+      try {
+        const carrierFeesData = charges.filter(charge => charge.name && charge.quantity && charge.amt).map(charge => ({
+          name: charge.name,
+          quantity: parseInt(charge.quantity) || 0,
+          amount: parseInt(charge.amt) || 0,
+          total: parseInt(charge.total) || 0
+        }));
+
+        console.log('Updating carrier fees immediately:', carrierFeesData);
+
+        const result = await updateCarrierFees(editingOrder._id, carrierFeesData);
+        if (result) {
+          alertify.success('Carrier fees updated successfully!');
+          setCarrierFeesJustUpdated(true); // Set flag to prevent duplicate alerts
+        }
+      } catch (error) {
+        console.error('Error updating carrier fees:', error);
+        alertify.error('Failed to update carrier fees');
+      }
+    }
+
     setShowChargesPopup(false);
   };
 
@@ -496,17 +522,17 @@ export default function DeliveryOrder() {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setSubmitting(true);
-      
+
       // Validate that at least one customer exists
       console.log('=== DEBUG: CUSTOMERS VALIDATION ===');
       console.log('formData.customers:', formData.customers);
       console.log('formData.customers.length:', formData.customers?.length);
       console.log('formData.customers type:', typeof formData.customers);
       console.log('=== END DEBUG ===');
-      
+
       if (!formData.customers || formData.customers.length === 0) {
         // If somehow customers array is empty, add one customer automatically
         setFormData(prev => ({
@@ -526,12 +552,12 @@ export default function DeliveryOrder() {
         setSubmitting(false);
         return;
       }
-      
+
       // Get user data to extract empId
       const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
       const user = JSON.parse(userStr);
       const empId = user.empId || "EMP001";
-      
+
       // Calculate total amounts for each customer
       const customersWithTotals = formData.customers.map(customer => ({
         // Try omitting loadNo entirely since backend should auto-generate it
@@ -596,7 +622,7 @@ export default function DeliveryOrder() {
 
       // Submit to API
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      
+
       // Debug: Log what we're about to send
       console.log('=== DEBUG: BEFORE API CALL ===');
       console.log('customersWithTotals:', customersWithTotals);
@@ -605,13 +631,13 @@ export default function DeliveryOrder() {
       console.log('submitData.customers.length:', submitData.customers.length);
       console.log('formData.docs exists:', !!formData.docs);
       console.log('=== END DEBUG ===');
-      
+
       // Create FormData if file is uploaded, otherwise use JSON
       let response; // Declare response here
       if (formData.docs) {
         const formDataToSend = new FormData();
         formDataToSend.append('empId', empId);
-        
+
         // Send customers as individual fields for each customer
         customersWithTotals.forEach((customer, index) => {
           formDataToSend.append(`customers[${index}][billTo]`, customer.billTo);
@@ -622,12 +648,12 @@ export default function DeliveryOrder() {
           formDataToSend.append(`customers[${index}][other]`, customer.other);
           formDataToSend.append(`customers[${index}][totalAmount]`, customer.totalAmount);
         });
-        
+
         // Send carrier data as individual fields
         formDataToSend.append('carrier[carrierName]', carrierData.carrierName);
         formDataToSend.append('carrier[equipmentType]', carrierData.equipmentType);
         formDataToSend.append('carrier[totalCarrierFees]', carrierData.totalCarrierFees);
-        
+
         // Send carrier fees as individual fields
         carrierData.carrierFees.forEach((fee, index) => {
           formDataToSend.append(`carrier[carrierFees][${index}][name]`, fee.name);
@@ -635,7 +661,7 @@ export default function DeliveryOrder() {
           formDataToSend.append(`carrier[carrierFees][${index}][amount]`, fee.amount);
           formDataToSend.append(`carrier[carrierFees][${index}][total]`, fee.total);
         });
-        
+
         // Send shipper data as individual fields
         formDataToSend.append('shipper[name]', formData.shipperName);
         formDataToSend.append('shipper[pickUpDate]', formData.pickupLocations[0]?.date || '');
@@ -643,7 +669,7 @@ export default function DeliveryOrder() {
         formDataToSend.append('shipper[containerType]', formData.containerType);
         formDataToSend.append('shipper[weight]', parseInt(formData.weight) || 0);
         formDataToSend.append('shipper[dropDate]', formData.dropLocations[0]?.date || '');
-        
+
         // Send pickup locations as individual fields
         formData.pickupLocations.forEach((location, index) => {
           formDataToSend.append(`shipper[pickUpLocations][${index}][name]`, location.name);
@@ -652,7 +678,7 @@ export default function DeliveryOrder() {
           formDataToSend.append(`shipper[pickUpLocations][${index}][state]`, location.state);
           formDataToSend.append(`shipper[pickUpLocations][${index}][zipCode]`, location.zipCode);
         });
-        
+
         // Send drop locations as individual fields
         formData.dropLocations.forEach((location, index) => {
           formDataToSend.append(`shipper[dropLocations][${index}][name]`, location.name);
@@ -661,10 +687,10 @@ export default function DeliveryOrder() {
           formDataToSend.append(`shipper[dropLocations][${index}][state]`, location.state);
           formDataToSend.append(`shipper[dropLocations][${index}][zipCode]`, location.zipCode);
         });
-        
+
         formDataToSend.append('remarks', formData.remarks);
         formDataToSend.append('document', formData.docs);
-        
+
         // Debug: Log FormData contents
         console.log('=== DEBUG: FormData being sent ===');
         console.log('FormData entries:');
@@ -672,7 +698,7 @@ export default function DeliveryOrder() {
           console.log(`${key} : ${value}`);
         }
         console.log('=== END DEBUG ===');
-        
+
         response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, formDataToSend, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -686,7 +712,7 @@ export default function DeliveryOrder() {
         console.log('submitData.customers:', submitData.customers);
         console.log('submitData.customers.length:', submitData.customers.length);
         console.log('=== END DEBUG ===');
-        
+
         response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, submitData, {
           headers: {
             'Content-Type': 'application/json',
@@ -698,7 +724,7 @@ export default function DeliveryOrder() {
       if (response.data.success) {
         // Add the new order to the existing orders list
         const loadNo = response.data.data.customers?.[0]?.loadNo || 'N/A';
-        
+
         const newOrder = {
           id: `DO-${response.data.data._id.slice(-6)}`,
           doNum: loadNo,
@@ -725,7 +751,7 @@ export default function DeliveryOrder() {
         };
 
         setOrders(prevOrders => [newOrder, ...prevOrders]);
-        
+
         // Close modal and reset form
         setShowAddOrderForm(false);
         setFormData({
@@ -741,18 +767,18 @@ export default function DeliveryOrder() {
               totalAmount: 0
             }
           ],
-          
+
           // Carrier Information
           carrierName: '',
           equipmentType: '',
           carrierFees: '',
-          
+
           // Shipper Information
           shipperName: '',
           containerNo: '',
           containerType: '',
           weight: '',
-          
+
           // Pickup Locations - Array for multiple locations
           pickupLocations: [
             {
@@ -764,7 +790,7 @@ export default function DeliveryOrder() {
               date: ''
             }
           ],
-          
+
           // Drop Locations - Array for multiple locations
           dropLocations: [
             {
@@ -776,7 +802,7 @@ export default function DeliveryOrder() {
               date: ''
             }
           ],
-          
+
           // General
           remarks: '',
           docs: null
@@ -789,13 +815,13 @@ export default function DeliveryOrder() {
       }
     } catch (error) {
       console.error('Error creating delivery order:', error);
-      
+
       // Enhanced error logging
       if (error.response) {
         console.error('API Error Response:', error.response.data);
         console.error('API Error Status:', error.response.status);
         console.error('API Error Headers:', error.response.headers);
-        
+
         // Show specific error message from API
         if (error.response.data && error.response.data.message) {
           alertify.error(`API Error: ${error.response.data.message}`);
@@ -819,30 +845,30 @@ export default function DeliveryOrder() {
     setShowAddOrderForm(false);
     setFormData({
       // Customer Information - Array for multiple customers
-              customers: [
-          {
-            loadNo: '', // Try empty string instead of null
-            billTo: '',
-            dispatcherName: '',
-            workOrderNo: '',
-            lineHaul: '',
-            fsc: '',
-            other: '',
-            totalAmount: 0
-          }
-        ],
-      
+      customers: [
+        {
+          loadNo: '', // Try empty string instead of null
+          billTo: '',
+          dispatcherName: '',
+          workOrderNo: '',
+          lineHaul: '',
+          fsc: '',
+          other: '',
+          totalAmount: 0
+        }
+      ],
+
       // Carrier Information
       carrierName: '',
       equipmentType: '',
       carrierFees: '',
-      
+
       // Shipper Information
       shipperName: '',
       containerNo: '',
       containerType: '',
       weight: '',
-      
+
       // Pickup Locations - Array for multiple locations
       pickupLocations: [
         {
@@ -854,7 +880,7 @@ export default function DeliveryOrder() {
           date: ''
         }
       ],
-      
+
       // Drop Locations - Array for multiple locations
       dropLocations: [
         {
@@ -866,12 +892,12 @@ export default function DeliveryOrder() {
           date: ''
         }
       ],
-      
+
       // General
       remarks: '',
       docs: null
     });
-    
+
     // Reset charges state
     setCharges([
       {
@@ -884,11 +910,7 @@ export default function DeliveryOrder() {
     setShowChargesPopup(false);
   };
 
-  // Handle view order details
-  const handleViewOrder = (order) => {
-    setSelectedOrder(order);
-    setShowOrderModal(true);
-  };
+
 
   // Handle view employee data API call
   const handleViewEmployeeData = async (empId) => {
@@ -901,11 +923,11 @@ export default function DeliveryOrder() {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      
+
       if (response.data.success) {
         console.log('Employee DO Data:', response.data);
         alertify.success('✅ Employee DO data fetched successfully!');
-        
+
         // Take the first delivery order from the response data
         if (response.data.data && response.data.data.length > 0) {
           const employeeOrder = response.data.data[0];
@@ -934,32 +956,32 @@ export default function DeliveryOrder() {
       console.log('Order object keys:', Object.keys(order));
       console.log('Order originalId:', order.originalId);
       console.log('Order id:', order.id);
-      
+
       // Use the stored original _id instead of extracting from the display ID
       const originalId = order.originalId || order.id.replace('DO-', '');
       console.log('Original ID to use:', originalId);
       console.log('Full order ID:', order.id);
-      
+
       // Fetch the complete order data from the API
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       console.log('Token:', token ? 'Token exists' : 'No token found');
-      
+
       const apiUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${originalId}`;
       console.log('API URL:', apiUrl);
-      
+
       const response = await axios.get(apiUrl, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.data && response.data.success) {
         const fullOrderData = response.data.data;
         console.log('Full order data for editing:', fullOrderData);
         console.log('Pickup locations from API:', fullOrderData.shipper?.pickUpLocations);
         console.log('Drop locations from API:', fullOrderData.shipper?.dropLocations);
-        
+
         // Helper function to format date for datetime-local input
         const formatDateForInput = (dateString) => {
           console.log('formatDateForInput called with:', dateString);
@@ -991,7 +1013,7 @@ export default function DeliveryOrder() {
           console.log('First customer from API:', fullOrderData.customers[0]);
           console.log('First customer keys:', Object.keys(fullOrderData.customers[0]));
         }
-        
+
         const editFormData = {
           customers: fullOrderData.customers || [{
             billTo: '',
@@ -1046,20 +1068,20 @@ export default function DeliveryOrder() {
           remarks: fullOrderData.remarks || '',
           docs: null
         };
-        
+
         console.log('Edit form data prepared:', editFormData);
         console.log('Formatted pickup locations:', editFormData.pickupLocations);
         console.log('Formatted drop locations:', editFormData.dropLocations);
-        
+
         // Set the form data
         setFormData(editFormData);
         console.log('Form data set successfully');
-        
+
         // Log the form data after a short delay to see if it was set correctly
         setTimeout(() => {
           console.log('Form data after setting:', formData);
         }, 100);
-        
+
         // Set charges if they exist
         console.log('Raw charges data from API:', fullOrderData.charges);
         console.log('Charges type:', typeof fullOrderData.charges);
@@ -1067,7 +1089,7 @@ export default function DeliveryOrder() {
         console.log('Full order data keys:', Object.keys(fullOrderData));
         console.log('Carrier data:', fullOrderData.carrier);
         console.log('Shipper data:', fullOrderData.shipper);
-        
+
         // Check for charges in different possible locations
         let chargesData = fullOrderData.charges;
         if (!chargesData && fullOrderData.carrier && fullOrderData.carrier.carrierFees) {
@@ -1082,7 +1104,7 @@ export default function DeliveryOrder() {
           chargesData = fullOrderData.shipper.charges;
           console.log('Found charges in shipper object:', chargesData);
         }
-        
+
         if (chargesData && Array.isArray(chargesData) && chargesData.length > 0) {
           // Ensure each charge has the correct structure and calculate totals
           const processedCharges = chargesData.map(charge => {
@@ -1105,7 +1127,7 @@ export default function DeliveryOrder() {
             total: 0
           }]);
         }
-        
+
         setFormData(editFormData);
         setEditingOrder({ ...order, _id: originalId, fullData: fullOrderData });
         setShowEditModal(true);
@@ -1121,10 +1143,10 @@ export default function DeliveryOrder() {
         data: error.response?.data,
         url: error.config?.url
       });
-      
+
       // Fallback: Try to use the data from the orders state
       console.log('Trying fallback approach with order data from state');
-      
+
       // Helper function to format date for datetime-local input
       const formatDateForInput = (dateString) => {
         console.log('Fallback formatDateForInput called with:', dateString);
@@ -1147,7 +1169,7 @@ export default function DeliveryOrder() {
           return '';
         }
       };
-      
+
       const fallbackFormData = {
         customers: [{
           billTo: order.clientName || '',
@@ -1196,11 +1218,11 @@ export default function DeliveryOrder() {
         remarks: order.remarks || '',
         docs: null
       };
-      
+
       console.log('Fallback form data:', fallbackFormData);
       setFormData(fallbackFormData);
       console.log('Fallback form data set successfully');
-      
+
       // Log the form data after a short delay to see if it was set correctly
       setTimeout(() => {
         console.log('Fallback form data after setting:', formData);
@@ -1211,7 +1233,15 @@ export default function DeliveryOrder() {
         amt: '',
         total: 0
       }]);
-      setEditingOrder({ ...order, _id: originalId });
+      // IDs pakka store karo + same modal edit-mode me kholo
+      setEditingOrder({
+        _id: originalId,
+        customerId: fullOrderData?.customers?.[0]?._id || null,
+        fullData: fullOrderData
+      });
+      setIsEditForm?.(true);            // agar aapne isEditForm use kiya hai
+      setShowAddOrderForm(true);        // yahi modal open hoga (Update ke liye)
+
       setShowEditModal(true);
       alertify.warning('Using limited data for editing. Some fields may be empty.');
     }
@@ -1221,6 +1251,7 @@ export default function DeliveryOrder() {
   const handleCloseEditModal = () => {
     setShowEditModal(false);
     setEditingOrder(null);
+    setCarrierFeesJustUpdated(false); // Reset the flag
     // Reset form data to original state
     setFormData({
       customers: [{
@@ -1260,168 +1291,706 @@ export default function DeliveryOrder() {
     });
   };
 
-  // Handle update order
+  // Handle update order - Fixed version with correct customer structure
+  // REPLACE: handleUpdateOrder
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    
+
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      
-      // Get user data to extract empId (same as handleSubmit)
-      const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
-      const user = JSON.parse(userStr);
-      const empId = user.empId || "EMP001";
-      
-      // Calculate total amounts for each customer (same as handleSubmit)
-      const customersWithTotals = formData.customers.map(customer => ({
-        billTo: customer.billTo,
-        dispatcherName: customer.dispatcherName,
-        workOrderNo: customer.workOrderNo,
-        lineHaul: parseInt(customer.lineHaul) || 0,
-        fsc: parseInt(customer.fsc) || 0,
-        other: parseInt(customer.other) || 0,
-        totalAmount: (parseInt(customer.lineHaul) || 0) + (parseInt(customer.fsc) || 0) + (parseInt(customer.other) || 0)
-      }));
+      const orderId = editingOrder?._id;
+      const customerId = editingOrder?.customerId;
 
-      // Validate that all required customer fields are present
-      console.log('Validating customers before update:');
-      customersWithTotals.forEach((customer, index) => {
-        console.log(`Customer ${index + 1}:`, customer);
-        console.log(`Customer ${index + 1} billTo:`, customer.billTo);
-        console.log(`Customer ${index + 1} dispatcherName:`, customer.dispatcherName);
-        console.log(`Customer ${index + 1} workOrderNo:`, customer.workOrderNo);
-        
-        // Check if any required fields are missing or empty
-        if (!customer.billTo || customer.billTo.trim() === '') {
-          console.warn(`Customer ${index + 1} billTo is missing or empty`);
-        }
-        if (!customer.dispatcherName || customer.dispatcherName.trim() === '') {
-          console.warn(`Customer ${index + 1} dispatcherName is missing or empty`);
-        }
-        if (!customer.workOrderNo || customer.workOrderNo.trim() === '') {
-          console.warn(`Customer ${index + 1} workOrderNo is missing or empty`);
-        }
-      });
-
-      // Prepare carrier data with charges array and total (same as handleSubmit)
-      const carrierData = {
-        carrierName: formData.carrierName,
-        equipmentType: formData.equipmentType,
-        carrierFees: charges.map(charge => ({
-          name: charge.name,
-          quantity: parseInt(charge.quantity) || 0,
-          amount: parseInt(charge.amt) || 0,
-          total: (parseFloat(charge.quantity) || 0) * (parseFloat(charge.amt) || 0)
-        })),
-        totalCarrierFees: charges.reduce((sum, charge) => sum + (charge.total || 0), 0)
-      };
-
-      // Prepare the update payload - match the structure used in handleSubmit
-      const updatePayload = {
-        empId: empId, // Add empId field (same as handleSubmit)
-        customers: customersWithTotals,
-        carrier: carrierData,
-        shipper: {
-          name: formData.shipperName,
-          pickUpLocations: formData.pickupLocations.map(location => ({
-            name: location.name,
-            address: location.address,
-            city: location.city,
-            state: location.state,
-            zipCode: location.zipCode
-          })),
-          pickUpDate: formData.pickupLocations[0]?.date || '',
-          containerNo: formData.containerNo,
-          containerType: formData.containerType,
-          weight: parseInt(formData.weight) || 0,
-          dropLocations: formData.dropLocations.map(location => ({
-            name: location.name,
-            address: location.address,
-            city: location.city,
-            state: location.state,
-            zipCode: location.zipCode
-          })),
-          dropDate: formData.dropLocations[0]?.date || ''
-        },
-        remarks: formData.remarks
-      };
-
-      // Additional validation - check if any customer has empty required fields
-      const hasEmptyRequiredFields = customersWithTotals.some(customer => 
-        !customer.billTo || customer.billTo.trim() === '' ||
-        !customer.dispatcherName || customer.dispatcherName.trim() === '' ||
-        !customer.workOrderNo || customer.workOrderNo.trim() === ''
-      );
-
-      if (hasEmptyRequiredFields) {
-        console.error('Some customers have empty required fields. Please fill in all required fields.');
-        alertify.error('Please fill in all required customer fields before updating.');
+      if (!orderId) {
+        alertify.error('Order ID missing');
         setSubmitting(false);
         return;
       }
-      
-      // Additional validation - ensure all required fields are properly formatted
-      customersWithTotals.forEach((customer, index) => {
-        if (!customer.billTo || customer.billTo.trim() === '') {
-          console.error(`Customer ${index + 1} billTo is empty or missing`);
-        }
-        if (!customer.dispatcherName || customer.dispatcherName.trim() === '') {
-          console.error(`Customer ${index + 1} dispatcherName is empty or missing`);
-        }
-        if (!customer.workOrderNo || customer.workOrderNo.trim() === '') {
-          console.error(`Customer ${index + 1} workOrderNo is empty or missing`);
-        }
-      });
-      
-      console.log('Sending update payload:', updatePayload);
-      console.log('Update payload customers:', updatePayload.customers);
-      console.log('Update payload customers[0]:', updatePayload.customers[0]);
-      console.log('Update payload customers[0].billTo:', updatePayload.customers[0]?.billTo);
-      console.log('Update payload customers[0].dispatcherName:', updatePayload.customers[0]?.dispatcherName);
-      console.log('Update payload customers[0].workOrderNo:', updatePayload.customers[0]?.workOrderNo);
-      console.log('Update payload customers[0].lineHaul:', updatePayload.customers[0]?.lineHaul);
-      console.log('Update payload customers[0].fsc:', updatePayload.customers[0]?.fsc);
-      console.log('Update payload customers[0].other:', updatePayload.customers[0]?.other);
-      console.log('Update payload customers[0].totalAmount:', updatePayload.customers[0]?.totalAmount);
-      console.log('Update payload carrier:', updatePayload.carrier);
-      console.log('Update payload shipper:', updatePayload.shipper);
-      console.log('Editing order ID:', editingOrder._id);
-      
-      // Additional debugging - check data types
-      console.log('=== DATA TYPE DEBUG ===');
-      console.log('billTo type:', typeof updatePayload.customers[0]?.billTo);
-      console.log('dispatcherName type:', typeof updatePayload.customers[0]?.dispatcherName);
-      console.log('workOrderNo type:', typeof updatePayload.customers[0]?.workOrderNo);
-      console.log('lineHaul type:', typeof updatePayload.customers[0]?.lineHaul);
-      console.log('fsc type:', typeof updatePayload.customers[0]?.fsc);
-      console.log('other type:', typeof updatePayload.customers[0]?.other);
-      console.log('totalAmount type:', typeof updatePayload.customers[0]?.totalAmount);
-      console.log('=== END DATA TYPE DEBUG ===');
-      
-      // Try using the same structure as the working POST request
-      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${editingOrder._id}`, updatePayload, {
+
+      // --- Customer updates (0 ko bhi allow karo) ---
+      const customerUpdates = {};
+      if (formData.customers?.length) {
+        const c = formData.customers[0];
+
+        if (c.billTo !== undefined) customerUpdates.billTo = c.billTo;
+        if (c.dispatcherName !== undefined) customerUpdates.dispatcherName = c.dispatcherName;
+        if (c.workOrderNo !== undefined) customerUpdates.workOrderNo = c.workOrderNo;
+
+        const toNum = (v) => (v === '' || v === null || v === undefined) ? undefined : Number(v);
+        const lh = toNum(c.lineHaul); if (lh !== undefined && !Number.isNaN(lh)) customerUpdates.lineHaul = lh;
+        const fsc = toNum(c.fsc); if (fsc !== undefined && !Number.isNaN(fsc)) customerUpdates.fsc = fsc;
+        const oth = toNum(c.other); if (oth !== undefined && !Number.isNaN(oth)) customerUpdates.other = oth;
+      }
+
+      // --- Carrier fees normalise ---
+      const carrierFeesData = (charges || [])
+        .filter(ch => ch?.name && ch?.quantity !== '' && ch?.amt !== '')
+        .map(ch => ({
+          name: ch.name,
+          quantity: Number(ch.quantity) || 0,
+          amount: Number(ch.amt) || 0,
+          total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
+        }));
+      const totalCarrierFees = carrierFeesData.reduce((s, f) => s + (f.total || 0), 0);
+
+      // --- Shipper (nested + locations + dates) ---
+      const shipperPayload = {
+        name: formData.shipperName,
+        containerNo: formData.containerNo,
+        containerType: formData.containerType,
+        weight: formData.weight === '' ? undefined : (Number(formData.weight) || 0),
+        pickUpDate: formData.pickupLocations?.[0]?.date || '',
+        dropDate: formData.dropLocations?.[0]?.date || '',
+        pickUpLocations: (formData.pickupLocations || []).map(l => ({
+          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode
+        })),
+        dropLocations: (formData.dropLocations || []).map(l => ({
+          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode
+        })),
+      };
+
+      // --- Carrier (nested) ---
+      const carrierPayload = {
+        carrierName: formData.carrierName,
+        equipmentType: formData.equipmentType,
+        ...(carrierFeesData.length ? { carrierFees: carrierFeesData, totalCarrierFees } : {})
+      };
+
+      // --- Final payload (backend structure) ---
+      const updatePayload = {};
+      if (customerId && Object.keys(customerUpdates).length) {
+        updatePayload.customerId = customerId;
+        updatePayload.customerUpdates = customerUpdates;
+      }
+      if (
+        carrierPayload.carrierName !== undefined ||
+        carrierPayload.equipmentType !== undefined ||
+        carrierPayload.carrierFees
+      ) {
+        updatePayload.carrier = carrierPayload;
+      }
+      if (
+        shipperPayload.name !== undefined ||
+        shipperPayload.containerNo !== undefined ||
+        shipperPayload.containerType !== undefined ||
+        shipperPayload.weight !== undefined ||
+        shipperPayload.pickUpLocations?.length ||
+        shipperPayload.dropLocations?.length ||
+        shipperPayload.pickUpDate || shipperPayload.dropDate
+      ) {
+        updatePayload.shipper = shipperPayload;
+      }
+      if (formData.remarks !== undefined) updatePayload.remarks = formData.remarks;
+
+      const res = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
+        updatePayload,
+        { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } }
+      );
+
+      if (res?.data?.success) {
+        alertify.success('Delivery order updated!');
+        setShowAddOrderForm(false);
+        setEditingOrder(null);
+        setCarrierFeesJustUpdated(false);
+        fetchOrders();
+      } else {
+        alertify.error(res?.data?.message || 'Update failed');
+      }
+    } catch (error) {
+      console.error('Error updating delivery order:', error?.response?.data || error);
+      alertify.error(error?.response?.data?.message || 'Failed to update delivery order');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+  // Function to update only carrier fields (without customer data)
+  const updateCarrierOnly = async (orderId, carrierName, equipmentType) => {
+    setSubmitting(true);
+
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      const updateData = {};
+      if (carrierName) updateData.carrierName = carrierName;
+      if (equipmentType) updateData.equipmentType = equipmentType;
+
+      console.log('Updating carrier only with payload:', updateData);
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, updateData, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
       });
-      
+
       if (response.data && response.data.success) {
-        alertify.success('Delivery order updated successfully!');
-        handleCloseEditModal();
+        alertify.success('Carrier updated successfully!');
         fetchOrders(); // Refresh the orders list
+        return response.data;
       } else {
         console.error('Server response:', response.data);
-        alertify.error('Failed to update delivery order');
+        alertify.error('Failed to update carrier');
+        return null;
       }
     } catch (error) {
-      console.error('Error updating delivery order:', error);
+      console.error('Error updating carrier:', error);
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
-      alertify.error('Failed to update delivery order. Please try again.');
+      alertify.error('Failed to update carrier. Please try again.');
+      return null;
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Function to update carrier fees
+  const updateCarrierFees = async (orderId, carrierFees) => {
+    setSubmitting(true);
+
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      // Get current order to preserve existing carrier data - try multiple sources
+      let currentOrder = null;
+      let existingCarrierData = null;
+
+      // First try from editingOrder.fullData
+      if (editingOrder && editingOrder.fullData && editingOrder.fullData.carrier) {
+        currentOrder = editingOrder.fullData;
+        existingCarrierData = editingOrder.fullData.carrier;
+        console.log('Found carrier from editingOrder.fullData:', existingCarrierData);
+      }
+      // If not found, try from orders array
+      else if (editingOrder && editingOrder._id) {
+        currentOrder = orders.find(order => order._id === editingOrder._id);
+        if (currentOrder && currentOrder.carrier) {
+          existingCarrierData = currentOrder.carrier;
+          console.log('Found carrier from orders array:', existingCarrierData);
+        }
+      }
+
+      if (!existingCarrierData) {
+        console.error('No carrier found. editingOrder:', editingOrder);
+        console.error('Orders array length:', orders.length);
+        alertify.error('No carrier found in this order');
+        return null;
+      }
+
+      const updateData = {
+        carrier: {
+          carrierName: existingCarrierData.carrierName || formData.carrierName || 'Default Carrier',
+          equipmentType: existingCarrierData.equipmentType || formData.equipmentType || 'Default Equipment',
+          carrierFees: carrierFees,
+          totalCarrierFees: carrierFees.reduce((sum, fee) => sum + (fee.total || 0), 0)
+        }
+      };
+
+      console.log('Updating carrier fees with payload:', updateData);
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, updateData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success('Carrier fees updated successfully!');
+        fetchOrders(); // Refresh the orders list
+        return response.data;
+      } else {
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update carrier fees');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error updating carrier fees:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update carrier fees. Please try again.');
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
+
+  // Function to update shipper fields (containerNo, containerType, weight)
+  const updateShipperFields = async (orderId, shipperData) => {
+    setSubmitting(true);
+
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      console.log('Updating shipper fields with payload:', shipperData);
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, shipperData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success('Shipper fields updated successfully!');
+        fetchOrders(); // Refresh the orders list
+        return response.data;
+      } else {
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update shipper fields');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error updating shipper fields:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update shipper fields. Please try again.');
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
+
+  // Handle status change and API integration
+  const handleStatusChange = async (newStatus) => {
+    try {
+      if (!selectedOrder) {
+        alertify.error('Order not found');
+        return;
+      }
+
+      // Get the correct order ID - use _id as priority
+      let orderId = selectedOrder._id || selectedOrder.originalId || selectedOrder.id;
+
+      // If it's the display ID (DO-XXXXXX format), we need to find the actual _id
+      if (orderId && orderId.startsWith('DO-')) {
+        // Try to find the order in the orders list to get the proper _id
+        const foundOrder = orders.find(order => order.id === orderId);
+        if (foundOrder) {
+          orderId = foundOrder.originalId || foundOrder._id;
+        }
+      }
+
+      if (!orderId) {
+        alertify.error('Order ID not found');
+        return;
+      }
+
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      const statusData = {
+        doId: orderId,
+        status: newStatus
+      };
+
+      console.log('Updating status with payload:', statusData);
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/status`, statusData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success(`Status updated to ${newStatus} successfully!`);
+
+        // Update the local state to reflect the change
+        setSelectedOrder(prev => ({
+          ...prev,
+          status: newStatus
+        }));
+
+        // Also update the orders list
+        setOrders(prevOrders =>
+          prevOrders.map(order => {
+            // Use _id for comparison as it's the most reliable
+            const currentOrderId = order._id || order.originalId;
+            const selectedOrderId = selectedOrder._id || selectedOrder.originalId;
+
+            return currentOrderId === selectedOrderId
+              ? { ...order, status: newStatus }
+              : order;
+          })
+        );
+      } else {
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update status');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update status. Please try again.');
+    }
+  };
+
+  // Generate Invoice PDF function
+  const generateInvoicePDF = (order) => {
+    try {
+      // Create a new window for PDF generation
+      const printWindow = window.open('', '_blank');
+
+      // Generate the HTML content for the invoice
+      const invoiceHTML = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Delivery Order Invoice</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: 'Arial', sans-serif;
+              line-height: 1.4;
+              color: #333;
+              background: white;
+              font-size: 12px;
+            }
+            .invoice-container {
+              max-width: 800px;
+              margin: 0 auto;
+              background: white;
+              padding: 20px;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-bottom: 20px;
+              border-bottom: 1px solid #333;
+              padding-bottom: 15px;
+            }
+            .logo {
+              width: 120px;
+              height: 90px;
+              object-fit: contain;
+            }
+            .bill-to {
+              text-align: right;
+            }
+            .bill-to h3 {
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 8px;
+            }
+            .bill-to-content {
+              font-size: 12px;
+              line-height: 1.4;
+            }
+            .load-number {
+              font-size: 18px;
+              font-weight: bold;
+              margin-bottom: 20px;
+              text-align: center;
+            }
+            .shipper-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 25px;
+              border-radius: 10px;
+              overflow: hidden;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }
+            .shipper-table th,
+            .shipper-table td {
+              border: none;
+              padding: 12px 15px;
+              text-align: left;
+              font-size: 13px;
+            }
+            .shipper-table th {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              font-weight: 600;
+              font-size: 14px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .shipper-table tr:nth-child(even) {
+              background-color: #f8f9ff;
+            }
+            .shipper-table tr:hover {
+              background-color: #e8f4fd;
+              transition: background-color 0.3s ease;
+            }
+            .shipper-table td:first-child {
+              font-weight: 600;
+              color: #667eea;
+              width: 40%;
+            }
+            .rates-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+            }
+            .rates-table th,
+            .rates-table td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: left;
+              font-size: 12px;
+            }
+            .rates-table th:nth-child(1),
+            .rates-table td:nth-child(1) {
+              width: 35%;
+            }
+            .rates-table th:nth-child(2),
+            .rates-table td:nth-child(2) {
+              width: 20%;
+            }
+            .rates-table th:nth-child(3),
+            .rates-table td:nth-child(3) {
+              width: 15%;
+            }
+            .rates-table th:nth-child(4),
+            .rates-table td:nth-child(4) {
+              width: 15%;
+            }
+            .rates-table th:nth-child(5),
+            .rates-table td:nth-child(5) {
+              width: 15%;
+            }
+            .rates-table th {
+              background-color: #f5f5f5;
+              font-weight: bold;
+            }
+            .rates-table .amount {
+              text-align: right;
+              font-weight: bold;
+            }
+            .rates-table .total-row {
+              background: #ffffff;
+              color: black;
+              font-weight: bold;
+              font-size: 16px;
+            }
+            .rates-table .total-row td {
+              border-top: 2px solid #000000;
+              padding: 15px;
+            }
+            .rates-table .total-row .amount {
+              color: black;
+            }
+            .divider {
+              border-top: 1px solid #333;
+              margin: 20px 0;
+            }
+            @media print {
+              body { background: white; }
+              .invoice-container { box-shadow: none; margin: 0; }
+              /* Hide automatic date/time in PDF */
+              @page {
+                margin: 0;
+                size: A4;
+              }
+              /* Hide browser-generated headers and footers */
+              @page :first {
+                margin-top: 0;
+              }
+              @page :left {
+                margin-left: 0;
+              }
+              @page :right {
+                margin-right: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-container">
+            <!-- Header -->
+            <div class="header">
+              <img src="/src/assets/LogoFinal.png" alt="Company Logo" class="logo">
+              <div class="bill-to">
+                <div class="bill-to-content">
+                  ${order.customers && order.customers.length > 0 ? `
+                    ${order.customers[0].billTo || 'N/A'}<br>
+                    W/O: ${order.customers[0].workOrderNo || 'N/A'}<br>
+                    Invoice Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}<br>
+                    Invoice No: ${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}
+                  ` : 'N/A'}
+                </div>
+              </div>
+            </div>
+
+            <!-- Load Number -->
+            <div class="load-number">LOAD #: ${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}</div>
+
+            <!-- Shipper Information Table -->
+            <table class="rates-table">
+              <thead>
+                <tr>
+                  <th>Shipper Name</th>
+                  <th>Container No</th>
+                  <th>Weight</th>
+                  <th>Pickup Date</th>
+                  <th>Drop Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.shipper ? `
+                  <tr>
+                    <td>${order.shipper.name || 'N/A'}</td>
+                    <td>${order.shipper.containerNo || 'N/A'}</td>
+                    <td>${order.shipper.weight || 'N/A'} lbs</td>
+                    <td>${order.shipper.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString() : 'N/A'}</td>
+                    <td>${order.shipper.dropDate ? new Date(order.shipper.dropDate).toLocaleDateString() : 'N/A'}</td>
+                  </tr>
+                ` : ''}
+              </tbody>
+            </table>
+
+            <!-- Pick Up Location Table -->
+            <table class="rates-table">
+              <thead>
+                <tr>
+                  <th>Pick Up Location</th>
+                  <th>Address</th>
+                  <th>City</th>
+                  <th>State</th>
+                  <th>Zip Code</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.shipper && order.shipper.pickUpLocations && order.shipper.pickUpLocations.length > 0 ?
+          order.shipper.pickUpLocations.map(location => `
+                    <tr>
+                      <td>${location.name || 'N/A'}</td>
+                      <td>${location.address || 'N/A'}</td>
+                      <td>${location.city || 'N/A'}</td>
+                      <td>${location.state || 'N/A'}</td>
+                      <td>${location.zipCode || 'N/A'}</td>
+                    </tr>
+                  `).join('') : ''
+        }
+              </tbody>
+            </table>
+
+            <!-- Drop Location Table -->
+            <table class="rates-table">
+              <thead>
+                <tr>
+                  <th>Drop Location</th>
+                  <th>Address</th>
+                  <th>City</th>
+                  <th>State</th>
+                  <th>Zip Code</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.shipper && order.shipper.dropLocations && order.shipper.dropLocations.length > 0 ?
+          order.shipper.dropLocations.map(location => `
+                    <tr>
+                      <td>${location.name || 'N/A'}</td>
+                      <td>${location.address || 'N/A'}</td>
+                      <td>${location.city || 'N/A'}</td>
+                      <td>${location.state || 'N/A'}</td>
+                      <td>${location.zipCode || 'N/A'}</td>
+                    </tr>
+                  `).join('') : ''
+        }
+              </tbody>
+            </table>
+
+            <div class="divider"></div>
+
+            <!-- Rates and Charges Table -->
+            <table class="rates-table">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.customers && order.customers.length > 0 ? `
+                  ${(order.customers[0].lineHaul || 0) > 0 ? `
+                    <tr>
+                      <td>Line Haul</td>
+                      <td class="amount">$${(order.customers[0].lineHaul || 0).toLocaleString()}</td>
+                    </tr>
+                  ` : ''}
+                  ${(order.customers[0].fsc || 0) > 0 ? `
+                    <tr>
+                      <td>FSC</td>
+                      <td class="amount">$${(order.customers[0].fsc || 0).toLocaleString()}</td>
+                    </tr>
+                  ` : ''}
+                  ${(order.customers[0].other || 0) > 0 ? `
+                    <tr>
+                      <td>Other</td>
+                      <td class="amount">$${(order.customers[0].other || 0).toLocaleString()}</td>
+                    </tr>
+                  ` : ''}
+                ` : ''}
+                ${order.carrier && order.carrier.carrierFees ? order.carrier.carrierFees.filter(charge => (charge.total || 0) > 0).map(charge => `
+                  <tr>
+                    <td>${charge.name}</td>
+                    <td class="amount">$${(charge.total || 0).toLocaleString()}</td>
+                  </tr>
+                `).join('') : ''}
+                <tr class="total-row">
+                  <td><strong>TOTAL</strong></td>
+                  <td class="amount"><strong>$${(() => {
+          const lineHaul = order.customers && order.customers.length > 0 ? (order.customers[0].lineHaul || 0) : 0;
+          const fsc = order.customers && order.customers.length > 0 ? (order.customers[0].fsc || 0) : 0;
+          const other = order.customers && order.customers.length > 0 ? (order.customers[0].other || 0) : 0;
+          const carrierCharges = order.carrier && order.carrier.carrierFees ? order.carrier.carrierFees.reduce((sum, charge) => sum + (charge.total || 0), 0) : 0;
+          return (lineHaul + fsc + other + carrierCharges).toLocaleString();
+        })()} USD</strong></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Notes Section -->
+            <div class="notes-section">
+              <h3 class="notes-title">Notes:</h3>
+              <div class="notes-content">
+                ${['Thank you for your business!']}
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Write the HTML to the new window
+      printWindow.document.write(invoiceHTML);
+      printWindow.document.close();
+
+      // Wait for content to load then print
+      printWindow.onload = function () {
+        printWindow.print();
+        printWindow.close();
+      };
+
+      alertify.success('Invoice PDF generated successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alertify.error('Failed to generate PDF. Please try again.');
     }
   };
 
@@ -1479,21 +2048,21 @@ export default function DeliveryOrder() {
   }
 
   return (
-          <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-6">
-            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                  <Truck className="text-green-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Total Orders</p>
-                  <p className="text-xl font-bold text-gray-800">{orders.length}</p>
-                </div>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-6">
+          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                <Truck className="text-green-600" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Total Orders</p>
+                <p className="text-xl font-bold text-gray-800">{orders.length}</p>
               </div>
             </div>
-            {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          </div>
+          {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                   <CheckCircle className="text-blue-600" size={20} />
@@ -1504,7 +2073,7 @@ export default function DeliveryOrder() {
                 </div>
               </div>
             </div> */}
-            {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
                   <Clock className="text-yellow-600" size={20} />
@@ -1515,42 +2084,42 @@ export default function DeliveryOrder() {
                 </div>
               </div>
             </div> */}
-            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <Calendar className="text-purple-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Today</p>
-                  <p className="text-xl font-bold text-purple-600">{orders.filter(order => order.createdAt === new Date().toISOString().split('T')[0]).length}</p>
-                </div>
+          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                <Calendar className="text-purple-600" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Today</p>
+                <p className="text-xl font-bold text-purple-600">{orders.filter(order => order.createdAt === new Date().toISOString().split('T')[0]).length}</p>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Search orders..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            <button
-              onClick={() => setShowAddOrderForm(true)}
-              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
-            >
-              <PlusCircle size={20} /> Add Delivery Order
-            </button>
-          </div>
         </div>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search orders..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+          <button
+            onClick={() => setShowAddOrderForm(true)}
+            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+          >
+            <PlusCircle size={20} /> Add Delivery Order
+          </button>
+        </div>
+      </div>
 
-        {/* API Error Display */}
-        {/* The custom error box UI for API errors is removed as per the edit hint. */}
+      {/* API Error Display */}
+      {/* The custom error box UI for API errors is removed as per the edit hint. */}
 
-        {viewDoc && selectedOrder ? (
+      {viewDoc && selectedOrder ? (
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
           <div className="flex justify-between items-center mb-8">
             <div className="flex gap-4">
@@ -1670,7 +2239,7 @@ export default function DeliveryOrder() {
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-                              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                 <tr>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
@@ -1678,6 +2247,7 @@ export default function DeliveryOrder() {
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPPER NAME</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEES</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
                 </tr>
@@ -1702,6 +2272,14 @@ export default function DeliveryOrder() {
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">${order.carrierFees || 0}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === 'close'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-green-100 text-green-800'
+                        }`}>
+                        {order.status === 'close' ? 'Close' : (order.status === 'open' ? 'Open' : 'Open')}
+                      </span>
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>
@@ -1760,11 +2338,10 @@ export default function DeliveryOrder() {
               <button
                 key={page}
                 onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${
-                  currentPage === page
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'border-gray-300 hover:bg-gray-50'
-                }`}
+                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'border-gray-300 hover:bg-gray-50'
+                  }`}
               >
                 {page}
               </button>
@@ -1813,397 +2390,397 @@ export default function DeliveryOrder() {
               </div>
             </div>
 
-                         {/* Form */}
-             <form onSubmit={handleSubmit} className="p-6 space-y-6">
-               {/* Customer Information Section */}
-               <div className="bg-blue-50 p-4 rounded-lg">
-                 <div className="flex justify-between items-center mb-4">
-                   <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
-                   <button
-                     type="button"
-                     onClick={addCustomer}
-                     className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
-                   >
-                     + Add Customer
-                   </button>
-                 </div>
-                 
-                 {formData.customers.map((customer, customerIndex) => (
-                   <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
-                     <div className="flex justify-between items-center mb-3">
-                       <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
-                       {formData.customers.length > 1 && (
-                         <button
-                           type="button"
-                           onClick={() => removeCustomer(customerIndex)}
-                           className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                         >
-                           Remove
-                         </button>
-                       )}
-                     </div>
-                     
-                      {/* All 7 fields in one grid - 4 fields per line */}
-                      <div className="grid grid-cols-4 gap-4">
-                        <input
-                          type="text"
-                          value={customer.billTo}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Bill To *"
-                        />
-                        <input
-                          type="text"
-                          value={customer.dispatcherName}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Dispatcher Name *"
-                        />
-                        <input
-                          type="text"
-                          value={customer.workOrderNo}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Work Order No *"
-                        />
-                        <input
-                          type="number"
-                          value={customer.lineHaul}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Line Haul *"
-                        />
-                        <input
-                          type="number"
-                          value={customer.fsc}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="FSC *"
-                        />
-                        <input
-                          type="number"
-                          value={customer.other}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Other *"
-                        />
-                        <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
-                          <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
-                        </div>
-                      </div>
-                   </div>
-                 ))}
-               </div>
+            {/* Form */}
+            <form onSubmit={editingOrder?._id ? handleUpdateOrder : handleSubmit} className="p-6 space-y-6">
+              {/* Customer Information Section */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
+                  <button
+                    type="button"
+                    onClick={addCustomer}
+                    className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
+                  >
+                    + Add Customer
+                  </button>
+                </div>
 
-               {/* Carrier Information Section */}
-               <div className="bg-green-50 p-4 rounded-lg">
-                 <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
-                 <div className="grid grid-cols-3 gap-4">
-                   <input
-                     type="text"
-                     name="carrierName"
-                     value={formData.carrierName}
-                     onChange={handleInputChange}
-                     required
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                     placeholder="Carrier Name *"
-                   />
-                   <input
-                     type="text"
-                     name="equipmentType"
-                     value={formData.equipmentType}
-                     onChange={handleInputChange}
-                     required
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                     placeholder="Equipment Type *"
-                   />
-                   <input
-                     type="number"
-                     name="carrierFees"
-                     value={formData.carrierFees}
-                     onChange={handleInputChange}
-                     onClick={handleChargesClick}
-                     required
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-pointer"
-                     placeholder="Carrier Fees * (Click to add charges)"
-                     readOnly
-                   />
-                 </div>
-               </div>
-
-               {/* Shipper Information Section */}
-               <div className="bg-purple-50 p-4 rounded-lg">
-                 <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
-                 
-                 {/* Shipper Basic Info */}
-                 <div className="grid grid-cols-4 gap-4 mb-4">
-                   <input
-                     type="text"
-                     name="shipperName"
-                     value={formData.shipperName}
-                     onChange={handleInputChange}
-                     required
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                     placeholder="Shipper Name *"
-                   />
-                   <input
-                     type="text"
-                     name="containerNo"
-                     value={formData.containerNo}
-                     onChange={handleInputChange}
-                     required
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                     placeholder="Container No *"
-                   />
-                   <input
-                     type="text"
-                     name="containerType"
-                     value={formData.containerType}
-                     onChange={handleInputChange}
-                     required
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                     placeholder="Container Type *"
-                   />
-                   <input
-                     type="number"
-                     name="weight"
-                     value={formData.weight}
-                     onChange={handleInputChange}
-                     required
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                     placeholder="Weight (lbs) *"
-                   />
-                 </div>
-
-                 {/* Pickup Locations */}
-                 <div className="bg-white p-4 rounded-lg mb-4">
-                   <div className="flex justify-between items-center mb-3">
-                     <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
-                     <button
-                       type="button"
-                       onClick={addPickupLocation}
-                       className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                     >
-                       + Add Location
-                     </button>
-                   </div>
-                   
-                   {formData.pickupLocations.map((location, locationIndex) => (
-                     <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-                       <div className="flex justify-between items-center mb-3">
-                         <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
-                         {formData.pickupLocations.length > 1 && (
-                           <button
-                             type="button"
-                             onClick={() => removePickupLocation(locationIndex)}
-                             className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                           >
-                             Remove
-                           </button>
-                         )}
-                       </div>
-                       
-                       <div className="grid grid-cols-3 gap-4">
-                         <input
-                           type="text"
-                           value={location.name}
-                           onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="Location Name *"
-                         />
-                         <input
-                           type="text"
-                           value={location.address}
-                           onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="Address *"
-                         />
-                         <input
-                           type="text"
-                           value={location.city}
-                           onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="City *"
-                         />
-                         <input
-                           type="text"
-                           value={location.state}
-                           onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="State *"
-                         />
-                         <input
-                           type="text"
-                           value={location.zipCode}
-                           onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="Zip Code *"
-                         />
-                         <input
-                           type="datetime-local"
-                           value={location.date}
-                           onChange={(e) => handlePickupLocationChange(locationIndex, 'date', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                         />
-                       </div>
-                     </div>
-                   ))}
-                 </div>
-
-                 {/* Drop Locations */}
-                 <div className="bg-white p-4 rounded-lg">
-                   <div className="flex justify-between items-center mb-3">
-                     <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
-                     <button
-                       type="button"
-                       onClick={addDropLocation}
-                       className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                     >
-                       + Add Location
-                     </button>
-                   </div>
-                   
-                   {formData.dropLocations.map((location, locationIndex) => (
-                     <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-                       <div className="flex justify-between items-center mb-3">
-                         <h5 className="text-sm font-semibold text-gray-700">Drop Location {locationIndex + 1}</h5>
-                         {formData.dropLocations.length > 1 && (
-                           <button
-                             type="button"
-                             onClick={() => removeDropLocation(locationIndex)}
-                             className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                           >
-                             Remove
-                           </button>
-                         )}
-                       </div>
-                       
-                       <div className="grid grid-cols-3 gap-4">
-                         <input
-                           type="text"
-                           value={location.name}
-                           onChange={(e) => handleDropLocationChange(locationIndex, 'name', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="Location Name *"
-                         />
-                         <input
-                           type="text"
-                           value={location.address}
-                           onChange={(e) => handleDropLocationChange(locationIndex, 'address', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="Address *"
-                         />
-                         <input
-                           type="text"
-                           value={location.city}
-                           onChange={(e) => handleDropLocationChange(locationIndex, 'city', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="City *"
-                         />
-                         <input
-                           type="text"
-                           value={location.state}
-                           onChange={(e) => handleDropLocationChange(locationIndex, 'state', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="State *"
-                         />
-                         <input
-                           type="text"
-                           value={location.zipCode}
-                           onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                           placeholder="Zip Code *"
-                         />
-                         <input
-                           type="datetime-local"
-                           value={location.date}
-                           onChange={(e) => handleDropLocationChange(locationIndex, 'date', e.target.value)}
-                           required
-                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                         />
-                       </div>  
-                     </div>
-                   ))}
-                 </div>
-               </div>
-
-                {/* Document Upload */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Document Upload</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center w-full">
-                      <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
-                          </svg>
-                          <p className="mb-2 text-sm text-gray-500">
-                            <span className="font-semibold">Click to upload</span> or drag and drop
-                          </p>
-                          <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
-                        </div>
-                        <input 
-                          id="file-upload" 
-                          type="file" 
-                          className="hidden" 
-                          onChange={handleFileChange}
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        />
-                      </label>
-                    </div>
-                    {formData.docs && (
-                      <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                          </svg>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
-                            <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
-                          </div>
-                        </div>
+                {formData.customers.map((customer, customerIndex) => (
+                  <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
+                      {formData.customers.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
-                          className="text-red-500 hover:text-red-700 transition-colors"
+                          onClick={() => removeCustomer(customerIndex)}
+                          className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                          </svg>
+                          Remove
                         </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                      )}
+                    </div>
 
-                {/* Remarks */}
-                <div>
-                  <textarea
-                    name="remarks"
-                    value={formData.remarks}
+                    {/* All 7 fields in one grid - 4 fields per line */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <input
+                        type="text"
+                        value={customer.billTo}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Bill To *"
+                      />
+                      <input
+                        type="text"
+                        value={customer.dispatcherName}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Dispatcher Name *"
+                      />
+                      <input
+                        type="text"
+                        value={customer.workOrderNo}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Work Order No *"
+                      />
+                      <input
+                        type="number"
+                        value={customer.lineHaul}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Line Haul *"
+                      />
+                      <input
+                        type="number"
+                        value={customer.fsc}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="FSC *"
+                      />
+                      <input
+                        type="number"
+                        value={customer.other}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Other *"
+                      />
+                      <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
+                        <span className="text-black-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Carrier Information Section */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <input
+                    type="text"
+                    name="carrierName"
+                    value={formData.carrierName}
                     onChange={handleInputChange}
-                    rows="3"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Remarks (optional)"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Carrier Name *"
+                  />
+                  <input
+                    type="text"
+                    name="equipmentType"
+                    value={formData.equipmentType}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Equipment Type *"
+                  />
+                  <input
+                    type="number"
+                    name="carrierFees"
+                    value={formData.carrierFees}
+                    onChange={handleInputChange}
+                    onClick={handleChargesClick}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-pointer"
+                    placeholder="Carrier Fees * (Click to add charges)"
+                    readOnly
                   />
                 </div>
+              </div>
+
+              {/* Shipper Information Section */}
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
+
+                {/* Shipper Basic Info */}
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <input
+                    type="text"
+                    name="shipperName"
+                    value={formData.shipperName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Shipper Name *"
+                  />
+                  <input
+                    type="text"
+                    name="containerNo"
+                    value={formData.containerNo}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Container No *"
+                  />
+                  <input
+                    type="text"
+                    name="containerType"
+                    value={formData.containerType}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Container Type *"
+                  />
+                  <input
+                    type="number"
+                    name="weight"
+                    value={formData.weight}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Weight (lbs) *"
+                  />
+                </div>
+
+                {/* Pickup Locations */}
+                <div className="bg-white p-4 rounded-lg mb-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
+                    <button
+                      type="button"
+                      onClick={addPickupLocation}
+                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                    >
+                      + Add Location
+                    </button>
+                  </div>
+
+                  {formData.pickupLocations.map((location, locationIndex) => (
+                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                      <div className="flex justify-between items-center mb-3">
+                        <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
+                        {formData.pickupLocations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePickupLocation(locationIndex)}
+                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <input
+                          type="text"
+                          value={location.name}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Location Name *"
+                        />
+                        <input
+                          type="text"
+                          value={location.address}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Address *"
+                        />
+                        <input
+                          type="text"
+                          value={location.city}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="City *"
+                        />
+                        <input
+                          type="text"
+                          value={location.state}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="State *"
+                        />
+                        <input
+                          type="text"
+                          value={location.zipCode}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Zip Code *"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={location.date}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'date', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Drop Locations */}
+                <div className="bg-white p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
+                    <button
+                      type="button"
+                      onClick={addDropLocation}
+                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                    >
+                      + Add Location
+                    </button>
+                  </div>
+
+                  {formData.dropLocations.map((location, locationIndex) => (
+                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                      <div className="flex justify-between items-center mb-3">
+                        <h5 className="text-sm font-semibold text-gray-700">Drop Location {locationIndex + 1}</h5>
+                        {formData.dropLocations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeDropLocation(locationIndex)}
+                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <input
+                          type="text"
+                          value={location.name}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'name', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Location Name *"
+                        />
+                        <input
+                          type="text"
+                          value={location.address}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'address', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Address *"
+                        />
+                        <input
+                          type="text"
+                          value={location.city}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'city', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="City *"
+                        />
+                        <input
+                          type="text"
+                          value={location.state}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'state', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="State *"
+                        />
+                        <input
+                          type="text"
+                          value={location.zipCode}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Zip Code *"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={location.date}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'date', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Document Upload */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Document Upload</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center w-full">
+                    <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                          <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
+                        </svg>
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
+                      </div>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        className="hidden"
+                        onChange={handleFileChange}
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      />
+                    </label>
+                  </div>
+                  {formData.docs && (
+                    <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
+                          <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <textarea
+                  name="remarks"
+                  value={formData.remarks}
+                  onChange={handleInputChange}
+                  rows="3"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Remarks (optional)"
+                />
+              </div>
 
               {/* Form Actions */}
               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
@@ -2211,22 +2788,20 @@ export default function DeliveryOrder() {
                   type="button"
                   onClick={handleCloseModal}
                   disabled={submitting}
-                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed text-gray-400' 
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed text-gray-400'
+                    : 'text-gray-700 hover:bg-gray-50'
+                    }`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : 'hover:from-blue-600 hover:to-blue-700'
-                  }`}
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-blue-600 hover:to-blue-700'
+                    }`}
                 >
                   {submitting ? (
                     <div className="flex items-center gap-2">
@@ -2449,7 +3024,7 @@ export default function DeliveryOrder() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Carrier Charges */}
                   {selectedOrder.carrier.carrierFees && selectedOrder.carrier.carrierFees.length > 0 && (
                     <div className="mt-4">
@@ -2625,6 +3200,34 @@ export default function DeliveryOrder() {
                 </div>
               )}
 
+              {/* Status */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="text-blue-600" size={16} />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800">Status</h3>
+                </div>
+                <div className="bg-white rounded-lg p-4 border border-blue-200 space-y-4">
+                  <select
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    value={selectedOrder.status || "open"}
+                    onChange={(e) => handleStatusChange(e.target.value)}
+                  >
+                    <option value="open">Open</option>
+                    <option value="close">Close</option>
+                  </select>
+
+                  <button
+                    onClick={() => generateInvoicePDF(selectedOrder)}
+                    className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold shadow hover:from-green-600 hover:to-green-700 transition-all duration-200 flex items-center justify-center gap-2"
+                  >
+                    <FaDownload className="text-white" size={16} />
+                    Generate Invoice PDF
+                  </button>
+                </div>
+              </div>
+
               {/* Uploaded Files */}
               {selectedOrder.uploadedFiles && selectedOrder.uploadedFiles.length > 0 && (
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
@@ -2755,11 +3358,10 @@ export default function DeliveryOrder() {
                       type="button"
                       onClick={() => removeCharge(index)}
                       disabled={charges.length === 1}
-                      className={`p-2 rounded-full transition-all ${
-                        charges.length === 1 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                          : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
-                      }`}
+                      className={`p-2 rounded-full transition-all ${charges.length === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
+                        }`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -2867,7 +3469,7 @@ export default function DeliveryOrder() {
                     + Add Customer
                   </button>
                 </div>
-                
+
                 {formData.customers.map((customer, customerIndex) => (
                   <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
                     <div className="flex justify-between items-center mb-3">
@@ -2882,61 +3484,61 @@ export default function DeliveryOrder() {
                         </button>
                       )}
                     </div>
-                    
-                     {/* All 7 fields in one grid - 4 fields per line */}
-                     <div className="grid grid-cols-4 gap-4">
-                       <input
-                         type="text"
-                         value={customer.billTo}
-                         onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Bill To *"
-                       />
-                       <input
-                         type="text"
-                         value={customer.dispatcherName}
-                         onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Dispatcher Name *"
-                       />
-                       <input
-                         type="text"
-                         value={customer.workOrderNo}
-                         onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Work Order No *"
-                       />
-                       <input
-                         type="number"
-                         value={customer.lineHaul}
-                         onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Line Haul *"
-                       />
-                       <input
-                         type="number"
-                         value={customer.fsc}
-                         onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="FSC *"
-                       />
-                       <input
-                         type="number"
-                         value={customer.other}
-                         onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Other *"
-                       />
-                       <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
-                         <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
-                       </div>
-                     </div>
+
+                    {/* All 7 fields in one grid - 4 fields per line */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <input
+                        type="text"
+                        value={customer.billTo}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Bill To *"
+                      />
+                      <input
+                        type="text"
+                        value={customer.dispatcherName}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Dispatcher Name *"
+                      />
+                      <input
+                        type="text"
+                        value={customer.workOrderNo}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Work Order No *"
+                      />
+                      <input
+                        type="number"
+                        value={customer.lineHaul}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Line Haul *"
+                      />
+                      <input
+                        type="number"
+                        value={customer.fsc}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="FSC *"
+                      />
+                      <input
+                        type="number"
+                        value={customer.other}
+                        onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Other *"
+                      />
+                      <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
+                        <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2980,7 +3582,7 @@ export default function DeliveryOrder() {
               {/* Shipper Information Section */}
               <div className="bg-purple-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
-                
+
                 {/* Shipper Basic Info */}
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <input
@@ -3033,7 +3635,7 @@ export default function DeliveryOrder() {
                       + Add Location
                     </button>
                   </div>
-                  
+
                   {formData.pickupLocations.map((location, locationIndex) => (
                     <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
                       <div className="flex justify-between items-center mb-3">
@@ -3048,7 +3650,7 @@ export default function DeliveryOrder() {
                           </button>
                         )}
                       </div>
-                      
+
                       <div className="grid grid-cols-3 gap-4">
                         <input
                           type="text"
@@ -3114,7 +3716,7 @@ export default function DeliveryOrder() {
                       + Add Location
                     </button>
                   </div>
-                  
+
                   {formData.dropLocations.map((location, locationIndex) => (
                     <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
                       <div className="flex justify-between items-center mb-3">
@@ -3129,7 +3731,7 @@ export default function DeliveryOrder() {
                           </button>
                         )}
                       </div>
-                      
+
                       <div className="grid grid-cols-3 gap-4">
                         <input
                           type="text"
@@ -3178,72 +3780,72 @@ export default function DeliveryOrder() {
                           required
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
-                      </div>  
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-                {/* Document Upload */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Document Upload</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center w-full">
-                      <label htmlFor="file-upload-edit" className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
-                          </svg>
-                          <p className="mb-2 text-sm text-gray-500">
-                            <span className="font-semibold">Click to upload</span> or drag and drop
-                          </p>
-                          <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
-                        </div>
-                        <input 
-                          id="file-upload-edit" 
-                          type="file" 
-                          className="hidden" 
-                          onChange={handleFileChange}
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        />
-                      </label>
-                    </div>
-                    {formData.docs && (
-                      <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                          </svg>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
-                            <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
-                          className="text-red-500 hover:text-red-700 transition-colors"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                          </svg>
-                        </button>
+              {/* Document Upload */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Document Upload</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center w-full">
+                    <label htmlFor="file-upload-edit" className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                          <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
+                        </svg>
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
                       </div>
-                    )}
+                      <input
+                        id="file-upload-edit"
+                        type="file"
+                        className="hidden"
+                        onChange={handleFileChange}
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      />
+                    </label>
                   </div>
+                  {formData.docs && (
+                    <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
+                          <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
+              </div>
 
-                {/* Remarks */}
-                <div>
-                  <textarea
-                    name="remarks"
-                    value={formData.remarks}
-                    onChange={handleInputChange}
-                    rows="3"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Remarks (optional)"
-                  />
-                </div>
+              {/* Remarks */}
+              <div>
+                <textarea
+                  name="remarks"
+                  value={formData.remarks}
+                  onChange={handleInputChange}
+                  rows="3"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Remarks (optional)"
+                />
+              </div>
 
               {/* Form Actions */}
               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
@@ -3251,22 +3853,20 @@ export default function DeliveryOrder() {
                   type="button"
                   onClick={handleCloseEditModal}
                   disabled={submitting}
-                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed text-gray-400' 
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed text-gray-400'
+                    : 'text-gray-700 hover:bg-gray-50'
+                    }`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : 'hover:from-green-600 hover:to-green-700'
-                  }`}
+                  className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-green-600 hover:to-green-700'
+                    }`}
                 >
                   {submitting ? (
                     <div className="flex items-center gap-2">
@@ -3282,8 +3882,6 @@ export default function DeliveryOrder() {
           </div>
         </div>
       )}
-
-
     </div>
   );
 } 
