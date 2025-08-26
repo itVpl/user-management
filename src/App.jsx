@@ -52,6 +52,7 @@ import CandidateShortlist from "./Components/HRDashboard/CandidateShortlist.jsx"
 import TargetReports from "./Components/HRDashboard/TargetReports.jsx";
 import Consignment from "./Pages/Consignment.jsx";
 import CustomerLoads from "./Pages/CustomerLoads.jsx";
+import DailyRateRequest from "./Components/CMT-Manager/DailyRateRequest.jsx";
 
 
 function App() {
@@ -131,6 +132,7 @@ function App() {
         <Route path="/target-reports" element={<TargetReports/>}/>
         <Route path="/Consignment" element={<Consignment/>}/>
         <Route path="/CustomerLoads" element={<CustomerLoads/>}/>
+        <Route path="/DailyRateRequest" element={<DailyRateRequest/>}/>
 
         
 

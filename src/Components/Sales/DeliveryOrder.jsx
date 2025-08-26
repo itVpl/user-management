@@ -23,6 +23,8 @@ export default function DeliveryOrder() {
   const [carrierFeesJustUpdated, setCarrierFeesJustUpdated] = useState(false);
   // PATCH: add this
   const [isEditForm, setIsEditForm] = useState(false);
+// top-level states ke saath
+const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
 
 
   // Charges popup state
@@ -245,6 +247,101 @@ export default function DeliveryOrder() {
       console.error('Status update failed:', err);
     }
   };
+const handleDuplicateOrder = async (rowOrder) => {
+  try {
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+    const originalId =
+      rowOrder.originalId ||
+      rowOrder._id ||
+      (rowOrder.id?.startsWith('DO-') ? rowOrder.id.replace('DO-', '') : rowOrder.id);
+
+    // source order lao (full detail)
+    const { data } = await axios.get(
+      `${API_CONFIG.BASE_URL}/api/v1/do/do/${originalId}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    if (!data?.success) {
+      alertify.error('Source order fetch failed');
+      return;
+    }
+    const src = data.data;
+
+    const fmt = (d) => {
+      if (!d) return '';
+      const x = new Date(d);
+      return Number.isNaN(x.getTime()) ? '' : x.toISOString().slice(0,16); // yyyy-mm-ddThh:mm
+    };
+
+    // formData ko prefill karo (IDs/doc/status skip)
+    const prefCustomers = (src.customers || []).map(c => {
+      const lh = Number(c.lineHaul) || 0;
+      const fsc = Number(c.fsc) || 0;
+      const oth = Number(c.other) || 0;
+      return {
+        billTo: c.billTo || '',
+        dispatcherName: c.dispatcherName || '',
+        // agar unique chahiye to suffix add kar lo:
+        // workOrderNo: `${c.workOrderNo || ''}-COPY`,
+        workOrderNo: c.workOrderNo || '',
+        lineHaul: lh,
+        fsc: fsc,
+        other: oth,
+        totalAmount: lh + fsc + oth,
+      };
+    });
+
+    const prefForm = {
+      customers: prefCustomers.length ? prefCustomers : [{
+        billTo: '', dispatcherName: '', workOrderNo: '',
+        lineHaul: '', fsc: '', other: '', totalAmount: 0
+      }],
+
+      // Carrier + fees show karo, par POST me backend new banayega
+      carrierName: src.carrier?.carrierName || '',
+      equipmentType: src.carrier?.equipmentType || '',
+      carrierFees: src.carrier?.totalCarrierFees || '',
+
+      // Shipper
+      shipperName: src.shipper?.name || '',
+      containerNo: src.shipper?.containerNo || '',
+      containerType: src.shipper?.containerType || '',
+      weight: src.shipper?.weight || '',
+
+      pickupLocations: (src.shipper?.pickUpLocations || [{
+        name:'', address:'', city:'', state:'', zipCode:'', date:''
+      }]).map(l => ({ ...l, date: fmt(src.shipper?.pickUpDate) })),
+
+      dropLocations: (src.shipper?.dropLocations || [{
+        name:'', address:'', city:'', state:'', zipCode:'', date:''
+      }]).map(l => ({ ...l, date: fmt(src.shipper?.dropDate) })),
+
+      remarks: src.remarks || '',
+      docs: null, // file copy nahi kar sakte; user chahe to naya upload kare
+    };
+
+    const fees = (src.carrier?.carrierFees || []).map(f => ({
+      name: f.name || '',
+      quantity: Number(f.quantity) || 0,
+      amt: Number(f.amount) || 0,
+      total: Number(f.total) || ((Number(f.quantity)||0) * (Number(f.amount)||0)),
+    }));
+
+    setFormData(prefForm);
+    setCharges(fees.length ? fees : [{ name:'', quantity:'', amt:'', total:0 }]);
+
+    // ⚠️ IMPORTANT: duplicate me update nahi karna, isliye editingOrder ko null rakho
+    setEditingOrder(null);
+    setFormMode('duplicate');         // UI: edit-jaisa form khulega
+    setShowAddOrderForm(true);
+
+    alertify.message('You are duplicating this order. Submitting will create a new order.');
+  } catch (e) {
+    console.error(e);
+    alertify.error('Duplicate form open failed');
+  }
+};
+
 
   // Status color helper
   const statusColor = (status) => {
@@ -908,6 +1005,8 @@ export default function DeliveryOrder() {
       }
     ]);
     setShowChargesPopup(false);
+     setFormMode('add');
+  setEditingOrder(null);
   };
 
 
@@ -1130,7 +1229,8 @@ export default function DeliveryOrder() {
 
         setFormData(editFormData);
         setEditingOrder({ ...order, _id: originalId, fullData: fullOrderData });
-        setShowEditModal(true);
+        setFormMode('edit');
+setShowAddOrderForm(true);
       } else {
         alertify.error('Failed to fetch order details for editing');
       }
@@ -2108,7 +2208,12 @@ export default function DeliveryOrder() {
             />
           </div>
           <button
-            onClick={() => setShowAddOrderForm(true)}
+            onClick={() => {
+  setFormMode('add');
+  setEditingOrder(null);
+  setShowAddOrderForm(true);
+}}
+
             className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
           >
             <PlusCircle size={20} /> Add Delivery Order
@@ -2298,6 +2403,13 @@ export default function DeliveryOrder() {
                         >
                           Edit
                         </button>
+                        <button
+  onClick={() => handleDuplicateOrder(order)}
+  className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+>
+  Duplicate
+</button>
+
                       </div>
                     </td>
                   </tr>
@@ -2377,8 +2489,21 @@ export default function DeliveryOrder() {
                     <PlusCircle className="text-white" size={24} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Add Delivery Order</h2>
-                    <p className="text-blue-100">Create a new delivery order</p>
+                    <h2 className="text-xl font-bold">
+  {formMode === 'edit'
+    ? 'Edit Delivery Order'
+    : formMode === 'duplicate'
+      ? 'Duplicate Delivery Order'
+      : 'Add Delivery Order'}
+</h2>
+<p className="text-blue-100">
+  {formMode === 'edit'
+    ? 'Update the existing delivery order'
+    : formMode === 'duplicate'
+      ? 'Review and submit to create a new copy'
+      : 'Create a new delivery order'}
+</p>
+
                   </div>
                 </div>
                 <button
@@ -2391,7 +2516,7 @@ export default function DeliveryOrder() {
             </div>
 
             {/* Form */}
-            <form onSubmit={editingOrder?._id ? handleUpdateOrder : handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={formMode === 'edit' ? handleUpdateOrder : handleSubmit} className="p-6 space-y-6">
               {/* Customer Information Section */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
@@ -2804,13 +2929,18 @@ export default function DeliveryOrder() {
                     }`}
                 >
                   {submitting ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Creating...
-                    </div>
-                  ) : (
-                    'Create Delivery Order'
-                  )}
+  <div className="flex items-center gap-2">
+    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+    {formMode === 'edit' ? 'Updating...' : 'Creating...'}
+  </div>
+) : (
+  formMode === 'edit'
+    ? 'Update Delivery Order'
+    : formMode === 'duplicate'
+      ? 'Create Duplicate'
+      : 'Create Delivery Order'
+)}
+
                 </button>
               </div>
             </form>
