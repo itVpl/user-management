@@ -15,15 +15,25 @@ export default function DeliveryOrder() {
   const [reason, setReason] = useState('');
   const [showAddOrderForm, setShowAddOrderForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [loadingOrderId, setLoadingOrderId] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [carrierFeesJustUpdated, setCarrierFeesJustUpdated] = useState(false);
-  // PATCH: add this
-  const [isEditForm, setIsEditForm] = useState(false);
+  const [customerNameInput, setCustomerNameInput] = useState('');
+  const [dispatchers, setDispatchers] = useState([]);
+  const [loadingDispatchers, setLoadingDispatchers] = useState(false);
 
+  // Reset customer name input when selectedOrder changes
+  useEffect(() => {
+    if (selectedOrder) {
+      console.log('Selected order changed, customer name:', selectedOrder.customerName);
+      setCustomerNameInput(selectedOrder.customerName || '');
+    }
+  }, [selectedOrder]);
 
   // Charges popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
@@ -224,8 +234,40 @@ export default function DeliveryOrder() {
     }
   };
 
+  // Fetch dispatchers from CMT department
+  const fetchDispatchers = async () => {
+    try {
+      setLoadingDispatchers(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data && response.data.employees) {
+        // Filter only active employees
+        const activeEmployees = response.data.employees.filter(emp => emp.status === 'active');
+        setDispatchers(activeEmployees);
+        console.log('Dispatchers loaded:', activeEmployees);
+      } else {
+        console.error('No employees data in response');
+        setDispatchers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching dispatchers:', error);
+      alertify.error('Failed to load dispatchers');
+      setDispatchers([]);
+    } finally {
+      setLoadingDispatchers(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
+    fetchDispatchers(); // Also fetch dispatchers when component mounts
   }, []);
 
   const handleStatusUpdate = async (status) => {
@@ -255,7 +297,13 @@ export default function DeliveryOrder() {
     return 'bg-blue-100 text-blue-700';
   };
 
-
+  // Priority color helper
+  const priorityColor = (priority) => {
+    if (priority === 'high') return 'bg-red-100 text-red-700';
+    if (priority === 'normal') return 'bg-blue-100 text-blue-700';
+    if (priority === 'low') return 'bg-gray-100 text-gray-700';
+    return 'bg-gray-100 text-gray-700';
+  };
 
   // Filter orders based on search term
   const filteredOrders = orders.filter(order =>
@@ -910,7 +958,54 @@ export default function DeliveryOrder() {
     setShowChargesPopup(false);
   };
 
-
+  // Handle view order details
+  const handleViewOrder = async (order) => {
+    try {
+      const orderId = order.originalId || order._id || order.id;
+      setLoadingOrderId(orderId);
+      console.log('Viewing order:', order);
+      
+      // Get the original ID for API call
+      const originalId = order.originalId || order._id || order.id.replace('DO-', '');
+      console.log('Original ID for API call:', originalId);
+      
+      // Fetch complete order data from API
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const apiUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${originalId}`;
+      console.log('Fetching order details from:', apiUrl);
+      
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.data && response.data.success) {
+        const completeOrderData = response.data.data;
+        console.log('Complete order data from API:', completeOrderData);
+        
+        // Set the complete order data
+        setSelectedOrder(completeOrderData);
+        setCustomerNameInput(completeOrderData.customers?.[0]?.billTo || '');
+        setShowOrderModal(true);
+        
+        alertify.success('✅ Order details loaded successfully!');
+      } else {
+        console.error('API response format error:', response.data);
+        alertify.error('Failed to load order details');
+      }
+    } catch (error) {
+      console.error('Error fetching order details:', error);
+      if (error.response) {
+        alertify.error(`API Error: ${error.response.data.message || 'Failed to fetch order details'}`);
+      } else {
+        alertify.error('Network error. Please check your connection and try again.');
+      }
+    } finally {
+      setLoadingOrderId(null);
+    }
+  };
 
   // Handle view employee data API call
   const handleViewEmployeeData = async (empId) => {
@@ -932,6 +1027,7 @@ export default function DeliveryOrder() {
         if (response.data.data && response.data.data.length > 0) {
           const employeeOrder = response.data.data[0];
           setSelectedOrder(employeeOrder);
+          setCustomerNameInput(employeeOrder.customerName || '');
           setShowOrderModal(true);
         } else {
           alertify.warning('No delivery orders found for this employee');
@@ -1233,15 +1329,7 @@ export default function DeliveryOrder() {
         amt: '',
         total: 0
       }]);
-      // IDs pakka store karo + same modal edit-mode me kholo
-      setEditingOrder({
-        _id: originalId,
-        customerId: fullOrderData?.customers?.[0]?._id || null,
-        fullData: fullOrderData
-      });
-      setIsEditForm?.(true);            // agar aapne isEditForm use kiya hai
-      setShowAddOrderForm(true);        // yahi modal open hoga (Update ke liye)
-
+      setEditingOrder({ ...order, _id: originalId });
       setShowEditModal(true);
       alertify.warning('Using limited data for editing. Some fields may be empty.');
     }
@@ -1292,130 +1380,418 @@ export default function DeliveryOrder() {
   };
 
   // Handle update order - Fixed version with correct customer structure
-  // REPLACE: handleUpdateOrder
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      const orderId = editingOrder?._id;
-      const customerId = editingOrder?.customerId;
 
-      if (!orderId) {
-        alertify.error('Order ID missing');
+      // Get the current order to find customer ID - try editingOrder first, then orders array
+      let currentOrder = null;
+      let customerId = null;
+
+      // First try to get from editingOrder (which might have fullData)
+      if (editingOrder && editingOrder.fullData && editingOrder.fullData.customers && editingOrder.fullData.customers.length > 0) {
+        currentOrder = editingOrder.fullData;
+        customerId = editingOrder.fullData.customers[0]._id;
+        console.log('Found customer from editingOrder.fullData:', customerId);
+      }
+      // If not found, try from orders array
+      else if (editingOrder && editingOrder._id) {
+        currentOrder = orders.find(order => order._id === editingOrder._id);
+        if (currentOrder && currentOrder.customers && currentOrder.customers.length > 0) {
+          customerId = currentOrder.customers[0]._id;
+          console.log('Found customer from orders array:', customerId);
+        }
+      }
+
+      if (!customerId) {
+        console.error('No customer found. editingOrder:', editingOrder);
+        console.error('Orders array length:', orders.length);
+        alertify.error('No customer found in this order');
         setSubmitting(false);
         return;
       }
-
-      // --- Customer updates (0 ko bhi allow karo) ---
       const customerUpdates = {};
-      if (formData.customers?.length) {
-        const c = formData.customers[0];
 
-        if (c.billTo !== undefined) customerUpdates.billTo = c.billTo;
-        if (c.dispatcherName !== undefined) customerUpdates.dispatcherName = c.dispatcherName;
-        if (c.workOrderNo !== undefined) customerUpdates.workOrderNo = c.workOrderNo;
-
-        const toNum = (v) => (v === '' || v === null || v === undefined) ? undefined : Number(v);
-        const lh = toNum(c.lineHaul); if (lh !== undefined && !Number.isNaN(lh)) customerUpdates.lineHaul = lh;
-        const fsc = toNum(c.fsc); if (fsc !== undefined && !Number.isNaN(fsc)) customerUpdates.fsc = fsc;
-        const oth = toNum(c.other); if (oth !== undefined && !Number.isNaN(oth)) customerUpdates.other = oth;
+      // Add customer fields that are filled in the form
+      if (formData.customers && formData.customers.length > 0) {
+        const customer = formData.customers[0];
+        if (customer.dispatcherName) customerUpdates.dispatcherName = customer.dispatcherName;
+        if (customer.billTo) customerUpdates.billTo = customer.billTo;
+        if (customer.workOrderNo) customerUpdates.workOrderNo = customer.workOrderNo;
+        if (customer.lineHaul) customerUpdates.lineHaul = parseInt(customer.lineHaul) || 0;
+        if (customer.fsc) customerUpdates.fsc = parseInt(customer.fsc) || 0;
+        if (customer.other) customerUpdates.other = parseInt(customer.other) || 0;
       }
 
-      // --- Carrier fees normalise ---
-      const carrierFeesData = (charges || [])
-        .filter(ch => ch?.name && ch?.quantity !== '' && ch?.amt !== '')
-        .map(ch => ({
-          name: ch.name,
-          quantity: Number(ch.quantity) || 0,
-          amount: Number(ch.amt) || 0,
-          total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
+      // Check if we have carrier updates
+      const hasCarrierUpdates = formData.carrierName || formData.equipmentType;
+      const hasCustomerUpdates = Object.keys(customerUpdates).length > 0;
+      const hasCarrierFees = charges && charges.length > 0 && charges.some(charge => charge.name && charge.quantity && charge.amt);
+      const hasShipperUpdates = formData.shipperName || formData.containerNo || formData.containerType || formData.weight;
+
+      console.log('Update types:', { hasCarrierUpdates, hasCustomerUpdates, hasCarrierFees, hasShipperUpdates });
+      console.log('Current charges:', charges);
+
+      // If only carrier fees updates, use carrier fees function
+      if (hasCarrierFees && !hasCarrierUpdates && !hasCustomerUpdates) {
+        console.log('Using carrier fees only update');
+
+        // If carrier fees were just updated, don't update again
+        if (carrierFeesJustUpdated) {
+          console.log('Carrier fees were just updated, skipping duplicate update');
+          handleCloseEditModal();
+          return;
+        }
+
+        const carrierFeesData = charges.filter(charge => charge.name && charge.quantity && charge.amt).map(charge => ({
+          name: charge.name,
+          quantity: parseInt(charge.quantity) || 0,
+          amount: parseInt(charge.amt) || 0,
+          total: parseInt(charge.total) || 0
         }));
-      const totalCarrierFees = carrierFeesData.reduce((s, f) => s + (f.total || 0), 0);
+        const result = await updateCarrierFees(editingOrder._id, carrierFeesData);
+        if (result) {
+          handleCloseEditModal();
+        }
+        return;
+      }
 
-      // --- Shipper (nested + locations + dates) ---
-      const shipperPayload = {
-        name: formData.shipperName,
-        containerNo: formData.containerNo,
-        containerType: formData.containerType,
-        weight: formData.weight === '' ? undefined : (Number(formData.weight) || 0),
-        pickUpDate: formData.pickupLocations?.[0]?.date || '',
-        dropDate: formData.dropLocations?.[0]?.date || '',
-        pickUpLocations: (formData.pickupLocations || []).map(l => ({
-          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode
-        })),
-        dropLocations: (formData.dropLocations || []).map(l => ({
-          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode
-        })),
-      };
+      // If only carrier updates, use carrier-only function
+      if (hasCarrierUpdates && !hasCustomerUpdates && !hasCarrierFees && !hasShipperUpdates) {
+        console.log('Using carrier-only update');
+        const result = await updateCarrierOnly(editingOrder._id, formData.carrierName, formData.equipmentType);
+        if (result) {
+          handleCloseEditModal();
+        }
+        return;
+      }
 
-      // --- Carrier (nested) ---
-      const carrierPayload = {
-        carrierName: formData.carrierName,
-        equipmentType: formData.equipmentType,
-        ...(carrierFeesData.length ? { carrierFees: carrierFeesData, totalCarrierFees } : {})
-      };
+      // If only shipper updates, use shipper-only function
+      if (hasShipperUpdates && !hasCarrierUpdates && !hasCustomerUpdates && !hasCarrierFees) {
+        console.log('Using shipper-only update');
+        const shipperData = {};
+        if (formData.shipperName) shipperData.shipperName = formData.shipperName;
+        if (formData.containerNo) shipperData.containerNo = formData.containerNo;
+        if (formData.containerType) shipperData.containerType = formData.containerType;
+        if (formData.weight) shipperData.weight = parseInt(formData.weight) || 0;
 
-      // --- Final payload (backend structure) ---
+        const result = await updateShipperFields(editingOrder._id, shipperData);
+        if (result) {
+          handleCloseEditModal();
+        }
+        return;
+      }
+
+      // Create the correct payload structure for mixed updates
       const updatePayload = {};
-      if (customerId && Object.keys(customerUpdates).length) {
+
+      // Add customer updates if any customer fields are filled
+      if (hasCustomerUpdates) {
         updatePayload.customerId = customerId;
         updatePayload.customerUpdates = customerUpdates;
       }
-      if (
-        carrierPayload.carrierName !== undefined ||
-        carrierPayload.equipmentType !== undefined ||
-        carrierPayload.carrierFees
-      ) {
-        updatePayload.carrier = carrierPayload;
-      }
-      if (
-        shipperPayload.name !== undefined ||
-        shipperPayload.containerNo !== undefined ||
-        shipperPayload.containerType !== undefined ||
-        shipperPayload.weight !== undefined ||
-        shipperPayload.pickUpLocations?.length ||
-        shipperPayload.dropLocations?.length ||
-        shipperPayload.pickUpDate || shipperPayload.dropDate
-      ) {
-        updatePayload.shipper = shipperPayload;
-      }
-      if (formData.remarks !== undefined) updatePayload.remarks = formData.remarks;
 
-      const res = await axios.put(
-        `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
-        updatePayload,
-        { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } }
-      );
+      // Add carrier fields directly (not inside customerUpdates)
+      console.log('Form data carrier fields:', {
+        carrierName: formData.carrierName,
+        equipmentType: formData.equipmentType
+      });
 
-      if (res?.data?.success) {
-        alertify.success('Delivery order updated!');
-        setShowAddOrderForm(false);
-        setEditingOrder(null);
-        setCarrierFeesJustUpdated(false);
-        fetchOrders();
+      if (formData.carrierName) {
+        updatePayload.carrierName = formData.carrierName;
+        console.log('Added carrierName to payload:', formData.carrierName);
+      }
+      if (formData.equipmentType) {
+        updatePayload.equipmentType = formData.equipmentType;
+        console.log('Added equipmentType to payload:', formData.equipmentType);
+      }
+
+      // Add carrier fees if they exist
+      if (hasCarrierFees) {
+        const carrierFeesData = charges.filter(charge => charge.name && charge.quantity && charge.amt).map(charge => ({
+          name: charge.name,
+          quantity: parseInt(charge.quantity) || 0,
+          amount: parseInt(charge.amt) || 0,
+          total: parseInt(charge.total) || 0
+        }));
+        updatePayload.carrier = {
+          carrierFees: carrierFeesData
+        };
+        console.log('Added carrier fees to payload:', carrierFeesData);
+      }
+
+      // Add shipper fields if they exist
+      if (formData.shipperName) updatePayload.shipperName = formData.shipperName;
+      if (formData.containerNo) updatePayload.containerNo = formData.containerNo;
+      if (formData.containerType) updatePayload.containerType = formData.containerType;
+      if (formData.weight) updatePayload.weight = parseInt(formData.weight) || 0;
+
+      // Add other non-customer fields if they exist
+      if (formData.remarks) updatePayload.remarks = formData.remarks;
+
+      console.log('Sending customer update payload:', updatePayload);
+      console.log('Editing order ID:', editingOrder._id);
+      console.log('Customer ID:', customerId);
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${editingOrder._id}`, updatePayload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success('Delivery order updated successfully!');
+        handleCloseEditModal();
+        fetchOrders(); // Refresh the orders list
       } else {
-        alertify.error(res?.data?.message || 'Update failed');
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update delivery order');
       }
     } catch (error) {
-      console.error('Error updating delivery order:', error?.response?.data || error);
-      alertify.error(error?.response?.data?.message || 'Failed to update delivery order');
+      console.error('Error updating delivery order:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update delivery order. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Handle partial update (for specific fields like dispatcherName)
+  const handlePartialUpdate = async (orderId, updateData) => {
+    setSubmitting(true);
 
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
+      console.log('Sending partial update payload:', updateData);
+      console.log('Order ID:', orderId);
 
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, updateData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+      });
 
+      if (response.data && response.data.success) {
+        alertify.success('Delivery order updated successfully!');
+        fetchOrders(); // Refresh the orders list
+        return response.data;
+      } else {
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update delivery order');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error updating delivery order:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update delivery order. Please try again.');
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
+  // Universal update function - can update any field or combination of fields
+  const updateDeliveryOrder = async (orderId, updateData) => {
+    setSubmitting(true);
 
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
+      console.log('Sending update payload:', updateData);
+      console.log('Order ID:', orderId);
 
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, updateData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+      });
 
+      if (response.data && response.data.success) {
+        alertify.success('Delivery order updated successfully!');
+        fetchOrders(); // Refresh the orders list
+        return response.data;
+      } else {
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update delivery order');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error updating delivery order:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update delivery order. Please try again.');
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
+  // Helper functions for specific update scenarios
+
+  // 1. Update Carrier Fields
+  const updateCarrierFields = async (orderId, carrierData) => {
+    return await updateDeliveryOrder(orderId, { carrier: carrierData });
+  };
+
+  // 2. Update Specific Customer (by index)
+  const updateSpecificCustomer = async (orderId, customerIndex, customerData) => {
+    // First get current order to update specific customer
+    const currentOrder = orders.find(order => order._id === orderId);
+    if (!currentOrder) {
+      alertify.error('Order not found');
+      return null;
+    }
+
+    const updatedCustomers = [...currentOrder.customers];
+    updatedCustomers[customerIndex] = { ...updatedCustomers[customerIndex], ...customerData };
+
+    return await updateDeliveryOrder(orderId, { customers: updatedCustomers });
+  };
+
+  // 3. Add New Customer
+  const addNewCustomer = async (orderId, newCustomerData) => {
+    const currentOrder = orders.find(order => order._id === orderId);
+    if (!currentOrder) {
+      alertify.error('Order not found');
+      return null;
+    }
+
+    const updatedCustomers = [...currentOrder.customers, newCustomerData];
+    return await updateDeliveryOrder(orderId, { customers: updatedCustomers });
+  };
+
+  // 4. Update Complete Customers Array
+  const updateCompleteCustomers = async (orderId, customersArray) => {
+    return await updateDeliveryOrder(orderId, { customers: customersArray });
+  };
+
+  // 5. Update Complete Carrier Object
+  const updateCompleteCarrier = async (orderId, completeCarrierData) => {
+    return await updateDeliveryOrder(orderId, { carrier: completeCarrierData });
+  };
+
+  // 6. Update Single Field (like dispatcherName)
+  const updateSingleField = async (orderId, fieldName, fieldValue) => {
+    const updateData = {};
+    updateData[fieldName] = fieldValue;
+    return await updateDeliveryOrder(orderId, updateData);
+  };
+
+  // 7. Update Specific Customer Fields (like lineHaul, other, fsc)
+  const updateCustomerFields = async (orderId, customerId, customerUpdates) => {
+    setSubmitting(true);
+
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      const updateData = {
+        customerId: customerId,
+        customerUpdates: customerUpdates
+      };
+
+      console.log('Sending customer field update:', updateData);
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, updateData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success('Customer fields updated successfully!');
+        fetchOrders(); // Refresh the orders list
+        return response.data;
+      } else {
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update customer fields');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error updating customer fields:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update customer fields. Please try again.');
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 8. Helper functions for specific customer field updates
+  const updateLineHaul = async (orderId, customerId, lineHaulValue) => {
+    return await updateCustomerFields(orderId, customerId, { lineHaul: lineHaulValue });
+  };
+
+  const updateOther = async (orderId, customerId, otherValue) => {
+    return await updateCustomerFields(orderId, customerId, { other: otherValue });
+  };
+
+  const updateFsc = async (orderId, customerId, fscValue) => {
+    return await updateCustomerFields(orderId, customerId, { fsc: fscValue });
+  };
+
+  const updateBillTo = async (orderId, customerId, billToValue) => {
+    return await updateCustomerFields(orderId, customerId, { billTo: billToValue });
+  };
+
+  const updateWorkOrderNo = async (orderId, customerId, workOrderNoValue) => {
+    return await updateCustomerFields(orderId, customerId, { workOrderNo: workOrderNoValue });
+  };
+
+  const updateDispatcherName = async (orderId, customerId, dispatcherNameValue) => {
+    return await updateCustomerFields(orderId, customerId, { dispatcherName: dispatcherNameValue });
+  };
+
+  // Test function to update carrier fields directly
+  const testUpdateCarrier = async (orderId) => {
+    setSubmitting(true);
+
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      const updateData = {
+        carrierName: "VPL Transport",
+        equipmentType: "Trailer"
+      };
+
+      console.log('Testing carrier update with payload:', updateData);
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, updateData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success('Carrier test update successful!');
+        fetchOrders(); // Refresh the orders list
+        return response.data;
+      } else {
+        console.error('Server response:', response.data);
+        alertify.error('Failed to update carrier');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error updating carrier:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alertify.error('Failed to update carrier. Please try again.');
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // Function to update only carrier fields (without customer data)
   const updateCarrierOnly = async (orderId, carrierName, equipmentType) => {
@@ -1528,7 +1904,34 @@ export default function DeliveryOrder() {
     }
   };
 
+  // Helper function to update specific carrier fee
+  const updateSpecificCarrierFee = async (orderId, feeIndex, feeData) => {
+    // First get current order to update specific fee
+    const currentOrder = orders.find(order => order._id === orderId);
+    if (!currentOrder || !currentOrder.carrier || !currentOrder.carrier.carrierFees) {
+      alertify.error('No carrier fees found in this order');
+      return null;
+    }
 
+    const updatedFees = [...currentOrder.carrier.carrierFees];
+    updatedFees[feeIndex] = { ...updatedFees[feeIndex], ...feeData };
+
+    return await updateCarrierFees(orderId, updatedFees);
+  };
+
+  // Helper function to add new carrier fee
+  const addNewCarrierFee = async (orderId, newFeeData) => {
+    const currentOrder = orders.find(order => order._id === orderId);
+    if (!currentOrder || !currentOrder.carrier) {
+      alertify.error('No carrier found in this order');
+      return null;
+    }
+
+    const currentFees = currentOrder.carrier.carrierFees || [];
+    const updatedFees = [...currentFees, newFeeData];
+
+    return await updateCarrierFees(orderId, updatedFees);
+  };
 
   // Function to update shipper fields (containerNo, containerType, weight)
   const updateShipperFields = async (orderId, shipperData) => {
@@ -1566,7 +1969,22 @@ export default function DeliveryOrder() {
     }
   };
 
+  // Helper functions for specific shipper field updates
+  const updateContainerNo = async (orderId, containerNo) => {
+    return await updateShipperFields(orderId, { containerNo: containerNo });
+  };
 
+  const updateContainerType = async (orderId, containerType) => {
+    return await updateShipperFields(orderId, { containerType: containerType });
+  };
+
+  const updateWeight = async (orderId, weight) => {
+    return await updateShipperFields(orderId, { weight: weight });
+  };
+
+  const updateShipperName = async (orderId, shipperName) => {
+    return await updateShipperFields(orderId, { shipperName: shipperName });
+  };
 
   // Handle status change and API integration
   const handleStatusChange = async (newStatus) => {
@@ -1639,6 +2057,427 @@ export default function DeliveryOrder() {
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
       alertify.error('Failed to update status. Please try again.');
+    }
+  };
+
+  // Generate Rate and Load Confirmation PDF function
+  const generateRateLoadConfirmationPDF = (order) => {
+    try {
+      // Create a new window for PDF generation
+      const printWindow = window.open('', '_blank');
+
+      // Generate the HTML content for the rate and load confirmation
+      const confirmationHTML = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Rate and Load Confirmation</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: 'Arial', sans-serif;
+              line-height: 1.4;
+              color: #333;
+              background: white;
+              font-size: 12px;
+            }
+            .confirmation-container {
+              max-width: 800px;
+              margin: 0 auto;
+              background: white;
+              padding: 20px;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 20px;
+              border-bottom: 2px solid #333;
+              padding-bottom: 15px;
+              gap: 20px;
+            }
+            .logo {
+              width: 120px;
+              height: 90px;
+              object-fit: contain;
+            }
+            .bill-to {
+              text-align: right;
+            }
+            .confirmation-title {
+              font-size: 24px;
+              font-weight: bold;
+              margin-bottom: 20px;
+              text-align: center;
+              color: #2c3e50;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .load-number {
+              font-size: 18px;
+              font-weight: bold;
+              margin-bottom: 20px;
+              text-align: center;
+              background: #f8f9fa;
+              padding: 10px;
+              border-radius: 5px;
+            }
+            .rates-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+            }
+            .rates-table th,
+            .rates-table td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: left;
+              font-size: 12px;
+            }
+            .rates-table th {
+              background-color: #f5f5f5;
+              font-weight: bold;
+            }
+            .rates-table .amount {
+              text-align: right;
+              font-weight: bold;
+            }
+            .rates-table .total-row {
+              background: #ffffff;
+              color: black;
+              font-weight: bold;
+              font-size: 16px;
+            }
+            .rates-table .total-row td {
+              border-top: 2px solid #000000;
+              padding: 15px;
+            }
+            .notes-section {
+              margin-top: 30px;
+              padding: 20px;
+              background: #f8f9fa;
+              border-radius: 8px;
+            }
+            .notes-title {
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 10px;
+              color: #2c3e50;
+            }
+            .notes-content {
+              font-size: 14px;
+              line-height: 1.6;
+            }
+            @media print {
+              body { background: white; }
+              .confirmation-container { box-shadow: none; margin: 0; }
+              @page {
+                margin: 0;
+                size: A4;
+              }
+              @page :first {
+                margin-top: 0;
+              }
+              @page :left {
+                margin-left: 0;
+              }
+              @page :right {
+                margin-right: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="confirmation-container">
+            <!-- Header -->
+            <div class="header">
+              <img src="/src/assets/LogoFinal.png" alt="Company Logo" class="logo">
+              
+           
+              
+              <div class="bill-to">
+                <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
+                  <tr>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Dispatcher</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers && order.customers.length > 0 ? (order.customers[0].dispatcherName || 'N/A') : 'N/A'}</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Load</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Phone</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers && order.customers.length > 0 ? (order.customers[0].phone || 'N/A') : 'N/A'}</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Ship Date</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper && order.shipper.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Fax</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers && order.customers.length > 0 ? (order.customers[0].fax || 'N/A') : 'N/A'}</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Today Date</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Email</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers && order.customers.length > 0 ? (order.customers[0].email || 'N/A') : 'N/A'}</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">W/O</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers && order.customers.length > 0 ? (order.customers[0].workOrderNo || 'N/A') : 'N/A'}</td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+            
+            <!-- Title above Carrier Information Table -->
+            <div style="text-align: center; margin: 20px 0 15px 0;">
+              <h3 style="font-size: 18px; font-weight: bold; color: #2c3e50; text-transform: uppercase; letter-spacing: 1px; margin: 0;">
+                Rate & Load Confirmation
+              </h3>
+            </div>
+
+            <!-- Carrier Information Table -->
+            <table class="rates-table">
+              <thead>
+                <tr>
+                  <th>Carrier</th>
+                  <th>Phone</th>
+                  <th>Equipment</th>
+                  <th>Load Status</th>
+                  <th>Agreed Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${order.carrier && order.carrier.carrierName ? order.carrier.carrierName : 'N/A'}</td>
+                  <td>${order.carrier && order.carrier.phone ? order.carrier.phone : 'N/A'}</td>
+                  <td>${order.carrier && order.carrier.equipmentType ? order.carrier.equipmentType : 'N/A'}</td>
+                  <td>${order.status ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : 'N/A'}</td>
+                  <td class="amount">$${(() => {
+          const lineHaul = order.customers && order.customers.length > 0 ? (order.customers[0].lineHaul || 0) : 0;
+          const fsc = order.customers && order.customers.length > 0 ? (order.customers[0].fsc || 0) : 0;
+          const other = order.customers && order.customers.length > 0 ? (order.customers[0].other || 0) : 0;
+          const carrierCharges = order.carrier && order.carrier.carrierFees ? order.carrier.carrierFees.reduce((sum, charge) => sum + (charge.total || 0), 0) : 0;
+          return (lineHaul + fsc + other + carrierCharges).toLocaleString();
+        })()}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Shipper Information Table -->
+            <table class="rates-table">
+              <thead>
+                <tr>
+                  <th colspan="2" style="text-align: left; background-color: #f0f0f0; font-size: 14px; font-weight: bold;">Shipper</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="2" style="padding: 8px; font-weight: bold; border-bottom: 1px solid #ddd;">
+                    ${order.shipper ? order.shipper.name || 'N/A' : 'N/A'}
+                    ${order.shipper && order.shipper.pickUpLocations && order.shipper.pickUpLocations.length > 0 ?
+          order.shipper.pickUpLocations.map(location => `
+                        <br>${location.address || ''}, ${location.city || ''}, ${location.state || ''} ${location.zipCode || ''}
+                      `).join('') : ''
+        }
+                  </td>
+                </tr>
+                <tr>
+                  <td style="width: 50%; padding: 8px;">
+                    <strong>Date:</strong> ${order.shipper && order.shipper.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString() : 'N/A'}<br>
+                    <strong>Time:</strong> N/A<br>
+                    <strong>Type:</strong> ${order.shipper ? (order.shipper.containerType || '40HC') : '40HC'}<br>
+                    <strong>Quantity:</strong> 1<br>
+                    <strong>Weight:</strong> ${order.shipper ? (order.shipper.weight || 'N/A') + ' lbs' : 'N/A'}
+                  </td>
+                  <td style="width: 50%; padding: 8px;">
+                    <strong>Purchase Order #:</strong> N/A<br>
+                    <strong>Major Intersection:</strong> N/A<br>
+                    <strong>Shipping Hours:</strong> N/A<br>
+                    <strong>Appointment:</strong> No<br>
+                    <strong>Description:</strong> ${order.shipper ? (order.shipper.containerNo || 'N/A') : 'N/A'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Consignee Information Table -->
+            <table class="rates-table">
+              <thead>
+                <tr>
+                  <th colspan="2" style="text-align: left; background-color: #f0f0f0; font-size: 14px; font-weight: bold;">Consignee</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="2" style="padding: 8px; font-weight: bold; border-bottom: 1px solid #ddd;">
+                    ${order.shipper ? order.shipper.name || 'N/A' : 'N/A'}
+                    ${order.shipper && order.shipper.dropLocations && order.shipper.dropLocations.length > 0 ?
+          order.shipper.dropLocations.map(location => `
+                        <br>${location.address || ''}, ${location.city || ''}, ${location.state || ''} ${location.zipCode || ''}
+                      `).join('') : ''
+        }
+                  </td>
+                </tr>
+                <tr>
+                  <td style="width: 50%; padding: 8px;">
+                    <strong>Date:</strong> ${order.shipper && order.shipper.dropDate ? new Date(order.shipper.dropDate).toLocaleDateString() : 'N/A'}<br>
+                    <strong>Time:</strong> N/A<br>
+                    <strong>Type:</strong> ${order.shipper ? (order.shipper.containerType || '40HC') : '40HC'}<br>
+                    <strong>Quantity:</strong> 1<br>
+                    <strong>Weight:</strong> ${order.shipper ? (order.shipper.weight || 'N/A') + ' lbs' : 'N/A'}
+                  </td>
+                  <td style="width: 50%; padding: 8px;">
+                    <strong>Purchase Order #:</strong> N/A<br>
+                    <strong>Major Intersection:</strong> N/A<br>
+                    <strong>Receiving Hours:</strong> N/A<br>
+                    <strong>Appointment:</strong> No<br>
+                    <strong>Description:</strong> ${order.shipper ? (order.shipper.containerNo || 'N/A') : 'N/A'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <!-- Dispatcher Notes -->
+            <div style="margin-top: 20px;">
+              <h4 style="font-size: 14px; font-weight: bold; color:rgb(11, 14, 17);">Dispatcher Notes:</h4>
+            </div>
+
+          </div>
+          
+          <!-- Page Break for Terms and Conditions -->
+          <div style="page-break-before: always; margin-top: 20px;">
+            <div class="confirmation-container" style="width: 100%; margin: 0 auto;">
+              <h2 style="text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #2c3e50;">Terms and Conditions</h2>
+              
+              <div style="font-size: 9px; line-height: 1.2; text-align: justify;">
+                <p style="margin-bottom: 8px;">
+                  This rate confirmation hereby serves as an agreement governing the movement of freight/commodity as specified & becomes a part of the
+                  transportation agreement between the signing parties.
+                </p>
+                
+                <h3 style="font-size: 12px; font-weight: bold; margin: 10px 0 6px 0; color: #2c3e50;">SAFE DELIVERY NORMS</h3>
+                
+                <ol style="margin-left: 8px; margin-bottom: 8px;">
+                  <li style="margin-bottom: 3px;">All freights /commodities shall be picked-up & delivered within the time frame mentioned on the rate confirmation. Failure to do this may attract penalty from the agreed freight rate.</li>
+                  
+                  <li style="margin-bottom: 3px;">Drivers are required to comply by appointment timings in case of Live loading / Unloading. Failure to comply by the same would result in a penalty of $150 per appointment for late delivery on same day or in case of missed appointment, $200 per day.</li>
+                  
+                  <li style="margin-bottom: 3px;">In case of missed delivery appointments, the carrier will have to compensate for storage or re-scheduling costs for all such loads.</li>
+                  
+                  <li style="margin-bottom: 3px;">Any damage to the load that might occur due to the negligence of the Driver at the time of loading / unloading or during transit is to be paid by the Appointed Carrier / driver.</li>
+                  
+                  <li style="margin-bottom: 3px;">Whilst loading, the driver must do a piece count & inspect the condition of the load. Driver shall not leave the shipper without picking up complete load & getting our BOL signed from the site.</li>
+                  
+                  <li style="margin-bottom: 3px;">Please ensure our BOL is presented and signed at delivery for POD. Using any other paperwork will result in a $100 penalty.</li>
+                  
+                  <li style="margin-bottom: 3px;">Pictures are required at the time of Unloading/Loading of the Container/Trailor and once the Delivery is completed pictures for empty/loaded container/trailor is mandatory. Failure to do so will result in $50 penalty.</li>
+                  
+                  <li style="margin-bottom: 3px;">Assigned Carriers /drivers /dispatchers shall not contact the shipper or consignee directly under any conditions.</li>
+                  
+                  <li style="margin-bottom: 3px;">Assigned Carrier is required to ensure that seals, if attached on the loads are not tempered with at any given time. If seal is required to be removed, it should only be done by the receiver.</li>
+                  
+                  <li style="margin-bottom: 3px;">Re-assigning / Double Brokering / Interlining / Warehousing of this load is strictly prohibited until & unless a written consent for the same is obtained from us. This may lead to deferred payments to the contracted carrier plus we might report you to the authorities & pull a Freight Card against you.</li>
+                  
+                  <li style="margin-bottom: 3px;">All detentions due to missed appointments or late arrivals are to be paid by the driver.</li>
+                  
+                  <li style="margin-bottom: 3px;">A standard fee of $300 per day shall be implied in case you hold our freight hostage for whatsoever reason.</li>
+                  
+                  <li style="margin-bottom: 3px;">Macro-point is required as long as it has been requested by the customer. Macro point must be accepted/activated with the actual driver</li>
+                  
+                  <li style="margin-bottom: 3px;">Follow safety protocols at times. Wear masks at the time of pick-up & drop off. In case of FSD loads, drivers are required to wear Hard hats, safety glasses, and safety vests when in facility.</li>
+                  
+                  <li style="margin-bottom: 3px;">For all loads booked as FTL, trailers are exclusive & no LTL/ Partial loads can be added to it. Payments will be voided if LTL loads are added.</li>
+                  
+                  <li style="margin-bottom: 3px;">Any damage to the load that might occur due to the negligence of the Driver at the time of loading / unloading or during transit is to be paid by the Appointed Carrier.</li>
+                  
+                  <li style="margin-bottom: 3px;">Should there be any damage or loss to the freight during the load movement, the carrier is inclined to pay for complete loss as demanded by the Shipper</li>
+                  
+                  <li style="margin-bottom: 3px;">In case if we book a load with you & you are unable to keep up to the commitment and deliver the services, you are liable to pay us $100 for the time & losses that we had to incur on that load.</li>
+                  
+                  <li style="margin-bottom: 3px;">Freight charges payments shall be made when we receive POD and carrier invoice within 48 hours of the load delivery. Payment will be made 30 days after all required paperwork is received by our accounts department.</li>
+                  
+                  <li style="margin-bottom: 3px;">Any additional charge receipts such as for detention, lumper & overtime are to be submitted along with the POD within 72 hours of freight delivery along with the required documentation to arrange for the reimbursement.</li>
+                  
+                  <li style="margin-bottom: 3px;">If under any circumstances load gets delayed by 1-2 days and the temperature is maintained as an agreed term, there would be no claim entertained on that load.</li>
+                </ol>
+                
+                <h3 style="font-size: 13px; font-weight: bold; margin: 15px 0 8px 0; color: #2c3e50;">Additional information</h3>
+                
+                <p style="margin-bottom: 10px;">
+                  After the successful completion of the load / empty trailer delivery, if the carrier is unable to submit invoices & complete documentation as per
+                  the set time frames, deductions as below will be applicable:
+                </p>
+                
+                <ul style="margin-left: 15px; margin-bottom: 15px;">
+                  <li style="margin-bottom: 4px;">In case, documents are not submitted within 1 day of the load delivery, $100 shall be deducted</li>
+                  <li style="margin-bottom: 4px;">In case, documents are not submitted within 2 days, $150 shall be deducted</li>
+                  <li style="margin-bottom: 4px;">In case, documents are not submitted within 5 days, $250 shall be deducted</li>
+                </ul>
+                
+                <p style="font-weight: bold; margin-top: 20px; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #2c3e50;">
+                  DOCUMENTS BE MUST CLEAR AND LEGIBLE. POD'S MUST BE SENT VIA E-MAIL OR FAX WITHIN 24 HRS OF THE DELIVERY
+                  FOR STRAIGHT THROUGH DELIVERIES AND WITHIN 3 HOURS FOR FIXED APPOINTMENT DELIVERIES
+                  WITH OUR LOAD NUMBER CLEARLY NOTED ON THE TOP OF IT
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Simple Carrier Pay Section -->
+          <div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">
+            <h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 15px; color: #2c3e50;">Carrier Pay</h3>
+            
+            <div style="text-align: center; margin-bottom: 20px; font-size: 12px; line-height: 1.6;">
+              <p style="margin-bottom: 10px;">
+                <strong>Carrier Pay:</strong> Direct: $${(() => {
+          const lineHaul = order.customers && order.customers.length > 0 ? (order.customers[0].lineHaul || 0) : 0;
+          const fsc = order.customers && order.customers.length > 0 ? (order.customers[0].fsc || 0) : 0;
+          const other = order.customers && order.customers.length > 0 ? (order.customers[0].other || 0) : 0;
+          const carrierCharges = order.carrier && order.carrier.carrierFees ? order.carrier.carrierFees.reduce((sum, charge) => sum + (charge.total || 0), 0) : 0;
+          return (lineHaul + fsc + other + carrierCharges).toLocaleString();
+        })()}.00, # of Units: 1, Bobtail: $25.00, TOTAL: $${(() => {
+          const lineHaul = order.customers && order.customers.length > 0 ? (order.customers[0].lineHaul || 0) : 0;
+          const fsc = order.customers && order.customers.length > 0 ? (order.customers[0].fsc || 0) : 0;
+          const other = order.customers && order.customers.length > 0 ? (order.customers[0].other || 0) : 0;
+          const carrierCharges = order.carrier && order.carrier.carrierFees ? order.carrier.carrierFees.reduce((sum, charge) => sum + (charge.total || 0), 0) : 0;
+          return (lineHaul + fsc + other + carrierCharges + 25).toLocaleString();
+        })()} USD
+              </p>
+            </div>
+            
+            <div style="margin-bottom: 15px; font-size: 12px; line-height: 1.6;">
+              <p style="margin-bottom: 10px; text-align: center;">
+                Accepted By _________________________ Date ________________ Signature ____________________
+              </p>
+            </div>
+            
+            <div style="font-size: 12px; line-height: 1.6;">
+              <p style="text-align: center;">
+                Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Write the HTML to the new window
+      printWindow.document.write(confirmationHTML);
+      printWindow.document.close();
+
+      // Wait for content to load then print
+      printWindow.onload = function () {
+        printWindow.print();
+        printWindow.close();
+      };
+
+      alertify.success('Rate and Load Confirmation PDF generated successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alertify.error('Failed to generate PDF. Please try again.');
     }
   };
 
@@ -1825,14 +2664,24 @@ export default function DeliveryOrder() {
             <div class="header">
               <img src="/src/assets/LogoFinal.png" alt="Company Logo" class="logo">
               <div class="bill-to">
-                <div class="bill-to-content">
-                  ${order.customers && order.customers.length > 0 ? `
-                    ${order.customers[0].billTo || 'N/A'}<br>
-                    W/O: ${order.customers[0].workOrderNo || 'N/A'}<br>
-                    Invoice Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}<br>
-                    Invoice No: ${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}
-                  ` : 'N/A'}
-                </div>
+                <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
+                  <tr>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Bill To</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers && order.customers.length > 0 ? (order.customers[0].billTo || 'N/A') : 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">W/O (Ref)</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers && order.customers.length > 0 ? (order.customers[0].workOrderNo || 'N/A') : 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Invoice Date</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Invoice No</td>
+                    <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}</td>
+                  </tr>
+                </table>
               </div>
             </div>
 
@@ -1970,6 +2819,8 @@ export default function DeliveryOrder() {
               <h3 class="notes-title">Notes:</h3>
               <div class="notes-content">
                 ${['Thank you for your business!']}
+                <br>
+                ${['V Power Logistics']}
               </div>
             </div>
           </div>
@@ -2275,8 +3126,8 @@ export default function DeliveryOrder() {
                     </td>
                     <td className="py-2 px-3">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === 'close'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-green-100 text-green-800'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-green-100 text-green-800'
                         }`}>
                         {order.status === 'close' ? 'Close' : (order.status === 'open' ? 'Open' : 'Open')}
                       </span>
@@ -2287,10 +3138,22 @@ export default function DeliveryOrder() {
                     <td className="py-2 px-3">
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleViewEmployeeData(order.createdBySalesUser?.empId || '1234')}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                          onClick={() => handleViewOrder(order)}
+                          disabled={loadingOrderId === (order.originalId || order._id || order.id)}
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                            loadingOrderId === (order.originalId || order._id || order.id)
+                              ? 'bg-gray-400 cursor-not-allowed text-white' 
+                              : 'bg-blue-500 hover:bg-blue-600 text-white'
+                          }`}
                         >
-                          View
+                          {loadingOrderId === (order.originalId || order._id || order.id) ? (
+                            <>
+                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              Loading...
+                            </>
+                          ) : (
+                            'View'
+                          )}
                         </button>
                         <button
                           onClick={() => handleEditOrder(order)}
@@ -2339,8 +3202,8 @@ export default function DeliveryOrder() {
                 key={page}
                 onClick={() => handlePageChange(page)}
                 className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'border-gray-300 hover:bg-gray-50'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'border-gray-300 hover:bg-gray-50'
                   }`}
               >
                 {page}
@@ -2391,7 +3254,7 @@ export default function DeliveryOrder() {
             </div>
 
             {/* Form */}
-            <form onSubmit={editingOrder?._id ? handleUpdateOrder : handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
               {/* Customer Information Section */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
@@ -2430,14 +3293,23 @@ export default function DeliveryOrder() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="Bill To *"
                       />
-                      <input
-                        type="text"
+                      <select
                         value={customer.dispatcherName}
                         onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
                         required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Dispatcher Name *"
-                      />
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      >
+                        <option value="">Select Dispatcher *</option>
+                        {loadingDispatchers ? (
+                          <option value="" disabled>Loading dispatchers...</option>
+                        ) : (
+                          dispatchers.map((dispatcher) => (
+                            <option key={dispatcher._id} value={dispatcher.aliasName}>
+                              {dispatcher.aliasName}
+                            </option>
+                          ))
+                        )}
+                      </select>
                       <input
                         type="text"
                         value={customer.workOrderNo}
@@ -2789,8 +3661,8 @@ export default function DeliveryOrder() {
                   onClick={handleCloseModal}
                   disabled={submitting}
                   className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
-                    ? 'opacity-50 cursor-not-allowed text-gray-400'
-                    : 'text-gray-700 hover:bg-gray-50'
+                      ? 'opacity-50 cursor-not-allowed text-gray-400'
+                      : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   Cancel
@@ -2799,8 +3671,8 @@ export default function DeliveryOrder() {
                   type="submit"
                   disabled={submitting}
                   className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:from-blue-600 hover:to-blue-700'
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:from-blue-600 hover:to-blue-700'
                     }`}
                 >
                   {submitting ? (
@@ -2820,6 +3692,16 @@ export default function DeliveryOrder() {
 
       {/* Employee DO Data Modal */}
       {showOrderModal && selectedOrder && (
+        <>
+          {loadingOrderId && (
+            <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center">
+              <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-lg font-semibold text-gray-800">Loading Order Details...</p>
+                <p className="text-sm text-gray-600">Please wait while we fetch the complete data</p>
+              </div>
+            </div>
+          )}
         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
             scrollbarWidth: 'none',
@@ -3200,34 +4082,6 @@ export default function DeliveryOrder() {
                 </div>
               )}
 
-              {/* Status */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <CheckCircle className="text-blue-600" size={16} />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-800">Status</h3>
-                </div>
-                <div className="bg-white rounded-lg p-4 border border-blue-200 space-y-4">
-                  <select
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                    value={selectedOrder.status || "open"}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                  >
-                    <option value="open">Open</option>
-                    <option value="close">Close</option>
-                  </select>
-
-                  <button
-                    onClick={() => generateInvoicePDF(selectedOrder)}
-                    className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold shadow hover:from-green-600 hover:to-green-700 transition-all duration-200 flex items-center justify-center gap-2"
-                  >
-                    <FaDownload className="text-white" size={16} />
-                    Generate Invoice PDF
-                  </button>
-                </div>
-              </div>
-
               {/* Uploaded Files */}
               {selectedOrder.uploadedFiles && selectedOrder.uploadedFiles.length > 0 && (
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
@@ -3252,19 +4106,19 @@ export default function DeliveryOrder() {
                             <Calendar size={12} />
                             <span>Uploaded: {new Date(file.uploadDate).toLocaleDateString()}</span>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-1.5 justify-start">
                             <a
                               href={file.fileUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="flex-1 bg-blue-500 text-white text-center py-2 px-3 rounded-lg hover:bg-blue-600 transition text-xs font-medium"
+                              className="bg-blue-500 text-white text-center py-1.5 px-2.5 rounded-md hover:bg-blue-600 transition text-xs font-medium"
                             >
-                              View File
+                              View
                             </a>
                             <a
                               href={file.fileUrl}
                               download={file.fileName}
-                              className="bg-green-500 text-white py-2 px-3 rounded-lg hover:bg-green-600 transition text-xs font-medium"
+                              className="bg-green-500 text-white py-1.5 px-2.5 rounded-md hover:bg-green-600 transition text-xs font-medium"
                             >
                               Download
                             </a>
@@ -3275,9 +4129,128 @@ export default function DeliveryOrder() {
                   </div>
                 </div>
               )}
+
+              {/* Customer Name Section - At the very end */}
+              {/* 
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <User className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Update Customer Name</h3>
+                </div>
+                <div className="bg-white rounded-xl p-4 border border-blue-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <User className="text-blue-600" size={18} />
+                    <h4 className="font-semibold text-gray-800">Customer Name</h4>
+                  </div>
+                  <div className="space-y-4">
+                    <input
+                      type="text"
+                      placeholder="Enter customer name"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      value={customerNameInput}
+                      onChange={(e) => {
+                        console.log('Customer name input changed:', e.target.value);
+                        setCustomerNameInput(e.target.value);
+                      }}
+                    />
+                    <button
+                                              onClick={async () => {
+                          try {
+                            const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+                            const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/customer/name`, {
+                              doId: selectedOrder._id,
+                              customerName: customerNameInput
+                            }, {
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                              }
+                            });
+                          
+                          if (response.data && response.data.success) {
+                            alertify.success('Customer name updated successfully!');
+                            // Update the local state to reflect the change
+                            setSelectedOrder(prev => ({
+                              ...prev,
+                              customerName: customerNameInput
+                            }));
+                            
+                            // Update the orders list to reflect the change
+                            setOrders(prevOrders => 
+                              prevOrders.map(order => 
+                                order._id === selectedOrder._id 
+                                  ? { ...order, customerName: customerNameInput }
+                                  : order
+                              )
+                            );
+                          } else {
+                            alertify.error(response.data?.message || 'Failed to update customer name');
+                          }
+                        } catch (error) {
+                          console.error('Error updating customer name:', error);
+                          alertify.error('Failed to update customer name. Please try again.');
+                        }
+                      }}
+                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center gap-2"
+                    >
+                      <User className="text-white" size={16} />
+                      Update Customer Name
+                    </button>
+                  </div>
+                </div>
+              </div>
+              */}
+
+                             {/* Status */}
+               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                 <div className="flex items-center gap-2 mb-4">
+                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                     <CheckCircle className="text-blue-600" size={16} />
+                   </div>
+                   <h3 className="text-lg font-bold text-gray-800">Status</h3>
+                 </div>
+                 <div className="bg-white rounded-lg p-4 border border-blue-200">
+                   <select
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                     value={selectedOrder.status || "open"}
+                     onChange={(e) => handleStatusChange(e.target.value)}
+                   >
+                     <option value="open">Open</option>
+                     <option value="close">Close</option>
+                   </select>
+                 </div>
+               </div>
+
+               {/* PDF Generation Buttons */}
+               <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-4">
+                 <div className="flex items-center gap-2 mb-3">
+                   <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
+                     <FaDownload className="text-purple-600" size={14} />
+                   </div>
+                   <h3 className="text-base font-bold text-gray-800">Generate Documents</h3>
+                 </div>
+                 <div className="flex gap-2 justify-start">
+                   <button
+                     onClick={() => generateInvoicePDF(selectedOrder)}
+                     className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-1.5 rounded-md font-medium shadow hover:shadow-md transition-all duration-200 flex items-center justify-center gap-1.5 text-xs"
+                   >
+                     <FaDownload className="text-white" size={12} />
+                     <span>Invoice PDF</span>
+                   </button>
+
+                   <button
+                     onClick={() => generateRateLoadConfirmationPDF(selectedOrder)}
+                     className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-1.5 rounded-md font-medium shadow hover:shadow-md transition-all duration-200 flex items-center justify-center gap-1.5 text-xs"
+                   >
+                     <FaDownload className="text-white" size={12} />
+                     <span>Rate Confirmation PDF</span>
+                   </button>
+                 </div>
+               </div>
             </div>
           </div>
         </div>
+        </>
       )}
 
       {/* Charges Popup */}
@@ -3359,8 +4332,8 @@ export default function DeliveryOrder() {
                       onClick={() => removeCharge(index)}
                       disabled={charges.length === 1}
                       className={`p-2 rounded-full transition-all ${charges.length === 1
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
                         }`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3854,8 +4827,8 @@ export default function DeliveryOrder() {
                   onClick={handleCloseEditModal}
                   disabled={submitting}
                   className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
-                    ? 'opacity-50 cursor-not-allowed text-gray-400'
-                    : 'text-gray-700 hover:bg-gray-50'
+                      ? 'opacity-50 cursor-not-allowed text-gray-400'
+                      : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   Cancel
@@ -3864,8 +4837,8 @@ export default function DeliveryOrder() {
                   type="submit"
                   disabled={submitting}
                   className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${submitting
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:from-green-600 hover:to-green-700'
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:from-green-600 hover:to-green-700'
                     }`}
                 >
                   {submitting ? (
@@ -3882,6 +4855,8 @@ export default function DeliveryOrder() {
           </div>
         </div>
       )}
+
+
     </div>
   );
 } 
