@@ -36,17 +36,55 @@ const AddUserModal = ({ onClose }) => {
     bankStatementOrSalarySlip: [],
   });
 
+  const [uploadStatus, setUploadStatus] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const validateFile = (file, maxSize = 10 * 1024 * 1024) => { // 10MB default
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    
+    if (!allowedTypes.includes(file.type)) {
+      return { valid: false, error: 'File type not supported. Please upload PDF, DOC, DOCX, or image files.' };
+    }
+    
+    if (file.size > maxSize) {
+      return { valid: false, error: `File size too large. Maximum size is ${maxSize / (1024 * 1024)}MB.` };
+    }
+    
+    return { valid: true };
+  };
+
   const handleFileChange = (e) => {
     const { name, files: selected } = e.target;
+    
+    if (selected.length === 0) return;
+    
+    const fileList = Array.from(selected);
+    const validationResults = fileList.map(file => validateFile(file));
+    
+    const hasErrors = validationResults.some(result => !result.valid);
+    if (hasErrors) {
+      const errors = validationResults.filter(result => !result.valid).map(result => result.error);
+      alert(`File validation errors:\n${errors.join('\n')}`);
+      return;
+    }
+    
     setFiles(prev => ({
       ...prev,
-      [name]: name === 'educationalDocs' || name === 'bankStatementOrSalarySlip' ? Array.from(selected) : selected[0]
+      [name]: name === 'educationalDocs' || name === 'bankStatementOrSalarySlip' ? fileList : fileList[0]
     }));
+    
+    // Update upload status
+    setUploadStatus(prev => ({
+      ...prev,
+      [name]: { status: 'selected', fileName: fileList[0]?.name || `${fileList.length} files selected` }
+    }));
+    
+    console.log(`File selected for ${name}:`, fileList);
   };
 
   // Function to convert date from YYYY-MM-DD to DD-MM-YYYY format
@@ -61,45 +99,128 @@ const AddUserModal = ({ onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Client-side required field validation
-    const requiredFields = ['empId', 'password', 'employeeName', 'sex', 'email', 'mobileNo', 'alternateNo', 'department', 'designation', 'basicSalary', 'dateOfBirth', 'dateOfJoining'];
-    for (let field of requiredFields) {
-      if (!formData[field]) {
-        alert(`Please fill in the required field: ${field}`);
-        return;
-      }
-    }
-
-    const submitData = new FormData();
-
-    Object.entries(formData).forEach(([key, val]) => {
-      // Format date fields to DD-MM-YYYY format for API
-      if (key === 'dateOfBirth' || key === 'dateOfJoining') {
-        submitData.append(key, formatDateForAPI(val));
-      } else {
-        submitData.append(key, val);
-      }
-    });
-
-    Object.entries(files).forEach(([key, val]) => {
-      if (Array.isArray(val)) {
-        val.forEach(file => submitData.append(key, file));
-      } else if (val) {
-        submitData.append(key, val);
-      }
-    });
+    setIsSubmitting(true);
 
     try {
-      await axios.post('https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser', submitData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        withCredentials: true
+      // Client-side required field validation
+      const requiredFields = ['empId', 'password', 'employeeName', 'sex', 'email', 'mobileNo', 'alternateNo', 'department', 'designation', 'basicSalary', 'dateOfBirth', 'dateOfJoining'];
+      for (let field of requiredFields) {
+        if (!formData[field]) {
+          alert(`Please fill in the required field: ${field}`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      const submitData = new FormData();
+
+      // Add form data
+      Object.entries(formData).forEach(([key, val]) => {
+        // Format date fields to DD-MM-YYYY format for API
+        if (key === 'dateOfBirth' || key === 'dateOfJoining') {
+          submitData.append(key, formatDateForAPI(val));
+        } else {
+          submitData.append(key, val);
+        }
       });
+
+      // Add files with detailed logging
+      Object.entries(files).forEach(([key, val]) => {
+        if (Array.isArray(val)) {
+          val.forEach((file, index) => {
+            submitData.append(key, file);
+            console.log(`Adding file ${index + 1} for ${key}:`, file.name, file.size, file.type);
+          });
+        } else if (val) {
+          submitData.append(key, val);
+          console.log(`Adding single file for ${key}:`, val.name, val.size, val.type);
+        }
+      });
+
+      // Log FormData contents for debugging
+      console.log('FormData contents:');
+      for (let [key, value] of submitData.entries()) {
+        if (value instanceof File) {
+          console.log(`${key}:`, value.name, value.size, value.type);
+        } else {
+          console.log(`${key}:`, value);
+        }
+      }
+
+      // Update status for offer letter and experience letter specifically
+      if (files.offerLetter) {
+        setUploadStatus(prev => ({ ...prev, offerLetter: { status: 'uploading', fileName: files.offerLetter.name } }));
+      }
+      if (files.experienceLetter) {
+        setUploadStatus(prev => ({ ...prev, experienceLetter: { status: 'uploading', fileName: files.experienceLetter.name } }));
+      }
+
+      const response = await axios.post('https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser', submitData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        withCredentials: true,
+        timeout: 60000, // 60 second timeout
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          console.log('Upload progress:', percentCompleted + '%');
+        }
+      });
+
+      console.log('API Response:', response.data);
+      
+      // Update status to success
+      Object.keys(files).forEach(key => {
+        if (files[key]) {
+          setUploadStatus(prev => ({ ...prev, [key]: { status: 'success', fileName: Array.isArray(files[key]) ? files[key][0]?.name : files[key].name } }));
+        }
+      });
+
       alert('User added successfully!');
       onClose();
     } catch (err) {
-      console.error(err);
-      alert('Failed to add user');
+      console.error('Error details:', err);
+      
+      // Update status to error
+      Object.keys(files).forEach(key => {
+        if (files[key]) {
+          setUploadStatus(prev => ({ ...prev, [key]: { status: 'error', fileName: Array.isArray(files[key]) ? files[key][0]?.name : files[key].name } }));
+        }
+      });
+
+      let errorMessage = 'Failed to add user';
+      if (err.response) {
+        console.error('Response error:', err.response.data);
+        errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
+      } else if (err.request) {
+        console.error('Request error:', err.request);
+        errorMessage = 'Network error. Please check your connection.';
+      } else {
+        console.error('Other error:', err.message);
+        errorMessage = err.message;
+      }
+      
+      alert(`Error: ${errorMessage}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getFileStatusIcon = (status) => {
+    switch (status) {
+      case 'selected': return '📁';
+      case 'uploading': return '⏳';
+      case 'success': return '✅';
+      case 'error': return '❌';
+      default: return '📄';
+    }
+  };
+
+  const getFileStatusColor = (status) => {
+    switch (status) {
+      case 'selected': return 'text-blue-600';
+      case 'uploading': return 'text-yellow-600';
+      case 'success': return 'text-green-600';
+      case 'error': return 'text-red-600';
+      default: return 'text-gray-600';
     }
   };
 
@@ -241,10 +362,15 @@ const AddUserModal = ({ onClose }) => {
                         multiple={doc.key === 'bankStatementOrSalarySlip'}
                         onChange={handleFileChange}
                         className="hidden"
+                        disabled={isSubmitting}
                       />
                       <label
                         htmlFor={doc.key}
-                        className="block w-full px-6 py-6 border-2 border-dashed border-purple-300 rounded-xl text-center cursor-pointer hover:bg-purple-50 hover:border-purple-400 hover:shadow-lg transition-all duration-300 bg-white shadow-sm"
+                        className={`block w-full px-6 py-6 border-2 border-dashed rounded-xl text-center transition-all duration-300 bg-white shadow-sm ${
+                          isSubmitting 
+                            ? 'border-gray-300 cursor-not-allowed opacity-50' 
+                            : 'border-purple-300 cursor-pointer hover:bg-purple-50 hover:border-purple-400 hover:shadow-lg'
+                        }`}
                       >
                         <div className="flex flex-col items-center">
                           <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-3 shadow-lg">
@@ -256,6 +382,28 @@ const AddUserModal = ({ onClose }) => {
                           <span className="text-xs text-gray-500 mt-1">Click to browse files</span>
                         </div>
                       </label>
+                      
+                      {/* File Status Display */}
+                      {uploadStatus[doc.key] && (
+                        <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-lg">{getFileStatusIcon(uploadStatus[doc.key].status)}</span>
+                              <span className={`text-sm font-medium ${getFileStatusColor(uploadStatus[doc.key].status)}`}>
+                                {uploadStatus[doc.key].fileName}
+                              </span>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              uploadStatus[doc.key].status === 'success' ? 'bg-green-100 text-green-800' :
+                              uploadStatus[doc.key].status === 'error' ? 'bg-red-100 text-red-800' :
+                              uploadStatus[doc.key].status === 'uploading' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {uploadStatus[doc.key].status}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -296,20 +444,94 @@ const AddUserModal = ({ onClose }) => {
               </div>
             </div>
 
+            {/* Debug Section - Show selected files */}
+            <div className="bg-gradient-to-br from-gray-50 via-slate-50 to-zinc-50 rounded-2xl p-6 shadow-xl border border-gray-200">
+              <div className="flex items-center mb-4">
+                <div className="w-10 h-10 bg-gradient-to-r from-gray-600 to-slate-600 rounded-full flex items-center justify-center mr-3 shadow-lg">
+                  <span className="text-white font-bold text-sm">🔍</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">File Upload Status</h3>
+                  <p className="text-gray-600 text-sm">Check which files are ready for upload</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                {Object.entries(files).map(([key, file]) => {
+                  if (!file || (Array.isArray(file) && file.length === 0)) return null;
+                  
+                  const fileName = Array.isArray(file) ? file[0]?.name : file.name;
+                  const fileSize = Array.isArray(file) ? file[0]?.size : file.size;
+                  const fileType = Array.isArray(file) ? file[0]?.type : file.type;
+                  
+                  return (
+                    <div key={key} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-semibold text-sm text-gray-800 capitalize">
+                            {key.replace(/([A-Z])/g, ' $1').trim()}
+                          </div>
+                          <div className="text-xs text-gray-600 truncate">{fileName}</div>
+                          <div className="text-xs text-gray-500">
+                            {(fileSize / 1024 / 1024).toFixed(2)} MB • {fileType}
+                          </div>
+                        </div>
+                        <div className="ml-2">
+                          {uploadStatus[key] && (
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              uploadStatus[key].status === 'success' ? 'bg-green-100 text-green-800' :
+                              uploadStatus[key].status === 'error' ? 'bg-red-100 text-red-800' :
+                              uploadStatus[key].status === 'uploading' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {uploadStatus[key].status}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {Object.values(files).every(file => !file || (Array.isArray(file) && file.length === 0)) && (
+                <div className="text-center py-4 text-gray-500 text-sm">
+                  No files selected for upload
+                </div>
+              )}
+            </div>
+
             {/* Submit Button */}
             <div className="flex justify-end space-x-6 pt-8 border-t-2 border-gray-200">
               <button 
                 type="button" 
                 onClick={onClose}
-                className="px-10 py-4 border-2 border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 shadow-lg hover:shadow-xl"
+                disabled={isSubmitting}
+                className={`px-10 py-4 border-2 border-gray-300 text-gray-700 rounded-xl font-bold transition-all duration-300 shadow-lg hover:shadow-xl ${
+                  isSubmitting 
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : 'hover:bg-gray-50 hover:border-gray-400'
+                }`}
               >
                 Cancel
               </button>
               <button 
                 type="submit" 
-                className="px-10 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-700 text-white rounded-xl font-bold hover:from-blue-700 hover:via-purple-700 hover:to-blue-800 transform hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-2xl"
+                disabled={isSubmitting}
+                className={`px-10 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-700 text-white rounded-xl font-bold transition-all duration-300 shadow-xl hover:shadow-2xl ${
+                  isSubmitting 
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : 'hover:from-blue-700 hover:via-purple-700 hover:to-blue-800 transform hover:scale-105'
+                }`}
               >
-                Create User
+                {isSubmitting ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Creating User...</span>
+                  </div>
+                ) : (
+                  'Create User'
+                )}
               </button>
             </div>
           </form>
