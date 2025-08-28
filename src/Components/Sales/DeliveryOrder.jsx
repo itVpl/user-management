@@ -1598,10 +1598,6 @@ export default function DeliveryOrder() {
   };
   // Generate Rate and Load Confirmation PDF function
   // REPLACE THIS BLOCK: generateRateLoadConfirmationPDF (weight ko per-location line me show, shipper.weight hataya)
-
-  const generateRateLoadConfirmationPDF = (order) => {
-    try {
-
   const generateRateLoadConfirmationPDF = async (order) => {
     try {
       // Fetch dispatcher information from API
@@ -1622,7 +1618,6 @@ export default function DeliveryOrder() {
         console.error('Error fetching dispatcher info:', error);
         // Continue with default values if API call fails
       }
-
 
       const printWindow = window.open('', '_blank');
 
@@ -1664,7 +1659,7 @@ export default function DeliveryOrder() {
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Phone</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd;">${dispatcherPhone}</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Ship Date</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit',  day: '2-digit' }) : 'N/A'}</td>
                 </tr>
                 <tr>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Fax</td>
@@ -1900,11 +1895,7 @@ export default function DeliveryOrder() {
         matchedCompany?.state,
         matchedCompany?.zipcode,
       ].filter(Boolean).join(', ');
-
-      const billToDisplay = [companyName || 'N/A', billAddr].filter(Boolean).join(' — ');
-
       const billToDisplay = [companyName || 'N/A', billAddr].filter(Boolean).join('<br>');
-
       const workOrderNo = cust.workOrderNo || 'N/A';
       const invoiceNo = order.doNum || cust.loadNo || 'N/A';
       const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -1916,16 +1907,6 @@ export default function DeliveryOrder() {
       const CUSTOMER_TOTAL = LH + FSC + OTH;
 
       // helpers
-
-      const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
-      const fmtTime = (d) => {
-        if (!d) return '';
-        const dt = new Date(d);
-        if (Number.isNaN(dt.getTime())) return '';
-        // show time only if not midnight
-        if (dt.getHours() === 0 && dt.getMinutes() === 0) return '';
-        return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
       const fmtDateTime = (d) => {
         if (!d) return 'N/A';
         try {
@@ -1948,7 +1929,6 @@ export default function DeliveryOrder() {
           console.error('Error formatting date/time:', error, d);
           return 'Invalid Date';
         }
-
       };
       const fullAddr = (loc) =>
         [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
@@ -1962,9 +1942,6 @@ export default function DeliveryOrder() {
       const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
       const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
 
-
-      const hasPickupTime = pickRows.some(l => hasTimeVal(l?.date || order?.shipper?.pickUpDate));
-      const hasDropTime = dropRows.some(l => hasTimeVal(l?.date || order?.shipper?.dropDate));
 
 
       const html = `
@@ -2028,11 +2005,7 @@ export default function DeliveryOrder() {
         const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
         const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
         const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
-
-        const dateSrc = l?.date || order.shipper?.pickUpDate;
-
         const dateSrc = l?.pickUpDate || order.shipper?.pickUpDate;
-
         return `
               <tr>
                 <td>${l?.name || 'N/A'}</td>
@@ -2069,11 +2042,7 @@ export default function DeliveryOrder() {
         const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
         const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
         const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
-
-        const dateSrc = l?.date || order.shipper?.dropDate;
-
         const dateSrc = l?.dropDate || order.shipper?.dropDate;
-
         return `
               <tr>
                 <td>${l?.name || 'N/A'}</td>
