@@ -1089,11 +1089,11 @@ export default function DeliveryOrder() {
         setFormData(editFormData);
         setCharges(processedCharges);
         setEditingOrder({
-  ...order,
-  _id: originalId,
-  customerId: fullOrderData?.customers?.[0]?._id || null, // <-- IMPORTANT
-  fullData: fullOrderData
-});
+          ...order,
+          _id: originalId,
+          customerId: fullOrderData?.customers?.[0]?._id || null, // <-- IMPORTANT
+          fullData: fullOrderData
+        });
         setFormMode('edit');
         setShowAddOrderForm(true);
       } else {
@@ -1469,11 +1469,11 @@ export default function DeliveryOrder() {
   };
   // Generate Rate and Load Confirmation PDF function
   // REPLACE THIS BLOCK: generateRateLoadConfirmationPDF (weight ko per-location line me show, shipper.weight hataya)
-const generateRateLoadConfirmationPDF = (order) => {
-  try {
-    const printWindow = window.open('', '_blank');
+  const generateRateLoadConfirmationPDF = (order) => {
+    try {
+      const printWindow = window.open('', '_blank');
 
-    const confirmationHTML = `
+      const confirmationHTML = `
       <!DOCTYPE html>
       <html lang="en">
       <head>
@@ -1511,13 +1511,13 @@ const generateRateLoadConfirmationPDF = (order) => {
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Phone</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.phone || 'N/A'}</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Ship Date</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'}) : 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'N/A'}</td>
                 </tr>
                 <tr>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Fax</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.fax || 'N/A'}</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Today Date</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${new Date().toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'})}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}</td>
                 </tr>
                 <tr>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Email</td>
@@ -1545,13 +1545,13 @@ const generateRateLoadConfirmationPDF = (order) => {
                 <td>${order.carrier?.carrierName || 'N/A'}</td>
                 <td>${order.carrier?.phone || 'N/A'}</td>
                 <td>${order.carrier?.equipmentType || 'N/A'}</td>
-                <td>${order.status ? order.status[0].toUpperCase()+order.status.slice(1) : 'N/A'}</td>
+                <td>${order.status ? order.status[0].toUpperCase() + order.status.slice(1) : 'N/A'}</td>
                 <td class="amount">$${(() => {
-                  const c = order.customers?.[0] || {};
-                  const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
-                  const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
-                  return (lineHaul + fsc + other + carrierCharges).toLocaleString();
-                })()}</td>
+          const c = order.customers?.[0] || {};
+          const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
+          const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
+          return (lineHaul + fsc + other + carrierCharges).toLocaleString();
+        })()}</td>
               </tr>
             </tbody>
           </table>
@@ -1564,7 +1564,7 @@ const generateRateLoadConfirmationPDF = (order) => {
                 <td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">
                   ${order.shipper?.name || 'N/A'}
                   ${(order.shipper?.pickUpLocations || []).map(l => `
-                    <br>${[l.address,l.city,l.state,l.zipCode].filter(Boolean).join(', ')}
+                    <br>${[l.address, l.city, l.state, l.zipCode].filter(Boolean).join(', ')}
                   `).join('')}
                 </td>
               </tr>
@@ -1594,7 +1594,7 @@ const generateRateLoadConfirmationPDF = (order) => {
                 <td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">
                   ${order.shipper?.name || 'N/A'}
                   ${(order.shipper?.dropLocations || []).map(l => `
-                    <br>${[l.address,l.city,l.state,l.zipCode].filter(Boolean).join(', ')}
+                    <br>${[l.address, l.city, l.state, l.zipCode].filter(Boolean).join(', ')}
                   `).join('')}
                 </td>
               </tr>
@@ -1687,16 +1687,16 @@ const generateRateLoadConfirmationPDF = (order) => {
           <div style="text-align: center; margin-bottom: 20px; font-size: 12px; line-height: 1.6;">
             <p style="margin-bottom: 10px;">
               <strong>Carrier Pay:</strong> Direct: $${(() => {
-                const c = order.customers?.[0] || {};
-                const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
-                const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
-                return (lineHaul + fsc + other + carrierCharges).toLocaleString();
-              })()}.00, # of Units: 1, Bobtail: $25.00, TOTAL: $${(() => {
-                const c = order.customers?.[0] || {};
-                const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
-                const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
-                return (lineHaul + fsc + other + carrierCharges + 25).toLocaleString();
-              })()} USD
+          const c = order.customers?.[0] || {};
+          const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
+          const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
+          return (lineHaul + fsc + other + carrierCharges).toLocaleString();
+        })()}.00, # of Units: 1, Bobtail: $25.00, TOTAL: $${(() => {
+          const c = order.customers?.[0] || {};
+          const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
+          const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
+          return (lineHaul + fsc + other + carrierCharges + 25).toLocaleString();
+        })()} USD
             </p>
           </div>
           <div style="margin-bottom: 15px; font-size: 12px; line-height: 1.6;">
@@ -1714,76 +1714,76 @@ const generateRateLoadConfirmationPDF = (order) => {
       </html>
     `;
 
-    printWindow.document.write(confirmationHTML);
-    printWindow.document.close();
-    printWindow.onload = function () {
-      printWindow.print();
-      printWindow.close();
-    };
-    alertify.success('Rate and Load Confirmation PDF generated successfully!');
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    alertify.error('Failed to generate PDF. Please try again.');
-  }
-};
+      printWindow.document.write(confirmationHTML);
+      printWindow.document.close();
+      printWindow.onload = function () {
+        printWindow.print();
+        printWindow.close();
+      };
+      alertify.success('Rate and Load Confirmation PDF generated successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alertify.error('Failed to generate PDF. Please try again.');
+    }
+  };
 
 
 
   // Generate Invoice PDF function
-  
-const generateInvoicePDF = (order) => {
-  try {
-    const printWindow = window.open('', '_blank');
 
-    // ---- Bill To + Address (from shippers list if available) ----
-    const cust = order?.customers?.[0] || {};
-    const companyName = (cust.billTo || '').trim();
-    const matchedCompany = (Array.isArray(shippers) ? shippers : []).find(
-      s => (s.compName || '').toLowerCase() === companyName.toLowerCase()
-    );
-    const billAddr = [
-      matchedCompany?.compAdd,
-      matchedCompany?.city,
-      matchedCompany?.state,
-      matchedCompany?.zipcode,
-    ].filter(Boolean).join(', ');
-    const billToDisplay = [companyName || 'N/A', billAddr].filter(Boolean).join(' — ');
-    const workOrderNo = cust.workOrderNo || 'N/A';
-    const invoiceNo   = order.doNum || cust.loadNo || 'N/A';
-    const todayStr    = new Date().toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'});
+  const generateInvoicePDF = (order) => {
+    try {
+      const printWindow = window.open('', '_blank');
 
-    // ---- ONLY customer rates ----
-    const LH  = Number(cust.lineHaul) || 0;
-    const FSC = Number(cust.fsc) || 0;
-    const OTH = Number(cust.other) || 0;
-    const CUSTOMER_TOTAL = LH + FSC + OTH;
+      // ---- Bill To + Address (from shippers list if available) ----
+      const cust = order?.customers?.[0] || {};
+      const companyName = (cust.billTo || '').trim();
+      const matchedCompany = (Array.isArray(shippers) ? shippers : []).find(
+        s => (s.compName || '').toLowerCase() === companyName.toLowerCase()
+      );
+      const billAddr = [
+        matchedCompany?.compAdd,
+        matchedCompany?.city,
+        matchedCompany?.state,
+        matchedCompany?.zipcode,
+      ].filter(Boolean).join(', ');
+      const billToDisplay = [companyName || 'N/A', billAddr].filter(Boolean).join(' — ');
+      const workOrderNo = cust.workOrderNo || 'N/A';
+      const invoiceNo = order.doNum || cust.loadNo || 'N/A';
+      const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
-    // helpers
-    const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
-    const fmtTime = (d) => {
-      if (!d) return '';
-      const dt = new Date(d);
-      if (Number.isNaN(dt.getTime())) return '';
-      // show time only if not midnight
-      if (dt.getHours() === 0 && dt.getMinutes() === 0) return '';
-      return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
-    const fullAddr = (loc) =>
-      [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
-    const hasTimeVal = (ds) => {
-      if (!ds) return false;
-      const dt = new Date(ds);
-      if (Number.isNaN(dt.getTime())) return false;
-      return dt.getHours() !== 0 || dt.getMinutes() !== 0;
-    };
+      // ---- ONLY customer rates ----
+      const LH = Number(cust.lineHaul) || 0;
+      const FSC = Number(cust.fsc) || 0;
+      const OTH = Number(cust.other) || 0;
+      const CUSTOMER_TOTAL = LH + FSC + OTH;
 
-    const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
-    const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
+      // helpers
+      const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
+      const fmtTime = (d) => {
+        if (!d) return '';
+        const dt = new Date(d);
+        if (Number.isNaN(dt.getTime())) return '';
+        // show time only if not midnight
+        if (dt.getHours() === 0 && dt.getMinutes() === 0) return '';
+        return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      };
+      const fullAddr = (loc) =>
+        [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
+      const hasTimeVal = (ds) => {
+        if (!ds) return false;
+        const dt = new Date(ds);
+        if (Number.isNaN(dt.getTime())) return false;
+        return dt.getHours() !== 0 || dt.getMinutes() !== 0;
+      };
 
-    const hasPickupTime = pickRows.some(l => hasTimeVal(l?.date || order?.shipper?.pickUpDate));
-    const hasDropTime   = dropRows.some(l => hasTimeVal(l?.date || order?.shipper?.dropDate));
+      const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
+      const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
 
-    const html = `
+      const hasPickupTime = pickRows.some(l => hasTimeVal(l?.date || order?.shipper?.pickUpDate));
+      const hasDropTime = dropRows.some(l => hasTimeVal(l?.date || order?.shipper?.dropDate));
+
+      const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1841,12 +1841,12 @@ const generateInvoicePDF = (order) => {
         </thead>
         <tbody>
           ${pickRows.map(l => {
-            const weight = (l?.weight ?? '') !== '' && l?.weight !== null ? l.weight : 'N/A';
-            const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
-            const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
-            const qty    = Number(l?.quantity ?? order.shipper?.quantity) || 1;
-            const dateSrc = l?.date || order.shipper?.pickUpDate;
-            return `
+        const weight = (l?.weight ?? '') !== '' && l?.weight !== null ? l.weight : 'N/A';
+        const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
+        const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
+        const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
+        const dateSrc = l?.date || order.shipper?.pickUpDate;
+        return `
               <tr>
                 <td>${l?.name || 'N/A'}</td>
                 <td>${fullAddr(l)}</td>
@@ -1858,7 +1858,7 @@ const generateInvoicePDF = (order) => {
                 ${hasPickupTime ? `<td>${fmtTime(dateSrc)}</td>` : ''}
               </tr>
             `;
-          }).join('')}
+      }).join('')}
         </tbody>
       </table>
     </div>
@@ -1880,12 +1880,12 @@ const generateInvoicePDF = (order) => {
         </thead>
         <tbody>
           ${dropRows.map(l => {
-            const weight = (l?.weight ?? '') !== '' && l?.weight !== null ? l.weight : 'N/A';
-            const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
-            const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
-            const qty    = Number(l?.quantity ?? order.shipper?.quantity) || 1;
-            const dateSrc = l?.date || order.shipper?.dropDate;
-            return `
+        const weight = (l?.weight ?? '') !== '' && l?.weight !== null ? l.weight : 'N/A';
+        const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
+        const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
+        const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
+        const dateSrc = l?.date || order.shipper?.dropDate;
+        return `
               <tr>
                 <td>${l?.name || 'N/A'}</td>
                 <td>${fullAddr(l)}</td>
@@ -1897,7 +1897,7 @@ const generateInvoicePDF = (order) => {
                 ${hasDropTime ? `<td>${fmtTime(dateSrc)}</td>` : ''}
               </tr>
             `;
-          }).join('')}
+      }).join('')}
         </tbody>
       </table>
     </div>
@@ -1907,7 +1907,7 @@ const generateInvoicePDF = (order) => {
       <table class="tbl">
         <thead><tr><th>Description</th><th>Amount</th></tr></thead>
         <tbody>
-          ${LH  > 0 ? `<tr><td>Line Haul</td><td class="amount">$${LH.toLocaleString()}</td></tr>` : ''}
+          ${LH > 0 ? `<tr><td>Line Haul</td><td class="amount">$${LH.toLocaleString()}</td></tr>` : ''}
           ${FSC > 0 ? `<tr><td>FSC</td><td class="amount">$${FSC.toLocaleString()}</td></tr>` : ''}
           ${OTH > 0 ? `<tr><td>Other</td><td class="amount">$${OTH.toLocaleString()}</td></tr>` : ''}
           <tr class="total-row">
@@ -1924,18 +1924,18 @@ const generateInvoicePDF = (order) => {
 </html>
     `;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.onload = function () {
-      printWindow.print();
-      printWindow.close();
-    };
-    alertify.success('Invoice PDF generated successfully!');
-  } catch (err) {
-    console.error('Error generating PDF:', err);
-    alertify.error('Failed to generate PDF. Please try again.');
-  }
-};
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = function () {
+        printWindow.print();
+        printWindow.close();
+      };
+      alertify.success('Invoice PDF generated successfully!');
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alertify.error('Failed to generate PDF. Please try again.');
+    }
+  };
 
 
 
