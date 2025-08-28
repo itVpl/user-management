@@ -212,6 +212,11 @@ class ApiService {
     return this.get(this.endpoints.USER_PROFILE);
   }
 
+  // CMT Users methods
+  async getCMTUsers() {
+    return this.get(this.endpoints.CMT_USERS);
+  }
+
   // Delivery Order methods
   async getDeliveryOrders() {
     return this.get(this.endpoints.DELIVERY_ORDERS);

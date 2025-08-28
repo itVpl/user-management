@@ -9,7 +9,18 @@ const API_CONFIG = {
   },
   
   // API endpoints
-
+  ENDPOINTS: {
+    LOGIN: '/api/v1/auth/login',
+    SIGNUP: '/api/v1/auth/signup',
+    LOGOUT: '/api/v1/auth/logout',
+    USERS: '/api/v1/users',
+    USER_PROFILE: '/api/v1/user/profile',
+    DELIVERY_ORDERS: '/api/v1/delivery-orders',
+    CREATE_DELIVERY_ORDER: '/api/v1/delivery-orders',
+    TRUCKERS: '/api/v1/truckers',
+    UPDATE_TRUCKER_STATUS: '/api/v1/truckers',
+    CMT_USERS: '/api/v1/inhouseUser/department/CMT',
+  },
   
   // Helper function to get full URL
   getFullUrl: (endpoint) => {
