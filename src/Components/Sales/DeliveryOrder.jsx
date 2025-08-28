@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import apiService from '../../services/apiService.js';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
@@ -9,6 +10,132 @@ import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
 import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
+
+// Searchable Dropdown Component
+const SearchableDropdown = ({ 
+  value, 
+  onChange, 
+  options, 
+  placeholder, 
+  disabled = false, 
+  loading = false,
+  className = "",
+  searchPlaceholder = "Search..."
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredOptions, setFilteredOptions] = useState(options);
+  const dropdownRef = React.useRef(null);
+
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredOptions(options);
+    } else {
+      const filtered = options.filter(option => 
+        option.label.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredOptions(filtered);
+    }
+  }, [searchTerm, options]);
+
+  // Close dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [isOpen]);
+
+  const handleSelect = (option) => {
+    onChange(option.value);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  const selectedOption = options.find(option => option.value === value);
+
+  return (
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      <div
+        className={`w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${
+          disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
+        }`}
+        onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center justify-between">
+          <span className={selectedOption ? 'text-gray-900' : 'text-gray-500'}>
+            {loading ? 'Loading...' : selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <svg
+            className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
+
+      {isOpen && !disabled && !loading && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
+          {/* Search Input */}
+          <div className="p-2 border-b border-gray-200">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder={searchPlaceholder}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          {/* Options List */}
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option, index) => (
+                <div
+                  key={index}
+                  className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                  onClick={() => handleSelect(option)}
+                >
+                  {option.label}
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-2 text-gray-500 text-sm text-center">
+                No options found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function DeliveryOrder() {
   const [orders, setOrders] = useState([]);
@@ -136,7 +263,7 @@ export default function DeliveryOrder() {
     containerNo: '',
     containerType: '',
 
-    // Pickup Locations - each has weight
+    // Pickup Locations - each has weight and individual date
     pickupLocations: [
       {
         name: '',
@@ -144,12 +271,12 @@ export default function DeliveryOrder() {
         city: '',
         state: '',
         zipCode: '',
-        date: '',
-        weight: ''     // <-- NEW: yahi rakhen
+        weight: '',
+        pickUpDate: ''     // <-- NEW: individual pickup date
       }
     ],
 
-    // Drop Locations - each has weight
+    // Drop Locations - each has weight and individual date
     dropLocations: [
       {
         name: '',
@@ -157,8 +284,8 @@ export default function DeliveryOrder() {
         city: '',
         state: '',
         zipCode: '',
-        date: '',
-        weight: ''     // <-- NEW
+        weight: '',
+        dropDate: ''     // <-- NEW: individual drop date
       }
     ],
 
@@ -375,12 +502,12 @@ export default function DeliveryOrder() {
         containerType: src.shipper?.containerType || '',
 
         pickupLocations: (src.shipper?.pickUpLocations || [{
-          name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: ''
-        }]).map(l => ({ ...l, date: fmt(src.shipper?.pickUpDate), weight: l?.weight ?? '' })),
+          name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: ''
+        }]).map(l => ({ ...l, pickUpDate: fmt(l?.pickUpDate || src.shipper?.pickUpDate), weight: l?.weight ?? '' })),
 
         dropLocations: (src.shipper?.dropLocations || [{
-          name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: ''
-        }]).map(l => ({ ...l, date: fmt(src.shipper?.dropDate), weight: l?.weight ?? '' })),
+          name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: ''
+        }]).map(l => ({ ...l, dropDate: fmt(l?.dropDate || src.shipper?.dropDate), weight: l?.weight ?? '' })),
 
         remarks: src.remarks || '',
         docs: null,
@@ -543,7 +670,7 @@ export default function DeliveryOrder() {
       ...prev,
       pickupLocations: [
         ...prev.pickupLocations,
-        { name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: '' }
+        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '' }
       ]
     }));
   };
@@ -564,7 +691,7 @@ export default function DeliveryOrder() {
       ...prev,
       dropLocations: [
         ...prev.dropLocations,
-        { name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: '' }
+        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '' }
       ]
     }));
   };
@@ -741,9 +868,9 @@ export default function DeliveryOrder() {
             city: l.city,
             state: l.state,
             zipCode: l.zipCode,
-            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0
+            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
+            pickUpDate: l.pickUpDate || ''
           })),
-          pickUpDate: formData.pickupLocations[0]?.date || '',
           containerNo: formData.containerNo,
           containerType: formData.containerType,
           dropLocations: formData.dropLocations.map(l => ({
@@ -752,9 +879,9 @@ export default function DeliveryOrder() {
             city: l.city,
             state: l.state,
             zipCode: l.zipCode,
-            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0
-          })),
-          dropDate: formData.dropLocations[0]?.date || ''
+            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
+            dropDate: l.dropDate || ''
+          }))
         },
         remarks: formData.remarks
       };
@@ -783,10 +910,8 @@ export default function DeliveryOrder() {
 
         const shipperJSON = {
           name: formData.shipperName,
-          pickUpDate: formData.pickupLocations[0]?.date || '',
           containerNo: formData.containerNo,
           containerType: formData.containerType,
-          dropDate: formData.dropLocations[0]?.date || '',
           pickUpLocations: formData.pickupLocations.map(l => ({
             name: l.name,
             address: l.address,
@@ -794,6 +919,7 @@ export default function DeliveryOrder() {
             state: l.state,
             zipCode: l.zipCode,
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
+            pickUpDate: l.pickUpDate || ''
           })),
           dropLocations: formData.dropLocations.map(l => ({
             name: l.name,
@@ -802,6 +928,7 @@ export default function DeliveryOrder() {
             state: l.state,
             zipCode: l.zipCode,
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
+            dropDate: l.dropDate || ''
           })),
         };
 
@@ -881,8 +1008,8 @@ export default function DeliveryOrder() {
           shipperName: '',
           containerNo: '',
           containerType: '',
-          pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: '' }],
-          dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: '' }],
+                  pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '' }],
+        dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '' }],
           remarks: '',
           docs: null
         });
@@ -937,7 +1064,7 @@ export default function DeliveryOrder() {
       containerNo: '',
       containerType: '',
 
-      // Pickup Locations — with weight
+      // Pickup Locations — with weight and individual date
       pickupLocations: [
         {
           name: '',
@@ -945,12 +1072,12 @@ export default function DeliveryOrder() {
           city: '',
           state: '',
           zipCode: '',
-          date: '',
-          weight: ''   // <- keep weight here
+          weight: '',
+          pickUpDate: ''   // <- individual pickup date
         }
       ],
 
-      // Drop Locations — with weight
+      // Drop Locations — with weight and individual date
       dropLocations: [
         {
           name: '',
@@ -958,8 +1085,8 @@ export default function DeliveryOrder() {
           city: '',
           state: '',
           zipCode: '',
-          date: '',
-          weight: ''   // <- and here
+          weight: '',
+          dropDate: ''   // <- individual drop date
         }
       ],
 
@@ -1060,12 +1187,12 @@ export default function DeliveryOrder() {
           containerType: fullOrderData.shipper?.containerType || '',
           pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
             ...l,
-            date: formatDateForInput(fullOrderData.shipper?.pickUpDate),
+            pickUpDate: formatDateForInput(l?.pickUpDate || fullOrderData.shipper?.pickUpDate),
             weight: l?.weight ?? '' // fallback; shipper.weight ko use NA kare
           })),
           dropLocations: (fullOrderData.shipper?.dropLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
             ...l,
-            date: formatDateForInput(fullOrderData.shipper?.dropDate),
+            dropDate: formatDateForInput(l?.dropDate || fullOrderData.shipper?.dropDate),
             weight: l?.weight ?? ''
           })),
           remarks: fullOrderData.remarks || '',
@@ -1095,7 +1222,7 @@ export default function DeliveryOrder() {
           fullData: fullOrderData
         });
         setFormMode('edit');
-        setShowAddOrderForm(true);
+        setShowEditModal(true);
       } else {
         alertify.error('Failed to fetch order details for editing');
       }
@@ -1126,8 +1253,8 @@ export default function DeliveryOrder() {
           city: '',
           state: '',
           zipCode: '',
-          date: '',
-          weight: order.quantity || ''   // table me quantity dikh raha tha => location weight
+          weight: order.quantity || '',   // table me quantity dikh raha tha => location weight
+          pickUpDate: ''
         }],
         dropLocations: [{
           name: order.deliveryLocation || '',
@@ -1135,8 +1262,8 @@ export default function DeliveryOrder() {
           city: '',
           state: '',
           zipCode: '',
-          date: '',
-          weight: ''
+          weight: '',
+          dropDate: ''
         }],
         remarks: order.remarks || '',
         docs: null
@@ -1146,7 +1273,7 @@ export default function DeliveryOrder() {
       setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
       setEditingOrder({ _id: originalId, customerId: null, fullData: null });
       setFormMode('edit');
-      setShowAddOrderForm(true);
+      setShowEditModal(true);
       alertify.warning('Using limited data for editing. Some fields may be empty.');
     }
   };
@@ -1180,7 +1307,7 @@ export default function DeliveryOrder() {
       containerNo: '',
       containerType: '',
 
-      // Locations with weight fields
+      // Locations with weight fields and individual dates
       pickupLocations: [
         {
           name: '',
@@ -1188,8 +1315,8 @@ export default function DeliveryOrder() {
           city: '',
           state: '',
           zipCode: '',
-          date: '',
-          weight: ''
+          weight: '',
+          pickUpDate: ''
         }
       ],
       dropLocations: [
@@ -1199,8 +1326,8 @@ export default function DeliveryOrder() {
           city: '',
           state: '',
           zipCode: '',
-          date: '',
-          weight: ''
+          weight: '',
+          dropDate: ''
         }
       ],
 
@@ -1252,16 +1379,18 @@ export default function DeliveryOrder() {
         name: formData.shipperName,
         containerNo: formData.containerNo,
         containerType: formData.containerType,
-        pickUpDate: formData.pickupLocations?.[0]?.date || '',
-        dropDate: formData.dropLocations?.[0]?.date || '',
-        pickUpLocations: (formData.pickupLocations || []).map(l => ({
-          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode,
-          weight: l.weight === '' ? 0 : Number(l.weight) || 0
-        })),
-        dropLocations: (formData.dropLocations || []).map(l => ({
-          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode,
-          weight: l.weight === '' ? 0 : Number(l.weight) || 0
-        })),
+        pickUpDate: formData.pickupLocations?.[0]?.pickUpDate || '',
+        dropDate: formData.dropLocations?.[0]?.dropDate || '',
+                  pickUpLocations: (formData.pickupLocations || []).map(l => ({
+            name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode,
+            weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+            pickUpDate: l.pickUpDate || ''
+          })),
+          dropLocations: (formData.dropLocations || []).map(l => ({
+            name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode,
+            weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+            dropDate: l.dropDate || ''
+          })),
       };
 
       const carrierPayload = {
@@ -1469,8 +1598,27 @@ export default function DeliveryOrder() {
   };
   // Generate Rate and Load Confirmation PDF function
   // REPLACE THIS BLOCK: generateRateLoadConfirmationPDF (weight ko per-location line me show, shipper.weight hataya)
-  const generateRateLoadConfirmationPDF = (order) => {
+  const generateRateLoadConfirmationPDF = async (order) => {
     try {
+      // Fetch dispatcher information from API
+      let dispatcherPhone = 'N/A';
+      let dispatcherEmail = 'N/A';
+      
+      try {
+        const cmtUsers = await apiService.getCMTUsers();
+        const dispatcher = cmtUsers.find(user => 
+          user.aliasName === order.customers?.[0]?.dispatcherName
+        );
+        
+        if (dispatcher) {
+          dispatcherPhone = dispatcher.mobileNo || 'N/A';
+          dispatcherEmail = dispatcher.email || 'N/A';
+        }
+      } catch (error) {
+        console.error('Error fetching dispatcher info:', error);
+        // Continue with default values if API call fails
+      }
+
       const printWindow = window.open('', '_blank');
 
       const confirmationHTML = `
@@ -1509,9 +1657,9 @@ export default function DeliveryOrder() {
                 </tr>
                 <tr>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Phone</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.phone || 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${dispatcherPhone}</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Ship Date</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit',  day: '2-digit' }) : 'N/A'}</td>
                 </tr>
                 <tr>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Fax</td>
@@ -1521,7 +1669,7 @@ export default function DeliveryOrder() {
                 </tr>
                 <tr>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Email</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.email || 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${dispatcherEmail}</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">W/O</td>
                   <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.workOrderNo || 'N/A'}</td>
                 </tr>
@@ -1570,7 +1718,7 @@ export default function DeliveryOrder() {
               </tr>
               <tr>
                 <td style="width:50%;padding:8px;">
-                  <strong>Date:</strong> ${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString() : 'N/A'}<br>
+                  <strong>Date:</strong> ${(order.shipper?.pickUpLocations?.[0]?.pickUpDate || order.shipper?.pickUpDate) ? new Date(order.shipper?.pickUpLocations?.[0]?.pickUpDate || order.shipper?.pickUpDate).toLocaleDateString() : 'N/A'}<br>
                   <strong>Time:</strong> N/A<br>
                   <strong>Type:</strong> ${order.shipper?.containerType || '40HC'}<br>
                   <strong>Quantity:</strong> 1<br>
@@ -1600,7 +1748,7 @@ export default function DeliveryOrder() {
               </tr>
               <tr>
                 <td style="width:50%;padding:8px;">
-                  <strong>Date:</strong> ${order.shipper?.dropDate ? new Date(order.shipper.dropDate).toLocaleDateString() : 'N/A'}<br>
+                  <strong>Date:</strong> ${(order.shipper?.dropLocations?.[0]?.dropDate || order.shipper?.dropDate) ? new Date(order.shipper?.dropLocations?.[0]?.dropDate || order.shipper?.dropDate).toLocaleDateString() : 'N/A'}<br>
                   <strong>Time:</strong> N/A<br>
                   <strong>Type:</strong> ${order.shipper?.containerType || '40HC'}<br>
                   <strong>Quantity:</strong> 1<br>
@@ -1747,7 +1895,7 @@ export default function DeliveryOrder() {
         matchedCompany?.state,
         matchedCompany?.zipcode,
       ].filter(Boolean).join(', ');
-      const billToDisplay = [companyName || 'N/A', billAddr].filter(Boolean).join(' — ');
+      const billToDisplay = [companyName || 'N/A', billAddr].filter(Boolean).join('<br>');
       const workOrderNo = cust.workOrderNo || 'N/A';
       const invoiceNo = order.doNum || cust.loadNo || 'N/A';
       const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -1759,14 +1907,28 @@ export default function DeliveryOrder() {
       const CUSTOMER_TOTAL = LH + FSC + OTH;
 
       // helpers
-      const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
-      const fmtTime = (d) => {
-        if (!d) return '';
-        const dt = new Date(d);
-        if (Number.isNaN(dt.getTime())) return '';
-        // show time only if not midnight
-        if (dt.getHours() === 0 && dt.getMinutes() === 0) return '';
-        return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const fmtDateTime = (d) => {
+        if (!d) return 'N/A';
+        try {
+          const dt = new Date(d);
+          if (Number.isNaN(dt.getTime())) return 'Invalid Date';
+          // Format as UTC to avoid timezone conversion issues
+          const dateStr = dt.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            timeZone: 'UTC'
+          });
+          const timeStr = dt.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            timeZone: 'UTC'
+          });
+          return `${dateStr} ${timeStr}`;
+        } catch (error) {
+          console.error('Error formatting date/time:', error, d);
+          return 'Invalid Date';
+        }
       };
       const fullAddr = (loc) =>
         [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
@@ -1780,8 +1942,7 @@ export default function DeliveryOrder() {
       const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
       const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
 
-      const hasPickupTime = pickRows.some(l => hasTimeVal(l?.date || order?.shipper?.pickUpDate));
-      const hasDropTime = dropRows.some(l => hasTimeVal(l?.date || order?.shipper?.dropDate));
+
 
       const html = `
 <!DOCTYPE html>
@@ -1797,7 +1958,7 @@ export default function DeliveryOrder() {
   .header{display:flex;gap:16px;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px}
   .logo{width:140px;height:90px;object-fit:contain;flex:0 0 auto}
   .header-right{flex:1 1 auto}
-  .billto{border-collapse:collapse;width:100%;font-size:12px}
+  .billto{border-collapse:collapse;width:65%;font-size:12px;margin-left:auto}
   .billto th,.billto td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
   .billto th{background:#f5f5f5;font-weight:bold;width:35%}
   .section{margin-top:14px}
@@ -1835,8 +1996,7 @@ export default function DeliveryOrder() {
             <th>Container No</th>
             <th>Container Type</th>
             <th>Qty</th>
-            <th>Pickup Date</th>
-            ${hasPickupTime ? '<th>Time</th>' : ''}
+            <th>Pickup Date & Time</th>
           </tr>
         </thead>
         <tbody>
@@ -1845,7 +2005,7 @@ export default function DeliveryOrder() {
         const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
         const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
         const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
-        const dateSrc = l?.date || order.shipper?.pickUpDate;
+        const dateSrc = l?.pickUpDate || order.shipper?.pickUpDate;
         return `
               <tr>
                 <td>${l?.name || 'N/A'}</td>
@@ -1854,8 +2014,7 @@ export default function DeliveryOrder() {
                 <td>${contNo}</td>
                 <td>${contTp}</td>
                 <td>${qty}</td>
-                <td>${fmtDate(dateSrc)}</td>
-                ${hasPickupTime ? `<td>${fmtTime(dateSrc)}</td>` : ''}
+                <td>${fmtDateTime(dateSrc)}</td>
               </tr>
             `;
       }).join('')}
@@ -1874,8 +2033,7 @@ export default function DeliveryOrder() {
             <th>Container No</th>
             <th>Container Type</th>
             <th>Qty</th>
-            <th>Drop Date</th>
-            ${hasDropTime ? '<th>Time</th>' : ''}
+            <th>Drop Date & Time</th>
           </tr>
         </thead>
         <tbody>
@@ -1884,7 +2042,7 @@ export default function DeliveryOrder() {
         const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
         const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
         const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
-        const dateSrc = l?.date || order.shipper?.dropDate;
+        const dateSrc = l?.dropDate || order.shipper?.dropDate;
         return `
               <tr>
                 <td>${l?.name || 'N/A'}</td>
@@ -1893,8 +2051,7 @@ export default function DeliveryOrder() {
                 <td>${contNo}</td>
                 <td>${contTp}</td>
                 <td>${qty}</td>
-                <td>${fmtDate(dateSrc)}</td>
-                ${hasDropTime ? `<td>${fmtTime(dateSrc)}</td>` : ''}
+                <td>${fmtDateTime(dateSrc)}</td>
               </tr>
             `;
       }).join('')}
@@ -2468,34 +2625,26 @@ export default function DeliveryOrder() {
                       {/* Bill To (Company) - dropdown */}
                       {/* Bill To (Company) - dropdown */}
                       {shippers.length > 0 ? (
-                        <select
+                        <SearchableDropdown
                           value={customer.billTo || ''}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                          required
+                          onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
+                          options={[
+                            // Current value (if not in list)
+                            ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo) 
+                              ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }] 
+                              : []
+                            ),
+                            // Company options
+                            ...shippers.map(s => ({
+                              value: s.compName || '',
+                              label: s.compName || '(No name)'
+                            }))
+                          ]}
+                          placeholder="Select Company *"
                           disabled={loadingShippers}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          {/* Placeholder */}
-                          <option value="" disabled>
-                            {loadingShippers ? 'Loading companies...' : 'Select Company *'}
-                          </option>
-
-                          {/* Current value (agar list me na ho) */}
-                          {customer.billTo &&
-                            !shippers.some(s => (s.compName || '') === customer.billTo) && (
-                              <option value={customer.billTo}>
-                                {customer.billTo} (custom)
-                              </option>
-                            )
-                          }
-
-                          {/* Company options */}
-                          {shippers.map(s => (
-                            <option key={s._id} value={s.compName || ''}>
-                              {s.compName || '(No name)'}
-                            </option>
-                          ))}
-                        </select>
+                          loading={loadingShippers}
+                          searchPlaceholder="Search companies..."
+                        />
                       ) : (
                         // Fallback: companies load na ho to normal input
                         <input
@@ -2512,45 +2661,37 @@ export default function DeliveryOrder() {
 
                       {/* Dispatcher Name - dropdown (aliasName from CMT) */}
                       {dispatchers.length > 0 ? (
-                        <select
+                        <SearchableDropdown
                           value={customer.dispatcherName || ''}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)
+                          onChange={(value) =>
+                            handleCustomerChange(customerIndex, 'dispatcherName', value)
                           }
-                          required
-                          disabled={loadingDispatchers}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          {/* Placeholder */}
-                          <option value="" disabled>
-                            {loadingDispatchers ? 'Loading dispatchers...' : 'Select Dispatcher *'}
-                          </option>
-
-                          {/* Current value (agar list me na ho) */}
-                          {customer.dispatcherName &&
+                          options={[
+                            // Current value (agar list me na ho)
+                            ...(customer.dispatcherName &&
                             !dispatchers.some(
                               (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
-                            ) && (
-                              <option value={customer.dispatcherName}>
-                                {customer.dispatcherName} (custom)
-                              </option>
-                            )}
-
-                          {/* Alias list (fallback to employeeName if alias missing) */}
-                          {dispatchers
-                            .filter((d) => (d.status || '').toLowerCase() === 'active')
-                            .sort((a, b) =>
-                              (a.aliasName || a.employeeName || '').localeCompare(
-                                b.aliasName || b.employeeName || ''
-                              )
                             )
-                            .map((d) => (
-                              <option key={d._id || d.empId} value={d.aliasName || d.employeeName}>
-                                {d.aliasName || d.employeeName}
-                                {d.empId ? ` (${d.empId})` : ''}
-                              </option>
-                            ))}
-                        </select>
+                              ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
+                              : []),
+                            // Alias list (fallback to employeeName if alias missing)
+                            ...dispatchers
+                              .filter((d) => (d.status || '').toLowerCase() === 'active')
+                              .sort((a, b) =>
+                                (a.aliasName || a.employeeName || '').localeCompare(
+                                  b.aliasName || b.employeeName || ''
+                                )
+                              )
+                              .map((d) => ({
+                                value: d.aliasName || d.employeeName,
+                                label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}`
+                              }))
+                          ]}
+                          placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Select Dispatcher *'}
+                          disabled={loadingDispatchers}
+                          loading={loadingDispatchers}
+                          searchPlaceholder="Search dispatchers..."
+                        />
                       ) : (
                         // Fallback: list na aaye to normal input allow karo
                         <input
@@ -2760,10 +2901,11 @@ export default function DeliveryOrder() {
 
                         <input
                           type="datetime-local"
-                          value={location.date}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'date', e.target.value)}
+                          value={location.pickUpDate}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'pickUpDate', e.target.value)}
                           required
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Pickup Date & Time *"
                         />
                       </div>
                     </div>
@@ -2852,10 +2994,11 @@ export default function DeliveryOrder() {
 
                         <input
                           type="datetime-local"
-                          value={location.date}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'date', e.target.value)}
+                          value={location.dropDate}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'dropDate', e.target.value)}
                           required
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Drop Date & Time *"
                         />
                       </div>
                     </div>
@@ -3140,19 +3283,7 @@ export default function DeliveryOrder() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                          <Calendar className="text-yellow-600" size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Pickup Date</p>
-                          <p className="font-semibold text-gray-800">
-                            {selectedOrder.shipper?.pickUpDate
-                              ? new Date(selectedOrder.shipper.pickUpDate).toLocaleDateString()
-                              : 'N/A'}
-                          </p>
-                        </div>
-                      </div>
+
 
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -3174,31 +3305,15 @@ export default function DeliveryOrder() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                          <Calendar className="text-red-600" size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Drop Date</p>
-                          <p className="font-semibold text-gray-800">
-                            {selectedOrder.shipper?.dropDate
-                              ? new Date(selectedOrder.shipper.dropDate).toLocaleDateString()
-                              : 'N/A'}
-                          </p>
-                        </div>
-                      </div>
+
                     </div>
 
-                    {/* Pickup Locations (WITH Weight) */}
-                    {((selectedOrder.shipper?.pickUpLocations ||
-                      selectedOrder.shipper?.pickupLocations ||
-                      []).length > 0) && (
+                    {/* Pickup Locations (WITH Weight and Date) */}
+                    {((selectedOrder.shipper?.pickUpLocations || []).length > 0) && (
                         <div className="mt-4">
                           <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
                           <div className="space-y-3">
-                            {(selectedOrder.shipper?.pickUpLocations ||
-                              selectedOrder.shipper?.pickupLocations ||
-                              []).map((location, index) => (
+                            {(selectedOrder.shipper?.pickUpLocations || []).map((location, index) => (
                                 <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
                                   <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -3229,6 +3344,33 @@ export default function DeliveryOrder() {
                                           : 'N/A'}
                                       </p>
                                     </div>
+                                    <div>
+                                      <p className="text-sm text-gray-600">Pickup Date</p>
+                                      <p className="font-medium text-gray-800">
+                                        {location?.pickUpDate
+                                          ? (() => {
+                                              try {
+                                                const date = new Date(location.pickUpDate);
+                                                if (isNaN(date.getTime())) {
+                                                  return 'Invalid Date';
+                                                }
+                                                // Format as UTC to avoid timezone conversion issues
+                                                return date.toLocaleDateString('en-US', {
+                                                  year: 'numeric',
+                                                  month: '2-digit',
+                                                  day: '2-digit',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit',
+                                                  timeZone: 'UTC'
+                                                });
+                                              } catch (error) {
+                                                console.error('Error formatting pickup date:', error, location.pickUpDate);
+                                                return 'Invalid Date';
+                                              }
+                                            })()
+                                          : 'N/A'}
+                                      </p>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
@@ -3236,7 +3378,7 @@ export default function DeliveryOrder() {
                         </div>
                       )}
 
-                    {/* Drop Locations (WITH Weight) */}
+                    {/* Drop Locations (WITH Weight and Date) */}
                     {((selectedOrder.shipper?.dropLocations || []).length > 0) && (
                       <div className="mt-4">
                         <h4 className="font-semibold text-gray-800 mb-3">Drop Locations</h4>
@@ -3272,10 +3414,119 @@ export default function DeliveryOrder() {
                                       : 'N/A'}
                                   </p>
                                 </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Drop Date</p>
+                                  <p className="font-medium text-gray-800">
+                                    {location?.dropDate
+                                      ? (() => {
+                                          try {
+                                            const date = new Date(location.dropDate);
+                                            if (isNaN(date.getTime())) {
+                                              return 'Invalid Date';
+                                            }
+                                            // Format as UTC to avoid timezone conversion issues
+                                            return date.toLocaleDateString('en-US', {
+                                              year: 'numeric',
+                                              month: '2-digit',
+                                              day: '2-digit',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                              timeZone: 'UTC'
+                                            });
+                                          } catch (error) {
+                                            console.error('Error formatting drop date:', error, location.dropDate);
+                                            return 'Invalid Date';
+                                          }
+                                        })()
+                                      : 'N/A'}
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Document Display */}
+                {(selectedOrder?.docUpload || (selectedOrder?.uploadedFiles && selectedOrder.uploadedFiles.length > 0)) && (
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <FileText className="text-blue-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Uploaded Documents</h3>
+                    </div>
+                    
+                    {/* Single Document */}
+                    {selectedOrder?.docUpload && (
+                      <div className="bg-white rounded-lg p-4 border border-blue-200 mb-4">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-600 mb-2">Document Name</p>
+                            <p className="font-medium text-gray-800">{selectedOrder.docUpload}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <a
+                              href={`${API_CONFIG.BASE_URL}/${selectedOrder.docUpload}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                              <FaDownload size={14} />
+                              Download
+                            </a>
+                            <button
+                              onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedOrder.docUpload}`)}
+                              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                              <FileText size={14} />
+                              Preview
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Multiple Documents */}
+                    {selectedOrder?.uploadedFiles && selectedOrder.uploadedFiles.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {selectedOrder.uploadedFiles.map((file, index) => (
+                          <div key={index} className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <FileText className="text-blue-600" size={16} />
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-800 truncate">{file.fileName}</div>
+                                <div className="text-xs text-gray-500">{file.fileType}</div>
+                              </div>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <Calendar size={12} />
+                                <span>Uploaded: {new Date(file.uploadDate).toLocaleDateString()}</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <a
+                                  href={file.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex-1 bg-blue-500 text-white text-center py-2 px-3 rounded-lg hover:bg-blue-600 transition text-xs font-medium"
+                                >
+                                  View File
+                                </a>
+                                <a
+                                  href={file.fileUrl}
+                                  download={file.fileName}
+                                  className="bg-green-500 text-white py-2 px-3 rounded-lg hover:bg-green-600 transition text-xs font-medium"
+                                >
+                                  Download
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -3303,14 +3554,16 @@ export default function DeliveryOrder() {
                     <h3 className="text-lg font-bold text-gray-800">Status</h3>
                   </div>
                   <div className="bg-white rounded-lg p-4 border border-blue-200">
-                    <select
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    <SearchableDropdown
                       value={selectedOrder.status || 'open'}
-                      onChange={(e) => handleStatusChange(e.target.value)}
-                    >
-                      <option value="open">Open</option>
-                      <option value="close">Close</option>
-                    </select>
+                      onChange={(value) => handleStatusChange(value)}
+                      options={[
+                        { value: 'open', label: 'Open' },
+                        { value: 'close', label: 'Close' }
+                      ]}
+                      placeholder="Select Status"
+                      searchPlaceholder="Search status..."
+                    />
                   </div>
                 </div>
 
@@ -3557,34 +3810,26 @@ export default function DeliveryOrder() {
                       {/* Bill To (Company) - dropdown */}
                       {/* Bill To (Company) - dropdown */}
                       {shippers.length > 0 ? (
-                        <select
+                        <SearchableDropdown
                           value={customer.billTo || ''}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                          required
+                          onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
+                          options={[
+                            // Current value (if not in list)
+                            ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo) 
+                              ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }] 
+                              : []
+                            ),
+                            // Company options
+                            ...shippers.map(s => ({
+                              value: s.compName || '',
+                              label: s.compName || '(No name)'
+                            }))
+                          ]}
+                          placeholder="Select Company *"
                           disabled={loadingShippers}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          {/* Placeholder */}
-                          <option value="" disabled>
-                            {loadingShippers ? 'Loading companies...' : 'Select Company *'}
-                          </option>
-
-                          {/* Current value (agar list me na ho) */}
-                          {customer.billTo &&
-                            !shippers.some(s => (s.compName || '') === customer.billTo) && (
-                              <option value={customer.billTo}>
-                                {customer.billTo} (custom)
-                              </option>
-                            )
-                          }
-
-                          {/* Company options */}
-                          {shippers.map(s => (
-                            <option key={s._id} value={s.compName || ''}>
-                              {s.compName || '(No name)'}
-                            </option>
-                          ))}
-                        </select>
+                          loading={loadingShippers}
+                          searchPlaceholder="Search companies..."
+                        />
                       ) : (
                         // Fallback: companies load na ho to normal input
                         <input
@@ -3601,45 +3846,38 @@ export default function DeliveryOrder() {
 
                       {/* Dispatcher Name - dropdown (aliasName from CMT) */}
                       {dispatchers.length > 0 ? (
-                        <select
+                        <SearchableDropdown
                           value={customer.dispatcherName || ''}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)
+                          onChange={(value) =>
+                            handleCustomerChange(customerIndex, 'dispatcherName', value)
                           }
-                          required
-                          disabled={loadingDispatchers}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          {/* Placeholder */}
-                          <option value="" disabled>
-                            {loadingDispatchers ? 'Loading dispatchers...' : 'Select Dispatcher *'}
-                          </option>
-
-                          {/* Current value (agar list me na ho) */}
-                          {customer.dispatcherName &&
-                            !dispatchers.some(
-                              (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
-                            ) && (
-                              <option value={customer.dispatcherName}>
-                                {customer.dispatcherName} (custom)
-                              </option>
-                            )}
-
-                          {/* Alias list (fallback to employeeName if alias missing) */}
-                          {dispatchers
-                            .filter((d) => (d.status || '').toLowerCase() === 'active')
-                            .sort((a, b) =>
-                              (a.aliasName || a.employeeName || '').localeCompare(
-                                b.aliasName || b.employeeName || ''
+                          options={[
+                            // Current value (if not in list)
+                            ...(customer.dispatcherName &&
+                              !dispatchers.some(
+                                (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
+                              ) 
+                              ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }] 
+                              : []
+                            ),
+                            // Dispatcher options
+                            ...dispatchers
+                              .filter((d) => (d.status || '').toLowerCase() === 'active')
+                              .sort((a, b) =>
+                                (a.aliasName || a.employeeName || '').localeCompare(
+                                  b.aliasName || b.employeeName || ''
+                                )
                               )
-                            )
-                            .map((d) => (
-                              <option key={d._id || d.empId} value={d.aliasName || d.employeeName}>
-                                {d.aliasName || d.employeeName}
-                                {d.empId ? ` (${d.empId})` : ''}
-                              </option>
-                            ))}
-                        </select>
+                              .map((d) => ({
+                                value: d.aliasName || d.employeeName,
+                                label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}`
+                              }))
+                          ]}
+                          placeholder="Select Dispatcher *"
+                          disabled={loadingDispatchers}
+                          loading={loadingDispatchers}
+                          searchPlaceholder="Search dispatchers..."
+                        />
                       ) : (
                         // Fallback: list na aaye to normal input allow karo
                         <input
@@ -3764,15 +4002,6 @@ export default function DeliveryOrder() {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Container Type *"
                   />
-                  <input
-                    type="number"
-                    name="weight"
-                    value={formData.weight}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Weight (lbs) *"
-                  />
                 </div>
 
                 {/* Pickup Locations */}
@@ -3845,11 +4074,20 @@ export default function DeliveryOrder() {
                           placeholder="Zip Code *"
                         />
                         <input
-                          type="datetime-local"
-                          value={location.date}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'date', e.target.value)}
+                          type="number"
+                          value={location.weight}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
                           required
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Weight (lbs) *"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={location.pickUpDate}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'pickUpDate', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Pickup Date & Time *"
                         />
                       </div>
                     </div>
@@ -3926,11 +4164,20 @@ export default function DeliveryOrder() {
                           placeholder="Zip Code *"
                         />
                         <input
-                          type="datetime-local"
-                          value={location.date}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'date', e.target.value)}
+                          type="number"
+                          value={location.weight}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
                           required
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Weight (lbs) *"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={location.dropDate}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'dropDate', e.target.value)}
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Drop Date & Time *"
                         />
                       </div>
                     </div>
