@@ -5,6 +5,10 @@ import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, Plu
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
+import { DateRange } from 'react-date-range';
+import { addDays, format } from 'date-fns';
 
 export default function DeliveryOrder() {
   const [orders, setOrders] = useState([]);
@@ -15,18 +19,87 @@ export default function DeliveryOrder() {
   const [reason, setReason] = useState('');
   const [showAddOrderForm, setShowAddOrderForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [loadingOrderId, setLoadingOrderId] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [carrierFeesJustUpdated, setCarrierFeesJustUpdated] = useState(false);
+  const [customerNameInput, setCustomerNameInput] = useState('');
+  const [dispatchers, setDispatchers] = useState([]);
+  const [loadingDispatchers, setLoadingDispatchers] = useState(false);
   // PATCH: add this
   const [isEditForm, setIsEditForm] = useState(false);
-// top-level states ke saath
-const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
+  // top-level states ke saath
+  const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
+  // ADD: shipper companies (for Bill To dropdown)
+  const [shippers, setShippers] = useState([]);
+  const [loadingShippers, setLoadingShippers] = useState(false);
+  // ADD: get approved shippers (company names for Bill To)
+  const fetchShippersList = async () => {
+    try {
+      setLoadingShippers(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      // Prefer your API base URL
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+
+      const list = (res.data?.data || [])
+        .filter(x => (x.userType === 'shipper') && (x.status === 'approved'));
+
+      // Sort by company name (safe)
+      list.sort((a, b) => (a.compName || '').localeCompare(b.compName || ''));
+
+      setShippers(list);
+    } catch (err) {
+      console.error('Error loading shippers:', err);
+      alertify.error('Failed to load company list');
+      setShippers([]);
+    } finally {
+      setLoadingShippers(false);
+    }
+  };
 
 
+  // Date range state (default: last 30 days like screenshot)
+  const [range, setRange] = useState({
+    startDate: addDays(new Date(), -29),
+    endDate: new Date(),
+    key: 'selection'
+  });
+  const [showPresetMenu, setShowPresetMenu] = useState(false);
+  const [showCustomRange, setShowCustomRange] = useState(false);
+
+  // Presets
+  const presets = {
+    'Today': [new Date(), new Date()],
+    'Yesterday': [addDays(new Date(), -1), addDays(new Date(), -1)],
+    'Last 7 Days': [addDays(new Date(), -6), new Date()],
+    'Last 30 Days': [addDays(new Date(), -29), new Date()],
+    'This Month': [new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)],
+    'Last Month': [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1),
+    new Date(new Date().getFullYear(), new Date().getMonth(), 0)],
+  };
+  const applyPreset = (label) => {
+    const [s, e] = presets[label];
+    setRange({ startDate: s, endDate: e, key: 'selection' });
+    setShowPresetMenu(false);
+  };
+  const ymd = (d) => format(d, 'yyyy-MM-dd'); // "YYYY-MM-DD"
+
+  // Reset customer name input when selectedOrder changes
+  useEffect(() => {
+    if (selectedOrder) {
+      console.log('Selected order changed, customer name:', selectedOrder.customerName);
+      setCustomerNameInput(selectedOrder.customerName || '');
+    }
+  }, [selectedOrder]);
   // Charges popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
   const [charges, setCharges] = useState([
@@ -39,8 +112,8 @@ const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
   ]);
 
   // Form state for Add Delivery Order
+  // REPLACE THIS BLOCK: formData ka initial state (weight shipper se hata kar pickup/drop locations me dala)
   const [formData, setFormData] = useState({
-    // Customer Information - Array for multiple customers
     customers: [
       {
         billTo: '',
@@ -58,13 +131,12 @@ const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
     equipmentType: '',
     carrierFees: '',
 
-    // Shipper Information
+    // Shipper Information (NO top-level weight now)
     shipperName: '',
     containerNo: '',
     containerType: '',
-    weight: '',
 
-    // Pickup Locations - Array for multiple locations
+    // Pickup Locations - each has weight
     pickupLocations: [
       {
         name: '',
@@ -72,11 +144,12 @@ const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
         city: '',
         state: '',
         zipCode: '',
-        date: ''
+        date: '',
+        weight: ''     // <-- NEW: yahi rakhen
       }
     ],
 
-    // Drop Locations - Array for multiple locations
+    // Drop Locations - each has weight
     dropLocations: [
       {
         name: '',
@@ -84,14 +157,15 @@ const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
         city: '',
         state: '',
         zipCode: '',
-        date: ''
+        date: '',
+        weight: ''     // <-- NEW
       }
     ],
 
-    // General
     remarks: '',
     docs: null
   });
+
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,53 +191,50 @@ const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
   }, [formData.customers]);
 
   // Fetch data from API
+  // REPLACE THIS BLOCK: fetchOrders() (quantity ko locations ke weight se lo)
+  // REPLACE your fetchOrders with this version
   const fetchOrders = async () => {
     try {
       setLoading(true);
 
-      // Get user data to extract empId
       const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
-      if (!userStr) {
-        console.log('No user found in sessionStorage/localStorage');
-        return;
-      }
-
+      if (!userStr) return;
       const user = JSON.parse(userStr);
       const empId = user.empId;
-
-      if (!empId) {
-        console.log('No empId found in user object');
-        return;
-      }
-
-      console.log('Fetching orders for employee:', empId);
-      console.log('Fetching orders from:', `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`);
+      if (!empId) return;
 
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`, {
-        timeout: 10000, // 10 second timeout
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
       });
 
-      console.log('API Response:', response);
-
       if (response.data && response.data.success) {
-        // Transform API data to match our component structure
-        const transformedOrders = response.data.data.map(order => {
+        const transformedOrders = (response.data.data || []).map(order => {
+          // --------- PATCH: robust casing + fallbacks ----------
+          const puLocs =
+            order.shipper?.pickUpLocations ||
+            order.shipper?.pickupLocations || // some APIs use lowercase 'u'
+            [];
+          const drLocs =
+            order.shipper?.dropLocations ||
+            order.shipper?.deliveryLocations ||
+            [];
+
+          const puW = puLocs[0]?.weight;
+          const drW = drLocs[0]?.weight;
+          // -----------------------------------------------------
+
           const loadNo = order.customers?.[0]?.loadNo || 'N/A';
 
           return {
-            id: `DO-${order._id.slice(-6)}`,
-            originalId: order._id, // Store the full original _id
+            id: `DO-${String(order._id).slice(-6)}`,
+            originalId: order._id,
             doNum: loadNo,
             clientName: order.customers?.[0]?.billTo || 'N/A',
-            // clientPhone: '+1-555-0000', 
             clientEmail: `${(order.customers?.[0]?.billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
-            pickupLocation: order.shipper?.pickUpLocations?.[0]?.name || 'Pickup Location',
-            deliveryLocation: order.shipper?.dropLocations?.[0]?.name || 'Delivery Location',
+            pickupLocation: puLocs[0]?.name || 'Pickup Location',
+            deliveryLocation: drLocs[0]?.name || 'Delivery Location',
             amount: order.customers?.[0]?.totalAmount || 0,
             description: `Load: ${loadNo}`,
             priority: 'normal',
@@ -172,7 +243,9 @@ const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
             createdBy: `Employee ${order.empId || 'N/A'}`,
             docUpload: 'sample-doc.jpg',
             productName: order.shipper?.containerType || 'N/A',
-            quantity: order.shipper?.weight || 0,
+            // --------- PATCH: quantity fallback includes top-level shipper.weight if any ----------
+            quantity: (puW ?? drW ?? order.shipper?.weight ?? 0),
+            // --------------------------------------------------------------------------------------
             remarks: order.remarks || '',
             shipperName: order.shipper?.name || 'N/A',
             carrierName: order.carrier?.carrierName || 'N/A',
@@ -182,53 +255,53 @@ const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
           };
         });
 
-        console.log('Transformed orders:', transformedOrders);
         setOrders(transformedOrders);
-      } else {
-        console.error('API response format error:', response.data);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
-      console.error('Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        url: error.config?.url
-      });
-
       alertify.error(`Failed to load orders: ${error.response?.status || 'Network Error'}`);
-      // Fallback to sample data if API fails
-      const sampleOrders = [
-        {
-          id: 'DO-001',
-          doNum: 'LOAD001',
-          clientName: 'MSC',
-          clientPhone: '+1-555-0123',
-          clientEmail: 'contact@msc.com',
-          pickupLocation: 'New York, NY',
-          deliveryLocation: 'Los Angeles, CA',
-          amount: 13500,
-          description: 'Load: LOAD001',
-          priority: 'high',
-          status: 'approved',
-          createdAt: new Date().toISOString().split('T')[0],
-          createdBy: 'Employee 1234',
-          docUpload: 'sample-doc.jpg',
-          productName: 'Bullets',
-          quantity: 5,
-          remarks: 'Good'
-        }
-      ];
-      setOrders(sampleOrders);
     } finally {
       setLoading(false);
     }
   };
 
+
+  // Fetch dispatchers from CMT department
+  const fetchDispatchers = async () => {
+    try {
+      setLoadingDispatchers(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data && response.data.employees) {
+        // Filter only active employees
+        const activeEmployees = response.data.employees.filter(emp => emp.status === 'active');
+        setDispatchers(activeEmployees);
+        console.log('Dispatchers loaded:', activeEmployees);
+      } else {
+        console.error('No employees data in response');
+        setDispatchers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching dispatchers:', error);
+      alertify.error('Failed to load dispatchers');
+      setDispatchers([]);
+    } finally {
+      setLoadingDispatchers(false);
+    }
+  };
   useEffect(() => {
     fetchOrders();
+    fetchDispatchers();
+    fetchShippersList();         // ADD: load companies for Bill To dropdown
   }, []);
+
 
   const handleStatusUpdate = async (status) => {
     try {
@@ -247,100 +320,93 @@ const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
       console.error('Status update failed:', err);
     }
   };
-const handleDuplicateOrder = async (rowOrder) => {
-  try {
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+  // REPLACE THIS BLOCK: handleDuplicateOrder (locations ke weight ko preserve karo)
+  const handleDuplicateOrder = async (rowOrder) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const originalId =
+        rowOrder.originalId ||
+        rowOrder._id ||
+        (rowOrder.id?.startsWith('DO-') ? rowOrder.id.replace('DO-', '') : rowOrder.id);
 
-    const originalId =
-      rowOrder.originalId ||
-      rowOrder._id ||
-      (rowOrder.id?.startsWith('DO-') ? rowOrder.id.replace('DO-', '') : rowOrder.id);
+      const { data } = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/do/do/${originalId}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      if (!data?.success) {
+        alertify.error('Source order fetch failed');
+        return;
+      }
+      const src = data.data;
 
-    // source order lao (full detail)
-    const { data } = await axios.get(
-      `${API_CONFIG.BASE_URL}/api/v1/do/do/${originalId}`,
-      { headers: { 'Authorization': `Bearer ${token}` } }
-    );
-    if (!data?.success) {
-      alertify.error('Source order fetch failed');
-      return;
-    }
-    const src = data.data;
-
-    const fmt = (d) => {
-      if (!d) return '';
-      const x = new Date(d);
-      return Number.isNaN(x.getTime()) ? '' : x.toISOString().slice(0,16); // yyyy-mm-ddThh:mm
-    };
-
-    // formData ko prefill karo (IDs/doc/status skip)
-    const prefCustomers = (src.customers || []).map(c => {
-      const lh = Number(c.lineHaul) || 0;
-      const fsc = Number(c.fsc) || 0;
-      const oth = Number(c.other) || 0;
-      return {
-        billTo: c.billTo || '',
-        dispatcherName: c.dispatcherName || '',
-        // agar unique chahiye to suffix add kar lo:
-        // workOrderNo: `${c.workOrderNo || ''}-COPY`,
-        workOrderNo: c.workOrderNo || '',
-        lineHaul: lh,
-        fsc: fsc,
-        other: oth,
-        totalAmount: lh + fsc + oth,
+      const fmt = (d) => {
+        if (!d) return '';
+        const x = new Date(d);
+        return Number.isNaN(x.getTime()) ? '' : x.toISOString().slice(0, 16);
       };
-    });
 
-    const prefForm = {
-      customers: prefCustomers.length ? prefCustomers : [{
-        billTo: '', dispatcherName: '', workOrderNo: '',
-        lineHaul: '', fsc: '', other: '', totalAmount: 0
-      }],
+      const prefCustomers = (src.customers || []).map(c => {
+        const lh = Number(c.lineHaul) || 0;
+        const fsc = Number(c.fsc) || 0;
+        const oth = Number(c.other) || 0;
+        return {
+          billTo: c.billTo || '',
+          dispatcherName: c.dispatcherName || '',
+          workOrderNo: c.workOrderNo || '',
+          lineHaul: lh,
+          fsc: fsc,
+          other: oth,
+          totalAmount: lh + fsc + oth,
+        };
+      });
 
-      // Carrier + fees show karo, par POST me backend new banayega
-      carrierName: src.carrier?.carrierName || '',
-      equipmentType: src.carrier?.equipmentType || '',
-      carrierFees: src.carrier?.totalCarrierFees || '',
+      const prefForm = {
+        customers: prefCustomers.length ? prefCustomers : [{
+          billTo: '', dispatcherName: '', workOrderNo: '',
+          lineHaul: '', fsc: '', other: '', totalAmount: 0
+        }],
 
-      // Shipper
-      shipperName: src.shipper?.name || '',
-      containerNo: src.shipper?.containerNo || '',
-      containerType: src.shipper?.containerType || '',
-      weight: src.shipper?.weight || '',
+        carrierName: src.carrier?.carrierName || '',
+        equipmentType: src.carrier?.equipmentType || '',
+        carrierFees: src.carrier?.totalCarrierFees || '',
 
-      pickupLocations: (src.shipper?.pickUpLocations || [{
-        name:'', address:'', city:'', state:'', zipCode:'', date:''
-      }]).map(l => ({ ...l, date: fmt(src.shipper?.pickUpDate) })),
+        shipperName: src.shipper?.name || '',
+        containerNo: src.shipper?.containerNo || '',
+        containerType: src.shipper?.containerType || '',
 
-      dropLocations: (src.shipper?.dropLocations || [{
-        name:'', address:'', city:'', state:'', zipCode:'', date:''
-      }]).map(l => ({ ...l, date: fmt(src.shipper?.dropDate) })),
+        pickupLocations: (src.shipper?.pickUpLocations || [{
+          name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: ''
+        }]).map(l => ({ ...l, date: fmt(src.shipper?.pickUpDate), weight: l?.weight ?? '' })),
 
-      remarks: src.remarks || '',
-      docs: null, // file copy nahi kar sakte; user chahe to naya upload kare
-    };
+        dropLocations: (src.shipper?.dropLocations || [{
+          name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: ''
+        }]).map(l => ({ ...l, date: fmt(src.shipper?.dropDate), weight: l?.weight ?? '' })),
 
-    const fees = (src.carrier?.carrierFees || []).map(f => ({
-      name: f.name || '',
-      quantity: Number(f.quantity) || 0,
-      amt: Number(f.amount) || 0,
-      total: Number(f.total) || ((Number(f.quantity)||0) * (Number(f.amount)||0)),
-    }));
+        remarks: src.remarks || '',
+        docs: null,
+      };
 
-    setFormData(prefForm);
-    setCharges(fees.length ? fees : [{ name:'', quantity:'', amt:'', total:0 }]);
+      const fees = (src.carrier?.carrierFees || []).map(f => ({
+        name: f.name || '',
+        quantity: Number(f.quantity) || 0,
+        amt: Number(f.amount) || 0,
+        total: Number(f.total) || ((Number(f.quantity) || 0) * (Number(f.amount) || 0)),
+      }));
 
-    // ⚠️ IMPORTANT: duplicate me update nahi karna, isliye editingOrder ko null rakho
-    setEditingOrder(null);
-    setFormMode('duplicate');         // UI: edit-jaisa form khulega
-    setShowAddOrderForm(true);
+      setFormData(prefForm);
+      setCharges(fees.length ? fees : [{ name: '', quantity: '', amt: '', total: 0 }]);
 
-    alertify.message('You are duplicating this order. Submitting will create a new order.');
-  } catch (e) {
-    console.error(e);
-    alertify.error('Duplicate form open failed');
-  }
-};
+      setEditingOrder(null);
+      setFormMode('duplicate');
+      setShowAddOrderForm(true);
+
+      alertify.message('You are duplicating this order. Submitting will create a new order.');
+    } catch (e) {
+      console.error(e);
+      alertify.error('Duplicate form open failed');
+    }
+  };
+
 
 
   // Status color helper
@@ -355,12 +421,20 @@ const handleDuplicateOrder = async (rowOrder) => {
 
 
   // Filter orders based on search term
-  const filteredOrders = orders.filter(order =>
-    order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.pickupLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.deliveryLocation.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOrders = orders.filter(order => {
+    const text = searchTerm.toLowerCase();
+    const matchesText =
+      order.id.toLowerCase().includes(text) ||
+      order.clientName.toLowerCase().includes(text) ||
+      order.pickupLocation.toLowerCase().includes(text) ||
+      order.deliveryLocation.toLowerCase().includes(text);
+
+    const created = order.createdAt || ''; // e.g., "2025-08-27"
+    const inRange = created >= ymd(range.startDate) && created <= ymd(range.endDate);
+
+    return matchesText && inRange;
+  });
+
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
@@ -376,7 +450,8 @@ const handleDuplicateOrder = async (rowOrder) => {
   // Reset to first page when search term changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, range]);
+
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -412,30 +487,18 @@ const handleDuplicateOrder = async (rowOrder) => {
   // Handle pickup location input changes
   const handlePickupLocationChange = (index, field, value) => {
     setFormData(prev => {
-      const updatedPickupLocations = [...prev.pickupLocations];
-      updatedPickupLocations[index] = {
-        ...updatedPickupLocations[index],
-        [field]: value
-      };
-      return {
-        ...prev,
-        pickupLocations: updatedPickupLocations
-      };
+      const updated = [...prev.pickupLocations];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, pickupLocations: updated };
     });
   };
 
   // Handle drop location input changes
   const handleDropLocationChange = (index, field, value) => {
     setFormData(prev => {
-      const updatedDropLocations = [...prev.dropLocations];
-      updatedDropLocations[index] = {
-        ...updatedDropLocations[index],
-        [field]: value
-      };
-      return {
-        ...prev,
-        dropLocations: updatedDropLocations
-      };
+      const updated = [...prev.dropLocations];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, dropLocations: updated };
     });
   };
 
@@ -478,14 +541,10 @@ const handleDuplicateOrder = async (rowOrder) => {
   const addPickupLocation = () => {
     setFormData(prev => ({
       ...prev,
-      pickupLocations: [...prev.pickupLocations, {
-        name: '',
-        address: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        date: ''
-      }]
+      pickupLocations: [
+        ...prev.pickupLocations,
+        { name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: '' }
+      ]
     }));
   };
 
@@ -503,14 +562,10 @@ const handleDuplicateOrder = async (rowOrder) => {
   const addDropLocation = () => {
     setFormData(prev => ({
       ...prev,
-      dropLocations: [...prev.dropLocations, {
-        name: '',
-        address: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        date: ''
-      }]
+      dropLocations: [
+        ...prev.dropLocations,
+        { name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: '' }
+      ]
     }));
   };
 
@@ -617,25 +672,19 @@ const handleDuplicateOrder = async (rowOrder) => {
   };
 
   // Handle form submission
+  // REPLACE THIS BLOCK: handleSubmit (JSON payload aur FormData me locations.weight bhejna; shipper.weight hata do)
+  // DROP-IN REPLACEMENT for your handleSubmit
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
       setSubmitting(true);
 
-      // Validate that at least one customer exists
-      console.log('=== DEBUG: CUSTOMERS VALIDATION ===');
-      console.log('formData.customers:', formData.customers);
-      console.log('formData.customers.length:', formData.customers?.length);
-      console.log('formData.customers type:', typeof formData.customers);
-      console.log('=== END DEBUG ===');
-
+      // --- basic validations (same as before) ---
       if (!formData.customers || formData.customers.length === 0) {
-        // If somehow customers array is empty, add one customer automatically
         setFormData(prev => ({
           ...prev,
           customers: [{
-            loadNo: '',
             billTo: '',
             dispatcherName: '',
             workOrderNo: '',
@@ -650,286 +699,208 @@ const handleDuplicateOrder = async (rowOrder) => {
         return;
       }
 
-      // Get user data to extract empId
+      // --- user & emp ---
       const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
-      const user = JSON.parse(userStr);
+      const user = JSON.parse(userStr || '{}');
       const empId = user.empId || "EMP001";
 
-      // Calculate total amounts for each customer
-      const customersWithTotals = formData.customers.map(customer => ({
-        // Try omitting loadNo entirely since backend should auto-generate it
-        billTo: customer.billTo,
-        dispatcherName: customer.dispatcherName,
-        workOrderNo: customer.workOrderNo,
-        lineHaul: parseInt(customer.lineHaul) || 0,
-        fsc: parseInt(customer.fsc) || 0,
-        other: parseInt(customer.other) || 0,
-        totalAmount: (parseInt(customer.lineHaul) || 0) + (parseInt(customer.fsc) || 0) + (parseInt(customer.other) || 0)
+      // --- customers (totals) ---
+      const customersWithTotals = formData.customers.map(c => ({
+        billTo: c.billTo,
+        dispatcherName: c.dispatcherName,
+        workOrderNo: c.workOrderNo,
+        lineHaul: parseInt(c.lineHaul) || 0,
+        fsc: parseInt(c.fsc) || 0,
+        other: parseInt(c.other) || 0,
+        totalAmount: (parseInt(c.lineHaul) || 0) + (parseInt(c.fsc) || 0) + (parseInt(c.other) || 0)
       }));
 
-      // Additional validation after mapping
-      console.log('=== DEBUG: AFTER MAPPING ===');
-      console.log('customersWithTotals:', customersWithTotals);
-      console.log('customersWithTotals.length:', customersWithTotals.length);
-      console.log('customersWithTotals[0]:', customersWithTotals[0]);
-      console.log('=== END DEBUG ===');
-
-      // Prepare carrier data with charges array and total
+      // --- carrier (from charges) ---
       const carrierData = {
         carrierName: formData.carrierName,
         equipmentType: formData.equipmentType,
-        carrierFees: charges.map(charge => ({
-          name: charge.name,
-          quantity: parseInt(charge.quantity) || 0,
-          amount: parseInt(charge.amt) || 0,
-          total: (parseFloat(charge.quantity) || 0) * (parseFloat(charge.amt) || 0)
+        carrierFees: (charges || []).map(ch => ({
+          name: ch.name,
+          quantity: parseInt(ch.quantity) || 0,
+          amount: parseInt(ch.amt) || 0,
+          total: (parseFloat(ch.quantity) || 0) * (parseFloat(ch.amt) || 0)
         })),
-        totalCarrierFees: charges.reduce((sum, charge) => sum + (charge.total || 0), 0)
+        totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0)
       };
 
-      // Prepare the data for API submission
+      // --- plain JSON payload (no top-level shipper.weight) ---
       const submitData = {
-        empId: empId,
+        empId,
         customers: customersWithTotals,
         carrier: carrierData,
         shipper: {
           name: formData.shipperName,
-          pickUpLocations: formData.pickupLocations.map(location => ({
-            name: location.name,
-            address: location.address,
-            city: location.city,
-            state: location.state,
-            zipCode: location.zipCode
+          pickUpLocations: formData.pickupLocations.map(l => ({
+            name: l.name,
+            address: l.address,
+            city: l.city,
+            state: l.state,
+            zipCode: l.zipCode,
+            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0
           })),
           pickUpDate: formData.pickupLocations[0]?.date || '',
           containerNo: formData.containerNo,
           containerType: formData.containerType,
-          weight: parseInt(formData.weight) || 0,
-          dropLocations: formData.dropLocations.map(location => ({
-            name: location.name,
-            address: location.address,
-            city: location.city,
-            state: location.state,
-            zipCode: location.zipCode
+          dropLocations: formData.dropLocations.map(l => ({
+            name: l.name,
+            address: l.address,
+            city: l.city,
+            state: l.state,
+            zipCode: l.zipCode,
+            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0
           })),
           dropDate: formData.dropLocations[0]?.date || ''
         },
         remarks: formData.remarks
       };
 
-      // Submit to API
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
-      // Debug: Log what we're about to send
-      console.log('=== DEBUG: BEFORE API CALL ===');
-      console.log('customersWithTotals:', customersWithTotals);
-      console.log('customersWithTotals.length:', customersWithTotals.length);
-      console.log('submitData.customers:', submitData.customers);
-      console.log('submitData.customers.length:', submitData.customers.length);
-      console.log('formData.docs exists:', !!formData.docs);
-      console.log('=== END DEBUG ===');
+      let response;
 
-      // Create FormData if file is uploaded, otherwise use JSON
-      let response; // Declare response here
+      // ========== STEP B: MULTIPART (File attached) — send JSON as strings ==========
       if (formData.docs) {
-        const formDataToSend = new FormData();
-        formDataToSend.append('empId', empId);
+        const fd = new FormData();
+        fd.append('empId', empId);
 
-        // Send customers as individual fields for each customer
-        customersWithTotals.forEach((customer, index) => {
-          formDataToSend.append(`customers[${index}][billTo]`, customer.billTo);
-          formDataToSend.append(`customers[${index}][dispatcherName]`, customer.dispatcherName);
-          formDataToSend.append(`customers[${index}][workOrderNo]`, customer.workOrderNo);
-          formDataToSend.append(`customers[${index}][lineHaul]`, customer.lineHaul);
-          formDataToSend.append(`customers[${index}][fsc]`, customer.fsc);
-          formDataToSend.append(`customers[${index}][other]`, customer.other);
-          formDataToSend.append(`customers[${index}][totalAmount]`, customer.totalAmount);
-        });
+        // strings me bhejo (server pe JSON.parse karna hoga)
+        const carrierJSON = {
+          carrierName: formData.carrierName,
+          equipmentType: formData.equipmentType,
+          carrierFees: (charges || []).map(ch => ({
+            name: ch.name,
+            quantity: parseInt(ch.quantity) || 0,
+            amount: parseInt(ch.amt) || 0,
+            total: (parseFloat(ch.quantity) || 0) * (parseFloat(ch.amt) || 0),
+          })),
+          totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0),
+        };
 
-        // Send carrier data as individual fields
-        formDataToSend.append('carrier[carrierName]', carrierData.carrierName);
-        formDataToSend.append('carrier[equipmentType]', carrierData.equipmentType);
-        formDataToSend.append('carrier[totalCarrierFees]', carrierData.totalCarrierFees);
+        const shipperJSON = {
+          name: formData.shipperName,
+          pickUpDate: formData.pickupLocations[0]?.date || '',
+          containerNo: formData.containerNo,
+          containerType: formData.containerType,
+          dropDate: formData.dropLocations[0]?.date || '',
+          pickUpLocations: formData.pickupLocations.map(l => ({
+            name: l.name,
+            address: l.address,
+            city: l.city,
+            state: l.state,
+            zipCode: l.zipCode,
+            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
+          })),
+          dropLocations: formData.dropLocations.map(l => ({
+            name: l.name,
+            address: l.address,
+            city: l.city,
+            state: l.state,
+            zipCode: l.zipCode,
+            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
+          })),
+        };
 
-        // Send carrier fees as individual fields
-        carrierData.carrierFees.forEach((fee, index) => {
-          formDataToSend.append(`carrier[carrierFees][${index}][name]`, fee.name);
-          formDataToSend.append(`carrier[carrierFees][${index}][quantity]`, fee.quantity);
-          formDataToSend.append(`carrier[carrierFees][${index}][amount]`, fee.amount);
-          formDataToSend.append(`carrier[carrierFees][${index}][total]`, fee.total);
-        });
+        fd.append('customers', JSON.stringify(customersWithTotals));
+        fd.append('carrier', JSON.stringify(carrierJSON));
+        fd.append('shipper', JSON.stringify(shipperJSON));
+        fd.append('remarks', formData.remarks || '');
+        fd.append('document', formData.docs);
 
-        // Send shipper data as individual fields
-        formDataToSend.append('shipper[name]', formData.shipperName);
-        formDataToSend.append('shipper[pickUpDate]', formData.pickupLocations[0]?.date || '');
-        formDataToSend.append('shipper[containerNo]', formData.containerNo);
-        formDataToSend.append('shipper[containerType]', formData.containerType);
-        formDataToSend.append('shipper[weight]', parseInt(formData.weight) || 0);
-        formDataToSend.append('shipper[dropDate]', formData.dropLocations[0]?.date || '');
-
-        // Send pickup locations as individual fields
-        formData.pickupLocations.forEach((location, index) => {
-          formDataToSend.append(`shipper[pickUpLocations][${index}][name]`, location.name);
-          formDataToSend.append(`shipper[pickUpLocations][${index}][address]`, location.address);
-          formDataToSend.append(`shipper[pickUpLocations][${index}][city]`, location.city);
-          formDataToSend.append(`shipper[pickUpLocations][${index}][state]`, location.state);
-          formDataToSend.append(`shipper[pickUpLocations][${index}][zipCode]`, location.zipCode);
-        });
-
-        // Send drop locations as individual fields
-        formData.dropLocations.forEach((location, index) => {
-          formDataToSend.append(`shipper[dropLocations][${index}][name]`, location.name);
-          formDataToSend.append(`shipper[dropLocations][${index}][address]`, location.address);
-          formDataToSend.append(`shipper[dropLocations][${index}][city]`, location.city);
-          formDataToSend.append(`shipper[dropLocations][${index}][state]`, location.state);
-          formDataToSend.append(`shipper[dropLocations][${index}][zipCode]`, location.zipCode);
-        });
-
-        formDataToSend.append('remarks', formData.remarks);
-        formDataToSend.append('document', formData.docs);
-
-        // Debug: Log FormData contents
-        console.log('=== DEBUG: FormData being sent ===');
-        console.log('FormData entries:');
-        for (let [key, value] of formDataToSend.entries()) {
-          console.log(`${key} : ${value}`);
-        }
-        console.log('=== END DEBUG ===');
-
-        response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, formDataToSend, {
+        response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, fd, {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-          }
+            Authorization: `Bearer ${token}`,
+            // Content-Type ko na set karein; browser khud boundary set karega
+          },
         });
       } else {
-        // Debug: Log JSON payload
-        console.log('=== DEBUG: JSON payload being sent ===');
-        console.log('submitData:', submitData);
-        console.log('submitData.customers:', submitData.customers);
-        console.log('submitData.customers.length:', submitData.customers.length);
-        console.log('=== END DEBUG ===');
-
+        // plain JSON (as-is)
         response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, submitData, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
         });
       }
 
+      // ========== STEP C: success-block (newOrder with robust fallbacks) ==========
       if (response.data.success) {
-        // Add the new order to the existing orders list
-        const loadNo = response.data.data.customers?.[0]?.loadNo || 'N/A';
+        const resp = response.data.data || {};
+
+        const puLocs =
+          resp.shipper?.pickUpLocations ||
+          resp.shipper?.pickupLocations || [];
+        const drLocs =
+          resp.shipper?.dropLocations ||
+          resp.shipper?.deliveryLocations || [];
+        const puW = puLocs[0]?.weight;
+        const drW = drLocs[0]?.weight;
+
+        const loadNo = resp.customers?.[0]?.loadNo || 'N/A';
 
         const newOrder = {
-          id: `DO-${response.data.data._id.slice(-6)}`,
+          id: `DO-${String(resp._id).slice(-6)}`,
+          originalId: resp._id,
           doNum: loadNo,
-          clientName: response.data.data.customers?.[0]?.billTo || 'N/A',
+          clientName: resp.customers?.[0]?.billTo || 'N/A',
           clientPhone: '+1-555-0000',
-          clientEmail: `${(response.data.data.customers?.[0]?.billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
-          pickupLocation: response.data.data.shipper?.pickUpLocations?.[0]?.name || 'Pickup Location',
-          deliveryLocation: response.data.data.shipper?.dropLocations?.[0]?.name || 'Delivery Location',
-          amount: response.data.data.customers?.[0]?.totalAmount || 0,
+          clientEmail: `${(resp.customers?.[0]?.billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
+          pickupLocation: puLocs[0]?.name || 'Pickup Location',
+          deliveryLocation: drLocs[0]?.name || 'Delivery Location',
+          amount: resp.customers?.[0]?.totalAmount || 0,
           description: `Load: ${loadNo}`,
           priority: 'normal',
           status: 'pending',
-          createdAt: new Date(response.data.data.date).toISOString().split('T')[0],
-          createdBy: `Employee ${response.data.data.empId}`,
+          createdAt: new Date(resp.date).toISOString().split('T')[0],
+          createdBy: `Employee ${resp.empId}`,
           docUpload: formData.docs ? formData.docs.name : 'sample-doc.jpg',
-          productName: response.data.data.shipper?.containerType || 'N/A',
-          quantity: response.data.data.shipper?.weight || 0,
-          remarks: response.data.data.remarks || '',
-          shipperName: response.data.data.shipper?.name || 'N/A',
-          carrierName: response.data.data.carrier?.carrierName || 'N/A',
-          carrierFees: response.data.data.carrier?.totalCarrierFees || 0,
-          createdBySalesUser: response.data.data.createdBySalesUser || 'N/A',
-          supportingDocs: response.data.data.supportingDocs || []
+          productName: resp.shipper?.containerType || 'N/A',
+          // fallback me top-level shipper.weight bhi consider
+          quantity: (puW ?? drW ?? resp.shipper?.weight ?? 0),
+          remarks: resp.remarks || '',
+          shipperName: resp.shipper?.name || 'N/A',
+          carrierName: resp.carrier?.carrierName || 'N/A',
+          carrierFees: resp.carrier?.totalCarrierFees || 0,
+          createdBySalesUser: resp.createdBySalesUser || 'N/A',
+          supportingDocs: resp.supportingDocs || []
         };
 
-        setOrders(prevOrders => [newOrder, ...prevOrders]);
+        setOrders(prev => [newOrder, ...prev]);
 
-        // Close modal and reset form
+        // reset form
         setShowAddOrderForm(false);
         setFormData({
-          // Customer Information - Array for multiple customers
-          customers: [
-            {
-              billTo: '',
-              dispatcherName: '',
-              workOrderNo: '',
-              lineHaul: '',
-              fsc: '',
-              other: '',
-              totalAmount: 0
-            }
-          ],
-
-          // Carrier Information
+          customers: [{
+            billTo: '', dispatcherName: '', workOrderNo: '',
+            lineHaul: '', fsc: '', other: '', totalAmount: 0
+          }],
           carrierName: '',
           equipmentType: '',
           carrierFees: '',
-
-          // Shipper Information
           shipperName: '',
           containerNo: '',
           containerType: '',
-          weight: '',
-
-          // Pickup Locations - Array for multiple locations
-          pickupLocations: [
-            {
-              name: '',
-              address: '',
-              city: '',
-              state: '',
-              zipCode: '',
-              date: ''
-            }
-          ],
-
-          // Drop Locations - Array for multiple locations
-          dropLocations: [
-            {
-              name: '',
-              address: '',
-              city: '',
-              state: '',
-              zipCode: '',
-              date: ''
-            }
-          ],
-
-          // General
+          pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: '' }],
+          dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', date: '', weight: '' }],
           remarks: '',
           docs: null
         });
+        setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
 
-        // Show success message (you can add a toast notification here)
         alertify.success('✅ Delivery order created successfully!');
       } else {
         alertify.error('Failed to create delivery order. Please try again.');
       }
     } catch (error) {
       console.error('Error creating delivery order:', error);
-
-      // Enhanced error logging
-      if (error.response) {
-        console.error('API Error Response:', error.response.data);
-        console.error('API Error Status:', error.response.status);
-        console.error('API Error Headers:', error.response.headers);
-
-        // Show specific error message from API
-        if (error.response.data && error.response.data.message) {
-          alertify.error(`API Error: ${error.response.data.message}`);
-        } else {
-          alertify.error(`API Error: ${error.response.status} - ${error.response.statusText}`);
-        }
+      if (error.response?.data?.message) {
+        alertify.error(`API Error: ${error.response.data.message}`);
+      } else if (error.response) {
+        alertify.error(`API Error: ${error.response.status} - ${error.response.statusText}`);
       } else if (error.request) {
-        console.error('Network Error:', error.request);
         alertify.error('Network error. Please check your connection and try again.');
       } else {
-        console.error('Other Error:', error.message);
         alertify.error('Error creating delivery order. Please try again.');
       }
     } finally {
@@ -937,14 +908,15 @@ const handleDuplicateOrder = async (rowOrder) => {
     }
   };
 
+
+
   // Reset form when modal closes
+  // REPLACE THIS BLOCK: handleCloseModal (form reset with location weights, no top-level weight)
   const handleCloseModal = () => {
     setShowAddOrderForm(false);
     setFormData({
-      // Customer Information - Array for multiple customers
       customers: [
         {
-          loadNo: '', // Try empty string instead of null
           billTo: '',
           dispatcherName: '',
           workOrderNo: '',
@@ -960,13 +932,12 @@ const handleDuplicateOrder = async (rowOrder) => {
       equipmentType: '',
       carrierFees: '',
 
-      // Shipper Information
+      // Shipper Information (NO top-level weight)
       shipperName: '',
       containerNo: '',
       containerType: '',
-      weight: '',
 
-      // Pickup Locations - Array for multiple locations
+      // Pickup Locations — with weight
       pickupLocations: [
         {
           name: '',
@@ -974,11 +945,12 @@ const handleDuplicateOrder = async (rowOrder) => {
           city: '',
           state: '',
           zipCode: '',
-          date: ''
+          date: '',
+          weight: ''   // <- keep weight here
         }
       ],
 
-      // Drop Locations - Array for multiple locations
+      // Drop Locations — with weight
       dropLocations: [
         {
           name: '',
@@ -986,7 +958,8 @@ const handleDuplicateOrder = async (rowOrder) => {
           city: '',
           state: '',
           zipCode: '',
-          date: ''
+          date: '',
+          weight: ''   // <- and here
         }
       ],
 
@@ -997,17 +970,13 @@ const handleDuplicateOrder = async (rowOrder) => {
 
     // Reset charges state
     setCharges([
-      {
-        name: '',
-        quantity: '',
-        amt: '',
-        total: 0
-      }
+      { name: '', quantity: '', amt: '', total: 0 }
     ]);
     setShowChargesPopup(false);
-     setFormMode('add');
-  setEditingOrder(null);
+    setFormMode('add');
+    setEditingOrder(null);
   };
+
 
 
 
@@ -1049,227 +1018,92 @@ const handleDuplicateOrder = async (rowOrder) => {
   };
 
   // Handle edit order
+  // REPLACE THIS BLOCK: handleEditOrder (locations me weight map karo, shipper.weight ignore)
   const handleEditOrder = async (order) => {
     try {
       console.log('Edit order clicked:', order);
-      console.log('Order object keys:', Object.keys(order));
-      console.log('Order originalId:', order.originalId);
-      console.log('Order id:', order.id);
-
-      // Use the stored original _id instead of extracting from the display ID
       const originalId = order.originalId || order.id.replace('DO-', '');
-      console.log('Original ID to use:', originalId);
-      console.log('Full order ID:', order.id);
-
-      // Fetch the complete order data from the API
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      console.log('Token:', token ? 'Token exists' : 'No token found');
 
       const apiUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${originalId}`;
-      console.log('API URL:', apiUrl);
-
       const response = await axios.get(apiUrl, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
       });
 
       if (response.data && response.data.success) {
         const fullOrderData = response.data.data;
-        console.log('Full order data for editing:', fullOrderData);
-        console.log('Pickup locations from API:', fullOrderData.shipper?.pickUpLocations);
-        console.log('Drop locations from API:', fullOrderData.shipper?.dropLocations);
 
-        // Helper function to format date for datetime-local input
         const formatDateForInput = (dateString) => {
-          console.log('formatDateForInput called with:', dateString);
-          if (!dateString) {
-            console.log('No date string provided, returning empty string');
-            return '';
-          }
+          if (!dateString) return '';
           try {
             const date = new Date(dateString);
-            console.log('Created date object:', date);
-            if (isNaN(date.getTime())) {
-              console.log('Invalid date, returning empty string');
-              return '';
-            }
-            const formattedDate = date.toISOString().slice(0, 16); // Format: YYYY-MM-DDTHH:MM
-            console.log('Formatted date:', formattedDate);
-            return formattedDate;
-          } catch (error) {
-            console.log('Error formatting date:', dateString, error);
-            return '';
-          }
+            if (isNaN(date.getTime())) return '';
+            return date.toISOString().slice(0, 16); // yyyy-mm-ddThh:mm
+          } catch { return ''; }
         };
 
-        // Convert the full order data to match the form structure
-        console.log('Raw customers data from API:', fullOrderData.customers);
-        console.log('Customers type:', typeof fullOrderData.customers);
-        console.log('Customers is array:', Array.isArray(fullOrderData.customers));
-        if (fullOrderData.customers && fullOrderData.customers.length > 0) {
-          console.log('First customer from API:', fullOrderData.customers[0]);
-          console.log('First customer keys:', Object.keys(fullOrderData.customers[0]));
-        }
-
         const editFormData = {
-          customers: fullOrderData.customers || [{
-            billTo: '',
-            dispatcherName: '',
-            workOrderNo: '',
-            lineHaul: '',
-            fsc: '',
-            other: '',
-            totalAmount: 0
-          }],
+          customers: (fullOrderData.customers || []).map(c => ({
+            billTo: c.billTo || '',
+            dispatcherName: c.dispatcherName || '',
+            workOrderNo: c.workOrderNo || '',
+            lineHaul: c.lineHaul ?? '',
+            fsc: c.fsc ?? '',
+            other: c.other ?? '',
+            totalAmount: (Number(c.lineHaul) || 0) + (Number(c.fsc) || 0) + (Number(c.other) || 0)
+          })),
           carrierName: fullOrderData.carrier?.carrierName || '',
           equipmentType: fullOrderData.carrier?.equipmentType || '',
           carrierFees: fullOrderData.carrier?.totalCarrierFees || '',
           shipperName: fullOrderData.shipper?.name || '',
           containerNo: fullOrderData.shipper?.containerNo || '',
           containerType: fullOrderData.shipper?.containerType || '',
-          weight: fullOrderData.shipper?.weight || '',
-          pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{
-            name: '',
-            address: '',
-            city: '',
-            state: '',
-            zipCode: '',
-            date: ''
-          }]).map(location => {
-            console.log('Processing pickup location:', location);
-            // Use the pickUpDate from shipper object for all pickup locations
-            const formattedDate = formatDateForInput(fullOrderData.shipper?.pickUpDate);
-            console.log('Original pickUpDate:', fullOrderData.shipper?.pickUpDate, 'Formatted date:', formattedDate);
-            return {
-              ...location,
-              date: formattedDate
-            };
-          }),
-          dropLocations: (fullOrderData.shipper?.dropLocations || [{
-            name: '',
-            address: '',
-            city: '',
-            state: '',
-            zipCode: '',
-            date: ''
-          }]).map(location => {
-            console.log('Processing drop location:', location);
-            // Use the dropDate from shipper object for all drop locations
-            const formattedDate = formatDateForInput(fullOrderData.shipper?.dropDate);
-            console.log('Original dropDate:', fullOrderData.shipper?.dropDate, 'Formatted date:', formattedDate);
-            return {
-              ...location,
-              date: formattedDate
-            };
-          }),
+          pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
+            ...l,
+            date: formatDateForInput(fullOrderData.shipper?.pickUpDate),
+            weight: l?.weight ?? '' // fallback; shipper.weight ko use NA kare
+          })),
+          dropLocations: (fullOrderData.shipper?.dropLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
+            ...l,
+            date: formatDateForInput(fullOrderData.shipper?.dropDate),
+            weight: l?.weight ?? ''
+          })),
           remarks: fullOrderData.remarks || '',
           docs: null
         };
 
-        console.log('Edit form data prepared:', editFormData);
-        console.log('Formatted pickup locations:', editFormData.pickupLocations);
-        console.log('Formatted drop locations:', editFormData.dropLocations);
+        const chargesData =
+          fullOrderData.carrier?.carrierFees ||
+          fullOrderData.carrier?.charges ||
+          fullOrderData.charges || [];
 
-        // Set the form data
-        setFormData(editFormData);
-        console.log('Form data set successfully');
-
-        // Log the form data after a short delay to see if it was set correctly
-        setTimeout(() => {
-          console.log('Form data after setting:', formData);
-        }, 100);
-
-        // Set charges if they exist
-        console.log('Raw charges data from API:', fullOrderData.charges);
-        console.log('Charges type:', typeof fullOrderData.charges);
-        console.log('Charges is array:', Array.isArray(fullOrderData.charges));
-        console.log('Full order data keys:', Object.keys(fullOrderData));
-        console.log('Carrier data:', fullOrderData.carrier);
-        console.log('Shipper data:', fullOrderData.shipper);
-
-        // Check for charges in different possible locations
-        let chargesData = fullOrderData.charges;
-        if (!chargesData && fullOrderData.carrier && fullOrderData.carrier.carrierFees) {
-          chargesData = fullOrderData.carrier.carrierFees;
-          console.log('Found charges in carrier.carrierFees:', chargesData);
-        }
-        if (!chargesData && fullOrderData.carrier && fullOrderData.carrier.charges) {
-          chargesData = fullOrderData.carrier.charges;
-          console.log('Found charges in carrier object:', chargesData);
-        }
-        if (!chargesData && fullOrderData.shipper && fullOrderData.shipper.charges) {
-          chargesData = fullOrderData.shipper.charges;
-          console.log('Found charges in shipper object:', chargesData);
-        }
-
-        if (chargesData && Array.isArray(chargesData) && chargesData.length > 0) {
-          // Ensure each charge has the correct structure and calculate totals
-          const processedCharges = chargesData.map(charge => {
-            console.log('Processing charge:', charge);
-            return {
-              name: charge.name || charge.chargeName || charge.description || '',
-              quantity: charge.quantity || charge.qty || '',
-              amt: charge.amount || charge.amt || charge.rate || charge.price || '',
-              total: charge.total || (parseFloat(charge.quantity || charge.qty || 0)) * (parseFloat(charge.amount || charge.amt || charge.rate || charge.price || 0))
-            };
-          });
-          console.log('Processed charges for edit:', processedCharges);
-          setCharges(processedCharges);
-        } else {
-          console.log('No charges found, setting default charge');
-          setCharges([{
-            name: '',
-            quantity: '',
-            amt: '',
-            total: 0
-          }]);
-        }
+        const processedCharges = (Array.isArray(chargesData) && chargesData.length ? chargesData : [{
+          name: '', quantity: '', amt: '', total: 0
+        }]).map(charge => ({
+          name: charge.name || charge.chargeName || charge.description || '',
+          quantity: charge.quantity || charge.qty || '',
+          amt: charge.amount || charge.amt || charge.rate || charge.price || '',
+          total: charge.total || (parseFloat(charge.quantity || charge.qty || 0)) * (parseFloat(charge.amount || charge.amt || charge.rate || charge.price || 0))
+        }));
 
         setFormData(editFormData);
-        setEditingOrder({ ...order, _id: originalId, fullData: fullOrderData });
+        setCharges(processedCharges);
+        setEditingOrder({
+  ...order,
+  _id: originalId,
+  customerId: fullOrderData?.customers?.[0]?._id || null, // <-- IMPORTANT
+  fullData: fullOrderData
+});
         setFormMode('edit');
-setShowAddOrderForm(true);
+        setShowAddOrderForm(true);
       } else {
         alertify.error('Failed to fetch order details for editing');
       }
     } catch (error) {
       console.error('Error fetching order for editing:', error);
-      console.error('Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        url: error.config?.url
-      });
 
-      // Fallback: Try to use the data from the orders state
-      console.log('Trying fallback approach with order data from state');
-
-      // Helper function to format date for datetime-local input
-      const formatDateForInput = (dateString) => {
-        console.log('Fallback formatDateForInput called with:', dateString);
-        if (!dateString) {
-          console.log('No date string provided in fallback, returning empty string');
-          return '';
-        }
-        try {
-          const date = new Date(dateString);
-          console.log('Fallback created date object:', date);
-          if (isNaN(date.getTime())) {
-            console.log('Invalid date in fallback, returning empty string');
-            return '';
-          }
-          const formattedDate = date.toISOString().slice(0, 16); // Format: YYYY-MM-DDTHH:MM
-          console.log('Fallback formatted date:', formattedDate);
-          return formattedDate;
-        } catch (error) {
-          console.log('Error formatting date in fallback:', dateString, error);
-          return '';
-        }
-      };
-
+      // Fallback with whatever we have in table
+      const originalId = order.originalId || order.id.replace('DO-', '');
       const fallbackFormData = {
         customers: [{
           billTo: order.clientName || '',
@@ -1286,20 +1120,14 @@ setShowAddOrderForm(true);
         shipperName: order.shipperName || '',
         containerNo: '',
         containerType: order.productName || '',
-        weight: order.quantity || '',
         pickupLocations: [{
           name: order.pickupLocation || '',
           address: '',
           city: '',
           state: '',
           zipCode: '',
-          date: (() => {
-            const pickupDate = order.pickUpDate || order.pickupDate || '';
-            console.log('Fallback pickup date:', pickupDate);
-            const formattedPickupDate = formatDateForInput(pickupDate);
-            console.log('Fallback formatted pickup date:', formattedPickupDate);
-            return formattedPickupDate;
-          })()
+          date: '',
+          weight: order.quantity || ''   // table me quantity dikh raha tha => location weight
         }],
         dropLocations: [{
           name: order.deliveryLocation || '',
@@ -1307,92 +1135,82 @@ setShowAddOrderForm(true);
           city: '',
           state: '',
           zipCode: '',
-          date: (() => {
-            const dropDate = order.dropDate || '';
-            console.log('Fallback drop date:', dropDate);
-            const formattedDropDate = formatDateForInput(dropDate);
-            console.log('Fallback formatted drop date:', formattedDropDate);
-            return formattedDropDate;
-          })()
+          date: '',
+          weight: ''
         }],
         remarks: order.remarks || '',
         docs: null
       };
 
-      console.log('Fallback form data:', fallbackFormData);
       setFormData(fallbackFormData);
-      console.log('Fallback form data set successfully');
-
-      // Log the form data after a short delay to see if it was set correctly
-      setTimeout(() => {
-        console.log('Fallback form data after setting:', formData);
-      }, 100);
-      setCharges([{
-        name: '',
-        quantity: '',
-        amt: '',
-        total: 0
-      }]);
-      // IDs pakka store karo + same modal edit-mode me kholo
-      setEditingOrder({
-        _id: originalId,
-        customerId: fullOrderData?.customers?.[0]?._id || null,
-        fullData: fullOrderData
-      });
-      setIsEditForm?.(true);            // agar aapne isEditForm use kiya hai
-      setShowAddOrderForm(true);        // yahi modal open hoga (Update ke liye)
-
-      setShowEditModal(true);
+      setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+      setEditingOrder({ _id: originalId, customerId: null, fullData: null });
+      setFormMode('edit');
+      setShowAddOrderForm(true);
       alertify.warning('Using limited data for editing. Some fields may be empty.');
     }
   };
 
+
   // Handle close edit modal
+  // REPLACE THIS BLOCK: handleCloseEditModal (form reset with location weights, no top-level weight)
   const handleCloseEditModal = () => {
     setShowEditModal(false);
     setEditingOrder(null);
-    setCarrierFeesJustUpdated(false); // Reset the flag
-    // Reset form data to original state
+    setCarrierFeesJustUpdated(false);
+
     setFormData({
-      customers: [{
-        billTo: '',
-        dispatcherName: '',
-        workOrderNo: '',
-        lineHaul: '',
-        fsc: '',
-        other: '',
-        totalAmount: 0
-      }],
+      customers: [
+        {
+          billTo: '',
+          dispatcherName: '',
+          workOrderNo: '',
+          lineHaul: '',
+          fsc: '',
+          other: '',
+          totalAmount: 0
+        }
+      ],
       carrierName: '',
       equipmentType: '',
       carrierFees: '',
+
+      // Shipper (NO top-level weight now)
       shipperName: '',
       containerNo: '',
       containerType: '',
-      weight: '',
-      pickupLocations: [{
-        name: '',
-        address: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        date: ''
-      }],
-      dropLocations: [{
-        name: '',
-        address: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        date: ''
-      }],
+
+      // Locations with weight fields
+      pickupLocations: [
+        {
+          name: '',
+          address: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          date: '',
+          weight: ''
+        }
+      ],
+      dropLocations: [
+        {
+          name: '',
+          address: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          date: '',
+          weight: ''
+        }
+      ],
+
       remarks: '',
       docs: null
     });
   };
 
+
   // Handle update order - Fixed version with correct customer structure
-  // REPLACE: handleUpdateOrder
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -1408,22 +1226,18 @@ setShowAddOrderForm(true);
         return;
       }
 
-      // --- Customer updates (0 ko bhi allow karo) ---
       const customerUpdates = {};
       if (formData.customers?.length) {
         const c = formData.customers[0];
-
         if (c.billTo !== undefined) customerUpdates.billTo = c.billTo;
         if (c.dispatcherName !== undefined) customerUpdates.dispatcherName = c.dispatcherName;
         if (c.workOrderNo !== undefined) customerUpdates.workOrderNo = c.workOrderNo;
-
         const toNum = (v) => (v === '' || v === null || v === undefined) ? undefined : Number(v);
         const lh = toNum(c.lineHaul); if (lh !== undefined && !Number.isNaN(lh)) customerUpdates.lineHaul = lh;
         const fsc = toNum(c.fsc); if (fsc !== undefined && !Number.isNaN(fsc)) customerUpdates.fsc = fsc;
         const oth = toNum(c.other); if (oth !== undefined && !Number.isNaN(oth)) customerUpdates.other = oth;
       }
 
-      // --- Carrier fees normalise ---
       const carrierFeesData = (charges || [])
         .filter(ch => ch?.name && ch?.quantity !== '' && ch?.amt !== '')
         .map(ch => ({
@@ -1434,47 +1248,42 @@ setShowAddOrderForm(true);
         }));
       const totalCarrierFees = carrierFeesData.reduce((s, f) => s + (f.total || 0), 0);
 
-      // --- Shipper (nested + locations + dates) ---
       const shipperPayload = {
         name: formData.shipperName,
         containerNo: formData.containerNo,
         containerType: formData.containerType,
-        weight: formData.weight === '' ? undefined : (Number(formData.weight) || 0),
         pickUpDate: formData.pickupLocations?.[0]?.date || '',
         dropDate: formData.dropLocations?.[0]?.date || '',
         pickUpLocations: (formData.pickupLocations || []).map(l => ({
-          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode
+          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode,
+          weight: l.weight === '' ? 0 : Number(l.weight) || 0
         })),
         dropLocations: (formData.dropLocations || []).map(l => ({
-          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode
+          name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode,
+          weight: l.weight === '' ? 0 : Number(l.weight) || 0
         })),
       };
 
-      // --- Carrier (nested) ---
       const carrierPayload = {
         carrierName: formData.carrierName,
         equipmentType: formData.equipmentType,
         ...(carrierFeesData.length ? { carrierFees: carrierFeesData, totalCarrierFees } : {})
       };
 
-      // --- Final payload (backend structure) ---
       const updatePayload = {};
       if (customerId && Object.keys(customerUpdates).length) {
         updatePayload.customerId = customerId;
         updatePayload.customerUpdates = customerUpdates;
       }
-      if (
-        carrierPayload.carrierName !== undefined ||
+      if (carrierPayload.carrierName !== undefined ||
         carrierPayload.equipmentType !== undefined ||
-        carrierPayload.carrierFees
-      ) {
+        carrierPayload.carrierFees) {
         updatePayload.carrier = carrierPayload;
       }
       if (
         shipperPayload.name !== undefined ||
         shipperPayload.containerNo !== undefined ||
         shipperPayload.containerType !== undefined ||
-        shipperPayload.weight !== undefined ||
         shipperPayload.pickUpLocations?.length ||
         shipperPayload.dropLocations?.length ||
         shipperPayload.pickUpDate || shipperPayload.dropDate
@@ -1507,55 +1316,6 @@ setShowAddOrderForm(true);
   };
 
 
-
-
-
-
-
-
-
-
-
-
-  // Function to update only carrier fields (without customer data)
-  const updateCarrierOnly = async (orderId, carrierName, equipmentType) => {
-    setSubmitting(true);
-
-    try {
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-
-      const updateData = {};
-      if (carrierName) updateData.carrierName = carrierName;
-      if (equipmentType) updateData.equipmentType = equipmentType;
-
-      console.log('Updating carrier only with payload:', updateData);
-
-      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, updateData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-      });
-
-      if (response.data && response.data.success) {
-        alertify.success('Carrier updated successfully!');
-        fetchOrders(); // Refresh the orders list
-        return response.data;
-      } else {
-        console.error('Server response:', response.data);
-        alertify.error('Failed to update carrier');
-        return null;
-      }
-    } catch (error) {
-      console.error('Error updating carrier:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      alertify.error('Failed to update carrier. Please try again.');
-      return null;
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   // Function to update carrier fees
   const updateCarrierFees = async (orderId, carrierFees) => {
@@ -1630,41 +1390,7 @@ setShowAddOrderForm(true);
 
 
 
-  // Function to update shipper fields (containerNo, containerType, weight)
-  const updateShipperFields = async (orderId, shipperData) => {
-    setSubmitting(true);
 
-    try {
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-
-      console.log('Updating shipper fields with payload:', shipperData);
-
-      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, shipperData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-      });
-
-      if (response.data && response.data.success) {
-        alertify.success('Shipper fields updated successfully!');
-        fetchOrders(); // Refresh the orders list
-        return response.data;
-      } else {
-        console.error('Server response:', response.data);
-        alertify.error('Failed to update shipper fields');
-        return null;
-      }
-    } catch (error) {
-      console.error('Error updating shipper fields:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      alertify.error('Failed to update shipper fields. Please try again.');
-      return null;
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
 
 
@@ -1741,358 +1467,484 @@ setShowAddOrderForm(true);
       alertify.error('Failed to update status. Please try again.');
     }
   };
+  // Generate Rate and Load Confirmation PDF function
+  // REPLACE THIS BLOCK: generateRateLoadConfirmationPDF (weight ko per-location line me show, shipper.weight hataya)
+const generateRateLoadConfirmationPDF = (order) => {
+  try {
+    const printWindow = window.open('', '_blank');
 
-  // Generate Invoice PDF function
-  const generateInvoicePDF = (order) => {
-    try {
-      // Create a new window for PDF generation
-      const printWindow = window.open('', '_blank');
-
-      // Generate the HTML content for the invoice
-      const invoiceHTML = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Delivery Order Invoice</title>
-          <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            body {
-              font-family: 'Arial', sans-serif;
-              line-height: 1.4;
-              color: #333;
-              background: white;
-              font-size: 12px;
-            }
-            .invoice-container {
-              max-width: 800px;
-              margin: 0 auto;
-              background: white;
-              padding: 20px;
-            }
-            .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-start;
-              margin-bottom: 20px;
-              border-bottom: 1px solid #333;
-              padding-bottom: 15px;
-            }
-            .logo {
-              width: 120px;
-              height: 90px;
-              object-fit: contain;
-            }
-            .bill-to {
-              text-align: right;
-            }
-            .bill-to h3 {
-              font-size: 16px;
-              font-weight: bold;
-              margin-bottom: 8px;
-            }
-            .bill-to-content {
-              font-size: 12px;
-              line-height: 1.4;
-            }
-            .load-number {
-              font-size: 18px;
-              font-weight: bold;
-              margin-bottom: 20px;
-              text-align: center;
-            }
-            .shipper-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 25px;
-              border-radius: 10px;
-              overflow: hidden;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            }
-            .shipper-table th,
-            .shipper-table td {
-              border: none;
-              padding: 12px 15px;
-              text-align: left;
-              font-size: 13px;
-            }
-            .shipper-table th {
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              color: white;
-              font-weight: 600;
-              font-size: 14px;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-            .shipper-table tr:nth-child(even) {
-              background-color: #f8f9ff;
-            }
-            .shipper-table tr:hover {
-              background-color: #e8f4fd;
-              transition: background-color 0.3s ease;
-            }
-            .shipper-table td:first-child {
-              font-weight: 600;
-              color: #667eea;
-              width: 40%;
-            }
-            .rates-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 20px;
-            }
-            .rates-table th,
-            .rates-table td {
-              border: 1px solid #ddd;
-              padding: 8px;
-              text-align: left;
-              font-size: 12px;
-            }
-            .rates-table th:nth-child(1),
-            .rates-table td:nth-child(1) {
-              width: 35%;
-            }
-            .rates-table th:nth-child(2),
-            .rates-table td:nth-child(2) {
-              width: 20%;
-            }
-            .rates-table th:nth-child(3),
-            .rates-table td:nth-child(3) {
-              width: 15%;
-            }
-            .rates-table th:nth-child(4),
-            .rates-table td:nth-child(4) {
-              width: 15%;
-            }
-            .rates-table th:nth-child(5),
-            .rates-table td:nth-child(5) {
-              width: 15%;
-            }
-            .rates-table th {
-              background-color: #f5f5f5;
-              font-weight: bold;
-            }
-            .rates-table .amount {
-              text-align: right;
-              font-weight: bold;
-            }
-            .rates-table .total-row {
-              background: #ffffff;
-              color: black;
-              font-weight: bold;
-              font-size: 16px;
-            }
-            .rates-table .total-row td {
-              border-top: 2px solid #000000;
-              padding: 15px;
-            }
-            .rates-table .total-row .amount {
-              color: black;
-            }
-            .divider {
-              border-top: 1px solid #333;
-              margin: 20px 0;
-            }
-            @media print {
-              body { background: white; }
-              .invoice-container { box-shadow: none; margin: 0; }
-              /* Hide automatic date/time in PDF */
-              @page {
-                margin: 0;
-                size: A4;
-              }
-              /* Hide browser-generated headers and footers */
-              @page :first {
-                margin-top: 0;
-              }
-              @page :left {
-                margin-left: 0;
-              }
-              @page :right {
-                margin-right: 0;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="invoice-container">
-            <!-- Header -->
-            <div class="header">
-              <img src="/src/assets/LogoFinal.png" alt="Company Logo" class="logo">
-              <div class="bill-to">
-                <div class="bill-to-content">
-                  ${order.customers && order.customers.length > 0 ? `
-                    ${order.customers[0].billTo || 'N/A'}<br>
-                    W/O: ${order.customers[0].workOrderNo || 'N/A'}<br>
-                    Invoice Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}<br>
-                    Invoice No: ${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}
-                  ` : 'N/A'}
-                </div>
-              </div>
-            </div>
-
-            <!-- Load Number -->
-            <div class="load-number">LOAD #: ${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}</div>
-
-            <!-- Shipper Information Table -->
-            <table class="rates-table">
-              <thead>
+    const confirmationHTML = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Rate and Load Confirmation</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Arial', sans-serif; line-height: 1.4; color: #333; background: white; font-size: 12px; }
+          .confirmation-container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; }
+          .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; gap: 20px; }
+          .logo { width: 120px; height: 90px; object-fit: contain; }
+          .bill-to { text-align: right; }
+          .rates-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          .rates-table th, .rates-table td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+          .rates-table th { background-color: #f5f5f5; font-weight: bold; }
+          .rates-table .amount { text-align: right; font-weight: bold; }
+          @media print { @page { margin: 0; size: A4; } }
+        </style>
+      </head>
+      <body>
+        <div class="confirmation-container">
+          <!-- Header -->
+          <div class="header">
+            <img src="/src/assets/LogoFinal.png" alt="Company Logo" class="logo">
+            <div class="bill-to">
+              <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
                 <tr>
-                  <th>Shipper Name</th>
-                  <th>Container No</th>
-                  <th>Weight</th>
-                  <th>Pickup Date</th>
-                  <th>Drop Date</th>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Dispatcher</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.dispatcherName || 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Load</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${order.shipper ? `
-                  <tr>
-                    <td>${order.shipper.name || 'N/A'}</td>
-                    <td>${order.shipper.containerNo || 'N/A'}</td>
-                    <td>${order.shipper.weight || 'N/A'} lbs</td>
-                    <td>${order.shipper.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString() : 'N/A'}</td>
-                    <td>${order.shipper.dropDate ? new Date(order.shipper.dropDate).toLocaleDateString() : 'N/A'}</td>
-                  </tr>
-                ` : ''}
-              </tbody>
-            </table>
-
-            <!-- Pick Up Location Table -->
-            <table class="rates-table">
-              <thead>
                 <tr>
-                  <th>Pick Up Location</th>
-                  <th>Address</th>
-                  <th>City</th>
-                  <th>State</th>
-                  <th>Zip Code</th>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Phone</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.phone || 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Ship Date</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'}) : 'N/A'}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${order.shipper && order.shipper.pickUpLocations && order.shipper.pickUpLocations.length > 0 ?
-          order.shipper.pickUpLocations.map(location => `
-                    <tr>
-                      <td>${location.name || 'N/A'}</td>
-                      <td>${location.address || 'N/A'}</td>
-                      <td>${location.city || 'N/A'}</td>
-                      <td>${location.state || 'N/A'}</td>
-                      <td>${location.zipCode || 'N/A'}</td>
-                    </tr>
-                  `).join('') : ''
-        }
-              </tbody>
-            </table>
-
-            <!-- Drop Location Table -->
-            <table class="rates-table">
-              <thead>
                 <tr>
-                  <th>Drop Location</th>
-                  <th>Address</th>
-                  <th>City</th>
-                  <th>State</th>
-                  <th>Zip Code</th>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Fax</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.fax || 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Today Date</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${new Date().toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'})}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${order.shipper && order.shipper.dropLocations && order.shipper.dropLocations.length > 0 ?
-          order.shipper.dropLocations.map(location => `
-                    <tr>
-                      <td>${location.name || 'N/A'}</td>
-                      <td>${location.address || 'N/A'}</td>
-                      <td>${location.city || 'N/A'}</td>
-                      <td>${location.state || 'N/A'}</td>
-                      <td>${location.zipCode || 'N/A'}</td>
-                    </tr>
-                  `).join('') : ''
-        }
-              </tbody>
-            </table>
-
-            <div class="divider"></div>
-
-            <!-- Rates and Charges Table -->
-            <table class="rates-table">
-              <thead>
                 <tr>
-                  <th>Description</th>
-                  <th>Amount</th>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Email</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.email || 'N/A'}</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">W/O</td>
+                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.workOrderNo || 'N/A'}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${order.customers && order.customers.length > 0 ? `
-                  ${(order.customers[0].lineHaul || 0) > 0 ? `
-                    <tr>
-                      <td>Line Haul</td>
-                      <td class="amount">$${(order.customers[0].lineHaul || 0).toLocaleString()}</td>
-                    </tr>
-                  ` : ''}
-                  ${(order.customers[0].fsc || 0) > 0 ? `
-                    <tr>
-                      <td>FSC</td>
-                      <td class="amount">$${(order.customers[0].fsc || 0).toLocaleString()}</td>
-                    </tr>
-                  ` : ''}
-                  ${(order.customers[0].other || 0) > 0 ? `
-                    <tr>
-                      <td>Other</td>
-                      <td class="amount">$${(order.customers[0].other || 0).toLocaleString()}</td>
-                    </tr>
-                  ` : ''}
-                ` : ''}
-                ${order.carrier && order.carrier.carrierFees ? order.carrier.carrierFees.filter(charge => (charge.total || 0) > 0).map(charge => `
-                  <tr>
-                    <td>${charge.name}</td>
-                    <td class="amount">$${(charge.total || 0).toLocaleString()}</td>
-                  </tr>
-                `).join('') : ''}
-                <tr class="total-row">
-                  <td><strong>TOTAL</strong></td>
-                  <td class="amount"><strong>$${(() => {
-          const lineHaul = order.customers && order.customers.length > 0 ? (order.customers[0].lineHaul || 0) : 0;
-          const fsc = order.customers && order.customers.length > 0 ? (order.customers[0].fsc || 0) : 0;
-          const other = order.customers && order.customers.length > 0 ? (order.customers[0].other || 0) : 0;
-          const carrierCharges = order.carrier && order.carrier.carrierFees ? order.carrier.carrierFees.reduce((sum, charge) => sum + (charge.total || 0), 0) : 0;
-          return (lineHaul + fsc + other + carrierCharges).toLocaleString();
-        })()} USD</strong></td>
-                </tr>
-              </tbody>
-            </table>
-
-            <!-- Notes Section -->
-            <div class="notes-section">
-              <h3 class="notes-title">Notes:</h3>
-              <div class="notes-content">
-                ${['Thank you for your business!']}
-              </div>
+              </table>
             </div>
           </div>
-        </body>
-        </html>
-      `;
 
-      // Write the HTML to the new window
-      printWindow.document.write(invoiceHTML);
-      printWindow.document.close();
+          <!-- Carrier Information -->
+          <table class="rates-table">
+            <thead>
+              <tr>
+                <th>Carrier</th>
+                <th>Phone</th>
+                <th>Equipment</th>
+                <th>Load Status</th>
+                <th>Agreed Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${order.carrier?.carrierName || 'N/A'}</td>
+                <td>${order.carrier?.phone || 'N/A'}</td>
+                <td>${order.carrier?.equipmentType || 'N/A'}</td>
+                <td>${order.status ? order.status[0].toUpperCase()+order.status.slice(1) : 'N/A'}</td>
+                <td class="amount">$${(() => {
+                  const c = order.customers?.[0] || {};
+                  const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
+                  const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
+                  return (lineHaul + fsc + other + carrierCharges).toLocaleString();
+                })()}</td>
+              </tr>
+            </tbody>
+          </table>
 
-      // Wait for content to load then print
-      printWindow.onload = function () {
-        printWindow.print();
-        printWindow.close();
-      };
+          <!-- Shipper -->
+          <table class="rates-table">
+            <thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Shipper</th></tr></thead>
+            <tbody>
+              <tr>
+                <td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">
+                  ${order.shipper?.name || 'N/A'}
+                  ${(order.shipper?.pickUpLocations || []).map(l => `
+                    <br>${[l.address,l.city,l.state,l.zipCode].filter(Boolean).join(', ')}
+                  `).join('')}
+                </td>
+              </tr>
+              <tr>
+                <td style="width:50%;padding:8px;">
+                  <strong>Date:</strong> ${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString() : 'N/A'}<br>
+                  <strong>Time:</strong> N/A<br>
+                  <strong>Type:</strong> ${order.shipper?.containerType || '40HC'}<br>
+                  <strong>Quantity:</strong> 1<br>
+                  <strong>Weight:</strong> ${(order.shipper?.weight ?? 'N/A')} lbs
+                </td>
+                <td style="width:50%;padding:8px;">
+                  <strong>Purchase Order #:</strong> N/A<br>
+                  <strong>Shipping Hours:</strong> N/A<br>
+                  <strong>Appointment:</strong> No<br>
+                  <strong>Container/Trailer Number:</strong> ${order.shipper?.containerNo || 'N/A'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
-      alertify.success('Invoice PDF generated successfully!');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alertify.error('Failed to generate PDF. Please try again.');
-    }
-  };
+          <!-- Consignee -->
+          <table class="rates-table">
+            <thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Consignee</th></tr></thead>
+            <tbody>
+              <tr>
+                <td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">
+                  ${order.shipper?.name || 'N/A'}
+                  ${(order.shipper?.dropLocations || []).map(l => `
+                    <br>${[l.address,l.city,l.state,l.zipCode].filter(Boolean).join(', ')}
+                  `).join('')}
+                </td>
+              </tr>
+              <tr>
+                <td style="width:50%;padding:8px;">
+                  <strong>Date:</strong> ${order.shipper?.dropDate ? new Date(order.shipper.dropDate).toLocaleDateString() : 'N/A'}<br>
+                  <strong>Time:</strong> N/A<br>
+                  <strong>Type:</strong> ${order.shipper?.containerType || '40HC'}<br>
+                  <strong>Quantity:</strong> 1<br>
+                  <strong>Weight:</strong> ${(order.shipper?.weight ?? 'N/A')} lbs
+                </td>
+                <td style="width:50%;padding:8px;">
+                  <strong>Purchase Order #:</strong> N/A<br>
+                  <strong>Receiving Hours:</strong> N/A<br>
+                  <strong>Appointment:</strong> No<br>
+                  <strong>Container/Trailer Number:</strong> ${order.shipper?.containerNo || 'N/A'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Dispatcher Notes -->
+          <div style="margin-top: 20px;">
+            <h4 style="font-size: 14px; font-weight: bold; color:#0b0e11;">Dispatcher Notes:</h4>
+          </div>
+        </div>
+
+        <!-- PAGE BREAK: Terms & Conditions -->
+        <div style="page-break-before: always; margin-top: 20px;">
+          <div class="confirmation-container" style="width: 100%; margin: 0 auto;">
+            <h2 style="text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #2c3e50;">
+              Terms and Conditions
+            </h2>
+
+            <div style="font-size: 9px; line-height: 1.2; text-align: justify;">
+              <p style="margin-bottom: 8px;">
+                This rate confirmation hereby serves as an agreement governing the movement of freight/commodity as specified & becomes a part of the
+                transportation agreement between the signing parties.
+              </p>
+
+              <h3 style="font-size: 12px; font-weight: bold; margin: 10px 0 6px 0; color: #2c3e50;">SAFE DELIVERY NORMS</h3>
+
+              <ol style="margin-left: 8px; margin-bottom: 8px;">
+                <li style="margin-bottom: 3px;">All freights /commodities shall be picked-up & delivered within the time frame mentioned on the rate confirmation. Failure to do this may attract penalty from the agreed freight rate.</li>
+                <li style="margin-bottom: 3px;">Drivers are required to comply by appointment timings in case of Live loading / Unloading. Failure to comply by the same would result in a penalty of $150 per appointment for late delivery on same day or in case of missed appointment, $200 per day.</li>
+                <li style="margin-bottom: 3px;">In case of missed delivery appointments, the carrier will have to compensate for storage or re-scheduling costs for all such loads.</li>
+                <li style="margin-bottom: 3px;">Any damage to the load that might occur due to the negligence of the Driver at the time of loading / unloading or during transit is to be paid by the Appointed Carrier / driver.</li>
+                <li style="margin-bottom: 3px;">Whilst loading, the driver must do a piece count & inspect the condition of the load. Driver shall not leave the shipper without picking up complete load & getting our BOL signed from the site.</li>
+                <li style="margin-bottom: 3px;">Please ensure our BOL is presented and signed at delivery for POD. Using any other paperwork will result in a $100 penalty.</li>
+                <li style="margin-bottom: 3px;">Pictures are required at the time of Unloading/Loading of the Container/Trailor and once the Delivery is completed pictures for empty/loaded container/trailor is mandatory. Failure to do so will result in $50 penalty.</li>
+                <li style="margin-bottom: 3px;">Assigned Carriers /drivers /dispatchers shall not contact the shipper or consignee directly under any conditions.</li>
+                <li style="margin-bottom: 3px;">Assigned Carrier is required to ensure that seals, if attached on the loads are not tempered with at any given time. If seal is required to be removed, it should only be done by the receiver.</li>
+                <li style="margin-bottom: 3px;">Re-assigning / Double Brokering / Interlining / Warehousing of this load is strictly prohibited until & unless a written consent for the same is obtained from us. This may lead to deferred payments to the contracted carrier plus we might report you to the authorities & pull a Freight Card against you.</li>
+                <li style="margin-bottom: 3px;">All detentions due to missed appointments or late arrivals are to be paid by the driver.</li>
+                <li style="margin-bottom: 3px;">A standard fee of $300 per day shall be implied in case you hold our freight hostage for whatsoever reason.</li>
+                <li style="margin-bottom: 3px;">Macro-point is required as long as it has been requested by the customer. Macro point must be accepted/activated with the actual driver</li>
+                <li style="margin-bottom: 3px;">Follow safety protocols at times. Wear masks at the time of pick-up & drop off. In case of FSD loads, drivers are required to wear Hard hats, safety glasses, and safety vests when in facility.</li>
+                <li style="margin-bottom: 3px;">For all loads booked as FTL, trailers are exclusive & no LTL/ Partial loads can be added to it. Payments will be voided if LTL loads are added.</li>
+                <li style="margin-bottom: 3px;">Any damage to the load that might occur due to the negligence of the Driver at the time of loading / unloading or during transit is to be paid by the Appointed Carrier.</li>
+                <li style="margin-bottom: 3px;">Should there be any damage or loss to the freight during the load movement, the carrier is inclined to pay for complete loss as demanded by the Shipper</li>
+                <li style="margin-bottom: 3px;">In case if we book a load with you & you are unable to keep up to the commitment and deliver the services, you are liable to pay us $100 for the time & losses that we had to incur on that load.</li>
+                <li style="margin-bottom: 3px;">Freight charges payments shall be made when we receive POD and carrier invoice within 48 hours of the load delivery. Payment will be made 30 days after all required paperwork is received by our accounts department.</li>
+                <li style="margin-bottom: 3px;">Any additional charge receipts such as for detention, lumper & overtime are to be submitted along with the POD within 72 hours of freight delivery along with the required documentation to arrange for the reimbursement.</li>
+                <li style="margin-bottom: 3px;">If under any circumstances load gets delayed by 1-2 days and the temperature is maintained as an agreed term, there would be no claim entertained on that load.</li>
+              </ol>
+
+              <h3 style="font-size: 13px; font-weight: bold; margin: 15px 0 8px 0; color: #2c3e50;">Additional information</h3>
+              <p style="margin-bottom: 10px;">
+                After the successful completion of the load / empty trailer delivery, if the carrier is unable to submit invoices & complete documentation as per
+                the set time frames, deductions as below will be applicable:
+              </p>
+              <ul style="margin-left: 15px; margin-bottom: 15px;">
+                <li style="margin-bottom: 4px;">In case, documents are not submitted within 1 day of the load delivery, $100 shall be deducted</li>
+                <li style="margin-bottom: 4px;">In case, documents are not submitted within 2 days, $150 shall be deducted</li>
+                <li style="margin-bottom: 4px;">In case, documents are not submitted within 5 days, $250 shall be deducted</li>
+              </ul>
+
+              <p style="font-weight: bold; margin-top: 20px; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #2c3e50;">
+                DOCUMENTS BE MUST CLEAR AND LEGIBLE. POD'S MUST BE SENT VIA E-MAIL OR FAX WITHIN 24 HRS OF THE DELIVERY
+                FOR STRAIGHT THROUGH DELIVERIES AND WITHIN 3 HOURS FOR FIXED APPOINTMENT DELIVERIES
+                WITH OUR LOAD NUMBER CLEARLY NOTED ON THE TOP OF IT
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Carrier Pay (unchanged) -->
+        <div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">
+          <h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 15px; color: #2c3e50;">Carrier Pay</h3>
+          <div style="text-align: center; margin-bottom: 20px; font-size: 12px; line-height: 1.6;">
+            <p style="margin-bottom: 10px;">
+              <strong>Carrier Pay:</strong> Direct: $${(() => {
+                const c = order.customers?.[0] || {};
+                const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
+                const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
+                return (lineHaul + fsc + other + carrierCharges).toLocaleString();
+              })()}.00, # of Units: 1, Bobtail: $25.00, TOTAL: $${(() => {
+                const c = order.customers?.[0] || {};
+                const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
+                const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
+                return (lineHaul + fsc + other + carrierCharges + 25).toLocaleString();
+              })()} USD
+            </p>
+          </div>
+          <div style="margin-bottom: 15px; font-size: 12px; line-height: 1.6;">
+            <p style="margin-bottom: 10px; text-align: center;">
+              Accepted By _________________________ Date ________________ Signature ____________________
+            </p>
+          </div>
+          <div style="font-size: 12px; line-height: 1.6;">
+            <p style="text-align: center;">
+              Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(confirmationHTML);
+    printWindow.document.close();
+    printWindow.onload = function () {
+      printWindow.print();
+      printWindow.close();
+    };
+    alertify.success('Rate and Load Confirmation PDF generated successfully!');
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    alertify.error('Failed to generate PDF. Please try again.');
+  }
+};
+
+
+
+  // Generate Invoice PDF function
+  
+const generateInvoicePDF = (order) => {
+  try {
+    const printWindow = window.open('', '_blank');
+
+    // ---- Bill To + Address (from shippers list if available) ----
+    const cust = order?.customers?.[0] || {};
+    const companyName = (cust.billTo || '').trim();
+    const matchedCompany = (Array.isArray(shippers) ? shippers : []).find(
+      s => (s.compName || '').toLowerCase() === companyName.toLowerCase()
+    );
+    const billAddr = [
+      matchedCompany?.compAdd,
+      matchedCompany?.city,
+      matchedCompany?.state,
+      matchedCompany?.zipcode,
+    ].filter(Boolean).join(', ');
+    const billToDisplay = [companyName || 'N/A', billAddr].filter(Boolean).join(' — ');
+    const workOrderNo = cust.workOrderNo || 'N/A';
+    const invoiceNo   = order.doNum || cust.loadNo || 'N/A';
+    const todayStr    = new Date().toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'});
+
+    // ---- ONLY customer rates ----
+    const LH  = Number(cust.lineHaul) || 0;
+    const FSC = Number(cust.fsc) || 0;
+    const OTH = Number(cust.other) || 0;
+    const CUSTOMER_TOTAL = LH + FSC + OTH;
+
+    // helpers
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
+    const fmtTime = (d) => {
+      if (!d) return '';
+      const dt = new Date(d);
+      if (Number.isNaN(dt.getTime())) return '';
+      // show time only if not midnight
+      if (dt.getHours() === 0 && dt.getMinutes() === 0) return '';
+      return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+    const fullAddr = (loc) =>
+      [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
+    const hasTimeVal = (ds) => {
+      if (!ds) return false;
+      const dt = new Date(ds);
+      if (Number.isNaN(dt.getTime())) return false;
+      return dt.getHours() !== 0 || dt.getMinutes() !== 0;
+    };
+
+    const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
+    const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
+
+    const hasPickupTime = pickRows.some(l => hasTimeVal(l?.date || order?.shipper?.pickUpDate));
+    const hasDropTime   = dropRows.some(l => hasTimeVal(l?.date || order?.shipper?.dropDate));
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Delivery Order Invoice</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Arial,sans-serif;line-height:1.4;color:#333;background:#fff;font-size:12px}
+  .invoice{max-width:800px;margin:0 auto;background:#fff;padding:20px}
+  .header{display:flex;gap:16px;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px}
+  .logo{width:140px;height:90px;object-fit:contain;flex:0 0 auto}
+  .header-right{flex:1 1 auto}
+  .billto{border-collapse:collapse;width:100%;font-size:12px}
+  .billto th,.billto td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
+  .billto th{background:#f5f5f5;font-weight:bold;width:35%}
+  .section{margin-top:14px}
+  .tbl{width:100%;border-collapse:collapse;margin-top:8px}
+  .tbl th,.tbl td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}
+  .amount{text-align:right;font-weight:bold}
+  .total-row{background:#fff;color:#000;font-weight:bold;font-size:14px}
+  .total-row td{border-top:2px solid #000;padding:12px}
+  @media print{@page{margin:0;size:A4}}
+</style>
+</head>
+<body>
+  <div class="invoice">
+    <!-- HEADER: logo (left) + Bill To table (right) -->
+    <div class="header">
+      <img src="/src/assets/LogoFinal.png" class="logo" alt="Company Logo" />
+      <div class="header-right">
+        <table class="billto">
+          <tr><th>Bill To</th><td>${billToDisplay}</td></tr>
+          <tr><th>W/O (Ref)</th><td>${workOrderNo}</td></tr>
+          <tr><th>Invoice Date</th><td>${todayStr}</td></tr>
+          <tr><th>Invoice No</th><td>${invoiceNo}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pick Up Locations -->
+    <div class="section">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Pick Up Location</th>
+            <th>Address</th>
+            <th>Weight (lbs)</th>
+            <th>Container No</th>
+            <th>Container Type</th>
+            <th>Qty</th>
+            <th>Pickup Date</th>
+            ${hasPickupTime ? '<th>Time</th>' : ''}
+          </tr>
+        </thead>
+        <tbody>
+          ${pickRows.map(l => {
+            const weight = (l?.weight ?? '') !== '' && l?.weight !== null ? l.weight : 'N/A';
+            const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
+            const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
+            const qty    = Number(l?.quantity ?? order.shipper?.quantity) || 1;
+            const dateSrc = l?.date || order.shipper?.pickUpDate;
+            return `
+              <tr>
+                <td>${l?.name || 'N/A'}</td>
+                <td>${fullAddr(l)}</td>
+                <td>${weight}</td>
+                <td>${contNo}</td>
+                <td>${contTp}</td>
+                <td>${qty}</td>
+                <td>${fmtDate(dateSrc)}</td>
+                ${hasPickupTime ? `<td>${fmtTime(dateSrc)}</td>` : ''}
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Drop Locations -->
+    <div class="section">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Drop Location</th>
+            <th>Address</th>
+            <th>Weight (lbs)</th>
+            <th>Container No</th>
+            <th>Container Type</th>
+            <th>Qty</th>
+            <th>Drop Date</th>
+            ${hasDropTime ? '<th>Time</th>' : ''}
+          </tr>
+        </thead>
+        <tbody>
+          ${dropRows.map(l => {
+            const weight = (l?.weight ?? '') !== '' && l?.weight !== null ? l.weight : 'N/A';
+            const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
+            const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
+            const qty    = Number(l?.quantity ?? order.shipper?.quantity) || 1;
+            const dateSrc = l?.date || order.shipper?.dropDate;
+            return `
+              <tr>
+                <td>${l?.name || 'N/A'}</td>
+                <td>${fullAddr(l)}</td>
+                <td>${weight}</td>
+                <td>${contNo}</td>
+                <td>${contTp}</td>
+                <td>${qty}</td>
+                <td>${fmtDate(dateSrc)}</td>
+                ${hasDropTime ? `<td>${fmtTime(dateSrc)}</td>` : ''}
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Charges: ONLY customer information rates -->
+    <div class="section">
+      <table class="tbl">
+        <thead><tr><th>Description</th><th>Amount</th></tr></thead>
+        <tbody>
+          ${LH  > 0 ? `<tr><td>Line Haul</td><td class="amount">$${LH.toLocaleString()}</td></tr>` : ''}
+          ${FSC > 0 ? `<tr><td>FSC</td><td class="amount">$${FSC.toLocaleString()}</td></tr>` : ''}
+          ${OTH > 0 ? `<tr><td>Other</td><td class="amount">$${OTH.toLocaleString()}</td></tr>` : ''}
+          <tr class="total-row">
+            <td><strong>TOTAL</strong></td>
+            <td class="amount"><strong>$${CUSTOMER_TOTAL.toLocaleString()} USD</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">Thank you for your business!</div>
+  </div>
+</body>
+</html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = function () {
+      printWindow.print();
+      printWindow.close();
+    };
+    alertify.success('Invoice PDF generated successfully!');
+  } catch (err) {
+    console.error('Error generating PDF:', err);
+    alertify.error('Failed to generate PDF. Please try again.');
+  }
+};
+
+
+
+
+
+
+
+
+
 
   // Loading state
   if (loading) {
@@ -2207,12 +2059,78 @@ setShowAddOrderForm(true);
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
           </div>
+          {/* Range dropdown (like screenshot) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowPresetMenu(v => !v)}
+              className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
+            >
+              <span>
+                {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
+              </span>
+              <span className="ml-3">▼</span>
+            </button>
+
+            {showPresetMenu && (
+              <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
+                {Object.keys(presets).map((lbl) => (
+                  <button
+                    key={lbl}
+                    onClick={() => applyPreset(lbl)}
+                    className="block w-full text-left px-3 py-2 hover:bg-gray-50"
+                  >
+                    {lbl}
+                  </button>
+                ))}
+                <div className="my-1 border-t" />
+                <button
+                  onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                  className="block w-full text-left px-3 py-2 hover:bg-gray-50"
+                >
+                  Custom Range
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
+          {showCustomRange && (
+            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-2xl p-4">
+                <DateRange
+                  ranges={[range]}
+                  onChange={(item) => setRange(item.selection)}
+                  moveRangeOnFirstSelection={false}
+                  months={2}
+                  direction="horizontal"
+                />
+                <div className="flex justify-end gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomRange(false)}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomRange(false)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => {
-  setFormMode('add');
-  setEditingOrder(null);
-  setShowAddOrderForm(true);
-}}
+              setFormMode('add');
+              setEditingOrder(null);
+              setShowAddOrderForm(true);
+            }}
 
             className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
           >
@@ -2404,11 +2322,11 @@ setShowAddOrderForm(true);
                           Edit
                         </button>
                         <button
-  onClick={() => handleDuplicateOrder(order)}
-  className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
->
-  Duplicate
-</button>
+                          onClick={() => handleDuplicateOrder(order)}
+                          className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          Duplicate
+                        </button>
 
                       </div>
                     </td>
@@ -2490,19 +2408,19 @@ setShowAddOrderForm(true);
                   </div>
                   <div>
                     <h2 className="text-xl font-bold">
-  {formMode === 'edit'
-    ? 'Edit Delivery Order'
-    : formMode === 'duplicate'
-      ? 'Duplicate Delivery Order'
-      : 'Add Delivery Order'}
-</h2>
-<p className="text-blue-100">
-  {formMode === 'edit'
-    ? 'Update the existing delivery order'
-    : formMode === 'duplicate'
-      ? 'Review and submit to create a new copy'
-      : 'Create a new delivery order'}
-</p>
+                      {formMode === 'edit'
+                        ? 'Edit Delivery Order'
+                        : formMode === 'duplicate'
+                          ? 'Duplicate Delivery Order'
+                          : 'Add Delivery Order'}
+                    </h2>
+                    <p className="text-blue-100">
+                      {formMode === 'edit'
+                        ? 'Update the existing delivery order'
+                        : formMode === 'duplicate'
+                          ? 'Review and submit to create a new copy'
+                          : 'Create a new delivery order'}
+                    </p>
 
                   </div>
                 </div>
@@ -2547,22 +2465,107 @@ setShowAddOrderForm(true);
 
                     {/* All 7 fields in one grid - 4 fields per line */}
                     <div className="grid grid-cols-4 gap-4">
-                      <input
-                        type="text"
-                        value={customer.billTo}
-                        onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Bill To *"
-                      />
-                      <input
-                        type="text"
-                        value={customer.dispatcherName}
-                        onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Dispatcher Name *"
-                      />
+                      {/* Bill To (Company) - dropdown */}
+                      {/* Bill To (Company) - dropdown */}
+                      {shippers.length > 0 ? (
+                        <select
+                          value={customer.billTo || ''}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                          required
+                          disabled={loadingShippers}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {/* Placeholder */}
+                          <option value="" disabled>
+                            {loadingShippers ? 'Loading companies...' : 'Select Company *'}
+                          </option>
+
+                          {/* Current value (agar list me na ho) */}
+                          {customer.billTo &&
+                            !shippers.some(s => (s.compName || '') === customer.billTo) && (
+                              <option value={customer.billTo}>
+                                {customer.billTo} (custom)
+                              </option>
+                            )
+                          }
+
+                          {/* Company options */}
+                          {shippers.map(s => (
+                            <option key={s._id} value={s.compName || ''}>
+                              {s.compName || '(No name)'}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        // Fallback: companies load na ho to normal input
+                        <input
+                          type="text"
+                          value={customer.billTo}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                          required
+                          disabled={loadingShippers}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder={loadingShippers ? "Loading companies..." : "Bill To *"}
+                        />
+                      )}
+
+
+                      {/* Dispatcher Name - dropdown (aliasName from CMT) */}
+                      {dispatchers.length > 0 ? (
+                        <select
+                          value={customer.dispatcherName || ''}
+                          onChange={(e) =>
+                            handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)
+                          }
+                          required
+                          disabled={loadingDispatchers}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {/* Placeholder */}
+                          <option value="" disabled>
+                            {loadingDispatchers ? 'Loading dispatchers...' : 'Select Dispatcher *'}
+                          </option>
+
+                          {/* Current value (agar list me na ho) */}
+                          {customer.dispatcherName &&
+                            !dispatchers.some(
+                              (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
+                            ) && (
+                              <option value={customer.dispatcherName}>
+                                {customer.dispatcherName} (custom)
+                              </option>
+                            )}
+
+                          {/* Alias list (fallback to employeeName if alias missing) */}
+                          {dispatchers
+                            .filter((d) => (d.status || '').toLowerCase() === 'active')
+                            .sort((a, b) =>
+                              (a.aliasName || a.employeeName || '').localeCompare(
+                                b.aliasName || b.employeeName || ''
+                              )
+                            )
+                            .map((d) => (
+                              <option key={d._id || d.empId} value={d.aliasName || d.employeeName}>
+                                {d.aliasName || d.employeeName}
+                                {d.empId ? ` (${d.empId})` : ''}
+                              </option>
+                            ))}
+                        </select>
+                      ) : (
+                        // Fallback: list na aaye to normal input allow karo
+                        <input
+                          type="text"
+                          value={customer.dispatcherName}
+                          onChange={(e) =>
+                            handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)
+                          }
+                          required
+                          disabled={loadingDispatchers}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Dispatcher Name *'}
+                        />
+                      )}
+
                       <input
                         type="text"
                         value={customer.workOrderNo}
@@ -2672,15 +2675,7 @@ setShowAddOrderForm(true);
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Container Type *"
                   />
-                  <input
-                    type="number"
-                    name="weight"
-                    value={formData.weight}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Weight (lbs) *"
-                  />
+
                 </div>
 
                 {/* Pickup Locations */}
@@ -2752,6 +2747,17 @@ setShowAddOrderForm(true);
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="Zip Code *"
                         />
+                        <input
+                          type="number"
+                          value={formData.pickupLocations?.[locationIndex]?.weight ?? ''}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
+                          required
+                          inputMode="decimal"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Weight (lbs) *"
+                        />
+
+
                         <input
                           type="datetime-local"
                           value={location.date}
@@ -2833,6 +2839,17 @@ setShowAddOrderForm(true);
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="Zip Code *"
                         />
+                        <input
+                          type="number"
+                          value={formData.dropLocations?.[locationIndex]?.weight ?? ''}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
+                          required
+                          inputMode="decimal"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Weight (lbs) *"
+                        />
+
+
                         <input
                           type="datetime-local"
                           value={location.date}
@@ -2929,17 +2946,17 @@ setShowAddOrderForm(true);
                     }`}
                 >
                   {submitting ? (
-  <div className="flex items-center gap-2">
-    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-    {formMode === 'edit' ? 'Updating...' : 'Creating...'}
-  </div>
-) : (
-  formMode === 'edit'
-    ? 'Update Delivery Order'
-    : formMode === 'duplicate'
-      ? 'Create Duplicate'
-      : 'Create Delivery Order'
-)}
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      {formMode === 'edit' ? 'Updating...' : 'Creating...'}
+                    </div>
+                  ) : (
+                    formMode === 'edit'
+                      ? 'Update Delivery Order'
+                      : formMode === 'duplicate'
+                        ? 'Create Duplicate'
+                        : 'Create Delivery Order'
+                  )}
 
                 </button>
               </div>
@@ -2950,465 +2967,385 @@ setShowAddOrderForm(true);
 
       {/* Employee DO Data Modal */}
       {showOrderModal && selectedOrder && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}>
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <Truck className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Employee DO Data</h2>
-                    <p className="text-blue-100">Delivery Order Details</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowOrderModal(false)}
-                  className="text-white hover:text-gray-200 text-2xl font-bold"
-                >
-                  ×
-                </button>
+        <>
+          {loadingOrderId && (
+            <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center">
+              <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-lg font-semibold text-gray-800">Loading Order Details...</p>
+                <p className="text-sm text-gray-600">Please wait while we fetch the complete data</p>
               </div>
             </div>
+          )}
 
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              {/* Order Information */}
-              {/* <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Building className="text-blue-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Order Information</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-6">
+          <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+            <div
+              className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <FileText className="text-blue-600" size={16} />
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <Truck className="text-white" size={24} />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">DO ID</p>
-                      <p className="font-semibold text-gray-800">{selectedOrder.id || 'N/A'}</p>
+                      <h2 className="text-xl font-bold">Employee DO Data</h2>
+                      <p className="text-blue-100">Delivery Order Details</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <FileText className="text-green-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">DO Number</p>
-                      <p className="font-semibold text-gray-800">{selectedOrder.doNum || 'N/A'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <User className="text-purple-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Bill To</p>
-                      <p className="font-semibold text-gray-800">{selectedOrder.clientName || 'N/A'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <Truck className="text-orange-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Shipper Name</p>
-                      <p className="font-semibold text-gray-800">{selectedOrder.shipperName || 'N/A'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                      <Truck className="text-red-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Carrier Name</p>
-                      <p className="font-semibold text-gray-800">{selectedOrder.carrierName || 'N/A'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <DollarSign className="text-green-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Carrier Fees</p>
-                      <p className="font-semibold text-gray-800">${selectedOrder.carrierFees || 0}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                      <Calendar className="text-gray-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Created Date</p>
-                      <p className="font-semibold text-gray-800">
-                        {selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        }) : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <User className="text-blue-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Created By</p>
-                      <p className="font-semibold text-gray-800">{selectedOrder.createdBySalesUser?.employeeName || 'N/A'}</p>
-                    </div>
-                  </div>
-                </div>
-              </div> */}
-
-              {/* Customer Information */}
-              {selectedOrder.customers && selectedOrder.customers.length > 0 && (
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <User className="text-green-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
-                  </div>
-                  <div className="space-y-4">
-                    {selectedOrder.customers.map((customer, index) => (
-                      <div key={index} className="bg-white rounded-xl p-4 border border-green-200">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-green-600 font-bold text-sm">{index + 1}</span>
-                          </div>
-                          <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-600">Bill To</p>
-                            <p className="font-medium text-gray-800">{customer.billTo || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Dispatcher Name</p>
-                            <p className="font-medium text-gray-800">{customer.dispatcherName || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Work Order No</p>
-                            <p className="font-medium text-gray-800">{customer.workOrderNo || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Line Haul</p>
-                            <p className="font-medium text-gray-800">${customer.lineHaul || 0}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">FSC</p>
-                            <p className="font-medium text-gray-800">${customer.fsc || 0}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Other</p>
-                            <p className="font-medium text-gray-800">${customer.other || 0}</p>
-                          </div>
-                          <div className="col-span-2">
-                            <p className="text-sm text-gray-600">Total Amount</p>
-                            <p className="font-bold text-lg text-green-600">${customer.totalAmount || 0}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Carrier Information */}
-              {selectedOrder.carrier && (
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Truck className="text-purple-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Carrier Information</h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <Truck className="text-purple-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Carrier Name</p>
-                        <p className="font-semibold text-gray-800">{selectedOrder.carrier.carrierName || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
-                        <Truck className="text-pink-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Equipment Type</p>
-                        <p className="font-semibold text-gray-800">{selectedOrder.carrier.equipmentType || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                        <DollarSign className="text-green-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Total Carrier Fees</p>
-                        <p className="font-semibold text-gray-800">${selectedOrder.carrier.totalCarrierFees || 0}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Carrier Charges */}
-                  {selectedOrder.carrier.carrierFees && selectedOrder.carrier.carrierFees.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-3">Carrier Charges</h4>
-                      <div className="space-y-2">
-                        {selectedOrder.carrier.carrierFees.map((charge, index) => (
-                          <div key={index} className="bg-white rounded-lg p-3 border border-purple-200">
-                            <div className="flex justify-between items-center">
-                              <span className="font-medium text-gray-800">{charge.name}</span>
-                              <span className="font-bold text-green-600">${charge.total}</span>
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Quantity: {charge.quantity} × Amount: ${charge.amount}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Shipper Information */}
-              {selectedOrder.shipper && (
-                <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Truck className="text-orange-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Shipper Information</h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                        <User className="text-orange-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Shipper Name</p>
-                        <p className="font-semibold text-gray-800">{selectedOrder.shipper.name || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                        <Calendar className="text-yellow-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Pickup Date</p>
-                        <p className="font-semibold text-gray-800">
-                          {selectedOrder.shipper.pickUpDate ? new Date(selectedOrder.shipper.pickUpDate).toLocaleDateString() : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <FileText className="text-blue-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Container No</p>
-                        <p className="font-semibold text-gray-800">{selectedOrder.shipper.containerNo || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                        <Truck className="text-green-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Container Type</p>
-                        <p className="font-semibold text-gray-800">{selectedOrder.shipper.containerType || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <span className="text-purple-600 font-bold text-sm">W</span>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Weight</p>
-                        <p className="font-semibold text-gray-800">{selectedOrder.shipper.weight || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                        <Calendar className="text-red-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Drop Date</p>
-                        <p className="font-semibold text-gray-800">
-                          {selectedOrder.shipper.dropDate ? new Date(selectedOrder.shipper.dropDate).toLocaleDateString() : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pickup Locations */}
-                  {selectedOrder.shipper.pickUpLocations && selectedOrder.shipper.pickUpLocations.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
-                      <div className="space-y-3">
-                        {selectedOrder.shipper.pickUpLocations.map((location, index) => (
-                          <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm text-gray-600">Name</p>
-                                <p className="font-medium text-gray-800">{location.name || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Address</p>
-                                <p className="font-medium text-gray-800">{location.address || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">City</p>
-                                <p className="font-medium text-gray-800">{location.city || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">State</p>
-                                <p className="font-medium text-gray-800">{location.state || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Zip Code</p>
-                                <p className="font-medium text-gray-800">{location.zipCode || 'N/A'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Drop Locations */}
-                  {selectedOrder.shipper.dropLocations && selectedOrder.shipper.dropLocations.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-3">Drop Locations</h4>
-                      <div className="space-y-3">
-                        {selectedOrder.shipper.dropLocations.map((location, index) => (
-                          <div key={index} className="bg-white rounded-lg p-3 border border-yellow-200">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm text-gray-600">Name</p>
-                                <p className="font-medium text-gray-800">{location.name || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Address</p>
-                                <p className="font-medium text-gray-800">{location.address || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">City</p>
-                                <p className="font-medium text-gray-800">{location.city || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">State</p>
-                                <p className="font-medium text-gray-800">{location.state || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Zip Code</p>
-                                <p className="font-medium text-gray-800">{location.zipCode || 'N/A'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Remarks */}
-              {selectedOrder.remarks && (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FileText className="text-gray-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Remarks</h3>
-                  </div>
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <p className="text-gray-800">{selectedOrder.remarks}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Status */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <CheckCircle className="text-blue-600" size={16} />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-800">Status</h3>
-                </div>
-                <div className="bg-white rounded-lg p-4 border border-blue-200 space-y-4">
-                  <select
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                    value={selectedOrder.status || "open"}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                  >
-                    <option value="open">Open</option>
-                    <option value="close">Close</option>
-                  </select>
-
                   <button
-                    onClick={() => generateInvoicePDF(selectedOrder)}
-                    className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold shadow hover:from-green-600 hover:to-green-700 transition-all duration-200 flex items-center justify-center gap-2"
+                    onClick={() => setShowOrderModal(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
                   >
-                    <FaDownload className="text-white" size={16} />
-                    Generate Invoice PDF
+                    ×
                   </button>
                 </div>
               </div>
 
-              {/* Uploaded Files */}
-              {selectedOrder.uploadedFiles && selectedOrder.uploadedFiles.length > 0 && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FileText className="text-blue-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Uploaded Files</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {selectedOrder.uploadedFiles.map((file, index) => (
-                      <div key={index} className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <FileText className="text-blue-600" size={16} />
+              {/* Content */}
+              <div className="p-6 space-y-6">
+                {/* Customer Information */}
+                {selectedOrder?.customers?.length > 0 && (
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <User className="text-green-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
+                    </div>
+
+                    <div className="space-y-4">
+                      {selectedOrder.customers.map((customer, index) => (
+                        <div key={index} className="bg-white rounded-xl p-4 border border-green-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                              <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                            </div>
+                            <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
                           </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-800 truncate">{file.fileName}</div>
-                            <div className="text-xs text-gray-500">{file.fileType}</div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-600">Bill To</p>
+                              <p className="font-medium text-gray-800">{customer?.billTo || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Dispatcher Name</p>
+                              <p className="font-medium text-gray-800">{customer?.dispatcherName || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Work Order No</p>
+                              <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Line Haul</p>
+                              <p className="font-medium text-gray-800">${customer?.lineHaul || 0}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">FSC</p>
+                              <p className="font-medium text-gray-800">${customer?.fsc || 0}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Other</p>
+                              <p className="font-medium text-gray-800">${customer?.other || 0}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-sm text-gray-600">Total Amount</p>
+                              <p className="font-bold text-lg text-green-600">${customer?.totalAmount || 0}</p>
+                            </div>
                           </div>
                         </div>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <Calendar size={12} />
-                            <span>Uploaded: {new Date(file.uploadDate).toLocaleDateString()}</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <a
-                              href={file.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex-1 bg-blue-500 text-white text-center py-2 px-3 rounded-lg hover:bg-blue-600 transition text-xs font-medium"
-                            >
-                              View File
-                            </a>
-                            <a
-                              href={file.fileUrl}
-                              download={file.fileName}
-                              className="bg-green-500 text-white py-2 px-3 rounded-lg hover:bg-green-600 transition text-xs font-medium"
-                            >
-                              Download
-                            </a>
-                          </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Carrier Information */}
+                {selectedOrder?.carrier && (
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Truck className="text-purple-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Carrier Information</h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                          <Truck className="text-purple-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Carrier Name</p>
+                          <p className="font-semibold text-gray-800">{selectedOrder.carrier?.carrierName || 'N/A'}</p>
                         </div>
                       </div>
-                    ))}
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                          <Truck className="text-pink-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Equipment Type</p>
+                          <p className="font-semibold text-gray-800">{selectedOrder.carrier?.equipmentType || 'N/A'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <DollarSign className="text-green-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Total Carrier Fees</p>
+                          <p className="font-semibold text-gray-800">${selectedOrder.carrier?.totalCarrierFees || 0}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedOrder.carrier?.carrierFees?.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-semibold text-gray-800 mb-3">Carrier Charges</h4>
+                        <div className="space-y-2">
+                          {selectedOrder.carrier.carrierFees.map((charge, i) => (
+                            <div key={i} className="bg-white rounded-lg p-3 border border-purple-200">
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium text-gray-800">{charge?.name}</span>
+                                <span className="font-bold text-green-600">${charge?.total || 0}</span>
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Quantity: {charge?.quantity || 0} × Amount: ${charge?.amount || 0}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Shipper Information (NO weight here) */}
+                {selectedOrder?.shipper && (
+                  <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Truck className="text-orange-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Shipper Information</h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                          <User className="text-orange-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Shipper Name</p>
+                          <p className="font-semibold text-gray-800">{selectedOrder.shipper?.name || 'N/A'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                          <Calendar className="text-yellow-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Pickup Date</p>
+                          <p className="font-semibold text-gray-800">
+                            {selectedOrder.shipper?.pickUpDate
+                              ? new Date(selectedOrder.shipper.pickUpDate).toLocaleDateString()
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <FileText className="text-blue-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Container No</p>
+                          <p className="font-semibold text-gray-800">{selectedOrder.shipper?.containerNo || 'N/A'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <Truck className="text-green-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Container Type</p>
+                          <p className="font-semibold text-gray-800">{selectedOrder.shipper?.containerType || 'N/A'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                          <Calendar className="text-red-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Drop Date</p>
+                          <p className="font-semibold text-gray-800">
+                            {selectedOrder.shipper?.dropDate
+                              ? new Date(selectedOrder.shipper.dropDate).toLocaleDateString()
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pickup Locations (WITH Weight) */}
+                    {((selectedOrder.shipper?.pickUpLocations ||
+                      selectedOrder.shipper?.pickupLocations ||
+                      []).length > 0) && (
+                        <div className="mt-4">
+                          <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
+                          <div className="space-y-3">
+                            {(selectedOrder.shipper?.pickUpLocations ||
+                              selectedOrder.shipper?.pickupLocations ||
+                              []).map((location, index) => (
+                                <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <p className="text-sm text-gray-600">Name</p>
+                                      <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-gray-600">Address</p>
+                                      <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-gray-600">City</p>
+                                      <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-gray-600">State</p>
+                                      <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-gray-600">Zip Code</p>
+                                      <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-gray-600">Weight (lbs)</p>
+                                      <p className="font-medium text-gray-800">
+                                        {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                          ? location.weight
+                                          : 'N/A'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Drop Locations (WITH Weight) */}
+                    {((selectedOrder.shipper?.dropLocations || []).length > 0) && (
+                      <div className="mt-4">
+                        <h4 className="font-semibold text-gray-800 mb-3">Drop Locations</h4>
+                        <div className="space-y-3">
+                          {(selectedOrder.shipper?.dropLocations || []).map((location, index) => (
+                            <div key={index} className="bg-white rounded-lg p-3 border border-yellow-200">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-sm text-gray-600">Name</p>
+                                  <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Address</p>
+                                  <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">City</p>
+                                  <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">State</p>
+                                  <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Zip Code</p>
+                                  <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Weight (lbs)</p>
+                                  <p className="font-medium text-gray-800">
+                                    {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                      ? location.weight
+                                      : 'N/A'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Remarks */}
+                {selectedOrder?.remarks && (
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <FileText className="text-gray-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Remarks</h3>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <p className="text-gray-800">{selectedOrder.remarks}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <CheckCircle className="text-blue-600" size={16} />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800">Status</h3>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 border border-blue-200">
+                    <select
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      value={selectedOrder.status || 'open'}
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                    >
+                      <option value="open">Open</option>
+                      <option value="close">Close</option>
+                    </select>
                   </div>
                 </div>
-              )}
+
+                {/* PDF Generation Buttons */}
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
+                      <FaDownload className="text-purple-600" size={14} />
+                    </div>
+                    <h3 className="text-base font-bold text-gray-800">Generate Documents</h3>
+                  </div>
+                  <div className="flex gap-2 justify-start">
+                    <button
+                      onClick={() => generateInvoicePDF(selectedOrder)}
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-1.5 rounded-md font-medium shadow hover:shadow-md transition-all duration-200 flex items-center justify-center gap-1.5 text-xs"
+                    >
+                      <FaDownload className="text-white" size={12} />
+                      <span>Invoice PDF</span>
+                    </button>
+
+                    <button
+                      onClick={() => generateRateLoadConfirmationPDF(selectedOrder)}
+                      className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-1.5 rounded-md font-medium shadow hover:shadow-md transition-all duration-200 flex items-center justify-center gap-1.5 text-xs"
+                    >
+                      <FaDownload className="text-white" size={12} />
+                      <span>Rate Confirmation PDF</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
+
 
       {/* Charges Popup */}
       {showChargesPopup && (
@@ -3555,9 +3492,9 @@ setShowAddOrderForm(true);
         <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
           {/* Hide scrollbar for modal content */}
           <style>{`
-            .hide-scrollbar::-webkit-scrollbar { display: none; }
-            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-          `}</style>
+                  .hide-scrollbar::-webkit-scrollbar { display: none; }
+                  .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+                `}</style>
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -3617,22 +3554,107 @@ setShowAddOrderForm(true);
 
                     {/* All 7 fields in one grid - 4 fields per line */}
                     <div className="grid grid-cols-4 gap-4">
-                      <input
-                        type="text"
-                        value={customer.billTo}
-                        onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Bill To *"
-                      />
-                      <input
-                        type="text"
-                        value={customer.dispatcherName}
-                        onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Dispatcher Name *"
-                      />
+                      {/* Bill To (Company) - dropdown */}
+                      {/* Bill To (Company) - dropdown */}
+                      {shippers.length > 0 ? (
+                        <select
+                          value={customer.billTo || ''}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                          required
+                          disabled={loadingShippers}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {/* Placeholder */}
+                          <option value="" disabled>
+                            {loadingShippers ? 'Loading companies...' : 'Select Company *'}
+                          </option>
+
+                          {/* Current value (agar list me na ho) */}
+                          {customer.billTo &&
+                            !shippers.some(s => (s.compName || '') === customer.billTo) && (
+                              <option value={customer.billTo}>
+                                {customer.billTo} (custom)
+                              </option>
+                            )
+                          }
+
+                          {/* Company options */}
+                          {shippers.map(s => (
+                            <option key={s._id} value={s.compName || ''}>
+                              {s.compName || '(No name)'}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        // Fallback: companies load na ho to normal input
+                        <input
+                          type="text"
+                          value={customer.billTo}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                          required
+                          disabled={loadingShippers}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder={loadingShippers ? "Loading companies..." : "Bill To *"}
+                        />
+                      )}
+
+
+                      {/* Dispatcher Name - dropdown (aliasName from CMT) */}
+                      {dispatchers.length > 0 ? (
+                        <select
+                          value={customer.dispatcherName || ''}
+                          onChange={(e) =>
+                            handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)
+                          }
+                          required
+                          disabled={loadingDispatchers}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {/* Placeholder */}
+                          <option value="" disabled>
+                            {loadingDispatchers ? 'Loading dispatchers...' : 'Select Dispatcher *'}
+                          </option>
+
+                          {/* Current value (agar list me na ho) */}
+                          {customer.dispatcherName &&
+                            !dispatchers.some(
+                              (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
+                            ) && (
+                              <option value={customer.dispatcherName}>
+                                {customer.dispatcherName} (custom)
+                              </option>
+                            )}
+
+                          {/* Alias list (fallback to employeeName if alias missing) */}
+                          {dispatchers
+                            .filter((d) => (d.status || '').toLowerCase() === 'active')
+                            .sort((a, b) =>
+                              (a.aliasName || a.employeeName || '').localeCompare(
+                                b.aliasName || b.employeeName || ''
+                              )
+                            )
+                            .map((d) => (
+                              <option key={d._id || d.empId} value={d.aliasName || d.employeeName}>
+                                {d.aliasName || d.employeeName}
+                                {d.empId ? ` (${d.empId})` : ''}
+                              </option>
+                            ))}
+                        </select>
+                      ) : (
+                        // Fallback: list na aaye to normal input allow karo
+                        <input
+                          type="text"
+                          value={customer.dispatcherName}
+                          onChange={(e) =>
+                            handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)
+                          }
+                          required
+                          disabled={loadingDispatchers}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Dispatcher Name *'}
+                        />
+                      )}
+
                       <input
                         type="text"
                         value={customer.workOrderNo}
