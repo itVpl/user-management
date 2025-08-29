@@ -3,6 +3,7 @@ import axios from 'axios';
 import apiService from '../../services/apiService.js';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
+import Logo from '../../assets/LogoFinal.png';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -155,6 +156,7 @@ export default function DeliveryOrder() {
   const [customerNameInput, setCustomerNameInput] = useState('');
   const [dispatchers, setDispatchers] = useState([]);
   const [loadingDispatchers, setLoadingDispatchers] = useState(false);
+  const logoSrc = Logo; 
   // top-level states ke saath
   const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
   // ADD: shipper companies (for Bill To dropdown)
@@ -1852,7 +1854,7 @@ export default function DeliveryOrder() {
   <div class="confirmation-container">
     <!-- Header -->
     <div class="header">
-      <img src="/src/assets/LogoFinal.png" alt="Company Logo" class="logo">
+      <img src="${logoSrc}" alt="Company Logo" class="logo"/>
       <div class="bill-to">
         <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
           <tr>
