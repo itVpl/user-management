@@ -12,12 +12,12 @@ import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 
 // Searchable Dropdown Component
-const SearchableDropdown = ({ 
-  value, 
-  onChange, 
-  options, 
-  placeholder, 
-  disabled = false, 
+const SearchableDropdown = ({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled = false,
   loading = false,
   className = "",
   searchPlaceholder = "Search..."
@@ -31,7 +31,7 @@ const SearchableDropdown = ({
     if (searchTerm.trim() === '') {
       setFilteredOptions(options);
     } else {
-      const filtered = options.filter(option => 
+      const filtered = options.filter(option =>
         option.label.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredOptions(filtered);
@@ -76,9 +76,8 @@ const SearchableDropdown = ({
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <div
-        className={`w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${
-          disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
-        }`}
+        className={`w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
+          }`}
         onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
       >
         <div className="flex items-center justify-between">
@@ -146,7 +145,6 @@ export default function DeliveryOrder() {
   const [reason, setReason] = useState('');
   const [showAddOrderForm, setShowAddOrderForm] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [viewLoading, setViewLoading] = useState(false);
   const [loadingOrderId, setLoadingOrderId] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -157,8 +155,6 @@ export default function DeliveryOrder() {
   const [customerNameInput, setCustomerNameInput] = useState('');
   const [dispatchers, setDispatchers] = useState([]);
   const [loadingDispatchers, setLoadingDispatchers] = useState(false);
-  // PATCH: add this
-  const [isEditForm, setIsEditForm] = useState(false);
   // top-level states ke saath
   const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
   // ADD: shipper companies (for Bill To dropdown)
@@ -240,6 +236,7 @@ export default function DeliveryOrder() {
 
   // Form state for Add Delivery Order
   // REPLACE THIS BLOCK: formData ka initial state (weight shipper se hata kar pickup/drop locations me dala)
+  // ✅ REPLACE: initial formData (with remarks on locations)
   const [formData, setFormData] = useState({
     customers: [
       {
@@ -258,12 +255,12 @@ export default function DeliveryOrder() {
     equipmentType: '',
     carrierFees: '',
 
-    // Shipper Information (NO top-level weight now)
+    // Shipper Information
     shipperName: '',
     containerNo: '',
     containerType: '',
 
-    // Pickup Locations - each has weight and individual date
+    // Pickup Locations - each has weight, individual date, and remarks (optional)
     pickupLocations: [
       {
         name: '',
@@ -272,11 +269,12 @@ export default function DeliveryOrder() {
         state: '',
         zipCode: '',
         weight: '',
-        pickUpDate: ''     // <-- NEW: individual pickup date
+        pickUpDate: '',
+        remarks: '' // 👈 NEW
       }
     ],
 
-    // Drop Locations - each has weight and individual date
+    // Drop Locations - each has weight, individual date, and remarks (optional)
     dropLocations: [
       {
         name: '',
@@ -285,13 +283,15 @@ export default function DeliveryOrder() {
         state: '',
         zipCode: '',
         weight: '',
-        dropDate: ''     // <-- NEW: individual drop date
+        dropDate: '',
+        remarks: '' // 👈 NEW
       }
     ],
 
     remarks: '',
     docs: null
   });
+
 
 
   // Pagination states
@@ -448,6 +448,7 @@ export default function DeliveryOrder() {
     }
   };
   // REPLACE THIS BLOCK: handleDuplicateOrder (locations ke weight ko preserve karo)
+  // ✅ REPLACE: handleDuplicateOrder (preserve location remarks)
   const handleDuplicateOrder = async (rowOrder) => {
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -502,12 +503,22 @@ export default function DeliveryOrder() {
         containerType: src.shipper?.containerType || '',
 
         pickupLocations: (src.shipper?.pickUpLocations || [{
-          name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: ''
-        }]).map(l => ({ ...l, pickUpDate: fmt(l?.pickUpDate || src.shipper?.pickUpDate), weight: l?.weight ?? '' })),
+          name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: ''
+        }]).map(l => ({
+          ...l,
+          pickUpDate: fmt(l?.pickUpDate || src.shipper?.pickUpDate),
+          weight: l?.weight ?? '',
+          remarks: l?.remarks ?? '' // 👈 NEW
+        })),
 
         dropLocations: (src.shipper?.dropLocations || [{
-          name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: ''
-        }]).map(l => ({ ...l, dropDate: fmt(l?.dropDate || src.shipper?.dropDate), weight: l?.weight ?? '' })),
+          name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '', remarks: ''
+        }]).map(l => ({
+          ...l,
+          dropDate: fmt(l?.dropDate || src.shipper?.dropDate),
+          weight: l?.weight ?? '',
+          remarks: l?.remarks ?? '' // 👈 NEW
+        })),
 
         remarks: src.remarks || '',
         docs: null,
@@ -533,6 +544,7 @@ export default function DeliveryOrder() {
       alertify.error('Duplicate form open failed');
     }
   };
+
 
 
 
@@ -670,7 +682,7 @@ export default function DeliveryOrder() {
       ...prev,
       pickupLocations: [
         ...prev.pickupLocations,
-        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '' }
+        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: '' } // 👈 remarks added
       ]
     }));
   };
@@ -691,10 +703,11 @@ export default function DeliveryOrder() {
       ...prev,
       dropLocations: [
         ...prev.dropLocations,
-        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '' }
+        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '', remarks: '' } // 👈 remarks added
       ]
     }));
   };
+
 
   // Remove drop location
   const removeDropLocation = (index) => {
@@ -801,13 +814,14 @@ export default function DeliveryOrder() {
   // Handle form submission
   // REPLACE THIS BLOCK: handleSubmit (JSON payload aur FormData me locations.weight bhejna; shipper.weight hata do)
   // DROP-IN REPLACEMENT for your handleSubmit
+  // ✅ REPLACE: handleSubmit (remarks included in locations JSON + multipart)
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
       setSubmitting(true);
 
-      // --- basic validations (same as before) ---
+      // validations
       if (!formData.customers || formData.customers.length === 0) {
         setFormData(prev => ({
           ...prev,
@@ -826,12 +840,12 @@ export default function DeliveryOrder() {
         return;
       }
 
-      // --- user & emp ---
+      // user/emp
       const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
       const user = JSON.parse(userStr || '{}');
       const empId = user.empId || "EMP001";
 
-      // --- customers (totals) ---
+      // customers
       const customersWithTotals = formData.customers.map(c => ({
         billTo: c.billTo,
         dispatcherName: c.dispatcherName,
@@ -842,7 +856,7 @@ export default function DeliveryOrder() {
         totalAmount: (parseInt(c.lineHaul) || 0) + (parseInt(c.fsc) || 0) + (parseInt(c.other) || 0)
       }));
 
-      // --- carrier (from charges) ---
+      // carrier (from charges)
       const carrierData = {
         carrierName: formData.carrierName,
         equipmentType: formData.equipmentType,
@@ -855,7 +869,7 @@ export default function DeliveryOrder() {
         totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0)
       };
 
-      // --- plain JSON payload (no top-level shipper.weight) ---
+      // plain JSON payload (remarks included)
       const submitData = {
         empId,
         customers: customersWithTotals,
@@ -869,7 +883,8 @@ export default function DeliveryOrder() {
             state: l.state,
             zipCode: l.zipCode,
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            pickUpDate: l.pickUpDate || ''
+            pickUpDate: l.pickUpDate || '',
+            remarks: l.remarks || '' // 👈
           })),
           containerNo: formData.containerNo,
           containerType: formData.containerType,
@@ -880,7 +895,8 @@ export default function DeliveryOrder() {
             state: l.state,
             zipCode: l.zipCode,
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            dropDate: l.dropDate || ''
+            dropDate: l.dropDate || '',
+            remarks: l.remarks || '' // 👈
           }))
         },
         remarks: formData.remarks
@@ -890,12 +906,11 @@ export default function DeliveryOrder() {
 
       let response;
 
-      // ========== STEP B: MULTIPART (File attached) — send JSON as strings ==========
+      // MULTIPART (file attached) — shipper/carrier strings me with remarks
       if (formData.docs) {
         const fd = new FormData();
         fd.append('empId', empId);
 
-        // strings me bhejo (server pe JSON.parse karna hoga)
         const carrierJSON = {
           carrierName: formData.carrierName,
           equipmentType: formData.equipmentType,
@@ -919,7 +934,8 @@ export default function DeliveryOrder() {
             state: l.state,
             zipCode: l.zipCode,
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            pickUpDate: l.pickUpDate || ''
+            pickUpDate: l.pickUpDate || '',
+            remarks: l.remarks || '' // 👈
           })),
           dropLocations: formData.dropLocations.map(l => ({
             name: l.name,
@@ -928,7 +944,8 @@ export default function DeliveryOrder() {
             state: l.state,
             zipCode: l.zipCode,
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            dropDate: l.dropDate || ''
+            dropDate: l.dropDate || '',
+            remarks: l.remarks || '' // 👈
           })),
         };
 
@@ -939,28 +956,26 @@ export default function DeliveryOrder() {
         fd.append('document', formData.docs);
 
         response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, fd, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            // Content-Type ko na set karein; browser khud boundary set karega
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
       } else {
-        // plain JSON (as-is)
+        // plain JSON
         response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, submitData, {
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
         });
       }
 
-      // ========== STEP C: success-block (newOrder with robust fallbacks) ==========
       if (response.data.success) {
         const resp = response.data.data || {};
 
         const puLocs =
           resp.shipper?.pickUpLocations ||
           resp.shipper?.pickupLocations || [];
+
         const drLocs =
           resp.shipper?.dropLocations ||
           resp.shipper?.deliveryLocations || [];
+
         const puW = puLocs[0]?.weight;
         const drW = drLocs[0]?.weight;
 
@@ -983,7 +998,6 @@ export default function DeliveryOrder() {
           createdBy: `Employee ${resp.empId}`,
           docUpload: formData.docs ? formData.docs.name : 'sample-doc.jpg',
           productName: resp.shipper?.containerType || 'N/A',
-          // fallback me top-level shipper.weight bhi consider
           quantity: (puW ?? drW ?? resp.shipper?.weight ?? 0),
           remarks: resp.remarks || '',
           shipperName: resp.shipper?.name || 'N/A',
@@ -1008,8 +1022,8 @@ export default function DeliveryOrder() {
           shipperName: '',
           containerNo: '',
           containerType: '',
-                  pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '' }],
-        dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '' }],
+          pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: '' }],
+          dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '', remarks: '' }],
           remarks: '',
           docs: null
         });
@@ -1037,8 +1051,8 @@ export default function DeliveryOrder() {
 
 
 
+
   // Reset form when modal closes
-  // REPLACE THIS BLOCK: handleCloseModal (form reset with location weights, no top-level weight)
   const handleCloseModal = () => {
     setShowAddOrderForm(false);
     setFormData({
@@ -1059,12 +1073,12 @@ export default function DeliveryOrder() {
       equipmentType: '',
       carrierFees: '',
 
-      // Shipper Information (NO top-level weight)
+      // Shipper Information
       shipperName: '',
       containerNo: '',
       containerType: '',
 
-      // Pickup Locations — with weight and individual date
+      // Pickup Locations — with weight, date, remarks
       pickupLocations: [
         {
           name: '',
@@ -1073,11 +1087,12 @@ export default function DeliveryOrder() {
           state: '',
           zipCode: '',
           weight: '',
-          pickUpDate: ''   // <- individual pickup date
+          pickUpDate: '',
+          remarks: '' // 👈
         }
       ],
 
-      // Drop Locations — with weight and individual date
+      // Drop Locations — with weight, date, remarks
       dropLocations: [
         {
           name: '',
@@ -1086,7 +1101,8 @@ export default function DeliveryOrder() {
           state: '',
           zipCode: '',
           weight: '',
-          dropDate: ''   // <- individual drop date
+          dropDate: '',
+          remarks: '' // 👈
         }
       ],
 
@@ -1096,56 +1112,50 @@ export default function DeliveryOrder() {
     });
 
     // Reset charges state
-    setCharges([
-      { name: '', quantity: '', amt: '', total: 0 }
-    ]);
+    setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
     setShowChargesPopup(false);
     setFormMode('add');
     setEditingOrder(null);
   };
 
 
-
-
-  // Handle view employee data API call
-  const handleViewEmployeeData = async (empId) => {
+  // View: fetch by this row's DO _id (NOT by employee)
+  const handleViewOrder = async (rowOrder) => {
     try {
+      const orderId =
+        rowOrder.originalId ||            // we saved this while transforming list
+        rowOrder._id ||                   // if present
+        null;
+
+      if (!orderId) {
+        alertify.error('Order ID not found for this row');
+        return;
+      }
+
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`,
-        {
-          withCredentials: true,
-          headers: { Authorization: `Bearer ${token}` }
-        }
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (response.data.success) {
-        console.log('Employee DO Data:', response.data);
-        alertify.success('✅ Employee DO data fetched successfully!');
-
-        // Take the first delivery order from the response data
-        if (response.data.data && response.data.data.length > 0) {
-          const employeeOrder = response.data.data[0];
-          setSelectedOrder(employeeOrder);
-          setShowOrderModal(true);
-        } else {
-          alertify.warning('No delivery orders found for this employee');
-        }
+      if (res?.data?.success && res.data.data) {
+        setSelectedOrder(res.data.data);  // exact DO doc
+        setShowOrderModal(true);          // open your details modal
       } else {
-        alertify.error('Failed to fetch employee DO data');
+        alertify.error('Could not load this delivery order');
       }
-    } catch (error) {
-      console.error('Error fetching employee DO data:', error);
-      if (error.response) {
-        alertify.error(`API Error: ${error.response.data.message || 'Failed to fetch data'}`);
-      } else {
-        alertify.error('Network error. Please check your connection and try again.');
-      }
+    } catch (err) {
+      console.error('View order failed:', err?.response?.data || err);
+      alertify.error('Failed to fetch order details');
     }
   };
 
-  // Handle edit order
-  // REPLACE THIS BLOCK: handleEditOrder (locations me weight map karo, shipper.weight ignore)
+
+
+
+
+
+
   const handleEditOrder = async (order) => {
     try {
       console.log('Edit order clicked:', order);
@@ -1188,12 +1198,14 @@ export default function DeliveryOrder() {
           pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
             ...l,
             pickUpDate: formatDateForInput(l?.pickUpDate || fullOrderData.shipper?.pickUpDate),
-            weight: l?.weight ?? '' // fallback; shipper.weight ko use NA kare
+            weight: l?.weight ?? '',
+            remarks: l?.remarks ?? '' // 👈
           })),
           dropLocations: (fullOrderData.shipper?.dropLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
             ...l,
             dropDate: formatDateForInput(l?.dropDate || fullOrderData.shipper?.dropDate),
-            weight: l?.weight ?? ''
+            weight: l?.weight ?? '',
+            remarks: l?.remarks ?? '' // 👈
           })),
           remarks: fullOrderData.remarks || '',
           docs: null
@@ -1253,8 +1265,9 @@ export default function DeliveryOrder() {
           city: '',
           state: '',
           zipCode: '',
-          weight: order.quantity || '',   // table me quantity dikh raha tha => location weight
-          pickUpDate: ''
+          weight: order.quantity || '',
+          pickUpDate: '',
+          remarks: '' // 👈
         }],
         dropLocations: [{
           name: order.deliveryLocation || '',
@@ -1263,7 +1276,8 @@ export default function DeliveryOrder() {
           state: '',
           zipCode: '',
           weight: '',
-          dropDate: ''
+          dropDate: '',
+          remarks: '' // 👈
         }],
         remarks: order.remarks || '',
         docs: null
@@ -1273,14 +1287,16 @@ export default function DeliveryOrder() {
       setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
       setEditingOrder({ _id: originalId, customerId: null, fullData: null });
       setFormMode('edit');
-      setShowEditModal(true);
+      setShowAddOrderForm(true);
       alertify.warning('Using limited data for editing. Some fields may be empty.');
     }
   };
 
 
+
   // Handle close edit modal
   // REPLACE THIS BLOCK: handleCloseEditModal (form reset with location weights, no top-level weight)
+  // ✅ REPLACE: handleCloseEditModal
   const handleCloseEditModal = () => {
     setShowEditModal(false);
     setEditingOrder(null);
@@ -1302,12 +1318,12 @@ export default function DeliveryOrder() {
       equipmentType: '',
       carrierFees: '',
 
-      // Shipper (NO top-level weight now)
+      // Shipper (NO top-level weight)
       shipperName: '',
       containerNo: '',
       containerType: '',
 
-      // Locations with weight fields and individual dates
+      // Locations with weight/date/remarks
       pickupLocations: [
         {
           name: '',
@@ -1316,7 +1332,8 @@ export default function DeliveryOrder() {
           state: '',
           zipCode: '',
           weight: '',
-          pickUpDate: ''
+          pickUpDate: '',
+          remarks: '' // 👈
         }
       ],
       dropLocations: [
@@ -1327,7 +1344,8 @@ export default function DeliveryOrder() {
           state: '',
           zipCode: '',
           weight: '',
-          dropDate: ''
+          dropDate: '',
+          remarks: '' // 👈
         }
       ],
 
@@ -1337,89 +1355,110 @@ export default function DeliveryOrder() {
   };
 
 
-  // Handle update order - Fixed version with correct customer structure
+
+  // Handle update order 
+
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const orderId = editingOrder?._id;
-      const customerId = editingOrder?.customerId;
+      if (!orderId) { alertify.error('Order ID missing'); setSubmitting(false); return; }
 
-      if (!orderId) {
-        alertify.error('Order ID missing');
-        setSubmitting(false);
-        return;
+      // 👉 existing customers from the full order (to preserve loadNo & _id)
+      const prevCustomers = editingOrder?.fullData?.customers || [];
+
+      // --- REQUIRED fields quick check (BillTo/Dispatcher/W/O)
+      for (let i = 0; i < (formData.customers?.length || 0); i++) {
+        const c = formData.customers[i] || {};
+        if (!c.billTo || !c.dispatcherName || !c.workOrderNo) {
+          alertify.error(`Customer ${i + 1} ke required fields (Bill To, Dispatcher, W/O) bharo`);
+          setSubmitting(false);
+          return;
+        }
       }
 
-      const customerUpdates = {};
-      if (formData.customers?.length) {
-        const c = formData.customers[0];
-        if (c.billTo !== undefined) customerUpdates.billTo = c.billTo;
-        if (c.dispatcherName !== undefined) customerUpdates.dispatcherName = c.dispatcherName;
-        if (c.workOrderNo !== undefined) customerUpdates.workOrderNo = c.workOrderNo;
-        const toNum = (v) => (v === '' || v === null || v === undefined) ? undefined : Number(v);
-        const lh = toNum(c.lineHaul); if (lh !== undefined && !Number.isNaN(lh)) customerUpdates.lineHaul = lh;
-        const fsc = toNum(c.fsc); if (fsc !== undefined && !Number.isNaN(fsc)) customerUpdates.fsc = fsc;
-        const oth = toNum(c.other); if (oth !== undefined && !Number.isNaN(oth)) customerUpdates.other = oth;
-      }
+      // --- Customers (⚠️ loadNo preserve)
+      const customers = (formData.customers || []).map((c, idx) => {
+        const preservedLoadNo =
+          prevCustomers[idx]?.loadNo          // from server doc
+          || editingOrder?.doNum              // table se (L0129 etc.)
+          || c.loadNo                         // agar kabhi form me ho
+          || '';
 
-      const carrierFeesData = (charges || [])
-        .filter(ch => ch?.name && ch?.quantity !== '' && ch?.amt !== '')
+        if (!preservedLoadNo) {
+          // agar kuch bhi nahi mila to backend reject karega — user ko bata do
+          alertify.error(`Customer ${idx + 1}: Load No missing`);
+          throw new Error('Missing loadNo');
+        }
+
+        return {
+          _id: prevCustomers[idx]?._id,       // preserve subdoc id if present
+          loadNo: preservedLoadNo,            // ✅ REQUIRED
+          billTo: (c.billTo || '').trim(),
+          dispatcherName: (c.dispatcherName || '').trim(),
+          workOrderNo: (c.workOrderNo || '').trim(),
+          lineHaul: Number(c.lineHaul) || 0,
+          fsc: Number(c.fsc) || 0,
+          other: Number(c.other) || 0,
+          totalAmount:
+            (Number(c.lineHaul) || 0) +
+            (Number(c.fsc) || 0) +
+            (Number(c.other) || 0),
+        };
+      });
+
+      // --- Carrier (as you already had)
+      const carrierFees = (charges || [])
+        .filter(ch => ch?.name)
         .map(ch => ({
           name: ch.name,
           quantity: Number(ch.quantity) || 0,
           amount: Number(ch.amt) || 0,
           total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
         }));
-      const totalCarrierFees = carrierFeesData.reduce((s, f) => s + (f.total || 0), 0);
 
-      const shipperPayload = {
-        name: formData.shipperName,
-        containerNo: formData.containerNo,
-        containerType: formData.containerType,
-        pickUpDate: formData.pickupLocations?.[0]?.pickUpDate || '',
-        dropDate: formData.dropLocations?.[0]?.dropDate || '',
-                  pickUpLocations: (formData.pickupLocations || []).map(l => ({
-            name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode,
-            weight: l.weight === '' ? 0 : Number(l.weight) || 0,
-            pickUpDate: l.pickUpDate || ''
-          })),
-          dropLocations: (formData.dropLocations || []).map(l => ({
-            name: l.name, address: l.address, city: l.city, state: l.state, zipCode: l.zipCode,
-            weight: l.weight === '' ? 0 : Number(l.weight) || 0,
-            dropDate: l.dropDate || ''
-          })),
+      const carrier = {
+        carrierName: formData.carrierName || '',
+        equipmentType: formData.equipmentType || '',
+        carrierFees,
+        totalCarrierFees: carrierFees.reduce((s, f) => s + (f.total || 0), 0),
       };
 
-      const carrierPayload = {
-        carrierName: formData.carrierName,
-        equipmentType: formData.equipmentType,
-        ...(carrierFeesData.length ? { carrierFees: carrierFeesData, totalCarrierFees } : {})
+      // --- Shipper + per-location fields
+      const shipper = {
+        name: formData.shipperName || '',
+        containerNo: formData.containerNo || '',
+        containerType: formData.containerType || '',
+        pickUpLocations: (formData.pickupLocations || []).map(l => ({
+          name: l.name || '',
+          address: l.address || '',
+          city: l.city || '',
+          state: l.state || '',
+          zipCode: l.zipCode || '',
+          weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+          pickUpDate: l.pickUpDate || '',
+          remarks: l.remarks || ''
+        })),
+        dropLocations: (formData.dropLocations || []).map(l => ({
+          name: l.name || '',
+          address: l.address || '',
+          city: l.city || '',
+          state: l.state || '',
+          zipCode: l.zipCode || '',
+          weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+          dropDate: l.dropDate || '',
+          remarks: l.remarks || ''
+        })),
       };
 
-      const updatePayload = {};
-      if (customerId && Object.keys(customerUpdates).length) {
-        updatePayload.customerId = customerId;
-        updatePayload.customerUpdates = customerUpdates;
-      }
-      if (carrierPayload.carrierName !== undefined ||
-        carrierPayload.equipmentType !== undefined ||
-        carrierPayload.carrierFees) {
-        updatePayload.carrier = carrierPayload;
-      }
-      if (
-        shipperPayload.name !== undefined ||
-        shipperPayload.containerNo !== undefined ||
-        shipperPayload.containerType !== undefined ||
-        shipperPayload.pickUpLocations?.length ||
-        shipperPayload.dropLocations?.length ||
-        shipperPayload.pickUpDate || shipperPayload.dropDate
-      ) {
-        updatePayload.shipper = shipperPayload;
-      }
-      if (formData.remarks !== undefined) updatePayload.remarks = formData.remarks;
+      const updatePayload = {
+        customers,          // ✅ now includes loadNo
+        carrier,
+        shipper,
+        remarks: formData.remarks || '',
+      };
 
       const res = await axios.put(
         `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
@@ -1431,18 +1470,19 @@ export default function DeliveryOrder() {
         alertify.success('Delivery order updated!');
         setShowAddOrderForm(false);
         setEditingOrder(null);
-        setCarrierFeesJustUpdated(false);
         fetchOrders();
       } else {
         alertify.error(res?.data?.message || 'Update failed');
       }
-    } catch (error) {
-      console.error('Error updating delivery order:', error?.response?.data || error);
-      alertify.error(error?.response?.data?.message || 'Failed to update delivery order');
+    } catch (err) {
+      console.error('Update error:', err?.response?.data || err);
+      alertify.error(err?.response?.data?.message || err.message || 'Failed to update delivery order');
     } finally {
       setSubmitting(false);
     }
   };
+
+
 
 
 
@@ -1597,269 +1637,352 @@ export default function DeliveryOrder() {
     }
   };
   // Generate Rate and Load Confirmation PDF function
-  // REPLACE THIS BLOCK: generateRateLoadConfirmationPDF (weight ko per-location line me show, shipper.weight hataya)
+
   const generateRateLoadConfirmationPDF = async (order) => {
     try {
-      // Fetch dispatcher information from API
+      // 1) Dispatcher info
       let dispatcherPhone = 'N/A';
       let dispatcherEmail = 'N/A';
-      
       try {
         const cmtUsers = await apiService.getCMTUsers();
-        const dispatcher = cmtUsers.find(user => 
-          user.aliasName === order.customers?.[0]?.dispatcherName
+        const dispatcher = cmtUsers.find(
+          (user) => user.aliasName === ((order.customers && order.customers[0] && order.customers[0].dispatcherName) || '')
         );
-        
         if (dispatcher) {
           dispatcherPhone = dispatcher.mobileNo || 'N/A';
           dispatcherEmail = dispatcher.email || 'N/A';
         }
-      } catch (error) {
-        console.error('Error fetching dispatcher info:', error);
-        // Continue with default values if API call fails
+      } catch (err) {
+        console.error('Error fetching dispatcher info:', err);
       }
 
+      // 2) Helpers (NO nullish + logical mixing)
+      const toNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const currency = (n) =>
+        Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const formatDateStr = (d) => {
+        if (!d) return 'N/A';
+        try { return new Date(d).toLocaleDateString(); } catch { return 'N/A'; }
+      };
+      const formatDateStrUS = (d) => {
+        if (!d) return 'N/A';
+        try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return 'N/A'; }
+      };
+      const formatAddr = (l) => {
+        if (!l) return 'N/A';
+        const parts = [l.address, l.city, l.state, l.zipCode].filter(Boolean);
+        return parts.length ? parts.join(', ') : 'N/A';
+      };
+
+      // 3) Carrier fees (names + qty + rate + total)
+      const rawFees = (order.carrier && Array.isArray(order.carrier.carrierFees)) ? order.carrier.carrierFees : [];
+      const feeEntries = rawFees.map((ch, idx) => {
+        let qtyRaw;
+        if (ch && ch.qty !== undefined && ch.qty !== null) qtyRaw = ch.qty;
+        else if (ch && ch.quantity !== undefined && ch.quantity !== null) qtyRaw = ch.quantity;
+        else qtyRaw = 1;
+        const qty = toNum(qtyRaw) || 1;
+
+        let rateRaw = (ch && ch.rate !== undefined && ch.rate !== null) ? ch.rate : 0;
+        const rate = toNum(rateRaw);
+
+        let totalRaw = null;
+        if (ch && ch.total !== undefined && ch.total !== null) totalRaw = ch.total;
+        else if (ch && ch.amount !== undefined && ch.amount !== null) totalRaw = ch.amount;
+        const total = totalRaw !== null ? toNum(totalRaw) : (rate * qty);
+
+        let desc = 'Charge ' + (idx + 1);
+        if (ch && ch.description) desc = ch.description;
+        else if (ch && ch.name) desc = ch.name;
+        else if (ch && ch.type) desc = ch.type;
+
+        return { desc, qty, rate, total };
+      });
+      const totalCarrierFees = feeEntries.reduce((s, it) => s + toNum(it.total), 0);
+
+      // Carrier Charges list (under Carrier Info)
+      const chargesListItemsHTML = feeEntries.length
+        ? feeEntries.map((it) =>
+          '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #ececec;border-radius:8px;padding:8px 10px;margin:6px 0;">' +
+          `<div><div style="font-weight:700;">${it.desc}</div><div style="font-size:11px;color:#555;">Quantity: ${it.qty} × Amount: $${currency(it.rate)}</div></div>` +
+          `<div style="font-weight:700;">$ ${currency(it.total)}</div>` +
+          '</div>'
+        ).join('')
+        : '<div style="color:#777;border:1px dashed #ccc;border-radius:8px;padding:8px 10px;">No carrier charges</div>';
+
+      const chargesListHTML =
+        '<div style="margin:-6px 0 10px 0;padding:10px;border:1px solid #f0e8ff;background:#fbf7ff;border-radius:10px;">' +
+        '<h4 style="font-size:12px;margin:0 0 8px 0;color:#2c3e50;">Carrier Charges</h4>' +
+        chargesListItemsHTML +
+        '</div>';
+
+      // 4) Pickup/Drop sections (EACH location separately)
+      const ship = order.shipper || {};
+      const pickUps = Array.isArray(ship.pickUpLocations) ? ship.pickUpLocations : [];
+      const drops = Array.isArray(ship.dropLocations) ? ship.dropLocations : [];
+
+      const pickupSectionsHTML = pickUps.length
+        ? pickUps.map((l, i) => {
+          const addr = formatAddr(l);
+          const dateStr = formatDateStr(l && l.pickUpDate);
+          const hoursLabel = 'Shipping Hours';
+          return (
+            '<table class="rates-table">' +
+            '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location ' + (i + 1) + '</th></tr></thead>' +
+            '<tbody>' +
+            '<tr>' +
+            '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addr + '</td>' +
+            '</tr>' +
+            '<tr>' +
+            '<td style="width:50%;padding:8px;">' +
+            '<strong>Date:</strong> ' + dateStr + '<br>' +
+            '<strong>Time:</strong> N/A<br>' +
+            '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
+            '<strong>Quantity:</strong> 1<br>' +
+            '<strong>Weight:</strong> ' + ((ship.weight !== undefined && ship.weight !== null) ? ship.weight : 'N/A') + ' lbs' +
+            '</td>' +
+            '<td style="width:50%;padding:8px;">' +
+            '<strong>Purchase Order #:</strong> N/A<br>' +
+            '<strong>' + hoursLabel + ':</strong> N/A<br>' +
+            '<strong>Appointment:</strong> No<br>' +
+            '<strong>Container/Trailer Number:</strong> ' + (ship.containerNo || 'N/A') +
+            '</td>' +
+            '</tr>' +
+            '</tbody>' +
+            '</table>'
+          );
+        }).join('')
+        : (
+          '<table class="rates-table">' +
+          '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location</th></tr></thead>' +
+          '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
+          '</table>'
+        );
+
+      const dropSectionsHTML = drops.length
+        ? drops.map((l, i) => {
+          const addr = formatAddr(l);
+          const dateStr = formatDateStr(l && l.dropDate);
+          const hoursLabel = 'Receiving Hours';
+          return (
+            '<table class="rates-table">' +
+            '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location ' + (i + 1) + '</th></tr></thead>' +
+            '<tbody>' +
+            '<tr>' +
+            '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addr + '</td>' +
+            '</tr>' +
+            '<tr>' +
+            '<td style="width:50%;padding:8px;">' +
+            '<strong>Date:</strong> ' + dateStr + '<br>' +
+            '<strong>Time:</strong> N/A<br>' +
+            '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
+            '<strong>Quantity:</strong> 1<br>' +
+            '<strong>Weight:</strong> ' + ((ship.weight !== undefined && ship.weight !== null) ? ship.weight : 'N/A') + ' lbs' +
+            '</td>' +
+            '<td style="width:50%;padding:8px;">' +
+            '<strong>Purchase Order #:</strong> N/A<br>' +
+            '<strong>' + hoursLabel + ':</strong> N/A<br>' +
+            '<strong>Appointment:</strong> No<br>' +
+            '<strong>Container/Trailer Number:</strong> ' + (ship.containerNo || 'N/A') +
+            '</td>' +
+            '</tr>' +
+            '</tbody>' +
+            '</table>'
+          );
+        }).join('')
+        : (
+          '<table class="rates-table">' +
+          '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location</th></tr></thead>' +
+          '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
+          '</table>'
+        );
+
+      // 5) Bottom: total with signature
+      const amountBottomBlockHTML =
+        '<div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">' +
+        '<h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #2c3e50;">Total Carrier Fees</h3>' +
+        '<p style="text-align:center; font-size: 16px; font-weight: 700; margin: 0 0 14px 0;">$ ' + currency(totalCarrierFees) + '</p>' +
+        '<div style="margin-top: 10px; font-size: 12px; line-height: 1.6;">' +
+        '<p style="margin-bottom: 10px; text-align: center;">' +
+        'Accepted By _________________________ Date ________________ Signature ____________________' +
+        '</p>' +
+        '<p style="text-align: center;">' +
+        'Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________' +
+        '</p>' +
+        '</div>' +
+        '</div>';
+
+      // 6) Dates for header
+      const todayUS = formatDateStrUS(new Date());
+      const shipDateUS = formatDateStrUS(order.shipper && order.shipper.pickUpDate);
+
+      // 7) Build HTML
       const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alertify.error('Popup blocked. Please allow popups and try again.');
+        return;
+      }
 
       const confirmationHTML = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Rate and Load Confirmation</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Arial', sans-serif; line-height: 1.4; color: #333; background: white; font-size: 12px; }
-          .confirmation-container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; }
-          .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; gap: 20px; }
-          .logo { width: 120px; height: 90px; object-fit: contain; }
-          .bill-to { text-align: right; }
-          .rates-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          .rates-table th, .rates-table td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
-          .rates-table th { background-color: #f5f5f5; font-weight: bold; }
-          .rates-table .amount { text-align: right; font-weight: bold; }
-          @media print { @page { margin: 0; size: A4; } }
-        </style>
-      </head>
-      <body>
-        <div class="confirmation-container">
-          <!-- Header -->
-          <div class="header">
-            <img src="/src/assets/LogoFinal.png" alt="Company Logo" class="logo">
-            <div class="bill-to">
-              <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
-                <tr>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Dispatcher</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.dispatcherName || 'N/A'}</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Load</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.doNum || order.customers?.[0]?.loadNo || 'N/A'}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Phone</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${dispatcherPhone}</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Ship Date</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.shipper?.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit',  day: '2-digit' }) : 'N/A'}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Fax</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.fax || 'N/A'}</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Today Date</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Email</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${dispatcherEmail}</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">W/O</td>
-                  <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.customers?.[0]?.workOrderNo || 'N/A'}</td>
-                </tr>
-              </table>
-            </div>
-          </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rate and Load Confirmation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Arial', sans-serif; line-height: 1.4; color: #333; background: white; font-size: 12px; }
+  .confirmation-container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; gap: 20px; }
+  .logo { width: 120px; height: 90px; object-fit: contain; }
+  .bill-to { text-align: right; }
+  .rates-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .rates-table th, .rates-table td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+  .rates-table th { background-color: #f5f5f5; font-weight: bold; }
+  .rates-table .amount { text-align: right; font-weight: bold; }
+  @media print { @page { margin: 0; size: A4; } }
+</style>
+</head>
+<body>
+  <div class="confirmation-container">
+    <!-- Header -->
+    <div class="header">
+      <img src="/src/assets/LogoFinal.png" alt="Company Logo" class="logo">
+      <div class="bill-to">
+        <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
+          <tr>
+            <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Dispatcher</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].dispatcherName) || 'N/A'}</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Load</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.doNum || (order.customers && order.customers[0] && order.customers[0].loadNo) || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Phone</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${dispatcherPhone}</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Ship Date</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${shipDateUS}</td>
+          </tr>
+          <tr>
+            <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Fax</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].fax) || 'N/A'}</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Today Date</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${todayUS}</td>
+          </tr>
+          <tr>
+            <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Email</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${dispatcherEmail}</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">W/O</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].workOrderNo) || 'N/A'}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
 
-          <!-- Carrier Information -->
-          <table class="rates-table">
-            <thead>
-              <tr>
-                <th>Carrier</th>
-                <th>Phone</th>
-                <th>Equipment</th>
-                <th>Load Status</th>
-                <th>Agreed Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>${order.carrier?.carrierName || 'N/A'}</td>
-                <td>${order.carrier?.phone || 'N/A'}</td>
-                <td>${order.carrier?.equipmentType || 'N/A'}</td>
-                <td>${order.status ? order.status[0].toUpperCase() + order.status.slice(1) : 'N/A'}</td>
-                <td class="amount">$${(() => {
-          const c = order.customers?.[0] || {};
-          const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
-          const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
-          return (lineHaul + fsc + other + carrierCharges).toLocaleString();
-        })()}</td>
-              </tr>
-            </tbody>
-          </table>
+    <!-- Carrier Information -->
+    <table class="rates-table">
+      <thead>
+        <tr>
+          <th>Carrier</th>
+          <th>Phone</th>
+          <th>Equipment</th>
+          <th>Load Status</th>
+          <th>Total Carrier Fees</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${(order.carrier && order.carrier.carrierName) || 'N/A'}</td>
+          <td>${(order.carrier && order.carrier.phone) || 'N/A'}</td>
+          <td>${(order.carrier && order.carrier.equipmentType) || 'N/A'}</td>
+          <td>${order.status ? (order.status[0].toUpperCase() + order.status.slice(1)) : 'N/A'}</td>
+          <td class="amount">$ ${currency(totalCarrierFees)}</td>
+        </tr>
+      </tbody>
+    </table>
 
-          <!-- Shipper -->
-          <table class="rates-table">
-            <thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Shipper</th></tr></thead>
-            <tbody>
-              <tr>
-                <td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">
-                  ${order.shipper?.name || 'N/A'}
-                  ${(order.shipper?.pickUpLocations || []).map(l => `
-                    <br>${[l.address, l.city, l.state, l.zipCode].filter(Boolean).join(', ')}
-                  `).join('')}
-                </td>
-              </tr>
-              <tr>
-                <td style="width:50%;padding:8px;">
-                  <strong>Date:</strong> ${(order.shipper?.pickUpLocations?.[0]?.pickUpDate || order.shipper?.pickUpDate) ? new Date(order.shipper?.pickUpLocations?.[0]?.pickUpDate || order.shipper?.pickUpDate).toLocaleDateString() : 'N/A'}<br>
-                  <strong>Time:</strong> N/A<br>
-                  <strong>Type:</strong> ${order.shipper?.containerType || '40HC'}<br>
-                  <strong>Quantity:</strong> 1<br>
-                  <strong>Weight:</strong> ${(order.shipper?.weight ?? 'N/A')} lbs
-                </td>
-                <td style="width:50%;padding:8px;">
-                  <strong>Purchase Order #:</strong> N/A<br>
-                  <strong>Shipping Hours:</strong> N/A<br>
-                  <strong>Appointment:</strong> No<br>
-                  <strong>Container/Trailer Number:</strong> ${order.shipper?.containerNo || 'N/A'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+    <!-- Carrier Charges (names + qty + amount) -->
+    ${chargesListHTML}
 
-          <!-- Consignee -->
-          <table class="rates-table">
-            <thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Consignee</th></tr></thead>
-            <tbody>
-              <tr>
-                <td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">
-                  ${order.shipper?.name || 'N/A'}
-                  ${(order.shipper?.dropLocations || []).map(l => `
-                    <br>${[l.address, l.city, l.state, l.zipCode].filter(Boolean).join(', ')}
-                  `).join('')}
-                </td>
-              </tr>
-              <tr>
-                <td style="width:50%;padding:8px;">
-                  <strong>Date:</strong> ${(order.shipper?.dropLocations?.[0]?.dropDate || order.shipper?.dropDate) ? new Date(order.shipper?.dropLocations?.[0]?.dropDate || order.shipper?.dropDate).toLocaleDateString() : 'N/A'}<br>
-                  <strong>Time:</strong> N/A<br>
-                  <strong>Type:</strong> ${order.shipper?.containerType || '40HC'}<br>
-                  <strong>Quantity:</strong> 1<br>
-                  <strong>Weight:</strong> ${(order.shipper?.weight ?? 'N/A')} lbs
-                </td>
-                <td style="width:50%;padding:8px;">
-                  <strong>Purchase Order #:</strong> N/A<br>
-                  <strong>Receiving Hours:</strong> N/A<br>
-                  <strong>Appointment:</strong> No<br>
-                  <strong>Container/Trailer Number:</strong> ${order.shipper?.containerNo || 'N/A'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+    <!-- Pickup Locations (each separately) -->
+    ${pickupSectionsHTML}
 
-          <!-- Dispatcher Notes -->
-          <div style="margin-top: 20px;">
-            <h4 style="font-size: 14px; font-weight: bold; color:#0b0e11;">Dispatcher Notes:</h4>
-          </div>
-        </div>
+    <!-- Drop Locations (each separately) -->
+    ${dropSectionsHTML}
 
-        <!-- PAGE BREAK: Terms & Conditions -->
-        <div style="page-break-before: always; margin-top: 20px;">
-          <div class="confirmation-container" style="width: 100%; margin: 0 auto;">
-            <h2 style="text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #2c3e50;">
-              Terms and Conditions
-            </h2>
+    <!-- Dispatcher Notes -->
+    <div style="margin-top: 20px;">
+      <h4 style="font-size: 14px; font-weight: bold; color:#0b0e11;">Dispatcher Notes:</h4>
+    </div>
+  </div>
 
-            <div style="font-size: 9px; line-height: 1.2; text-align: justify;">
-              <p style="margin-bottom: 8px;">
-                This rate confirmation hereby serves as an agreement governing the movement of freight/commodity as specified & becomes a part of the
-                transportation agreement between the signing parties.
-              </p>
+  <!-- PAGE BREAK: Terms & Conditions (UNCHANGED, FULL) -->
+  <div style="page-break-before: always; margin-top: 20px;">
+    <div class="confirmation-container" style="width: 100%; margin: 0 auto;">
+      <h2 style="text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #2c3e50;">
+        Terms and Conditions
+      </h2>
 
-              <h3 style="font-size: 12px; font-weight: bold; margin: 10px 0 6px 0; color: #2c3e50;">SAFE DELIVERY NORMS</h3>
+      <div style="font-size: 9px; line-height: 1.2; text-align: justify;">
+        <p style="margin-bottom: 8px;">
+          This rate confirmation hereby serves as an agreement governing the movement of freight/commodity as specified & becomes a part of the
+          transportation agreement between the signing parties.
+        </p>
 
-              <ol style="margin-left: 8px; margin-bottom: 8px;">
-                <li style="margin-bottom: 3px;">All freights /commodities shall be picked-up & delivered within the time frame mentioned on the rate confirmation. Failure to do this may attract penalty from the agreed freight rate.</li>
-                <li style="margin-bottom: 3px;">Drivers are required to comply by appointment timings in case of Live loading / Unloading. Failure to comply by the same would result in a penalty of $150 per appointment for late delivery on same day or in case of missed appointment, $200 per day.</li>
-                <li style="margin-bottom: 3px;">In case of missed delivery appointments, the carrier will have to compensate for storage or re-scheduling costs for all such loads.</li>
-                <li style="margin-bottom: 3px;">Any damage to the load that might occur due to the negligence of the Driver at the time of loading / unloading or during transit is to be paid by the Appointed Carrier / driver.</li>
-                <li style="margin-bottom: 3px;">Whilst loading, the driver must do a piece count & inspect the condition of the load. Driver shall not leave the shipper without picking up complete load & getting our BOL signed from the site.</li>
-                <li style="margin-bottom: 3px;">Please ensure our BOL is presented and signed at delivery for POD. Using any other paperwork will result in a $100 penalty.</li>
-                <li style="margin-bottom: 3px;">Pictures are required at the time of Unloading/Loading of the Container/Trailor and once the Delivery is completed pictures for empty/loaded container/trailor is mandatory. Failure to do so will result in $50 penalty.</li>
-                <li style="margin-bottom: 3px;">Assigned Carriers /drivers /dispatchers shall not contact the shipper or consignee directly under any conditions.</li>
-                <li style="margin-bottom: 3px;">Assigned Carrier is required to ensure that seals, if attached on the loads are not tempered with at any given time. If seal is required to be removed, it should only be done by the receiver.</li>
-                <li style="margin-bottom: 3px;">Re-assigning / Double Brokering / Interlining / Warehousing of this load is strictly prohibited until & unless a written consent for the same is obtained from us. This may lead to deferred payments to the contracted carrier plus we might report you to the authorities & pull a Freight Card against you.</li>
-                <li style="margin-bottom: 3px;">All detentions due to missed appointments or late arrivals are to be paid by the driver.</li>
-                <li style="margin-bottom: 3px;">A standard fee of $300 per day shall be implied in case you hold our freight hostage for whatsoever reason.</li>
-                <li style="margin-bottom: 3px;">Macro-point is required as long as it has been requested by the customer. Macro point must be accepted/activated with the actual driver</li>
-                <li style="margin-bottom: 3px;">Follow safety protocols at times. Wear masks at the time of pick-up & drop off. In case of FSD loads, drivers are required to wear Hard hats, safety glasses, and safety vests when in facility.</li>
-                <li style="margin-bottom: 3px;">For all loads booked as FTL, trailers are exclusive & no LTL/ Partial loads can be added to it. Payments will be voided if LTL loads are added.</li>
-                <li style="margin-bottom: 3px;">Any damage to the load that might occur due to the negligence of the Driver at the time of loading / unloading or during transit is to be paid by the Appointed Carrier.</li>
-                <li style="margin-bottom: 3px;">Should there be any damage or loss to the freight during the load movement, the carrier is inclined to pay for complete loss as demanded by the Shipper</li>
-                <li style="margin-bottom: 3px;">In case if we book a load with you & you are unable to keep up to the commitment and deliver the services, you are liable to pay us $100 for the time & losses that we had to incur on that load.</li>
-                <li style="margin-bottom: 3px;">Freight charges payments shall be made when we receive POD and carrier invoice within 48 hours of the load delivery. Payment will be made 30 days after all required paperwork is received by our accounts department.</li>
-                <li style="margin-bottom: 3px;">Any additional charge receipts such as for detention, lumper & overtime are to be submitted along with the POD within 72 hours of freight delivery along with the required documentation to arrange for the reimbursement.</li>
-                <li style="margin-bottom: 3px;">If under any circumstances load gets delayed by 1-2 days and the temperature is maintained as an agreed term, there would be no claim entertained on that load.</li>
-              </ol>
+        <h3 style="font-size: 12px; font-weight: bold; margin: 10px 0 6px 0; color: #2c3e50;">SAFE DELIVERY NORMS</h3>
 
-              <h3 style="font-size: 13px; font-weight: bold; margin: 15px 0 8px 0; color: #2c3e50;">Additional information</h3>
-              <p style="margin-bottom: 10px;">
-                After the successful completion of the load / empty trailer delivery, if the carrier is unable to submit invoices & complete documentation as per
-                the set time frames, deductions as below will be applicable:
-              </p>
-              <ul style="margin-left: 15px; margin-bottom: 15px;">
-                <li style="margin-bottom: 4px;">In case, documents are not submitted within 1 day of the load delivery, $100 shall be deducted</li>
-                <li style="margin-bottom: 4px;">In case, documents are not submitted within 2 days, $150 shall be deducted</li>
-                <li style="margin-bottom: 4px;">In case, documents are not submitted within 5 days, $250 shall be deducted</li>
-              </ul>
+        <ol style="margin-left: 8px; margin-bottom: 8px;">
+          <li style="margin-bottom: 3px;">All freights /commodities shall be picked-up & delivered within the time frame mentioned on the rate confirmation. Failure to do this may attract penalty from the agreed freight rate.</li>
+          <li style="margin-bottom: 3px;">Drivers are required to comply by appointment timings in case of Live loading / Unloading. Failure to comply by the same would result in a penalty of $150 per appointment for late delivery on same day or in case of missed appointment, $200 per day.</li>
+          <li style="margin-bottom: 3px;">In case of missed delivery appointments, the carrier will have to compensate for storage or re-scheduling costs for all such loads.</li>
+          <li style="margin-bottom: 3px;">Any damage to the load that might occur due to the negligence of the Driver at the time of loading / unloading or during transit is to be paid by the Appointed Carrier / driver.</li>
+          <li style="margin-bottom: 3px;">Whilst loading, the driver must do a piece count & inspect the condition of the load. Driver shall not leave the shipper without picking up complete load & getting our BOL signed from the site.</li>
+          <li style="margin-bottom: 3px;">Please ensure our BOL is presented and signed at delivery for POD. Using any other paperwork will result in a $100 penalty.</li>
+          <li style="margin-bottom: 3px;">Pictures are required at the time of Unloading/Loading of the Container/Trailor and once the Delivery is completed pictures for empty/loaded container/trailor is mandatory. Failure to do so will result in $50 penalty.</li>
+          <li style="margin-bottom: 3px;">Assigned Carriers /drivers /dispatchers shall not contact the shipper or consignee directly under any conditions.</li>
+          <li style="margin-bottom: 3px;">Assigned Carrier is required to ensure that seals, if attached on the loads are not tempered with at any given time. If seal is required to be removed, it should only be done by the receiver.</li>
+          <li style="margin-bottom: 3px;">Re-assigning / Double Brokering / Interlining / Warehousing of this load is strictly prohibited until & unless a written consent for the same is obtained from us. This may lead to deferred payments to the contracted carrier plus we might report you to the authorities & pull a Freight Card against you.</li>
+          <li style="margin-bottom: 3px;">All detentions due to missed appointments or late arrivals are to be paid by the driver.</li>
+          <li style="margin-bottom: 3px;">A standard fee of $300 per day shall be implied in case you hold our freight hostage for whatsoever reason.</li>
+          <li style="margin-bottom: 3px;">Macro-point is required as long as it has been requested by the customer. Macro point must be accepted/activated with the actual driver</li>
+          <li style="margin-bottom: 3px;">Follow safety protocols at times. Wear masks at the time of pick-up & drop off. In case of FSD loads, drivers are required to wear Hard hats, safety glasses, and safety vests when in facility.</li>
+          <li style="margin-bottom: 3px;">For all loads booked as FTL, trailers are exclusive & no LTL/ Partial loads can be added to it. Payments will be voided if LTL loads are added.</li>
+          <li style="margin-bottom: 3px;">Any damage to the load that might occur due to the negligence of the Driver at the time of loading / unloading or during transit is to be paid by the Appointed Carrier.</li>
+          <li style="margin-bottom: 3px;">Should there be any damage or loss to the freight during the load movement, the carrier is inclined to pay for complete loss as demanded by the Shipper</li>
+          <li style="margin-bottom: 3px;">In case if we book a load with you & you are unable to keep up to the commitment and deliver the services, you are liable to pay us $100 for the time & losses that we had to incur on that load.</li>
+          <li style="margin-bottom: 3px;">Freight charges payments shall be made when we receive POD and carrier invoice within 48 hours of the load delivery. Payment will be made 30 days after all required paperwork is received by our accounts department.</li>
+          <li style="margin-bottom: 3px;">Any additional charge receipts such as for detention, lumper & overtime are to be submitted along with the POD within 72 hours of freight delivery along with the required documentation to arrange for the reimbursement.</li>
+          <li style="margin-bottom: 3px;">If under any circumstances load gets delayed by 1-2 days and the temperature is maintained as an agreed term, there would be no claim entertained on that load.</li>
+        </ol>
 
-              <p style="font-weight: bold; margin-top: 20px; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #2c3e50;">
-                DOCUMENTS BE MUST CLEAR AND LEGIBLE. POD'S MUST BE SENT VIA E-MAIL OR FAX WITHIN 24 HRS OF THE DELIVERY
-                FOR STRAIGHT THROUGH DELIVERIES AND WITHIN 3 HOURS FOR FIXED APPOINTMENT DELIVERIES
-                WITH OUR LOAD NUMBER CLEARLY NOTED ON THE TOP OF IT
-              </p>
-            </div>
-          </div>
-        </div>
+        <h3 style="font-size: 13px; font-weight: bold; margin: 15px 0 8px 0; color: #2c3e50;">Additional information</h3>
+        <p style="margin-bottom: 10px;">
+          After the successful completion of the load / empty trailer delivery, if the carrier is unable to submit invoices & complete documentation as per
+          the set time frames, deductions as below will be applicable:
+        </p>
+        <ul style="margin-left: 15px; margin-bottom: 15px;">
+          <li style="margin-bottom: 4px;">In case, documents are not submitted within 1 day of the load delivery, $100 shall be deducted</li>
+          <li style="margin-bottom: 4px;">In case, documents are not submitted within 2 days, $150 shall be deducted</li>
+          <li style="margin-bottom: 4px;">In case, documents are not submitted within 5 days, $250 shall be deducted</li>
+        </ul>
 
-        <!-- Carrier Pay (unchanged) -->
-        <div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">
-          <h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 15px; color: #2c3e50;">Carrier Pay</h3>
-          <div style="text-align: center; margin-bottom: 20px; font-size: 12px; line-height: 1.6;">
-            <p style="margin-bottom: 10px;">
-              <strong>Carrier Pay:</strong> Direct: $${(() => {
-          const c = order.customers?.[0] || {};
-          const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
-          const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
-          return (lineHaul + fsc + other + carrierCharges).toLocaleString();
-        })()}.00, # of Units: 1, Bobtail: $25.00, TOTAL: $${(() => {
-          const c = order.customers?.[0] || {};
-          const lineHaul = c.lineHaul || 0, fsc = c.fsc || 0, other = c.other || 0;
-          const carrierCharges = (order.carrier?.carrierFees || []).reduce((s, ch) => s + (ch.total || 0), 0);
-          return (lineHaul + fsc + other + carrierCharges + 25).toLocaleString();
-        })()} USD
-            </p>
-          </div>
-          <div style="margin-bottom: 15px; font-size: 12px; line-height: 1.6;">
-            <p style="margin-bottom: 10px; text-align: center;">
-              Accepted By _________________________ Date ________________ Signature ____________________
-            </p>
-          </div>
-          <div style="font-size: 12px; line-height: 1.6;">
-            <p style="text-align: center;">
-              Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________
-            </p>
-          </div>
-        </div>
-      </body>
-      </html>
+        <p style="font-weight: bold; margin-top: 20px; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #2c3e50;">
+          DOCUMENTS BE MUST CLEAR AND LEGIBLE. POD'S MUST BE SENT VIA E-MAIL OR FAX WITHIN 24 HRS OF THE DELIVERY
+          FOR STRAIGHT THROUGH DELIVERIES AND WITHIN 3 HOURS FOR FIXED APPOINTMENT DELIVERIES
+          WITH OUR LOAD NUMBER CLEARLY NOTED ON THE TOP OF IT
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom: Total with signature -->
+  ${amountBottomBlockHTML}
+</body>
+</html>
     `;
 
       printWindow.document.write(confirmationHTML);
@@ -1874,6 +1997,10 @@ export default function DeliveryOrder() {
       alertify.error('Failed to generate PDF. Please try again.');
     }
   };
+
+
+
+
 
 
 
@@ -1907,42 +2034,29 @@ export default function DeliveryOrder() {
       const CUSTOMER_TOTAL = LH + FSC + OTH;
 
       // helpers
-      const fmtDateTime = (d) => {
+      const fmtDate = (d) => {
         if (!d) return 'N/A';
         try {
           const dt = new Date(d);
           if (Number.isNaN(dt.getTime())) return 'Invalid Date';
-          // Format as UTC to avoid timezone conversion issues
-          const dateStr = dt.toLocaleDateString('en-US', {
+          // Sirf date; UTC use kiya to avoid timezone issues
+          return dt.toLocaleDateString('en-US', {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
             timeZone: 'UTC'
           });
-          const timeStr = dt.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            timeZone: 'UTC'
-          });
-          return `${dateStr} ${timeStr}`;
         } catch (error) {
-          console.error('Error formatting date/time:', error, d);
+          console.error('Error formatting date:', error, d);
           return 'Invalid Date';
         }
       };
+
       const fullAddr = (loc) =>
         [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
-      const hasTimeVal = (ds) => {
-        if (!ds) return false;
-        const dt = new Date(ds);
-        if (Number.isNaN(dt.getTime())) return false;
-        return dt.getHours() !== 0 || dt.getMinutes() !== 0;
-      };
 
       const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
       const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
-
-
 
       const html = `
 <!DOCTYPE html>
@@ -1996,7 +2110,7 @@ export default function DeliveryOrder() {
             <th>Container No</th>
             <th>Container Type</th>
             <th>Qty</th>
-            <th>Pickup Date & Time</th>
+            <th>Pickup Date</th>
           </tr>
         </thead>
         <tbody>
@@ -2014,7 +2128,7 @@ export default function DeliveryOrder() {
                 <td>${contNo}</td>
                 <td>${contTp}</td>
                 <td>${qty}</td>
-                <td>${fmtDateTime(dateSrc)}</td>
+                <td>${fmtDate(dateSrc)}</td>
               </tr>
             `;
       }).join('')}
@@ -2033,7 +2147,7 @@ export default function DeliveryOrder() {
             <th>Container No</th>
             <th>Container Type</th>
             <th>Qty</th>
-            <th>Drop Date & Time</th>
+            <th>Drop Date</th>
           </tr>
         </thead>
         <tbody>
@@ -2051,7 +2165,7 @@ export default function DeliveryOrder() {
                 <td>${contNo}</td>
                 <td>${contTp}</td>
                 <td>${qty}</td>
-                <td>${fmtDateTime(dateSrc)}</td>
+                <td>${fmtDate(dateSrc)}</td>
               </tr>
             `;
       }).join('')}
@@ -2093,6 +2207,7 @@ export default function DeliveryOrder() {
       alertify.error('Failed to generate PDF. Please try again.');
     }
   };
+
 
 
 
@@ -2467,7 +2582,7 @@ export default function DeliveryOrder() {
                     <td className="py-2 px-3">
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleViewEmployeeData(order.createdBySalesUser?.empId || '1234')}
+                          onClick={() => handleViewOrder(order)}
                           className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                         >
                           View
@@ -2591,7 +2706,11 @@ export default function DeliveryOrder() {
             </div>
 
             {/* Form */}
-            <form onSubmit={formMode === 'edit' ? handleUpdateOrder : handleSubmit} className="p-6 space-y-6">
+            <form
+              key={`form-${formMode}-${editingOrder?._id || 'new'}`}
+              onSubmit={formMode === 'edit' ? handleUpdateOrder : handleSubmit}
+              className="p-6 space-y-6"
+            >
               {/* Customer Information Section */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
@@ -2630,8 +2749,8 @@ export default function DeliveryOrder() {
                           onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
                           options={[
                             // Current value (if not in list)
-                            ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo) 
-                              ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }] 
+                            ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
+                              ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
                               : []
                             ),
                             // Company options
@@ -2669,9 +2788,9 @@ export default function DeliveryOrder() {
                           options={[
                             // Current value (agar list me na ho)
                             ...(customer.dispatcherName &&
-                            !dispatchers.some(
-                              (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
-                            )
+                              !dispatchers.some(
+                                (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
+                              )
                               ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
                               : []),
                             // Alias list (fallback to employeeName if alias missing)
@@ -2899,6 +3018,7 @@ export default function DeliveryOrder() {
                         />
 
 
+
                         <input
                           type="datetime-local"
                           value={location.pickUpDate}
@@ -2906,6 +3026,12 @@ export default function DeliveryOrder() {
                           required
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="Pickup Date & Time *"
+                        />
+                        <textarea
+                          value={location.remarks || ''}
+                          onChange={(e) => handlePickupLocationChange(locationIndex, 'remarks', e.target.value)}
+                          className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mt-2"
+                          placeholder="Pickup remarks (optional)"
                         />
                       </div>
                     </div>
@@ -3000,6 +3126,12 @@ export default function DeliveryOrder() {
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="Drop Date & Time *"
                         />
+                        <textarea
+                          value={location.remarks || ''}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'remarks', e.target.value)}
+                          className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mt-2"
+                          placeholder="Drop remarks (optional)"
+                        />
                       </div>
                     </div>
                   ))}
@@ -3055,17 +3187,7 @@ export default function DeliveryOrder() {
                 </div>
               </div>
 
-              {/* Remarks */}
-              <div>
-                <textarea
-                  name="remarks"
-                  value={formData.remarks}
-                  onChange={handleInputChange}
-                  rows="3"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Remarks (optional)"
-                />
-              </div>
+
 
               {/* Form Actions */}
               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
@@ -3310,73 +3432,73 @@ export default function DeliveryOrder() {
 
                     {/* Pickup Locations (WITH Weight and Date) */}
                     {((selectedOrder.shipper?.pickUpLocations || []).length > 0) && (
-                        <div className="mt-4">
-                          <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
-                          <div className="space-y-3">
-                            {(selectedOrder.shipper?.pickUpLocations || []).map((location, index) => (
-                                <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <p className="text-sm text-gray-600">Name</p>
-                                      <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-gray-600">Address</p>
-                                      <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-gray-600">City</p>
-                                      <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-gray-600">State</p>
-                                      <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-gray-600">Zip Code</p>
-                                      <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-gray-600">Weight (lbs)</p>
-                                      <p className="font-medium text-gray-800">
-                                        {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
-                                          ? location.weight
-                                          : 'N/A'}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-gray-600">Pickup Date</p>
-                                      <p className="font-medium text-gray-800">
-                                        {location?.pickUpDate
-                                          ? (() => {
-                                              try {
-                                                const date = new Date(location.pickUpDate);
-                                                if (isNaN(date.getTime())) {
-                                                  return 'Invalid Date';
-                                                }
-                                                // Format as UTC to avoid timezone conversion issues
-                                                return date.toLocaleDateString('en-US', {
-                                                  year: 'numeric',
-                                                  month: '2-digit',
-                                                  day: '2-digit',
-                                                  hour: '2-digit',
-                                                  minute: '2-digit',
-                                                  timeZone: 'UTC'
-                                                });
-                                              } catch (error) {
-                                                console.error('Error formatting pickup date:', error, location.pickUpDate);
-                                                return 'Invalid Date';
-                                              }
-                                            })()
-                                          : 'N/A'}
-                                      </p>
-                                    </div>
-                                  </div>
+                      <div className="mt-4">
+                        <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
+                        <div className="space-y-3">
+                          {(selectedOrder.shipper?.pickUpLocations || []).map((location, index) => (
+                            <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-sm text-gray-600">Name</p>
+                                  <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
                                 </div>
-                              ))}
-                          </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Address</p>
+                                  <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">City</p>
+                                  <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">State</p>
+                                  <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Zip Code</p>
+                                  <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Weight (lbs)</p>
+                                  <p className="font-medium text-gray-800">
+                                    {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                      ? location.weight
+                                      : 'N/A'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Pickup Date</p>
+                                  <p className="font-medium text-gray-800">
+                                    {location?.pickUpDate
+                                      ? (() => {
+                                        try {
+                                          const date = new Date(location.pickUpDate);
+                                          if (isNaN(date.getTime())) {
+                                            return 'Invalid Date';
+                                          }
+                                          // Format as UTC to avoid timezone conversion issues
+                                          return date.toLocaleDateString('en-US', {
+                                            year: 'numeric',
+                                            month: '2-digit',
+                                            day: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            timeZone: 'UTC'
+                                          });
+                                        } catch (error) {
+                                          console.error('Error formatting pickup date:', error, location.pickUpDate);
+                                          return 'Invalid Date';
+                                        }
+                                      })()
+                                      : 'N/A'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      )}
+                      </div>
+                    )}
 
                     {/* Drop Locations (WITH Weight and Date) */}
                     {((selectedOrder.shipper?.dropLocations || []).length > 0) && (
@@ -3419,25 +3541,25 @@ export default function DeliveryOrder() {
                                   <p className="font-medium text-gray-800">
                                     {location?.dropDate
                                       ? (() => {
-                                          try {
-                                            const date = new Date(location.dropDate);
-                                            if (isNaN(date.getTime())) {
-                                              return 'Invalid Date';
-                                            }
-                                            // Format as UTC to avoid timezone conversion issues
-                                            return date.toLocaleDateString('en-US', {
-                                              year: 'numeric',
-                                              month: '2-digit',
-                                              day: '2-digit',
-                                              hour: '2-digit',
-                                              minute: '2-digit',
-                                              timeZone: 'UTC'
-                                            });
-                                          } catch (error) {
-                                            console.error('Error formatting drop date:', error, location.dropDate);
+                                        try {
+                                          const date = new Date(location.dropDate);
+                                          if (isNaN(date.getTime())) {
                                             return 'Invalid Date';
                                           }
-                                        })()
+                                          // Format as UTC to avoid timezone conversion issues
+                                          return date.toLocaleDateString('en-US', {
+                                            year: 'numeric',
+                                            month: '2-digit',
+                                            day: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            timeZone: 'UTC'
+                                          });
+                                        } catch (error) {
+                                          console.error('Error formatting drop date:', error, location.dropDate);
+                                          return 'Invalid Date';
+                                        }
+                                      })()
                                       : 'N/A'}
                                   </p>
                                 </div>
@@ -3457,7 +3579,7 @@ export default function DeliveryOrder() {
                       <FileText className="text-blue-600" size={20} />
                       <h3 className="text-lg font-bold text-gray-800">Uploaded Documents</h3>
                     </div>
-                    
+
                     {/* Single Document */}
                     {selectedOrder?.docUpload && (
                       <div className="bg-white rounded-lg p-4 border border-blue-200 mb-4">
@@ -3532,18 +3654,7 @@ export default function DeliveryOrder() {
                   </div>
                 )}
 
-                {/* Remarks */}
-                {selectedOrder?.remarks && (
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <FileText className="text-gray-600" size={20} />
-                      <h3 className="text-lg font-bold text-gray-800">Remarks</h3>
-                    </div>
-                    <div className="bg-white rounded-lg p-4 border border-gray-200">
-                      <p className="text-gray-800">{selectedOrder.remarks}</p>
-                    </div>
-                  </div>
-                )}
+
 
                 {/* Status */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
@@ -3815,8 +3926,8 @@ export default function DeliveryOrder() {
                           onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
                           options={[
                             // Current value (if not in list)
-                            ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo) 
-                              ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }] 
+                            ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
+                              ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
                               : []
                             ),
                             // Company options
@@ -3856,8 +3967,8 @@ export default function DeliveryOrder() {
                             ...(customer.dispatcherName &&
                               !dispatchers.some(
                                 (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
-                              ) 
-                              ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }] 
+                              )
+                              ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
                               : []
                             ),
                             // Dispatcher options
@@ -4090,6 +4201,12 @@ export default function DeliveryOrder() {
                           placeholder="Pickup Date & Time *"
                         />
                       </div>
+                      <textarea
+                        value={location.remarks || ''}
+                        onChange={(e) => handlePickupLocationChange(locationIndex, 'remarks', e.target.value)}
+                        className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mt-2"
+                        placeholder="Pickup remarks (optional)"
+                      />
                     </div>
                   ))}
                 </div>
@@ -4179,6 +4296,12 @@ export default function DeliveryOrder() {
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           placeholder="Drop Date & Time *"
                         />
+                        <textarea
+                          value={location.remarks || ''}
+                          onChange={(e) => handleDropLocationChange(locationIndex, 'remarks', e.target.value)}
+                          className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mt-2"
+                          placeholder="Drop remarks (optional)"
+                        />
                       </div>
                     </div>
                   ))}
@@ -4234,17 +4357,7 @@ export default function DeliveryOrder() {
                 </div>
               </div>
 
-              {/* Remarks */}
-              <div>
-                <textarea
-                  name="remarks"
-                  value={formData.remarks}
-                  onChange={handleInputChange}
-                  rows="3"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Remarks (optional)"
-                />
-              </div>
+
 
               {/* Form Actions */}
               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
