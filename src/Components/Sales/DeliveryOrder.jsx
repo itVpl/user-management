@@ -156,7 +156,7 @@ export default function DeliveryOrder() {
   const [customerNameInput, setCustomerNameInput] = useState('');
   const [dispatchers, setDispatchers] = useState([]);
   const [loadingDispatchers, setLoadingDispatchers] = useState(false);
-  const logoSrc = Logo; 
+  const logoSrc = Logo;
   // top-level states ke saath
   const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
   // ADD: shipper companies (for Bill To dropdown)
@@ -2090,7 +2090,7 @@ export default function DeliveryOrder() {
   <div class="invoice">
     <!-- HEADER: logo (left) + Bill To table (right) -->
     <div class="header">
-      <img src="/src/assets/LogoFinal.png" class="logo" alt="Company Logo" />
+      <img src="${logoSrc}" alt="Company Logo" class="logo">
       <div class="header-right">
         <table class="billto">
           <tr><th>Bill To</th><td>${billToDisplay}</td></tr>
