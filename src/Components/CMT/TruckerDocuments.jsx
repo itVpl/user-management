@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye } from 'lucide-react';
+import { FaArrowLeft, FaDownload, FaEye, FaFileAlt, FaEdit } from 'react-icons/fa';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload } from 'lucide-react';
 import AddTruckerForm from './AddTruckerform';
+import axios from 'axios';
 
 export default function TruckerDocuments() {
   const [truckers, setTruckers] = useState([]);
@@ -15,6 +15,31 @@ export default function TruckerDocuments() {
   const [Loading, setLoading] = useState(true);
   const [showTruckerModal, setShowTruckerModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({});
+  const [editUploadStatus, setEditUploadStatus] = useState({
+    brokeragePacket: false,
+    carrierPartnerAgreement: false,
+    w9Form: false,
+    mcAuthority: false,
+    safetyLetter: false,
+    bankingInfo: false,
+    inspectionLetter: false,
+    insurance: false,
+  });
+  const [error, setError] = useState(null);
+
+  // Document fields configuration
+  const documentFields = [
+    { key: 'brokeragePacket', label: 'Brokerage Packet', required: true },
+    { key: 'carrierPartnerAgreement', label: 'Carrier Partner Agreement' },
+    { key: 'w9Form', label: 'W9 Form', required: true },
+    { key: 'mcAuthority', label: 'MC Authority', required: true },
+    { key: 'safetyLetter', label: 'Safety Letter', required: false },
+    { key: 'bankingInfo', label: 'Banking Information', required: true },
+    { key: 'inspectionLetter', label: 'Inspection Letter', required: false },
+    { key: 'insurance', label: 'Insurance', required: true },
+  ];
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -30,14 +55,64 @@ export default function TruckerDocuments() {
   const fetchTruckers = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      // Check if user is authenticated
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      const res = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/cmt/truckers', {
-        headers: { Authorization: `Bearer ${token}` },
-        withCredentials: true
+      if (!token) {
+        setError("Authentication required. Please login again.");
+        setLoading(false);
+        return;
+      }
+
+      // Create axios instance with auth header
+      const axiosInstance = axios.create({
+        baseURL: 'https://vpl-liveproject-1.onrender.com',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
-      setTruckers(res.data.truckers || []);
+
+      // Try different endpoints based on user role
+      let response;
+      try {
+        // First try the CMT specific endpoint
+        response = await axiosInstance.get('/api/v1/shipper_driver/cmt/truckers');
+        response = response.data; // Extract data from axios response
+      } catch (cmtError) {
+        console.log('CMT endpoint failed, trying general truckers endpoint:', cmtError);
+        try {
+          // Fallback to general truckers endpoint
+          response = await axiosInstance.get('/api/v1/truckers');
+          response = response.data; // Extract data from axios response
+        } catch (generalError) {
+          console.log('General endpoint also failed:', generalError);
+          // Try one more endpoint
+          response = await axiosInstance.get('/api/v1/shipper_driver/truckers');
+          response = response.data; // Extract data from axios response
+        }
+      }
+
+      // Handle different response structures
+      if (response.truckers) {
+        setTruckers(response.truckers);
+      } else if (response.data && response.data.truckers) {
+        setTruckers(response.data.truckers);
+      } else if (Array.isArray(response)) {
+        setTruckers(response);
+      } else {
+        setTruckers([]);
+      }
     } catch (err) {
       console.error('Error fetching truckers:', err);
+      if (err.message.includes('403') || err.message.includes('401')) {
+        setError("Access denied. Please check your permissions or login again.");
+      } else if (err.message.includes('500')) {
+        setError("Server error. Please try again later.");
+      } else {
+        setError("Failed to load truckers. Please try again.");
+      }
+      setTruckers([]);
     } finally {
       setLoading(false);
     }
@@ -46,13 +121,22 @@ export default function TruckerDocuments() {
   const handleStatusUpdate = async (status) => {
     try {
       const { userId } = selectedTrucker;
+      
+      // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      await axios.patch(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/update-status/${userId}`, {
+      
+      // Create axios instance with auth header
+      const axiosInstance = axios.create({
+        baseURL: 'https://vpl-liveproject-1.onrender.com',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      await axiosInstance.patch(`/api/v1/shipper_driver/update-status/${userId}`, {
         status,
         statusReason: reason || null,
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-        withCredentials: true
       });
       setModalType(null);
       setReason('');
@@ -61,6 +145,301 @@ export default function TruckerDocuments() {
       fetchTruckers(); // Refresh
     } catch (err) {
       console.error('Status update failed:', err);
+      alert('Failed to update status. Please try again.');
+    }
+  };
+
+                       // Handle edit trucker
+           const handleEditTrucker = (trucker) => {
+        console.log('Trucker data for editing:', trucker);
+        console.log('Available ID fields:', {
+          _id: trucker._id,
+          userId: trucker.userId,
+          id: trucker.id
+        });
+       
+               setEditFormData({
+          _id: trucker._id || trucker.userId,
+          compName: trucker.compName || '',
+         email: trucker.email || '',
+         phoneNo: trucker.phoneNo || '',
+         mc_dot_no: trucker.mc_dot_no || '',
+         carrierType: trucker.carrierType || '',
+         fleetsize: trucker.fleetsize || '',
+         city: trucker.city || '',
+         state: trucker.state || '',
+         country: trucker.country || '',
+         status: trucker.status || 'pending',
+         // Document URLs and file names (for existing documents) - check different possible field names
+         brokeragePacketUrl: trucker.brokeragePacketUrl || trucker.brokeragePacket || trucker.documents?.brokeragePacket || null,
+         brokeragePacketFileName: trucker.brokeragePacketFileName || trucker.brokeragePacketName || null,
+         carrierPartnerAgreementUrl: trucker.carrierPartnerAgreementUrl || trucker.carrierPartnerAgreement || trucker.documents?.carrierPartnerAgreement || null,
+         carrierPartnerAgreementFileName: trucker.carrierPartnerAgreementFileName || trucker.carrierPartnerAgreementName || null,
+         w9FormUrl: trucker.w9FormUrl || trucker.w9Form || trucker.documents?.w9Form || null,
+         w9FormFileName: trucker.w9FormFileName || trucker.w9FormName || null,
+         mcAuthorityUrl: trucker.mcAuthorityUrl || trucker.mcAuthority || trucker.documents?.mcAuthority || null,
+         mcAuthorityFileName: trucker.mcAuthorityFileName || trucker.mcAuthorityName || null,
+         safetyLetterUrl: trucker.safetyLetterUrl || trucker.safetyLetter || trucker.documents?.safetyLetter || null,
+         safetyLetterFileName: trucker.safetyLetterFileName || trucker.safetyLetterName || null,
+         bankingInfoUrl: trucker.bankingInfoUrl || trucker.bankingInfo || trucker.documents?.bankingInfo || null,
+         bankingInfoFileName: trucker.bankingInfoFileName || trucker.bankingInfoName || null,
+         inspectionLetterUrl: trucker.inspectionLetterUrl || trucker.inspectionLetter || trucker.documents?.inspectionLetter || null,
+         inspectionLetterFileName: trucker.inspectionLetterFileName || trucker.inspectionLetterName || null,
+         insuranceUrl: trucker.insuranceUrl || trucker.insurance || trucker.documents?.insurance || null,
+         insuranceFileName: trucker.insuranceFileName || trucker.insuranceName || null,
+         // New file uploads (initially null)
+         brokeragePacket: null,
+         carrierPartnerAgreement: null,
+         w9Form: null,
+         mcAuthority: null,
+         safetyLetter: null,
+         bankingInfo: null,
+         inspectionLetter: null,
+         insurance: null
+       });
+      
+      // Reset upload status
+      setEditUploadStatus({
+        brokeragePacket: false,
+        carrierPartnerAgreement: false,
+        w9Form: false,
+        mcAuthority: false,
+        safetyLetter: false,
+        bankingInfo: false,
+        inspectionLetter: false,
+        insurance: false,
+      });
+      
+      setShowEditModal(true);
+    };
+
+         // Handle edit form submission
+    const handleEditSubmit = async (e) => {
+      e.preventDefault();
+      try {
+        console.log('Starting edit submission...');
+        console.log('Edit form data:', editFormData);
+        
+        // Create FormData for file uploads
+        const formData = new FormData();
+        
+                 // Add basic information
+         formData.append('compName', editFormData.compName);
+         formData.append('email', editFormData.email);
+         formData.append('phoneNo', editFormData.phoneNo);
+         formData.append('mc_dot_no', editFormData.mc_dot_no);
+         formData.append('carrierType', editFormData.carrierType);
+         formData.append('fleetsize', editFormData.fleetsize);
+         formData.append('city', editFormData.city);
+         formData.append('state', editFormData.state);
+         formData.append('country', editFormData.country);
+        
+        // Add new files if uploaded
+        documentFields.forEach(doc => {
+          if (editFormData[doc.key]) {
+            formData.append(doc.key, editFormData[doc.key]);
+          }
+        });
+        
+        // Log what's being sent
+        console.log('FormData contents:');
+        for (let [key, value] of formData.entries()) {
+          console.log(`${key}:`, value);
+        }
+        
+        console.log('Making API call to:', `/api/v1/shipper_driver/update/${editFormData._id}`);
+        
+                // Check if any files are being uploaded
+        const hasFileUploads = documentFields.some(doc => editFormData[doc.key]);
+        const hasTextChanges = editFormData.compName || editFormData.email || editFormData.phoneNo || 
+                              editFormData.mc_dot_no || editFormData.carrierType || editFormData.fleetsize || 
+                              editFormData.city || editFormData.state || editFormData.country;
+        
+        let response;
+        let documentsResponse;
+        
+        // Handle document uploads if any
+        if (hasFileUploads) {
+          console.log('Files detected, using documents API endpoint...');
+          
+          // Create FormData specifically for documents
+          const documentsFormData = new FormData();
+          
+          // Add only the files to the documents FormData
+          documentFields.forEach(doc => {
+            if (editFormData[doc.key]) {
+              documentsFormData.append(doc.key, editFormData[doc.key]);
+            }
+          });
+          
+          console.log('Documents FormData contents:');
+          for (let [key, value] of documentsFormData.entries()) {
+            console.log(`${key}:`, value);
+          }
+          
+          try {
+            // Get authentication token
+            const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+            
+            // Create axios instance with auth header
+            const axiosInstance = axios.create({
+              baseURL: 'https://vpl-liveproject-1.onrender.com',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            // Use the documents-specific endpoint with direct axios
+            documentsResponse = await axiosInstance.put(`/api/v1/shipper_driver/update/${editFormData._id}/documents`, documentsFormData);
+            console.log('Documents API Response:', documentsResponse);
+          } catch (documentsError) {
+            console.log('Documents API failed:', documentsError);
+            throw documentsError;
+          }
+        }
+        
+        // Handle text field updates if any
+        if (hasTextChanges) {
+          console.log('Text changes detected, using JSON approach...');
+          
+          const jsonData = {
+            compName: editFormData.compName,
+            email: editFormData.email,
+            phoneNo: editFormData.phoneNo,
+            mc_dot_no: editFormData.mc_dot_no,
+            carrierType: editFormData.carrierType,
+            fleetsize: editFormData.fleetsize,
+            city: editFormData.city,
+            state: editFormData.state,
+            country: editFormData.country
+          };
+          
+          console.log('JSON data being sent:', jsonData);
+          
+          try {
+            // Get authentication token
+            const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+            
+            // Create axios instance with auth header
+            const axiosInstance = axios.create({
+              baseURL: 'https://vpl-liveproject-1.onrender.com',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            response = await axiosInstance.put(`/api/v1/shipper_driver/update/${editFormData._id}`, jsonData);
+            console.log('JSON API Response:', response);
+          } catch (jsonError) {
+            console.log('JSON failed:', jsonError);
+            throw jsonError;
+          }
+        }
+        
+        // Use the appropriate response for logging
+        const finalResponse = documentsResponse || response;
+        
+        console.log('Final API Response:', finalResponse);
+        console.log('Response status:', finalResponse?.status);
+        console.log('Response data:', finalResponse?.data);
+        
+        // Check if the update was actually successful
+        if (finalResponse?.data && finalResponse.data.updatedFields && finalResponse.data.updatedFields.length === 0) {
+          console.warn('⚠️ Warning: API returned success but no fields were updated!');
+          console.warn('This might indicate a validation issue or field mapping problem.');
+        }
+        
+        // Show success message with details
+        let successMessage = 'Trucker updated successfully!';
+        if (hasFileUploads) {
+          successMessage += ' Documents have been uploaded.';
+        }
+        if (finalResponse?.data && finalResponse.data.updatedFields && finalResponse.data.updatedFields.length > 0) {
+          successMessage += ` Updated fields: ${finalResponse.data.updatedFields.join(', ')}`;
+        }
+       
+       setShowEditModal(false);
+       setEditFormData({});
+       setEditUploadStatus({
+         brokeragePacket: false,
+         carrierPartnerAgreement: false,
+         w9Form: false,
+         mcAuthority: false,
+         safetyLetter: false,
+         bankingInfo: false,
+         inspectionLetter: false,
+         insurance: false,
+       });
+       fetchTruckers(); // Refresh the list
+       alert(successMessage);
+     } catch (err) {
+       console.error('Error updating trucker:', err);
+       alert('Failed to update trucker. Please try again.');
+     }
+   };
+
+     // Handle input change for edit form
+   const handleEditInputChange = (e) => {
+     const { name, value } = e.target;
+     setEditFormData(prev => ({
+       ...prev,
+       [name]: value
+     }));
+   };
+
+   // Handle file change for edit form
+   const handleEditFileChange = (e) => {
+     const { name, files } = e.target;
+     if (files && files[0]) {
+       setEditFormData(prev => ({
+         ...prev,
+         [name]: files[0]
+       }));
+       setEditUploadStatus(prev => ({
+         ...prev,
+         [name]: true
+       }));
+     }
+   };
+
+   // Get upload icon for edit form
+   const getEditUploadIcon = (fieldName) => {
+     if (editUploadStatus[fieldName]) {
+       return <CheckCircle className="text-green-500" size={20} />;
+     }
+     return <Upload className="text-gray-400" size={20} />;
+   };
+
+  // Debug function to test different endpoints
+  const testEndpoints = async () => {
+    const endpoints = [
+      '/api/v1/shipper_driver/cmt/truckers',
+      '/api/v1/truckers',
+      '/api/v1/shipper_driver/truckers',
+      '/api/v1/inhouseUser/department/CMT'
+    ];
+
+    // Get authentication token
+    const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+    
+    // Create axios instance with auth header
+    const axiosInstance = axios.create({
+      baseURL: 'https://vpl-liveproject-1.onrender.com',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Testing endpoint: ${endpoint}`);
+        const response = await axiosInstance.get(endpoint);
+        console.log(`✅ Success for ${endpoint}:`, response.data);
+        return response.data;
+      } catch (error) {
+        console.log(`❌ Failed for ${endpoint}:`, error.message);
+      }
     }
   };
 
@@ -213,6 +592,237 @@ export default function TruckerDocuments() {
     );
   }
 
+     if (showEditModal) {
+     return (
+       <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+         <div className="relative w-full max-w-2xl rounded-2xl shadow-2xl overflow-auto max-h-[90vh] p-4 bg-gradient-to-br from-blue-200 via-white to-blue-300" style={{
+           scrollbarWidth: 'none', // Firefox
+           msOverflowStyle: 'none', // IE 10+
+         }}>
+           <style>{`
+             .hide-scrollbar::-webkit-scrollbar { display: none; }
+           `}</style>
+                     <button
+             onClick={() => setShowEditModal(false)}
+             className="absolute top-3 right-3 text-gray-500 hover:text-black text-2xl"
+           >
+             ×
+           </button>
+           <div className="hide-scrollbar">
+             <form onSubmit={handleEditSubmit} className="w-full max-w-2xl flex flex-col gap-4">
+            {/* Basic Details Card */}
+            <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
+              <h4 className="text-2xl font-bold mb-4 text-center">Basic Details</h4>
+              <div className="w-full flex flex-col gap-4">
+                {/* Company Name full width */}
+                <input
+                  type="text"
+                  name="compName"
+                  placeholder="Company Name"
+                  value={editFormData.compName}
+                  onChange={handleEditInputChange}
+                  className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                  required
+                />
+                {/* Email full width */}
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Email Address"
+                  value={editFormData.email}
+                  onChange={handleEditInputChange}
+                  className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                  required
+                />
+                {/* Phone | MC/DOT No */}
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    type="tel"
+                    name="phoneNo"
+                    placeholder="Phone Number"
+                    value={editFormData.phoneNo}
+                    onChange={handleEditInputChange}
+                    className="border border-gray-400 px-4 py-2 rounded-lg"
+                  />
+                  <input
+                    type="text"
+                    name="mc_dot_no"
+                    placeholder="MC/DOT Number"
+                    value={editFormData.mc_dot_no}
+                    onChange={handleEditInputChange}
+                    className="border border-gray-400 px-4 py-2 rounded-lg"
+                  />
+                </div>
+                {/* City | State */}
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    name="city"
+                    placeholder="City"
+                    value={editFormData.city}
+                    onChange={handleEditInputChange}
+                    className="border border-gray-400 px-4 py-2 rounded-lg"
+                  />
+                  <input
+                    type="text"
+                    name="state"
+                    placeholder="State"
+                    value={editFormData.state}
+                    onChange={handleEditInputChange}
+                    className="border border-gray-400 px-4 py-2 rounded-lg"
+                  />
+                </div>
+                                 {/* Country */}
+                 <div className="grid grid-cols-1 gap-4">
+                   <input
+                     type="text"
+                     name="country"
+                     placeholder="Country"
+                     value={editFormData.country}
+                     onChange={handleEditInputChange}
+                     className="border border-gray-400 px-4 py-2 rounded-lg"
+                   />
+                 </div>
+              </div>
+            </div>
+
+                         {/* Fleet Details Card */}
+             <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
+               <h4 className="text-2xl font-bold mb-4 text-center">Fleet Details</h4>
+               <div className="w-full grid grid-cols-2 gap-4">
+                 <input
+                   type="text"
+                   name="carrierType"
+                   placeholder="Carrier Type"
+                   value={editFormData.carrierType}
+                   onChange={handleEditInputChange}
+                   className="border border-gray-400 px-4 py-2 rounded-lg"
+                 />
+                 <input
+                   type="number"
+                   name="fleetsize"
+                   placeholder="Fleet Size"
+                   value={editFormData.fleetsize}
+                   onChange={handleEditInputChange}
+                   className="border border-gray-400 px-4 py-2 rounded-lg"
+                 />
+               </div>
+             </div>
+
+                                                                                                               {/* Current Documents Display Card */}
+                {/* Only show Current Documents section if there are existing documents */}
+                {Object.keys(editFormData).some(key => key.endsWith('Url') && editFormData[key]) && (
+                  <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
+                    <h4 className="text-2xl font-bold mb-4 text-center">Current Documents</h4>
+                    <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {documentFields.map((doc) => {
+                        const docUrl = editFormData[`${doc.key}Url`];
+                        const docFileName = editFormData[`${doc.key}FileName`];
+                        
+                        if (!docUrl) return null;
+                        
+                        return (
+                          <div key={doc.key} className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 shadow-sm border border-green-100 hover:shadow-md transition">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <FileText className="text-green-600" size={16} />
+                                <span className="font-medium text-sm text-gray-800">
+                                  {doc.label}
+                                </span>
+                              </div>
+                              <span className="text-xs text-gray-500 bg-green-100 px-2 py-1 rounded">
+                                Current
+                              </span>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <div className="text-xs text-gray-600 truncate">
+                                {docFileName || 'Document uploaded'}
+                              </div>
+                              
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleDocumentPreview(docUrl, doc.label)}
+                                  className="flex items-center gap-1 bg-blue-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-blue-600 transition"
+                                >
+                                  <Eye size={12} />
+                                  Preview
+                                </button>
+                                <a
+                                  href={docUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 bg-green-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-green-600 transition"
+                                >
+                                  <FaDownload size={10} />
+                                  Download
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+               {/* Required Documents Upload Card */}
+               <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
+                 <h4 className="text-2xl font-bold mb-4 text-center">Upload New Documents</h4>
+                 <div className="w-full grid grid-cols-2 gap-4">
+                   {documentFields.map((doc) => (
+                     <div key={doc.key} className="flex flex-col gap-2">
+                       <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                         <FileText size={16} />
+                         {doc.label}
+                         {doc.required && <span className="text-red-500">*</span>}
+                       </label>
+                       
+                       <div className="relative">
+                         <input
+                           type="file"
+                           name={doc.key}
+                           onChange={handleEditFileChange}
+                           className="w-full border border-gray-400 px-4 py-2 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                         />
+                         <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                           {getEditUploadIcon(doc.key)}
+                         </div>
+                       </div>
+                       <p className="text-xs text-gray-500">
+                         {editFormData[`${doc.key}Url`] ? 'Upload new file to replace current document' : 'Upload document'}
+                       </p>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+
+                         {/* Action Buttons Card */}
+             <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
+               <div className="w-full flex gap-4">
+                 <button
+                   type="button"
+                   onClick={() => setShowEditModal(false)}
+                   className="flex-1 py-3 rounded-full text-lg font-bold border-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition"
+                 >
+                   Cancel
+                 </button>
+                 <button
+                   type="submit"
+                   className="flex-1 py-3 rounded-full text-lg font-bold bg-black text-white hover:opacity-90 transition"
+                 >
+                   Save Changes
+                 </button>
+               </div>
+             </div>
+           </form>
+           </div>
+         </div>
+       </div>
+     );
+  }
+
   return (
     <div className="p-6">
       {/* Search and Add Trucker Section */}
@@ -251,6 +861,37 @@ export default function TruckerDocuments() {
           <PlusCircle size={20} /> Add Trucker
         </button>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                <XCircle className="text-red-600" size={16} />
+              </div>
+              <div>
+                <h3 className="text-red-800 font-semibold">Error Loading Data</h3>
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={fetchTruckers}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
+              >
+                Retry
+              </button>
+              <button
+                onClick={testEndpoints}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+              >
+                Debug API
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {viewDoc && selectedTrucker ? (
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
@@ -334,9 +975,33 @@ export default function TruckerDocuments() {
                       <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
                     </td>
                   </tr>
+                ) : currentTruckers.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-12">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                          <Truck className="text-gray-400" size={24} />
+                        </div>
+                        <div className="text-center">
+                          <h3 className="text-lg font-semibold text-gray-600 mb-2">No Truckers Found</h3>
+                          <p className="text-gray-500 text-sm">
+                            {searchTerm ? 'No truckers match your search criteria.' : 'No truckers have been added yet.'}
+                          </p>
+                          {searchTerm && (
+                            <button
+                              onClick={() => setSearchTerm('')}
+                              className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                            >
+                              Clear search
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
                 ) : (
                   <>
-                                         {currentTruckers.map((t, idx) => (
+                    {currentTruckers.map((t, idx) => (
                        <tr key={t.userId || idx} className="border-t text-sm hover:bg-blue-50 transition">
                          <td className="p-4">{new Date(t.addedAt).toLocaleDateString()}</td>
                          <td className="p-4">{t.compName}</td>
@@ -358,12 +1023,22 @@ export default function TruckerDocuments() {
                            </span>
                          </td>
                          <td className="p-4">
-                           <button
-                             onClick={() => handleViewTrucker(t)}
-                             className="bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                           >
-                             View
-                           </button>
+                           <div className="flex gap-2">
+                             <button
+                               onClick={() => handleViewTrucker(t)}
+                               className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
+                             >
+                               <Eye size={14} />
+                               View
+                             </button>
+                             <button
+                               onClick={() => handleEditTrucker(t)}
+                               className="flex items-center gap-1 bg-transparent text-green-600 px-3 py-1 rounded text-sm hover:bg-green-500/30 transition border border-green-200"
+                             >
+                               <Edit size={14} />
+                               Edit
+                             </button>
+                           </div>
                          </td>
                        </tr>
                      ))}

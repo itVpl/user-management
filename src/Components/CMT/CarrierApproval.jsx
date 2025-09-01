@@ -95,10 +95,10 @@ export default function CarrierApproval() {
           alertify.success('✅ Carrier approved successfully!');
         }
       } else if (status === 'rejected') {
-        // Use the rejection API
-        const response = await axios.patch(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/update-status/${selectedCarrier._id}`, {
-          status: 'rejected',
-          statusReason: reason || null,
+        // Use the new rejection API
+        const response = await axios.patch(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/approval/reject/${selectedCarrier.userId}`, {
+          rejectionReason: reason || "Document verification failed - MC/DOT number invalid",
+          step: "accountant_rejection" // Add the correct step enum value for accountant rejection
         }, {
           headers: { 
             'Content-Type': 'application/json'
