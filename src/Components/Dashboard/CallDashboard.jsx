@@ -10,10 +10,10 @@ import {
   AlertCircle,
   Clock,
 } from "lucide-react";
-
+import API_CONFIG from '../../config/api.js';
 /* ============ AXIOS INSTANCE (JWT attach) ============ */
 const api = axios.create({
-  baseURL: "https://vpl-liveproject-1.onrender.com",
+  baseURL: `${API_CONFIG.BASE_URL}`,
   withCredentials: false,
 });
 

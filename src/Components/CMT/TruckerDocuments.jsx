@@ -3,6 +3,7 @@ import { FaArrowLeft, FaDownload, FaEye, FaFileAlt, FaEdit } from 'react-icons/f
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload } from 'lucide-react';
 import AddTruckerForm from './AddTruckerform';
 import axios from 'axios';
+import API_CONFIG from '../../config/api.js';
 
 export default function TruckerDocuments() {
   const [truckers, setTruckers] = useState([]);
@@ -67,7 +68,7 @@ export default function TruckerDocuments() {
 
       // Create axios instance with auth header
       const axiosInstance = axios.create({
-        baseURL: 'https://vpl-liveproject-1.onrender.com',
+        baseURL: `${API_CONFIG.BASE_URL}`,
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -127,7 +128,7 @@ export default function TruckerDocuments() {
       
       // Create axios instance with auth header
       const axiosInstance = axios.create({
-        baseURL: 'https://vpl-liveproject-1.onrender.com',
+        baseURL: `${API_CONFIG.BASE_URL}`,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -283,7 +284,7 @@ export default function TruckerDocuments() {
             
             // Create axios instance with auth header
             const axiosInstance = axios.create({
-              baseURL: 'https://vpl-liveproject-1.onrender.com',
+              baseURL: `${API_CONFIG.BASE_URL}`,
               headers: {
                 'Authorization': `Bearer ${token}`
               }
@@ -322,7 +323,7 @@ export default function TruckerDocuments() {
             
             // Create axios instance with auth header
             const axiosInstance = axios.create({
-              baseURL: 'https://vpl-liveproject-1.onrender.com',
+              baseURL: `${API_CONFIG.BASE_URL}`,
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
@@ -425,7 +426,7 @@ export default function TruckerDocuments() {
     
     // Create axios instance with auth header
     const axiosInstance = axios.create({
-      baseURL: 'https://vpl-liveproject-1.onrender.com',
+      baseURL: `${API_CONFIG.BASE_URL}`,
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -917,7 +918,7 @@ export default function TruckerDocuments() {
               </button>
             </div>
             <a
-              href={`https://vpl-liveproject-1.onrender.com/${selectedTrucker.docUpload}`}
+              href={`${API_CONFIG.BASE_URL}/${selectedTrucker.docUpload}`}
               target="_blank"
               rel="noreferrer"
               className="hover:scale-110 transition-transform"
@@ -945,10 +946,10 @@ export default function TruckerDocuments() {
             </div>
             <div className="flex flex-col items-center justify-center">
               <img
-                src={`https://vpl-liveproject-1.onrender.com/${selectedTrucker.docUpload}`}
+                src={`${API_CONFIG.BASE_URL}/${selectedTrucker.docUpload}`}
                 alt="Uploaded Doc"
                 className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-blue-100 cursor-pointer hover:scale-105 transition"
-                onClick={() => setPreviewImg(`https://vpl-liveproject-1.onrender.com/${selectedTrucker.docUpload}`)}
+                onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedTrucker.docUpload}`)}
               />
               <div className="text-xs text-gray-400 mt-2">Click image to preview</div>
             </div>

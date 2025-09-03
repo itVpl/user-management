@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
+import API_CONFIG from '../../config/api.js';
+
 
 const UserPermission = () => {
   const [searchInput, setSearchInput] = useState("");
@@ -18,7 +20,7 @@ const UserPermission = () => {
 
   try {
     // Fetch all employees
-    const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser", {
+    const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser`, {
       headers: { Authorization: `Bearer ${token}` },
       withCredentials: true,
     });
@@ -54,7 +56,7 @@ const fetchModuleDetails = async (allowedModuleIds) => {
 
   try {
     const res = await axios.get(
-      `https://vpl-liveproject-1.onrender.com/api/v1/module`,
+      `${API_CONFIG.BASE_URL}/api/v1/module`,
       {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true,
@@ -94,8 +96,8 @@ const handleToggle = async (moduleId, currentStatus) => {
   const empId = String(selectedEmployee.empId); // ✅ Always string
 
 const url = currentStatus
-  ? `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/unassign-modules/${empId}`
-  : `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/assign-modules/${empId}`;
+  ? `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/unassign-modules/${empId}`
+  : `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/assign-modules/${empId}`;
 
   const action = currentStatus ? "deactivate" : "activate";
 

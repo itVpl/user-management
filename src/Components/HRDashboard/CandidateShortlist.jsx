@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Mail, Phone, Calendar, Search, PlusCircle, Edit, Trash2, Eye, CheckCircle, XCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
-
+import API_CONFIG from '../../config/api.js';
 // Custom CSS for hiding scrollbars
 const scrollbarHideStyles = `
   .scrollbar-hide {
@@ -16,7 +16,7 @@ const scrollbarHideStyles = `
 
 export default function CandidateShortlist() {
   // API Base URL
-  const API_BASE_URL = 'https://vpl-liveproject-1.onrender.com';
+  const API_BASE_URL = `${API_CONFIG.BASE_URL}`;
 
   // Check if user is logged in
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');

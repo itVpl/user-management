@@ -29,7 +29,7 @@ export default function Consignment() {
       }
 
       // Fetch data from the new API endpoint
-      const response = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/load/all-loads', {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/all-loads`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-
+import API_CONFIG from '../../config/api.js';
 const RECORDS_PER_PAGE = 16;
 
 const PayrollPage = () => {
@@ -30,7 +30,7 @@ const PayrollPage = () => {
         throw new Error("Missing token. Please login.");
       }
 
-      const url = `https://vpl-liveproject-1.onrender.com/api/v1/payroll/month/${selectedMonth}`;
+      const url = `${API_CONFIG.BASE_URL}/api/v1/payroll/month/${selectedMonth}`;
       const config = {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -67,7 +67,7 @@ const PayrollPage = () => {
 
       console.log("Sending payload:", payload); // Debug log
 
-      const url = "https://vpl-liveproject-1.onrender.com/api/v1/payroll";
+      const url = `${API_CONFIG.BASE_URL}/api/v1/payroll`;
       const config = {
         headers: {
           Authorization: `Bearer ${token}`,

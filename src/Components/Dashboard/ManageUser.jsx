@@ -3,6 +3,7 @@ import axios from 'axios';
 import { AdminIcon } from '../../assets/image';
 import { ArrowDown } from '../../assets/image';
 import AddUserModal from './AddUser';
+import API_CONFIG from '../../config/api.js';
 
 const ManageUser = () => {
   const [users, setUsers] = useState([]);
@@ -26,7 +27,7 @@ const ManageUser = () => {
   const fetchUsers = () => {
      setLoading(true);
     axios
-      .get('https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser', { withCredentials: true })
+      .get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser`, { withCredentials: true })
       .then(res => {
         const fetchedUsers = res.data.employees || [];
         // Map the actual status from server data
@@ -72,7 +73,7 @@ const ManageUser = () => {
 
     try {
       const response = await axios.patch(
-        `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${user.empId}/status`,
+        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${user.empId}/status`,
         { status: newStatus },
         { withCredentials: true }
       );
@@ -205,7 +206,7 @@ const handleRoleChange = async (empId, newRole) => {
 
   try {
     await axios.patch(
-      `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/assign-role/${empId}`,
+      `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/assign-role/${empId}`,
       { role: newRole },
       { withCredentials: true }
     );
@@ -230,7 +231,7 @@ const handleUpdateUser = async (updatedData) => {
     };
 
     const response = await axios.put(
-      `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${editingUser.empId}`,
+      `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${editingUser.empId}`,
       updatedData,
       config
     );
@@ -352,7 +353,7 @@ const handleUpdateUser = async (updatedData) => {
                        </button>
                      </div>
                    </td>
-                </tr>
+                 </tr>
 
                 {expandedIndex === globalIndex && (() => {
                   const allDocs = [

@@ -41,7 +41,7 @@ export default function CustomerLoads() {
       }
 
       // Fetch data from the new customer-specific API endpoint
-      const response = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/load/filter-by-customer-added-by', {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/filter-by-customer-added-by`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

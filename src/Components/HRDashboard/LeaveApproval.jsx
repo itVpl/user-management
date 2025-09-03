@@ -6,9 +6,9 @@ import {
 } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
-
+import API_CONFIG from '../../config/api.js';
 // ------------------ CONFIG ------------------
-const API_BASE = 'https://vpl-liveproject-1.onrender.com/api/v1/leave';
+const API_BASE = `${API_CONFIG.BASE_URL}/api/v1/leave`;
 const ENDPOINTS = {
   listPendingForManagerPrimary: `${API_BASE}/pending-manager-approval`,
   listPendingForManagerFallback: `${API_BASE}/pending-manager-approv`,
@@ -16,7 +16,7 @@ const ENDPOINTS = {
 };
 
 // Employee details API (by empId)
-const EMP_API = 'https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser';
+const EMP_API = `${API_CONFIG.BASE_URL}/api/v1/inhouseUser`;
 
 // toggle for consoles
 const DEBUG = true;

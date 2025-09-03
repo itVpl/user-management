@@ -3,7 +3,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign } from 'lucide-react';
-
+import API_CONFIG from '../../config/api.js';
 const statusColors = {
   Assigned: 'bg-orange-500',
   Posted: 'bg-blue-500',
@@ -143,7 +143,7 @@ const RateRequest = () => {
 
       // Pending approvals
       const pendingRes = await axios.get(
-        'https://vpl-liveproject-1.onrender.com/api/v1/load-approval/pending',
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending`,
         { headers }
       );
       const pendingApprovals = pendingRes.data?.data?.approvals || [];
@@ -200,7 +200,7 @@ const RateRequest = () => {
 
       // Loads for Rate tab
       const res = await axios.get(
-        'https://vpl-liveproject-1.onrender.com/api/v1/load/available/',
+        `${API_CONFIG.BASE_URL}/api/v1/load/available/`,
         { headers }
       );
       const allRequests = res.data?.loads || [];
@@ -244,7 +244,7 @@ const RateRequest = () => {
       }
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
       const res = await axios.get(
-        'https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/truckers/',
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers/`,
         { headers }
       );
       setTruckers(res.data?.data || []);
@@ -266,7 +266,7 @@ const RateRequest = () => {
         const loadId = ld._id;
         if (!timerStartMap[loadId] || timerStopMap[loadId]) continue;
         try {
-          const url = `https://vpl-liveproject-1.onrender.com/api/v1/bid/intermediate-approval-status?loadId=${loadId}`;
+          const url = `${API_CONFIG.BASE_URL}/api/v1/bid/intermediate-approval-status?loadId=${loadId}`;
           const r = await axios.get(url, { headers });
           const bids = r?.data?.bids || r?.data?.data?.bids || [];
           if (bids.length > 0) saveStop(loadId, Date.now());
@@ -350,7 +350,7 @@ const RateRequest = () => {
       };
 
       const response = await axios.post(
-        'https://vpl-liveproject-1.onrender.com/api/v1/load-approval/handle',
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
         payload,
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
       );
@@ -418,7 +418,7 @@ const RateRequest = () => {
     try {
       setSubmitting(true);
       await axios.post(
-        'https://vpl-liveproject-1.onrender.com/api/v1/bid/place-by-inhouse/',
+        `${API_CONFIG.BASE_URL}/api/v1/bid/place-by-inhouse/`,
         payload,
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
       );

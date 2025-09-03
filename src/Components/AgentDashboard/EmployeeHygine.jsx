@@ -30,8 +30,8 @@ import {
   Person,
   Flag,
 } from "@mui/icons-material";
-
-const API_BASE = "https://vpl-liveproject-1.onrender.com";
+import API_CONFIG from '../../config/api.js';
+const API_BASE = `${API_CONFIG.BASE_URL}`;
 
 /* -------------------- Utilities -------------------- */
 const getEmpIdFromSession = () => {
