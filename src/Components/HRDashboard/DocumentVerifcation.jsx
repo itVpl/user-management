@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-
+import API_CONFIG from '../../config/api.js';
 const DocumentsVerification = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employees, setEmployees] = useState([]);
@@ -16,7 +16,7 @@ const DocumentsVerification = () => {
     const fetchEmployees = async () => {
     setLoading(true);
       try {
-        const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/");
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/`);
         const data = res.data.employees || [];
 
         const mapped = data.map((emp) => {
@@ -81,7 +81,7 @@ const DocumentsVerification = () => {
 
   try {
     const res = await axios.patch(
-      `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${selectedEmployee.id}/doc-verified`,
+      `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${selectedEmployee.id}/doc-verified`,
       { docVerified: true },
       {
         headers: {
@@ -114,7 +114,7 @@ const DocumentsVerification = () => {
 
   try {
     const res = await axios.patch(
-      `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${selectedEmployee.id}/doc-verified`,
+      `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${selectedEmployee.id}/doc-verified`,
       { docVerified: false },
       {
         headers: {
@@ -142,7 +142,7 @@ const DocumentsVerification = () => {
   const handleDownloadAll = () => {
     selectedEmployee.allDocs.forEach((doc) => {
       const link = document.createElement("a");
-      link.href = `https://vpl-liveproject-1.onrender.com/${doc.url}`;
+      link.href = `${API_CONFIG.BASE_URL}/${doc.url}`;
       link.download = doc.label;
       document.body.appendChild(link);
       link.click();

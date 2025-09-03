@@ -30,8 +30,8 @@ import SummarizeIcon from "@mui/icons-material/Summarize";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import PaidIcon from "@mui/icons-material/Paid";
 import InventoryIcon from "@mui/icons-material/Inventory2";
-
-const API_URL = "https://vpl-liveproject-1.onrender.com/api/v1/do/do";
+import API_CONFIG from '../../config/api.js';
+const API_URL = `${API_CONFIG.BASE_URL}/api/v1/do/do`;
 
 const chipSx = { height: 22, "& .MuiChip-label": { px: 0.75, fontWeight: 700 } };
 
