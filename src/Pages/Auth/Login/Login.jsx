@@ -200,7 +200,7 @@ function Login({ setIsAuthenticated }) {
               <p id="password-error" className="text-red-600 text-sm mt-1">
                 {fieldErrors.password}
               </p>
-            )}
+            )} 
           </div>
 
           {/* Auth error (invalid creds) */}
@@ -229,4 +229,4 @@ function Login({ setIsAuthenticated }) {
   );
 }
 
-export default Login;
+export default Login; 
