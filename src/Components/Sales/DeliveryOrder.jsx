@@ -1428,128 +1428,161 @@ export default function DeliveryOrder() {
   // Handle update order 
 
   const handleUpdateOrder = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      const orderId = editingOrder?._id;
-      if (!orderId) { alertify.error('Order ID missing'); setSubmitting(false); return; }
+  e.preventDefault();
+  setSubmitting(true);
+  try {
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
-      // 👉 existing customers from the full order (to preserve loadNo & _id)
-      const prevCustomers = editingOrder?.fullData?.customers || [];
-
-      // --- REQUIRED fields quick check (BillTo/Dispatcher/W/O)
-      for (let i = 0; i < (formData.customers?.length || 0); i++) {
-        const c = formData.customers[i] || {};
-        if (!c.billTo || !c.dispatcherName || !c.workOrderNo) {
-          alertify.error(`Customer ${i + 1} ke required fields (Bill To, Dispatcher, W/O) bharo`);
-          setSubmitting(false);
-          return;
-        }
-      }
-
-      // --- Customers (⚠️ loadNo preserve)
-      const customers = (formData.customers || []).map((c, idx) => {
-        const preservedLoadNo =
-          prevCustomers[idx]?.loadNo          // from server doc
-          || editingOrder?.doNum              // table se (L0129 etc.)
-          || c.loadNo                         // agar kabhi form me ho
-          || '';
-
-        if (!preservedLoadNo) {
-          // agar kuch bhi nahi mila to backend reject karega — user ko bata do
-          alertify.error(`Customer ${idx + 1}: Load No missing`);
-          throw new Error('Missing loadNo');
-        }
-
-        return {
-          _id: prevCustomers[idx]?._id,       // preserve subdoc id if present
-          loadNo: preservedLoadNo,            // ✅ REQUIRED
-          billTo: (c.billTo || '').trim(),
-          dispatcherName: (c.dispatcherName || '').trim(),
-          workOrderNo: (c.workOrderNo || '').trim(),
-          lineHaul: Number(c.lineHaul) || 0,
-          fsc: Number(c.fsc) || 0,
-          other: Number(c.other) || 0,
-          totalAmount:
-            (Number(c.lineHaul) || 0) +
-            (Number(c.fsc) || 0) +
-            (Number(c.other) || 0),
-        };
-      });
-
-      // --- Carrier (as you already had)
-      const carrierFees = (charges || [])
-        .filter(ch => ch?.name)
-        .map(ch => ({
-          name: ch.name,
-          quantity: Number(ch.quantity) || 0,
-          amount: Number(ch.amt) || 0,
-          total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
-        }));
-
-      const carrier = {
-        carrierName: formData.carrierName || '',
-        equipmentType: formData.equipmentType || '',
-        carrierFees,
-        totalCarrierFees: carrierFees.reduce((s, f) => s + (f.total || 0), 0),
-      };
-
-      // --- Shipper + per-location fields
-      const shipper = {
-        name: formData.shipperName || '',
-        containerNo: formData.containerNo || '',
-        containerType: formData.containerType || '',
-        pickUpLocations: (formData.pickupLocations || []).map(l => ({
-          name: l.name || '',
-          address: l.address || '',
-          city: l.city || '',
-          state: l.state || '',
-          zipCode: l.zipCode || '',
-          weight: l.weight === '' ? 0 : Number(l.weight) || 0,
-          pickUpDate: l.pickUpDate || '',
-          remarks: l.remarks || ''
-        })),
-        dropLocations: (formData.dropLocations || []).map(l => ({
-          name: l.name || '',
-          address: l.address || '',
-          city: l.city || '',
-          state: l.state || '',
-          zipCode: l.zipCode || '',
-          weight: l.weight === '' ? 0 : Number(l.weight) || 0,
-          dropDate: l.dropDate || '',
-          remarks: l.remarks || ''
-        })),
-      };
-
-      const updatePayload = {
-        customers,          // ✅ now includes loadNo
-        carrier,
-        shipper,
-        remarks: formData.remarks || '',
-      };
-
-      const res = await axios.put(
-        `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
-        updatePayload,
-        { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } }
-      );
-
-      if (res?.data?.success) {
-        alertify.success('Delivery order updated!');
-        setShowAddOrderForm(false);
-        setEditingOrder(null);
-        fetchOrders();
-      } else {
-        alertify.error(res?.data?.message || 'Update failed');
-      }
-    } catch (err) {
-      console.error('Update error:', err?.response?.data || err);
-      alertify.error(err?.response?.data?.message || err.message || 'Failed to update delivery order');
-    } finally {
-      setSubmitting(false);
+    // Make sure we send the real Mongo _id, not "DO-xxxxxx"
+    let orderId = editingOrder?._id;
+    if (!orderId) { alertify.error('Order ID missing'); return; }
+    if (String(orderId).startsWith('DO-')) {
+      orderId = orderId.replace(/^DO-/, '');
     }
-  };
+
+    // 👉 existing customers from the full order (to preserve loadNo & _id)
+    const prevCustomers = editingOrder?.fullData?.customers || [];
+
+    // --- REQUIRED fields quick check (BillTo/Dispatcher/W/O)
+    for (let i = 0; i < (formData.customers?.length || 0); i++) {
+      const c = formData.customers[i] || {};
+      if (!c.billTo || !c.dispatcherName || !c.workOrderNo) {
+        alertify.error(`Customer ${i + 1} ke required fields (Bill To, Dispatcher, W/O) bharo`);
+        return;
+      }
+    }
+
+    // --- Customers (⚠️ loadNo preserve)
+    const customers = (formData.customers || []).map((c, idx) => {
+      const preservedLoadNo =
+        prevCustomers[idx]?.loadNo ||
+        editingOrder?.doNum ||
+        c.loadNo ||
+        '';
+
+      if (!preservedLoadNo) {
+        alertify.error(`Customer ${idx + 1}: Load No missing`);
+        throw new Error('Missing loadNo');
+      }
+
+      return {
+        _id: prevCustomers[idx]?._id, // preserve subdoc id if present
+        loadNo: preservedLoadNo,      // ✅ REQUIRED
+        billTo: (c.billTo || '').trim(),
+        dispatcherName: (c.dispatcherName || '').trim(),
+        workOrderNo: (c.workOrderNo || '').trim(),
+        lineHaul: Number(c.lineHaul) || 0,
+        fsc: Number(c.fsc) || 0,
+        other: Number(c.other) || 0,
+        totalAmount:
+          (Number(c.lineHaul) || 0) +
+          (Number(c.fsc) || 0) +
+          (Number(c.other) || 0),
+      };
+    });
+
+    // --- Carrier
+    const carrierFees = (charges || [])
+      .filter(ch => ch?.name)
+      .map(ch => ({
+        name: ch.name,
+        quantity: Number(ch.quantity) || 0,
+        amount: Number(ch.amt) || 0,
+        total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
+      }));
+
+    const carrier = {
+      carrierName: formData.carrierName || '',
+      equipmentType: formData.equipmentType || '',
+      carrierFees,
+      totalCarrierFees: carrierFees.reduce((s, f) => s + (f.total || 0), 0),
+    };
+
+    // --- Shipper + per-location fields
+    const shipper = {
+      name: formData.shipperName || '',
+      containerNo: formData.containerNo || '',
+      containerType: formData.containerType || '',
+      pickUpLocations: (formData.pickupLocations || []).map(l => ({
+        name: l.name || '',
+        address: l.address || '',
+        city: l.city || '',
+        state: l.state || '',
+        zipCode: l.zipCode || '',
+        weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+        pickUpDate: l.pickUpDate || '',
+        remarks: l.remarks || ''
+      })),
+      dropLocations: (formData.dropLocations || []).map(l => ({
+        name: l.name || '',
+        address: l.address || '',
+        city: l.city || '',
+        state: l.state || '',
+        zipCode: l.zipCode || '',
+        weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+        dropDate: l.dropDate || '',
+        remarks: l.remarks || ''
+      })),
+    };
+
+    const updatePayload = {
+      customers,  // ✅ includes loadNo
+      carrier,
+      shipper,
+      remarks: formData.remarks || '',
+    };
+
+    // 1) JSON update
+    const res = await axios.put(
+      `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
+      updatePayload,
+      { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (!res?.data?.success) {
+      alertify.error(res?.data?.message || 'Update failed');
+      return;
+    }
+
+    // 2) OPTIONAL document upload — same versioned base path to avoid 404
+    if (formData.docs && formData.docs instanceof File) {
+      try {
+        const fd = new FormData();
+        // NOTE: Change 'document' -> 'file' if your backend expects 'file'
+        fd.append('document', formData.docs);
+
+        const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}/upload`;
+        console.debug('Uploading document to:', uploadUrl, 'orderId:', orderId);
+
+        const upRes = await axios.put(uploadUrl, fd, {
+          headers: { Authorization: `Bearer ${token}` }, // axios sets multipart boundary automatically
+          timeout: 20000,
+        });
+
+        if (upRes?.data?.success) {
+          alertify.success('Document uploaded');
+        } else {
+          alertify.warning(upRes?.data?.message ? `Document upload failed: ${upRes.data.message}` : 'Document upload failed');
+        }
+      } catch (upErr) {
+        console.error('Upload error:', upErr?.response?.data || upErr);
+        const msg = upErr?.response?.data?.message || upErr?.message || 'Unknown error';
+        alertify.warning(`Order updated, but document upload failed: ${msg}`);
+      }
+    }
+
+    alertify.success('Delivery order updated!');
+    setShowAddOrderForm(false);
+    setEditingOrder(null);
+    fetchOrders();
+  } catch (err) {
+    console.error('Update error:', err?.response?.data || err);
+    alertify.error(err?.response?.data?.message || err.message || 'Failed to update delivery order');
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
 
 

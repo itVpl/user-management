@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { MoreHorizontal, User, Settings, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Award } from 'lucide-react';
+import API_CONFIG from '../../config/api.js';
+
 
 const HRDashboard = () => {
   const [employees, setEmployees] = useState([]);
@@ -31,13 +33,13 @@ const HRDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const empRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser");
+        const empRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser`);
         const empData = empRes.data?.employees || [];
         setEmployees(empData);
 
         // Fetch new joiners data
         try {
-          const newJoinersRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/new-joiners");
+          const newJoinersRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/new-joiners`);
           setNewJoinersData(newJoinersRes.data);
         } catch (error) {
           console.error("Error fetching new joiners:", error);
@@ -50,7 +52,7 @@ const HRDashboard = () => {
 
         // Fetch current month leave requests
         try {
-          const currentMonthRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/current-month");
+          const currentMonthRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/leave/current-month`);
           const currentMonthData = currentMonthRes.data?.leaves || [];
           setCurrentMonthLeaves(currentMonthData);
           setCurrentMonthTotal(currentMonthRes.data?.total || 6);
@@ -65,7 +67,7 @@ const HRDashboard = () => {
         // Fetch pending and manager approved leaves
         try {
           const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-          const pendingApprovedRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/pending-and-manager-approved", {
+          const pendingApprovedRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/leave/pending-and-manager-approved`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -91,7 +93,7 @@ const HRDashboard = () => {
         // Fetch pending leave count
         try {
           const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-          const pendingCountRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/current-month-pending-count", {
+          const pendingCountRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/leave/current-month-pending-count`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -107,7 +109,7 @@ const HRDashboard = () => {
         // Fetch attendance
         try {
           const today = new Date().toISOString().split("T")[0];
-          const attRes = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/attendance?date=${today}`);
+          const attRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/attendance?date=${today}`);
           const attendanceStats = attRes.data;
           setAttendance(attendanceStats);
         } catch (error) {
@@ -118,7 +120,7 @@ const HRDashboard = () => {
         // Fetch today's login count
         try {
           const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-          const loginCountRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/today-login-count", {
+          const loginCountRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/today-login-count`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -144,7 +146,7 @@ const HRDashboard = () => {
 
         // Fetch tasks
         try {
-          const taskRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/dailytask/assign");
+          const taskRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/dailytask/assign`);
           setTasks(taskRes.data.task || []);
         } catch (error) {
           console.error("Error fetching tasks:", error);
@@ -153,7 +155,7 @@ const HRDashboard = () => {
 
         // Calculate hygiene percentage
         try {
-          const breakRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/break/my-history");
+          const breakRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/break/my-history`);
           const lateBreaks = breakRes.data.filter(b => b.duration && parseInt(b.duration.split(":")[0]) > 1);
           const hygieneScore = empData.length ? Math.round(((empData.length - lateBreaks.length) / empData.length) * 100) : 0;
           setHygienePercentage(hygieneScore);

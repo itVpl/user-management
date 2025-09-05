@@ -5,6 +5,7 @@ import {
   Calendar, Clock, User, CheckCircle, XCircle, AlertCircle,
   Search, Filter, ArrowLeft, ArrowRight
 } from 'lucide-react';
+import API_CONFIG from '../../config/api.js';
 
 // ------------------ COMPONENT ------------------
 const HRManagementSystem = () => {
@@ -62,7 +63,7 @@ const HRManagementSystem = () => {
         setLoadingAttendance(true);
         setAttendanceError(null);
         const res = await axios.get(
-          `https://vpl-liveproject-1.onrender.com/api/v1/attendance?date=${selectedDate}`,
+          `${API_CONFIG.BASE_URL}/api/v1/attendance?date=${selectedDate}`,
           { withCredentials: true }
         );
         setDailyAttendanceData(res.data.records || []);
@@ -80,7 +81,7 @@ const HRManagementSystem = () => {
   useEffect(() => {
     const fetchLeaveRequests = async () => {
       try {
-        const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/all", {
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/leave/all`, {
           withCredentials: true,
         });
         if (Array.isArray(res.data.leaves)) {
@@ -159,7 +160,7 @@ const HRManagementSystem = () => {
     try {
       setFinalizing(prev => ({ ...prev, [leaveId]: true }));
       await axios.patch(
-        `https://vpl-liveproject-1.onrender.com/api/v1/leave/status/${leaveId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/leave/status/${leaveId}`,
         { status: 'approved', reviewedBy: reviewer },
         { withCredentials: true }
       );

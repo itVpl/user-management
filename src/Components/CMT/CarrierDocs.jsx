@@ -4,6 +4,7 @@ import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Search } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import API_CONFIG from '../../config/api.js';
 
 export default function CarrierDocs() {
   const [carriers, setCarriers] = useState([]);
@@ -36,7 +37,7 @@ export default function CarrierDocs() {
     try {
       setLoading(true);
       
-      const res = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/all-truckers', {
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/all-truckers`, {
         headers: { 
           'Content-Type': 'application/json'
         }
@@ -83,7 +84,7 @@ export default function CarrierDocs() {
       
       if (status === 'approved') {
         // Use the manager approval API
-        const response = await axios.patch(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/approval/manager/${userId}`, {
+        const response = await axios.patch(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/manager/${userId}`, {
           approvalReason: reason || "Documents verified and approved",
         }, {
           headers: { 
@@ -96,7 +97,7 @@ export default function CarrierDocs() {
         }
       } else if (status === 'rejected') {
         // Use the rejection API
-        const response = await axios.patch(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/approval/reject/${userId}`, {
+        const response = await axios.patch(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/reject/${userId}`, {
           rejectionReason: reason || "Incomplete documents provided",
         }, {
           headers: { 
@@ -317,7 +318,7 @@ export default function CarrierDocs() {
               </button>
             </div>
             <a
-              href={`https://vpl-liveproject-1.onrender.com/${selectedCarrier.docUpload}`}
+              href={`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`}
               target="_blank"
               rel="noreferrer"
               className="hover:scale-110 transition-transform"
@@ -347,10 +348,10 @@ export default function CarrierDocs() {
             </div>
             <div className="flex flex-col items-center justify-center">
               <img
-                src={`https://vpl-liveproject-1.onrender.com/${selectedCarrier.docUpload}`}
+                src={`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`}
                 alt="Uploaded Doc"
                 className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
-                onClick={() => setPreviewImg(`https://vpl-liveproject-1.onrender.com/${selectedCarrier.docUpload}`)}
+                onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`)}
               />
               <div className="text-xs text-gray-400 mt-2">Click image to preview</div>
             </div>

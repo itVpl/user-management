@@ -4,13 +4,15 @@ import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { RedTruck, Checkcircle, locationMarker, ArrowDown, ArrowUp } from "../../assets/image";
+import truckImg from '../../assets/Icons super admin/map-truckImage.png';
+import API_CONFIG from '../../config/api.js';
 
 // Custom Flatbed/Container Truck Icon using local image
 const createCustomTruckIcon = () => {
   return new L.Icon({
-    iconUrl: '/src/assets/Icons super admin/map-truckImage.png',
-    iconSize: [50, 30],
-    iconAnchor: [25, 15],
+    iconUrl: truckImg,
+    iconSize: [70, 40],
+    iconAnchor: [35, 20],
     popupAnchor: [0, -20],
     className: 'truck-marker-icon'
   });
@@ -139,9 +141,9 @@ export default function ConsignmentTracker() {
       let res;
 
       if (searchTerm.trim()) {
-        res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/load/shipment/${searchTerm}`);
+        res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${searchTerm}`);
       } else {
-        res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/load/shipment/`);
+        res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/`);
       }
 
       const track = res.data?.tracking;

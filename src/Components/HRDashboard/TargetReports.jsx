@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Users, Clock, Target, CheckCircle, XCircle, Calendar, TrendingUp, BarChart3, Phone, Truck, RefreshCw } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import API_CONFIG from '../../config/api.js';
 
 export default function TargetReports() {
-  const API_BASE_URL = 'https://vpl-liveproject-1.onrender.com';
+  const API_BASE_URL = `${API_CONFIG.BASE_URL}`;
   const [activeTab, setActiveTab] = useState('sales');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(false);

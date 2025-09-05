@@ -4,6 +4,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Clock, CheckCircle, Search, Calendar, DollarSign } from 'lucide-react';
+import API_CONFIG from '../../config/api.js';
 
 const statusColors = {
   Pending: 'bg-yellow-500',
@@ -61,7 +62,7 @@ const DailyRateRequest = () => {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       };
-      const url = `https://vpl-liveproject-1.onrender.com/api/v1/bid/today-count?date=${selectedDate}`;
+      const url = `${API_CONFIG.BASE_URL}/api/v1/bid/today-count?date=${selectedDate}`;
 
       console.log('➡️ GET URL:', url);
       console.log('➡️ Headers: ', headers);

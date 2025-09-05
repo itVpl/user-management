@@ -28,7 +28,7 @@ import {
   Bell
 } from "lucide-react";
 import { io } from "socket.io-client";
-
+import API_CONFIG from '../../config/api.js';
 const ChatPage = () => {
   const [chatList, setChatList] = useState([]);
   const [chatUsers, setChatUsers] = useState([]);
@@ -167,7 +167,7 @@ const ChatPage = () => {
     try {
       console.log("👁️ Marking messages as seen for:", senderEmpId);
       const res = await axios.patch(
-        `https://vpl-liveproject-1.onrender.com/api/v1/chat/seen/${senderEmpId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/seen/${senderEmpId}`,
         {},
         { withCredentials: true }
       );
@@ -200,7 +200,7 @@ const ChatPage = () => {
     if (!storedUser?.empId || !selectedEmpId) return;
     try {
       const res = await axios.get(
-        `https://vpl-liveproject-1.onrender.com/api/v1/chat/with/${selectedEmpId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/with/${selectedEmpId}`,
         { withCredentials: true }
       );
 
@@ -221,7 +221,7 @@ const ChatPage = () => {
   const fetchChatList = async () => {
     try {
       const res = await axios.get(
-        "https://vpl-liveproject-1.onrender.com/api/v1/chat/list",
+        `${API_CONFIG.BASE_URL}/api/v1/chat/list`,
         { withCredentials: true }
       );
       const list = res.data || [];
@@ -247,7 +247,7 @@ const ChatPage = () => {
   const fetchUnreadCounts = async () => {
     try {
       const res = await axios.get(
-        "https://vpl-liveproject-1.onrender.com/api/v1/chat/unread",
+        `${API_CONFIG.BASE_URL}/api/v1/chat/unread`,
         { withCredentials: true }
       );
       console.log("📊 Server unread counts:", res.data);
@@ -274,7 +274,7 @@ const ChatPage = () => {
     try {
       setLoadingFiles(true);
       const res = await axios.get(
-        `https://vpl-liveproject-1.onrender.com/api/v1/chat/files/user/${empId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/files/user/${empId}`,
         { withCredentials: true }
       );
       console.log('Files response:', res.data);
@@ -295,7 +295,7 @@ const ChatPage = () => {
         message: input,
       };
       const response = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/chat/send",
+        `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
         payload,
         { withCredentials: true }
       );
@@ -345,7 +345,7 @@ const ChatPage = () => {
       formData.append('message', `Sent a file: ${file.name}`);
       
       const response = await axios.post(
-        'https://vpl-liveproject-1.onrender.com/api/v1/chat/send',
+        `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
         formData,
         {
           withCredentials: true,
@@ -415,7 +415,7 @@ const ChatPage = () => {
       formData.append('message', `Sent an image: ${file.name}`);
       
       const response = await axios.post(
-        'https://vpl-liveproject-1.onrender.com/api/v1/chat/send',
+        `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
         formData,
         {
           withCredentials: true,
@@ -483,7 +483,7 @@ const ChatPage = () => {
     if (!query) return setChatUsers([]);
     try {
       const res = await axios.get(
-        `https://vpl-liveproject-1.onrender.com/api/v1/chat/search-users?q=${query}`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/search-users?q=${query}`,
         { withCredentials: true }
       );
       setChatUsers(res.data || []);
@@ -558,7 +558,7 @@ const ChatPage = () => {
 
     axios
       .get(
-        `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${localUser.empId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${localUser.empId}`,
         { withCredentials: true }
       )
       .then((res) => {
@@ -638,7 +638,7 @@ const ChatPage = () => {
   useEffect(() => {
     if (!storedUser?.empId) return;
 
-    socketRef.current = io("https://vpl-liveproject-1.onrender.com", {
+    socketRef.current = io(`${API_CONFIG.BASE_URL}`, {
       withCredentials: true,
     });
 
@@ -817,7 +817,7 @@ const ChatPage = () => {
                   onClick={async () => {
                     try {
                       const res = await axios.get(
-                        `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${user.empId}`,
+                        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${user.empId}`,
                         { withCredentials: true }
                       );
                       const fullUser = res.data.employee;
@@ -852,7 +852,7 @@ const ChatPage = () => {
                   onClick={async () => {
                     try {
                       const res = await axios.get(
-                        `https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${user.empId}`,
+                        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${user.empId}`,
                         { withCredentials: true }
                       );
                       const fullUser = res.data.employee;
@@ -1043,10 +1043,10 @@ const ChatPage = () => {
                                       return (
                                         <div className="mb-2">
                                           <img 
-                                            src={`https://vpl-liveproject-1.onrender.com/api/v1/chat/download/${msg._id}`}
+                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`https://vpl-liveproject-1.onrender.com/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
                                           />
                                           <p className="text-xs text-gray-500 mt-1">{fileName}</p>
                                         </div>
@@ -1065,10 +1065,10 @@ const ChatPage = () => {
                                       return (
                                         <div className="mb-2">
                                           <img 
-                                            src={`https://vpl-liveproject-1.onrender.com/api/v1/chat/download/${msg._id}`}
+                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`https://vpl-liveproject-1.onrender.com/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
                                           />
                                           <p className="text-xs text-gray-500 mt-1">{fileName}</p>
                                         </div>
@@ -1086,10 +1086,10 @@ const ChatPage = () => {
                                       return (
                                         <div className="mb-2">
                                           <img 
-                                            src={`https://vpl-liveproject-1.onrender.com/api/v1/chat/download/${msg._id}`}
+                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`https://vpl-liveproject-1.onrender.com/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
                                           />
                                           <p className="text-xs text-gray-500 mt-1">{file.originalName}</p>
                                         </div>
@@ -1140,7 +1140,7 @@ const ChatPage = () => {
                                           // Download using message ID
                                           if (msg._id) {
                                             console.log('Downloading file for message:', msg._id);
-                                            window.open(`https://vpl-liveproject-1.onrender.com/api/v1/chat/download/${msg._id}`, '_blank');
+                                            window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank');
                                           } else {
                                             console.log('No message ID found for download');
                                           }

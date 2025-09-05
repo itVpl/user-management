@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { ArrowLeft, Download, X } from 'lucide-react';
 import AddTruckerForm from './AddCustomer';
+import API_CONFIG from '../../config/api.js';
 
 const ShippersLDocuments = () => {
   const [shippers, setShippers] = useState([]);
@@ -18,7 +19,7 @@ const ShippersLDocuments = () => {
     const fetchShippers = async () => {
       setLoading(true); //
       try {
-        const res = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/shippers');
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers`);
         setShippers(res.data.data || []);
       } catch (error) {
         console.error('❌ Failed to fetch shippers:', error);
@@ -58,7 +59,7 @@ const ShippersLDocuments = () => {
 
     try {
       const res = await axios.patch(
-        `https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/simple-status/${selectedShipment._id}`,
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/simple-status/${selectedShipment._id}`,
         { status }
       );
       alert(`Status updated to "${status}" successfully`);
