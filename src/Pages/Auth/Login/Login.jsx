@@ -23,9 +23,7 @@ const EyeOff = (props) => (
 function Login({ setIsAuthenticated }) {
   const [empId, setEmpId] = useState('');
   const [password, setPassword] = useState('');
-
   const [showPassword, setShowPassword] = useState(false); // 👁️ default hidden (eye closed)
-
   const [loading, setLoading] = useState(false);
 
   // Inline validation errors
@@ -37,29 +35,6 @@ function Login({ setIsAuthenticated }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
-    // Clear previous errors
-    setEmpIdError('');
-    setPasswordError('');
-    setErrorMessage('');
-    
-    // Validate fields
-    let hasError = false;
-    
-    if (!empId.trim()) {
-      setEmpIdError('Please enter the employee id.');
-      hasError = true;
-    }
-    
-    if (!password.trim()) {
-      setPasswordError('Please enter the password.');
-      hasError = true;
-    }
-    
-    if (hasError) {
-      return;
-    }
-    
     setLoading(true);
     setAuthError('');
     setFieldErrors({ empId: '', password: '' });
@@ -95,7 +70,6 @@ function Login({ setIsAuthenticated }) {
 
         navigate('/dashboard');
       } else {
-
         // Generic auth error message (no backend phrasing like "Employee not found this id")
         setAuthError('Please enter the valid employee id or password.');
         // Clear fields on wrong creds
@@ -110,7 +84,6 @@ function Login({ setIsAuthenticated }) {
       setEmpId('');
       setPassword('');
       setShowPassword(false);
-
     } finally {
       setLoading(false);
     }
@@ -167,7 +140,6 @@ function Login({ setIsAuthenticated }) {
               <p id="empId-error" className="text-red-600 text-sm mt-1">
                 {fieldErrors.empId}
               </p>
-
             )}
           </div>
 
@@ -200,14 +172,14 @@ function Login({ setIsAuthenticated }) {
               <p id="password-error" className="text-red-600 text-sm mt-1">
                 {fieldErrors.password}
               </p>
-            )} 
+            )}
           </div>
 
           {/* Auth error (invalid creds) */}
           {authError && (
             <div className="rounded-md bg-red-50 border border-red-200 p-3">
               <p className="text-red-700 text-sm">{authError}</p>
-            </div> 
+            </div>
           )}
 
           {/* Submit */}
@@ -229,4 +201,4 @@ function Login({ setIsAuthenticated }) {
   );
 }
 
-export default Login; 
+export default Login;
