@@ -121,26 +121,30 @@ export default function CandidateShortlist() {
       });
 
       const data = await response.json();
+      console.log('API Response:', data); // Debug log
 
       if (data.success) {
         // Transform API data to match frontend format
-        const transformedCandidates = data.candidates.map(candidate => ({
+        const candidatesArray = data.candidates || [];
+        const transformedCandidates = candidatesArray.map(candidate => {
+          try {
+            return {
           id: candidate._id,
           name: candidate.candidateName,
           phone: candidate.phone,
           email: candidate.email,
-          profile: candidate.department === 'CMT' ? 'Operation' : candidate.department,
-          experience: `${candidate.experience} years`,
+          profile: candidate.profile || (candidate.department === 'CMT' ? 'Operation' : candidate.department),
+          experience: candidate.experience ? `${candidate.experience} years` : '0 years',
           currentlyWorking: candidate.currentlyEmployed === 'Yes' ? 'yes' : 'no',
-          noticePeriod: candidate.noticePeriod,
-          currentSalary: candidate.currentSalary.toString(),
-          expectedSalary: candidate.expectedSalary.toString(),
+          noticePeriod: candidate.noticePeriod || '',
+          currentSalary: candidate.currentSalary ? candidate.currentSalary.toString() : '0',
+          expectedSalary: candidate.expectedSalary ? candidate.expectedSalary.toString() : '0',
           performanceBasedIncentive: candidate.performanceBasedIncentive === 'Yes' ? 'yes' : 'no',
-          communicationSkills: candidate.communicationSkills.toLowerCase(),
-          status: candidate.status.toLowerCase(),
+          communicationSkills: candidate.communicationSkills ? candidate.communicationSkills.toLowerCase() : 'beginner',
+          status: candidate.status ? candidate.status.toLowerCase() : 'pending',
           interviewDate: candidate.interviewDate ? new Date(candidate.interviewDate).toISOString().split('T')[0] : '',
           notes: candidate.interviewNotes,
-          createdAt: new Date(candidate.createdAt).toISOString().split('T')[0],
+          createdAt: candidate.createdAt ? new Date(candidate.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           // Video interview fields
           videoInterviewLink: candidate.videoInterviewLink,
           videoInterviewStatus: candidate.videoInterviewStatus || 'Pending',
@@ -161,10 +165,30 @@ export default function CandidateShortlist() {
           nightShiftsWilling: candidate.nightShiftsWillingness === 'Yes' ? 'yes' : 'no',
           officeLocationWilling: candidate.gurgaonOfficeWillingness === 'Yes' ? 'yes' : 'no',
           fullTimeCommitment: candidate.fullTimeCommitment === 'Yes' ? 'yes' : 'no',
-          resume: candidate.resume
-        }));
+          resume: candidate.resume,
+          // Additional fields from API
+          currentlyEmployed: candidate.currentlyEmployed,
+          coldCallsComfort: candidate.coldCallsComfort,
+          leadGenerationExperience: candidate.leadGenerationExperience,
+          leadGenerationMethod: candidate.leadGenerationMethod,
+          targetDrivenEnvironment: candidate.targetDrivenEnvironment,
+          officeFieldSales: candidate.officeFieldSales,
+          salesMotivation: candidate.salesMotivation,
+          multitaskingComfort: candidate.multitaskingComfort,
+          clientVendorCommunication: candidate.clientVendorCommunication,
+          operationalMetricsExperience: candidate.operationalMetricsExperience,
+          nightShiftsWillingness: candidate.nightShiftsWillingness,
+          gurgaonOfficeWillingness: candidate.gurgaonOfficeWillingness,
+          fullTimeCommitment: candidate.fullTimeCommitment
+            };
+          } catch (error) {
+            console.error('Error transforming candidate:', candidate, error);
+            return null;
+          }
+        }).filter(candidate => candidate !== null);
         
         setCandidates(transformedCandidates);
+        console.log('Transformed candidates:', transformedCandidates);
         
         // Set statistics from API response
         if (data.statistics) {
@@ -178,8 +202,10 @@ export default function CandidateShortlist() {
           });
         }
         
+        console.log(`Loaded ${transformedCandidates.length} candidates successfully!`);
         // alertify.success(`Loaded ${transformedCandidates.length} candidates successfully!`);
       } else {
+        console.error('API Error:', data);
         alertify.error(data.message || 'Failed to fetch candidates');
       }
     } catch (error) {
@@ -241,13 +267,21 @@ export default function CandidateShortlist() {
       try {
         setLoading(true);
 
+        // Validate required fields
+        if (!formData.profile || formData.profile.trim() === '') {
+          alertify.error('Please enter a profile');
+          setLoading(false);
+          return;
+        }
+
         // Create JSON payload for API
         const payload = {
           candidateName: formData.name,
+          profile: formData.profile,
           department: formData.profile === 'Operation' ? 'CMT' : formData.profile,
           experience: parseInt(formData.experience),
           currentSalary: parseInt(formData.currentSalary) || 0,
-          expectedSalary: parseInt(formData.expectedSalary),
+          expectedSalary: parseInt(formData.expectedSalary) || 0,
           performanceBasedIncentive: formData.performanceBasedIncentive === 'yes' ? 'Yes' : 'No',
           currentlyEmployed: formData.currentlyWorking === 'yes' ? 'Yes' : 'No',
           noticePeriod: formData.noticePeriod || '',
@@ -291,6 +325,8 @@ export default function CandidateShortlist() {
           return;
         }
 
+        console.log('Sending payload:', payload); // Debug log
+
         // Make API call
         const response = await fetch(`${API_BASE_URL}/api/v1/candidate/create-simple`, {
           method: 'POST',
@@ -311,18 +347,18 @@ export default function CandidateShortlist() {
             ...data.candidate,
             id: data.candidate._id,
             name: data.candidate.candidateName,
-            profile: data.candidate.department,
+            profile: data.candidate.profile || data.candidate.department,
             phone: data.candidate.phone,
             email: data.candidate.email,
-            experience: data.candidate.experience.toString(),
-            currentSalary: data.candidate.currentSalary.toString(),
-            expectedSalary: data.candidate.expectedSalary.toString(),
-            status: data.candidate.status,
-            videoInterviewLink: data.candidate.videoInterviewLink,
-            videoInterviewStatus: data.candidate.videoInterviewStatus,
-            videoInterviewUrl: data.candidate.videoInterviewUrl,
-            videoInterviewExpiry: data.candidate.videoInterviewExpiry,
-            createdAt: new Date(data.candidate.createdAt).toISOString().split('T')[0]
+            experience: data.candidate.experience ? data.candidate.experience.toString() : '0',
+            currentSalary: data.candidate.currentSalary ? data.candidate.currentSalary.toString() : '0',
+            expectedSalary: data.candidate.expectedSalary ? data.candidate.expectedSalary.toString() : '0',
+            status: data.candidate.status || 'pending',
+            videoInterviewLink: data.candidate.videoInterviewLink || '',
+            videoInterviewStatus: data.candidate.videoInterviewStatus || 'Pending',
+            videoInterviewUrl: data.candidate.videoInterviewUrl || '',
+            videoInterviewExpiry: data.candidate.videoInterviewExpiry || '',
+            createdAt: data.candidate.createdAt ? new Date(data.candidate.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
           };
 
           // Refresh the candidates list from API
@@ -649,7 +685,6 @@ export default function CandidateShortlist() {
                 <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Name</th>
                 <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Profile</th>
                 <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Experience</th>
-                <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Expected Salary</th>
                 <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                 <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Video Interview</th>
                 <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
@@ -658,7 +693,7 @@ export default function CandidateShortlist() {
             <tbody>
               {apiLoading ? (
                 <tr>
-                  <td colSpan="7" className="py-12">
+                  <td colSpan="6" className="py-12">
                     <div className="flex justify-center items-center">
                       <div className="text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
@@ -682,9 +717,6 @@ export default function CandidateShortlist() {
                   </td>
                   <td className="py-3 px-4">
                     <span className="font-medium text-gray-700">{candidate.experience}</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="font-medium text-gray-700">₹{candidate.expectedSalary}</span>
                   </td>
                   <td className="py-3 px-4">
                     <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(candidate.status)}`}>
@@ -830,17 +862,15 @@ export default function CandidateShortlist() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mt-4">
-                  <select
+                  <input
+                    type="text"
                     name="profile"
                     value={formData.profile}
                     onChange={handleInputChange}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select Profile *</option>
-                    <option value="Sales">Sales</option>
-                    <option value="Operation">Operation</option>
-                  </select>
+                    placeholder="Select Profile *"
+                  />
                   <input
                     type="text"
                     name="experience"
@@ -904,7 +934,7 @@ export default function CandidateShortlist() {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="Current Salary"
                   />
-                  <input
+                  {/* <input
                     type="number"
                     name="expectedSalary"
                     value={formData.expectedSalary}
@@ -912,88 +942,18 @@ export default function CandidateShortlist() {
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="Expected Salary *"
-                  />
+                  /> */}
                 </div>
 
-                {/* Performance Based Incentive */}
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Are you comfortable with working on a performance-based incentive structure?
-                  </label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="performanceBasedIncentive"
-                        value="yes"
-                        checked={formData.performanceBasedIncentive === 'yes'}
-                        onChange={handleInputChange}
-                        className="mr-2"
-                      />
-                      Yes
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="performanceBasedIncentive"
-                        value="no"
-                        checked={formData.performanceBasedIncentive === 'no'}
-                        onChange={handleInputChange}
-                        className="mr-2"
-                      />
-                      No
-                    </label>
-                  </div>
-                </div>
-
-                {/* Communication Skills */}
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Communication Skills</label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center">
-                                             <input
-                         type="radio"
-                         name="communicationSkills"
-                         value="Beginner"
-                         checked={formData.communicationSkills === 'Beginner'}
-                         onChange={handleInputChange}
-                         className="mr-2"
-                       />
-                       Beginner
-                    </label>
-                    <label className="flex items-center">
-                                             <input
-                         type="radio"
-                         name="communicationSkills"
-                         value="Intermediate"
-                         checked={formData.communicationSkills === 'Intermediate'}
-                         onChange={handleInputChange}
-                         className="mr-2"
-                       />
-                       Intermediate
-                    </label>
-                    <label className="flex items-center">
-                                             <input
-                         type="radio"
-                         name="communicationSkills"
-                         value="Expert"
-                         checked={formData.communicationSkills === 'Expert'}
-                         onChange={handleInputChange}
-                         className="mr-2"
-                       />
-                       Expert
-                    </label>
-                  </div>
-                </div>
               </div>
 
               {/* Skills & Work Style - Conditional based on Profile */}
-              {formData.profile === 'Sales' && (
+              {/* {formData.profile === 'Sales' && (
                 <div className="bg-orange-50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold text-orange-800 mb-4">Skills & Work Style - Sales</h3>
 
                   {/* Cold Calls */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       1. Are you comfortable making cold calls and handling client rejections?
                     </label>
@@ -1021,10 +981,10 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Lead Generation */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       2. Do you have experience in lead generation or client acquisition?
                     </label>
@@ -1062,10 +1022,10 @@ export default function CandidateShortlist() {
                         placeholder="Please specify your lead generation method"
                       />
                     )}
-                  </div>
+                  </div> */}
 
                   {/* Target Driven Environment */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       3. Are you willing to work in a target-driven environment?
                     </label>
@@ -1093,10 +1053,10 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Field Sales */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       4. Are you comfortable with both in-office and field sales activities (if required)?
                     </label>
@@ -1124,10 +1084,10 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Sales Motivation */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       5. What motivates you more in sales?
                     </label>
@@ -1166,16 +1126,16 @@ export default function CandidateShortlist() {
                         Building client relationships
                       </label>
                     </div>
-                  </div>
-                </div>
-              )}
+                  </div> */}
+                {/* </div>
+              )} */}
 
-              {formData.profile === 'Operation' && (
+              {/* {formData.profile === 'Operation' && (
                 <div className="bg-indigo-50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold text-indigo-800 mb-4">Skills & Work Style - Operation</h3>
 
                   {/* Multiple Tasks */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       1. Are you comfortable handling multiple tasks simultaneously under tight deadlines?
                     </label>
@@ -1203,10 +1163,10 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Client/Vendor Communication */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       2. Have you worked in a role that required direct communication with clients or vendors?
                     </label>
@@ -1234,10 +1194,10 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Operational Metrics */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       3. Do you have experience in tracking and reporting key operational metrics?
                     </label>
@@ -1265,17 +1225,17 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
-                </div>
-              )}
+                  </div> */}
+                {/* </div>
+              )} */}
 
               {/* Work Flexibility & Commitment - Common for both */}
-              {(formData.profile === 'Sales' || formData.profile === 'Operation') && (
+              {/* {(formData.profile === 'Sales' || formData.profile === 'Operation') && (
                 <div className="bg-teal-50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold text-teal-800 mb-4">Work Flexibility & Commitment</h3>
 
                   {/* Night Shifts */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       1. Are you willing to work night shifts or extended hours if required?
                     </label>
@@ -1303,10 +1263,10 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Office Location */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       2. Are you willing to work from our office location [Gurgaon]?
                     </label>
@@ -1334,10 +1294,10 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Full Time Commitment */}
-                  <div className="mb-4">
+                  {/* <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       3. Can you commit to working full-time for at least 12 months?
                     </label>
@@ -1365,9 +1325,9 @@ export default function CandidateShortlist() {
                         No
                       </label>
                     </div>
-                  </div>
-                </div>
-              )}
+                  </div> */}
+                {/* </div>
+              )} */}
 
               
 
@@ -1433,8 +1393,8 @@ export default function CandidateShortlist() {
                     <p className="text-gray-800 font-medium">{candidateDetails.candidateName}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-600">Department</label>
-                    <p className="text-gray-800 font-medium">{candidateDetails.department === 'CMT' ? 'Operation' : candidateDetails.department}</p>
+                    <label className="block text-sm font-medium text-gray-600">Profile</label>
+                    <p className="text-gray-800 font-medium">{candidateDetails.profile || (candidateDetails.department === 'CMT' ? 'Operation' : candidateDetails.department)}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600">Phone</label>
@@ -1458,6 +1418,14 @@ export default function CandidateShortlist() {
                       <p className="text-gray-800 font-medium">{candidateDetails.noticePeriod}</p>
                     </div>
                   )}
+                  {candidateDetails.interviewDate && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Interview Date</label>
+                      <p className="text-gray-800 font-medium">
+                        {new Date(candidateDetails.interviewDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1468,18 +1436,6 @@ export default function CandidateShortlist() {
                   <div>
                     <label className="block text-sm font-medium text-gray-600">Current Salary</label>
                     <p className="text-gray-800 font-medium">₹{candidateDetails.currentSalary}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Expected Salary</label>
-                    <p className="text-gray-800 font-medium">₹{candidateDetails.expectedSalary}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Performance Based Incentive</label>
-                    <p className="text-gray-800 font-medium">{candidateDetails.performanceBasedIncentive}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Communication Skills</label>
-                    <p className="text-gray-800 font-medium">{candidateDetails.communicationSkills}</p>
                   </div>
                 </div>
               </div>
@@ -1539,24 +1495,6 @@ export default function CandidateShortlist() {
                 </div>
               )}
 
-              {/* Work Flexibility */}
-              <div className="bg-teal-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-teal-800 mb-4">Work Flexibility & Commitment</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Night Shifts Willingness</label>
-                    <p className="text-gray-800 font-medium">{candidateDetails.nightShiftsWillingness}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Gurgaon Office Willingness</label>
-                    <p className="text-gray-800 font-medium">{candidateDetails.gurgaonOfficeWillingness}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Full Time Commitment</label>
-                    <p className="text-gray-800 font-medium">{candidateDetails.fullTimeCommitment}</p>
-                  </div>
-                </div>
-              </div>
 
               {/* Video Interview Information */}
               <div className="bg-purple-50 p-4 rounded-lg">
@@ -1873,8 +1811,8 @@ export default function CandidateShortlist() {
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-2">Interview Date (Optional)</label>
                       <input
-                        type="datetime-local"
-                        value={candidateDetails.interviewDate ? new Date(candidateDetails.interviewDate).toISOString().slice(0, 16) : ''}
+                        type="date"
+                        value={candidateDetails.interviewDate ? new Date(candidateDetails.interviewDate).toISOString().split('T')[0] : ''}
                         onChange={(e) => {
                           setCandidateDetails(prev => ({
                             ...prev,
