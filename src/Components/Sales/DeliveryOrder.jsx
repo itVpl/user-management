@@ -156,6 +156,9 @@ export default function DeliveryOrder() {
   const [customerNameInput, setCustomerNameInput] = useState('');
   const [dispatchers, setDispatchers] = useState([]);
   const [loadingDispatchers, setLoadingDispatchers] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [orderToDelete, setOrderToDelete] = useState(null);
   const logoSrc = Logo;
   // top-level states ke saath
   const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
@@ -174,8 +177,7 @@ export default function DeliveryOrder() {
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
 
-      const list = (res.data?.data || [])
-        .filter(x => (x.userType === 'shipper') && (x.status === 'approved'));
+      const list = (res.data?.data || []).filter(x => (x.userType === 'shipper') && (x.status === 'approved'));
 
       // Sort by company name (safe)
       list.sort((a, b) => (a.compName || '').localeCompare(b.compName || ''));
@@ -1357,6 +1359,71 @@ export default function DeliveryOrder() {
   };
 
 
+
+  // Handle delete order (mark as inactive)
+  const handleDeleteOrder = async (e) => {
+    e.preventDefault();
+    try {
+      if (!orderToDelete || !deleteReason.trim()) {
+        alertify.error('Please provide a reason for deletion');
+        return;
+      }
+
+      setSubmitting(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const orderId = orderToDelete.originalId || orderToDelete._id || orderToDelete.id.replace('DO-', '');
+
+      // API call to mark order as inactive
+      const response = await axios.patch(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}/simple-status`, {
+        doStatus: "Inactive",
+        statusReason: deleteReason.trim()
+      }, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success('Delivery order marked as inactive successfully!');
+        
+        // Close modal and reset
+        setShowDeleteModal(false);
+        setDeleteReason('');
+        setOrderToDelete(null);
+        
+        // Refresh the page to show updated data
+        window.location.reload();
+      } else {
+        alertify.error('Failed to delete delivery order');
+      }
+    } catch (error) {
+      console.error('Error deleting delivery order:', error);
+      if (error.response?.data?.message) {
+        alertify.error(`Delete failed: ${error.response.data.message}`);
+      } else if (error.response) {
+        alertify.error(`Delete failed: ${error.response.status} - ${error.response.statusText}`);
+      } else {
+        alertify.error('Failed to delete delivery order. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Open delete modal
+  const openDeleteModal = (order) => {
+    setOrderToDelete(order);
+    setDeleteReason('');
+    setShowDeleteModal(true);
+  };
+
+  // Close delete modal
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteReason('');
+    setOrderToDelete(null);
+  };
 
   // Handle update order 
 
@@ -2600,6 +2667,12 @@ export default function DeliveryOrder() {
                           className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                         >
                           Duplicate
+                        </button>
+                        <button
+                          onClick={() => openDeleteModal(order)}
+                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          Delete
                         </button>
 
                       </div>
@@ -4393,6 +4466,105 @@ export default function DeliveryOrder() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Order Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 rounded-t-2xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Delete Delivery Order</h2>
+                    <p className="text-red-100">Confirm deletion</p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeDeleteModal}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="mb-6">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                    <span className="text-red-700 font-medium">Warning</span>
+                  </div>
+                  <p className="text-red-600 text-sm mt-2">
+                    You are about to delete the delivery order <strong>{orderToDelete?.id}</strong> 
+                    {orderToDelete?.customers?.[0]?.loadNo && (
+                      <> with Load Number <strong>{orderToDelete.customers[0].loadNo}</strong></>
+                    )}. 
+                    This action will mark the order as inactive.
+                  </p>
+                </div>
+
+                <div className="mb-4">
+                  <label htmlFor="delete-reason" className="block text-sm font-medium text-gray-700 mb-2">
+                    Reason for deletion <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    id="delete-reason"
+                    value={deleteReason}
+                    onChange={(e) => setDeleteReason(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                    placeholder="Please provide a reason for deleting this delivery order..."
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  disabled={submitting}
+                  className={`px-6 py-2 border border-gray-300 rounded-lg transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed text-gray-400'
+                    : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteOrder}
+                  disabled={submitting || !deleteReason.trim()}
+                  className={`px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold transition-colors ${submitting || !deleteReason.trim()
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-red-600 hover:to-red-700'
+                    }`}
+                >
+                  {submitting ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Deleting...
+                    </div>
+                  ) : (
+                    'Delete Order'
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -9,9 +9,10 @@ import { RedTruck, Checkcircle, locationMarker, ArrowDown, ArrowUp } from "../..
 const createCustomTruckIcon = () => {
   return new L.Icon({
     iconUrl: '/src/assets/Icons super admin/map-truckImage.png',
-    iconSize: [70, 40],
-    iconAnchor: [35, 20],
+    iconSize: [50, 30],
+    iconAnchor: [25, 15],
     popupAnchor: [0, -20],
+    className: 'truck-marker-icon'
   });
 };
 
@@ -37,10 +38,38 @@ export default function ConsignmentTracker() {
   const [trackingData, setTrackingData] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [currentLocationRoute, setCurrentLocationRoute] = useState([]);
+  const [showTruckPopup, setShowTruckPopup] = useState(false);
+  const [truckPopupData, setTruckPopupData] = useState(null);
+  const [truckPopupPosition, setTruckPopupPosition] = useState({ x: 0, y: 0 });
 
   const toggleExpand = (item) => {
     setExpandedId((prev) => (prev === item.id ? null : item.id));
     setSelectedShipment(item);
+  };
+
+  const handleTruckClick = (e) => {
+    if (trackingData) {
+      const truckData = {
+        driverName: trackingData.driverName || "Sam",
+        vehicleNumber: trackingData.vehicleNumber || "WH06AL7844",
+        batteryHealth: trackingData.locationData?.deviceInfo?.batteryLevel || 80,
+        speed: Math.round((trackingData.locationData?.speed || 0) * 3.6), // Convert m/s to km/h
+        address: trackingData.locationData?.address || "Location not available",
+        currentLocation: trackingData.currentLocation
+      };
+      setTruckPopupData(truckData);
+      
+      // Calculate popup position relative to the map container
+      const mapContainer = document.querySelector('.leaflet-container');
+      if (mapContainer) {
+        const rect = mapContainer.getBoundingClientRect();
+        const x = e.containerPoint.x + rect.left;
+        const y = e.containerPoint.y + rect.top - 190; // Position at the top of the icon
+        setTruckPopupPosition({ x, y });
+      }
+      
+      setShowTruckPopup(true);
+    }
   };
 
   // Function to fetch route from OSRM
@@ -244,6 +273,16 @@ export default function ConsignmentTracker() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative">
+      {/* Custom CSS for truck icon visibility */}
+      <style jsx>{`
+        .truck-marker-icon {
+          background-color: transparent !important;
+          border: none !important;
+        }
+        .leaflet-marker-icon.truck-marker-icon {
+          background-color: transparent !important;
+        }
+      `}</style>
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-indigo-600/20 rounded-full blur-3xl animate-pulse"></div>
@@ -494,6 +533,9 @@ export default function ConsignmentTracker() {
              <Marker 
                position={[trackingData.currentLocation.lat, trackingData.currentLocation.lon]} 
                icon={createCustomTruckIcon()}
+               eventHandlers={{
+                 click: handleTruckClick
+               }}
              />
            )}
           
@@ -530,6 +572,63 @@ export default function ConsignmentTracker() {
           )}
         </MapContainer>
       </div>
+
+      {/* Truck Popup - Map Positioned */}
+      {showTruckPopup && truckPopupData && (
+        <div 
+          className="fixed z-50 pointer-events-none"
+          style={{
+            left: `${truckPopupPosition.x}px`,
+            top: `${truckPopupPosition.y}px`,
+            transform: 'translateX(-50%)'
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[240px] pointer-events-auto">
+            {/* Close Button */}
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={() => setShowTruckPopup(false)}
+                className="w-5 h-5 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors duration-200"
+              >
+                <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Driver Name */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-600">Driver: <span className="font-semibold text-gray-800">{truckPopupData.driverName}</span></p>
+            </div>
+
+            {/* Vehicle Number */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-600">Vehicle: <span className="font-semibold text-gray-800">{truckPopupData.vehicleNumber}</span></p>
+            </div>
+
+            {/* Address */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-600">Location: <span className="font-semibold text-gray-800">{truckPopupData.address}</span></p>
+            </div>
+
+            {/* Battery Health */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-600">Battery: <span className="font-semibold text-gray-800">{truckPopupData.batteryHealth}%</span></p>
+            </div>
+
+            {/* Speed */}
+            <div className="mb-1">
+              <p className="text-xs text-gray-600">Speed: <span className="font-semibold text-gray-800">{truckPopupData.speed} km/h</span></p>
+            </div>
+          </div>
+          
+          {/* Pointer Triangle */}
+          <div 
+            className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-3 border-r-3 border-t-3 border-transparent border-t-white"
+            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}
+          ></div>
+        </div>
+      )}
     </div>
   );
 }
