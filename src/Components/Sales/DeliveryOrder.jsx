@@ -2701,12 +2701,26 @@ export default function DeliveryOrder() {
                         >
                           Duplicate
                         </button>
-                        <button
-                          onClick={() => openDeleteModal(order)}
-                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
-                        >
-                          Delete
-                        </button>
+                        {/* Only show Delete button for specific employee IDs */}
+                        {(() => {
+                          const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+                          if (!userStr) return null;
+                          const user = JSON.parse(userStr);
+                          const currentEmpId = user.empId;
+                          
+                          // Only show delete button for empId "1234" and "VPL006"
+                          if (currentEmpId === "1234" || currentEmpId === "VPL006") {
+                            return (
+                              <button
+                                onClick={() => openDeleteModal(order)}
+                                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                Delete
+                              </button>
+                            );
+                          }
+                          return null;
+                        })()}
 
                       </div>
                     </td>
