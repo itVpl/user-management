@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search,Plus } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Plus } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -19,128 +19,273 @@ export default function Loads() {
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   // ✅ NEW STATES
-const [showLoadCreationModal, setShowLoadCreationModal] = useState(false);
-const [loadType, setLoadType] = useState("OTR");
-const [shippers, setShippers] = useState([]);
-const [loadForm, setLoadForm] = useState({
-  shipperId: "", // Dynamic if needed
-  fromCity: "",
-  fromState: "",
-  toCity: "",
-  toState: "",
-  weight: "",
-  commodity: "",
-  vehicleType: "",
-  pickupDate: "",
-  deliveryDate: "",
-  returnDate: "",
-  drayageLocation: "",
-  rate: "",
-  // rateType: "Flat Rate",
-  bidDeadline: "",
-  containerNo: "",
-  poNumber: "",
-  bolNumber: ""
-});
+  const [showLoadCreationModal, setShowLoadCreationModal] = useState(false);
+  const [loadType, setLoadType] = useState("OTR");
+  const [shippers, setShippers] = useState([]);
+  // === Validation helpers & state (ADD) ===
+  const ALNUM = /^[A-Za-z0-9]+$/;
+  const MONEY2 = /^(?:\d+)(?:\.\d{1,2})?$/; // up to 2 decimals, no negatives
 
-// ✅ HANDLE CHANGE
-const handleChange = (e) => {
-  const { name, value } = e.target;
-  setLoadForm((prev) => ({ ...prev, [name]: value }));
-};
-
-// ✅ HANDLE SUBMIT
-const handleLoadSubmit = async (e) => {
-  e.preventDefault();
-
-  const token = sessionStorage.getItem("token");
-  if (!token) {
-    alertify.error("You're not logged in.");
-    return;
-  }
-
-  const payload = {
-    ...loadForm,
-    weight: parseInt(loadForm.weight, 10),
-    rate: parseInt(loadForm.rate, 10),
-    rateType: "Flat Rate",
-    loadType,
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const addDays = (dateStr, n) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
   };
 
-  // ✅ Client-side validation for required fields
-  const requiredFields = [
-    "shipperId", "fromCity", "fromState", "toCity", "toState",
-    "weight", "commodity", "vehicleType", "pickupDate",
-    "deliveryDate", "bidDeadline", "rate", "rateType", "loadType"
+  const [creatingLoad, setCreatingLoad] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
+
+  const fieldRefs = React.useRef({});
+  const scrollToField = (name) => {
+    const el = fieldRefs.current[name];
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try { el.focus({ preventScroll: true }); } catch { }
+    el.classList.add('ring-2', 'ring-red-300');
+    setTimeout(() => el.classList.remove('ring-2', 'ring-red-300'), 900);
+  };
+
+  // format to keep only digits and a single dot, and max 2 decimals 
+  const sanitizeMoney2 = (v) => {
+    if (!v) return '';
+    v = v.replace(/[^\d.]/g, '');          // remove non-digit/non-dot
+    const parts = v.split('.');
+    if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join(''); // keep only first dot
+    const [intP = '', decP = ''] = v.split('.');
+    const intClean = intP.replace(/^0+(?=\d)/, '') || (intP ? '0' : ''); // keep 0 if only decimals
+    const decClean = decP.slice(0, 2);
+    return decP !== '' && v.includes('.') ? `${intClean || '0'}.${decClean}` : intClean;
+  };
+
+  // Make full date field clickable
+  const openDatePicker = (refName) => {
+    const el = fieldRefs.current[refName];
+    if (el && typeof el.showPicker === 'function') {
+      el.showPicker();
+    } else if (el) {
+      el.focus();
+      el.click();
+    }
+  };
+
+  // ✅ Load form state
+  const [loadForm, setLoadForm] = useState({
+    shipperId: "",
+    fromCity: "",
+    fromState: "",
+    toCity: "",
+    toState: "",
+    vehicleType: "",
+    commodity: "",
+    weight: "",
+    rate: "",
+    rateType: "Flat Rate",   // now editable
+    pickupDate: "",
+    deliveryDate: "",
+    bidDeadline: "",
+    // DRAYAGE extras:
+    returnDate: "",
+    returnLocation: "",      // renamed from drayageLocation (UI); will map to payload.drayageLocation
+  });
+
+  // ✅ Handle Change with sanitization
+  const handleChange = (e) => {
+    const { name } = e.target;
+    let { value } = e.target;
+
+    // Numeric fields with up to 2 decimals (no negatives)
+    if (name === 'weight' || name === 'rate') {
+      value = sanitizeMoney2(value);
+    }
+
+    // Alphanumeric only for these
+    if (['containerNo', 'poNumber', 'bolNumber'].includes(name)) {
+      value = value.replace(/[^A-Za-z0-9]/g, '');
+    }
+
+    // Simple trim for strings
+    if (['fromCity', 'fromState', 'toCity', 'toState', 'vehicleType', 'commodity', 'rateType', 'returnLocation'].includes(name)) {
+      value = value.replace(/\s{2,}/g, ' ');
+    }
+
+    setLoadForm((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) setFormErrors((p) => { const n = { ...p }; delete n[name]; return n; });
+  };
+
+  // ✅ Per-field validators with EXACT messages
+  const validators = {
+    shipperId: (v) => v ? '' : 'Please select the shipper',
+    fromCity: (v) => v ? '' : 'Please enter  the From City name.',
+    fromState: (v) => v ? '' : 'Please enter  the From State name.',
+    toCity: (v) => v ? '' : 'Please enter  the To City name.',
+    toState: (v) => v ? '' : 'Please enter  the To State name.',
+    vehicleType: (v) => v ? '' : 'Please enter the Vehicle Type.',
+    commodity: (v) => v ? '' : 'Please enter the Commodity.',
+    weight: (v) => {
+      if (!v) return 'Please enter the weight.';    // (As given in your sheet)
+      if (!MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
+      return '';
+    },
+    rate: (v) => {
+      if (!v) return 'Please enter the Expected Price';
+      if (!MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
+      return '';
+    },
+    rateType: (v) => v ? '' : '', // they only said "unable to enter"; not mandating text. Keep permissive.
+    pickupDate: (v) => v ? '' : 'Please select the Pickup Date .',
+    deliveryDate: (v, all) => {
+      if (!v) return 'Please select the Delivery Date .';
+      // must be > pickupDate and >= today
+      const today = todayStr();
+      const mustMin = addDays(all.pickupDate || today, all.pickupDate ? 1 : 0); // strictly > pickup if provided
+      if (all.pickupDate && v <= all.pickupDate) return 'Drop date should be greater than Pickup Date.';
+      if (v < today) return 'The calendar shows only present and future dates only.';
+      if (mustMin && v < mustMin) return 'Drop date should be greater than Pickup Date.';
+      return '';
+    },
+    bidDeadline: (v) => v ? '' : 'Please select the Bid Deadline .',
+    containerNo: (v) => (v && !ALNUM.test(v)) ? 'It should accept only alpha numeric.' : '',
+    poNumber: (v) => (v && !ALNUM.test(v)) ? 'It should accept only alpha numeric.' : '',
+    bolNumber: (v) => (v && !ALNUM.test(v)) ? 'It should accept only alpha numeric.' : '',
+    // DRAYAGE-only mandatory
+    returnDate: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please select the Return Date.') : ''),
+    returnLocation: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please enter the Return Location.') : ''),
+  };
+
+  // field order for scroll-to-first-invalid
+  const fieldOrder = [
+    'shipperId', 'fromCity', 'fromState', 'toCity', 'toState', 'vehicleType',
+    'commodity', 'weight', 'rate', 'rateType', 'pickupDate', 'deliveryDate', 'bidDeadline',
+    'containerNo', 'poNumber', 'bolNumber', 'returnDate', 'returnLocation'
   ];
 
-  for (const field of requiredFields) {
-    if (!payload[field]) {
-      alertify.error(`Please fill in required field: ${field}`);
-      return;
-    }
-  }
+  // ✅ Validate all
+  const validateAll = () => {
+    const errs = {};
+    fieldOrder.forEach((name) => {
+      const v = loadForm[name] ?? '';
+      const m = validators[name] ? validators[name](v, loadForm) : '';
+      if (m) errs[name] = m;
+    });
+    setFormErrors(errs);
+    if (Object.keys(errs).length) scrollToField(Object.keys(errs)[0]);
+    return Object.keys(errs).length === 0;
+  };
 
-  console.log("🚀 Submitting Payload:", payload);
+  // ✅ Submit
+  const handleLoadSubmit = async (e) => {
+    e.preventDefault();
+    if (creatingLoad) return;
 
-  try {
-    const res = await axios.post(
-      `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`,
-      payload,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    // Client validation
+    if (!validateAll()) return;
 
-    if (res.data.success) {
-      alertify.success("✅ Load created successfully!");
-      setShowLoadCreationModal(false);
-      fetchLoads();
-    } else {
-      alertify.error(res.data.message || "❌ Load creation failed.");
-    }
-  } catch (err) {
-    console.error("❌ Error creating load:", err);
-    if (err.response) {
-      console.error("Server responded with:", err.response.status, err.response.data);
-      alertify.error(err.response.data.message || "❌ Backend validation failed.");
-    } else if (err.request) {
-      console.error("No response received:", err.request);
-      alertify.error("❌ No response from server.");
-    } else {
-      console.error("Request setup error:", err.message);
-      alertify.error("❌ Error setting up request.");
-    }
-  }
-};
+    // Guard against negative / malformed numbers (extra safety)
+    const weightOk = MONEY2.test(loadForm.weight || '');
+    const rateOk = MONEY2.test(loadForm.rate || '');
+    if (!weightOk || !rateOk) return; // messages already set above
 
-useEffect(() => {
-  const fetchShippers = async () => {
     const token = sessionStorage.getItem("token");
     if (!token) {
-      console.error("No token found");
+      alertify.error("You're not logged in.");
       return;
     }
 
-    try {
-      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      console.log("Shippers:", res.data);
+    const payload = {
+      loadType,
+      shipperId: loadForm.shipperId,
+      fromCity: loadForm.fromCity.trim(),
+      fromState: loadForm.fromState.trim(),
+      toCity: loadForm.toCity.trim(),
+      toState: loadForm.toState.trim(),
+      vehicleType: loadForm.vehicleType.trim(),
+      commodity: loadForm.commodity.trim(),
+      weight: parseFloat(loadForm.weight),
+      rate: parseFloat(loadForm.rate),
+      rateType: loadForm.rateType.trim() || 'Flat Rate',
+      pickupDate: loadForm.pickupDate,
+      deliveryDate: loadForm.deliveryDate,
+      bidDeadline: loadForm.bidDeadline,
+      // map UI "Return Location" -> API "drayageLocation"
+      ...(loadType === 'DRAYAGE' ? {
+        returnDate: loadForm.returnDate,
+        drayageLocation: loadForm.returnLocation.trim(),
+      } : {}),
+    };
 
-      setShippers(res.data?.customers || []); // 👈 adjust based on actual key
+    try {
+      setCreatingLoad(true); // loader ON & prevent double submit (one OTR at a time)
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (res.data?.success) {
+        alertify.success("✅ Load created successfully!");
+        setShowLoadCreationModal(false);
+        // reset form
+        setLoadForm({
+          shipperId: "",
+          fromCity: "",
+          fromState: "",
+          toCity: "",
+          toState: "",
+          vehicleType: "",
+          commodity: "",
+          weight: "",
+          rate: "",
+          rateType: "Flat Rate",
+          pickupDate: "",
+          deliveryDate: "",
+          bidDeadline: "",
+          returnDate: "",
+          returnLocation: "",
+        });
+        setFormErrors({});
+        fetchLoads();
+      } else {
+        alertify.error(res.data?.message || "❌ Load creation failed.");
+      }
     } catch (err) {
-      console.error("❌ Error fetching shippers:", err.response?.data || err.message || err);
+      console.error("❌ Error creating load:", err?.response?.data || err.message);
+      alertify.error(err?.response?.data?.message || "❌ Backend validation failed.");
+    } finally {
+      setCreatingLoad(false);
     }
   };
 
-  fetchShippers();
-}, []);
+  useEffect(() => {
+    const fetchShippers = async () => {
+      const token = sessionStorage.getItem("token");
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+
+      try {
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        console.log("Shippers:", res.data);
+
+        setShippers(res.data?.customers || []); // 👈 adjust based on actual key
+      } catch (err) {
+        console.error("❌ Error fetching shippers:", err.response?.data || err.message || err);
+      }
+    };
+
+    fetchShippers();
+  }, []);
 
 
 
@@ -167,7 +312,7 @@ useEffect(() => {
     try {
       setLoading(true);
       console.log('Fetching loads from:', `${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`);
-      
+
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
         timeout: 10000, // 10 second timeout
         headers: {
@@ -175,21 +320,21 @@ useEffect(() => {
         },
         withCredentials: true // Add this for authentication
       });
-      
+
       console.log('API Response:', response);
-      
+
       if (response.data && response.data.success && response.data.loads && Array.isArray(response.data.loads) && response.data.loads.length > 0) {
         // Transform API data to match our component structure
         const transformedLoads = response.data.loads.map((load, index) => {
           try {
             console.log(`Processing load ${index}:`, load);
-            
+
             // Check if load has required properties
             if (!load || !load._id) {
               console.warn(`Load ${index} is missing required properties:`, load);
               return {
-                id: `LD-ERROR-${index}`, 
-                loadNum: 'Invalid Data', 
+                id: `LD-ERROR-${index}`,
+                loadNum: 'Invalid Data',
                 shipmentNumber: 'N/A',
                 origin: 'N/A',
                 destination: 'N/A',
@@ -269,28 +414,28 @@ useEffect(() => {
             }
 
             const transformedLoad = {
-              id: `LD-${load._id?.slice(-6) || '000000'}`, 
-              loadNum: load._id || 'N/A', 
+              id: `LD-${load._id?.slice(-6) || '000000'}`,
+              loadNum: load._id || 'N/A',
               shipmentNumber: load.shipmentNumber || 'N/A',
               origin: originText,
               destination: destinationText,
               rate: load.rate || 0,
               truckerName: truckerName,
               status: status,
-              createdAt: load.pickupDate ? new Date(load.pickupDate).toISOString().split('T')[0] : 
-                       load.createdAt ? new Date(load.createdAt).toISOString().split('T')[0] : 'N/A',
+              createdAt: load.pickupDate ? new Date(load.pickupDate).toISOString().split('T')[0] :
+                load.createdAt ? new Date(load.createdAt).toISOString().split('T')[0] : 'N/A',
               createdBy: `Shipper: ${load.shipper?.compName || 'N/A'}`,
               docUpload: 'sample-doc.jpg',
               remarks: load.commodity || load.notes || ''
             };
-            
+
             console.log(`Transformed load ${index}:`, transformedLoad);
             return transformedLoad;
           } catch (error) {
             console.error(`Error processing load ${index}:`, error, load);
             return {
-              id: `LD-ERROR-${index}`, 
-              loadNum: 'Error', 
+              id: `LD-ERROR-${index}`,
+              loadNum: 'Error',
               shipmentNumber: 'Error',
               origin: 'Error',
               destination: 'Error',
@@ -304,7 +449,7 @@ useEffect(() => {
             };
           }
         });
-        
+
         console.log('Transformed loads:', transformedLoads);
         setLoads(transformedLoads);
       } else {
@@ -316,7 +461,7 @@ useEffect(() => {
           loadsType: typeof response.data?.loads,
           dataKeys: response.data ? Object.keys(response.data) : []
         });
-        
+
         // If API returns empty data, show empty state
         if (response.data && response.data.success && (!response.data.loads || response.data.loads.length === 0)) {
           console.log('API returned empty loads array');
@@ -394,16 +539,16 @@ useEffect(() => {
               }
 
               return {
-                id: `LD-${load._id?.slice(-6) || '000000'}`, 
-                loadNum: load._id || 'N/A', 
+                id: `LD-${load._id?.slice(-6) || '000000'}`,
+                loadNum: load._id || 'N/A',
                 shipmentNumber: load.shipmentNumber || 'N/A',
                 origin: originText,
                 destination: destinationText,
                 rate: load.rate || 0,
                 truckerName: truckerName,
                 status: status,
-                createdAt: load.pickupDate ? new Date(load.pickupDate).toISOString().split('T')[0] : 
-                         load.createdAt ? new Date(load.createdAt).toISOString().split('T')[0] : 'N/A',
+                createdAt: load.pickupDate ? new Date(load.pickupDate).toISOString().split('T')[0] :
+                  load.createdAt ? new Date(load.createdAt).toISOString().split('T')[0] : 'N/A',
                 createdBy: `Shipper: ${load.shipper?.compName || 'N/A'}`,
                 docUpload: 'sample-doc.jpg',
                 remarks: load.commodity || load.notes || ''
@@ -411,8 +556,8 @@ useEffect(() => {
             } catch (error) {
               console.error(`Error processing alternative load ${index}:`, error);
               return {
-                id: `LD-ERROR-${index}`, 
-                loadNum: 'Error', 
+                id: `LD-ERROR-${index}`,
+                loadNum: 'Error',
                 shipmentNumber: 'Error',
                 origin: 'Error',
                 destination: 'Error',
@@ -438,7 +583,7 @@ useEffect(() => {
         data: error.response?.data,
         url: error.config?.url
       });
-      
+
       alertify.error(`Failed to load loads: ${error.response?.status || 'Network Error'}`);
       // Fallback to sample data if API fails
       const sampleLoads = [
@@ -472,7 +617,7 @@ useEffect(() => {
       const { id } = selectedLoad;
       // Simulate API call
       setTimeout(() => {
-        setLoads(loads.map(load => 
+        setLoads(loads.map(load =>
           load.id === id ? { ...load, status } : load
         ));
         setModalType(null);
@@ -540,7 +685,7 @@ useEffect(() => {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setSubmitting(true);
       // Prepare the data for API submission
@@ -581,7 +726,7 @@ useEffect(() => {
         };
 
         setLoads(prevLoads => [newLoad, ...prevLoads]);
-        
+
         // Close modal and reset form
         setShowAddLoadForm(false);
         setFormData({
@@ -741,18 +886,18 @@ useEffect(() => {
             />
           </div>
           {/* // ✅ BUTTON TO OPEN MODAL */}
-<button
-  onClick={() => {
-    setLoadType("OTR");
-    setShowLoadCreationModal(true);
-  }}
-  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
->
-  <PlusCircle className="w-4 h-4" />
-  Add Loads
-</button>
+          <button
+            onClick={() => {
+              setLoadType("OTR");
+              setShowLoadCreationModal(true);
+            }}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Add Loads
+          </button>
         </div>
-        
+
       </div>
 
       {viewDoc && selectedLoad ? (
@@ -808,12 +953,12 @@ useEffect(() => {
                 {(selectedLoad.status === 'available' || selectedLoad.status === 'posted' || selectedLoad.status === 'bidding') && <CheckCircle size={14} />}
                 {selectedLoad.status === 'assigned' && <Clock size={14} />}
                 {(selectedLoad.status === 'in-transit' || selectedLoad.status === 'in transit') && <Truck size={14} />}
-                {selectedLoad.status === 'completed' || selectedLoad.status === 'delivered' ? 'Completed' : 
-                 selectedLoad.status === 'in-transit' || selectedLoad.status === 'in transit' ? 'In Transit' :
-                 selectedLoad.status === 'assigned' ? 'Assigned' :
-                 selectedLoad.status === 'posted' ? 'Posted' :
-                 selectedLoad.status === 'bidding' ? 'Bidding' :
-                 selectedLoad.status || 'Available'}
+                {selectedLoad.status === 'completed' || selectedLoad.status === 'delivered' ? 'Completed' :
+                  selectedLoad.status === 'in-transit' || selectedLoad.status === 'in transit' ? 'In Transit' :
+                    selectedLoad.status === 'assigned' ? 'Assigned' :
+                      selectedLoad.status === 'posted' ? 'Posted' :
+                        selectedLoad.status === 'bidding' ? 'Bidding' :
+                          selectedLoad.status || 'Available'}
               </div>
             </div>
             <div className="flex flex-col items-center justify-center">
@@ -875,12 +1020,12 @@ useEffect(() => {
                         {(load.status === 'available' || load.status === 'posted' || load.status === 'bidding') && <CheckCircle size={12} />}
                         {load.status === 'assigned' && <Clock size={12} />}
                         {(load.status === 'in-transit' || load.status === 'in transit') && <Truck size={12} />}
-                        {load.status === 'completed' || load.status === 'delivered' ? 'Completed' : 
-                         load.status === 'in-transit' || load.status === 'in transit' ? 'In Transit' :
-                         load.status === 'assigned' ? 'Assigned' :
-                         load.status === 'posted' ? 'Posted' :
-                         load.status === 'bidding' ? 'Bidding' :
-                         load.status || 'Available'}
+                        {load.status === 'completed' || load.status === 'delivered' ? 'Completed' :
+                          load.status === 'in-transit' || load.status === 'in transit' ? 'In Transit' :
+                            load.status === 'assigned' ? 'Assigned' :
+                              load.status === 'posted' ? 'Posted' :
+                                load.status === 'bidding' ? 'Bidding' :
+                                  load.status || 'Available'}
                       </div>
                     </td>
                     <td className="py-2 px-3">
@@ -927,11 +1072,10 @@ useEffect(() => {
               <button
                 key={page}
                 onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${
-                  currentPage === page
+                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
                     ? 'bg-blue-500 text-white border-blue-500'
                     : 'border-gray-300 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 {page}
               </button>
@@ -1097,22 +1241,20 @@ useEffect(() => {
                   type="button"
                   onClick={handleCloseModal}
                   disabled={submitting}
-                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed text-gray-400' 
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
+                      ? 'opacity-50 cursor-not-allowed text-gray-400'
                       : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed' 
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
+                      ? 'opacity-50 cursor-not-allowed'
                       : 'hover:from-blue-600 hover:to-blue-700'
-                  }`}
+                    }`}
                 >
                   {submitting ? (
                     <div className="flex items-center gap-2">
@@ -1128,175 +1270,317 @@ useEffect(() => {
           </div>
         </div>
       )}
-       {/* ✅ MODAL UI */}
-{showLoadCreationModal && (
-  <div className="fixed inset-0 z-50 bg-black/40 flex justify-center items-center p-4">
-    <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-8 border border-blue-300">
+      {/* ✅ MODAL UI */}
+      {showLoadCreationModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-8 border border-blue-300">
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-blue-700">🚚 Create New Load</h2>
-        <div className="flex gap-2 bg-blue-100 p-1 rounded-full">
-          {["OTR", "DRAYAGE"].map((type) => (
-            <button
-              key={type}
-              onClick={() => setLoadType(type)}
-              className={`px-6 py-2 rounded-full font-medium transition-all ${
-                loadType === type
-                  ? "bg-blue-600 text-white"
-                  : "text-blue-700 hover:bg-blue-200"
-              }`}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Form */}
-      <form onSubmit={handleLoadSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* Shipper Dropdown */}
-        <div className="col-span-2">
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Select Shipper *</label>
-          <select
-    name="shipperId"
-    value={loadForm.shipperId}
-    onChange={handleChange}
-    required
-    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
-  >
-    <option value="">-- Select Shipper --</option>
-    {shippers.map((shipper) => (
-      <option key={shipper._id} value={shipper._id}>        
-  {shipper.compName} ({shipper.email})
-</option>
-
-    ))}
-  </select>
-        </div>
-
-        {/* FROM/TO LOCATION */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">From City *</label>
-          <input name="fromCity" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">From State *</label>
-          <input name="fromState" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">To City *</label>
-          <input name="toCity" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">To State *</label>
-          <input name="toState" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-
-        {/* VEHICLE & COMMODITY */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Type *</label>
-          <input name="vehicleType" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Commodity *</label>
-          <input name="commodity" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-
-        {/* WEIGHT & RATE */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg) *</label>
-          <input type="number" name="weight" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Expected Price *</label>
-          <input type="number" name="rate" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-
-        {/* CONTAINER / PO / BOL */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Container No</label>
-          <input name="containerNo" onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">PO Number</label>
-          <input name="poNumber" onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">BOL Number</label>
-          <input name="bolNumber" onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
-          <input value="Flat Rate" readOnly disabled
-            className="w-full px-4 py-2 bg-gray-100 text-gray-600 border rounded-md border-gray-300" />
-        </div>
-
-        {/* DATES */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date *</label>
-          <input type="date" name="pickupDate" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Date *</label>
-          <input type="date" name="deliveryDate" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Bid Deadline *</label>
-          <input type="date" name="bidDeadline" required onChange={handleChange}
-            className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-        </div>
-
-        {/* DRAYAGE EXTRA FIELDS */}
-        {loadType === "DRAYAGE" && (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
-              <input type="date" name="returnDate" onChange={handleChange}
-                className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
+            {/* Header */}
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-2xl font-bold text-blue-700">🚚 Create New Load</h2>
+              <div className="flex gap-2 bg-blue-100 p-1 rounded-full">
+                {["OTR", "DRAYAGE"].map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => { setLoadType(type); setFormErrors({}); }}
+                    className={`px-6 py-2 rounded-full font-medium transition-all ${loadType === type ? "bg-blue-600 text-white" : "text-blue-700 hover:bg-blue-200"
+                      }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Drayage Location</label>
-              <input name="drayageLocation" onChange={handleChange}
-                className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </>
-        )}
 
-        {/* ACTION BUTTONS */}
-        <div className="col-span-2 flex justify-end gap-4 pt-8">
-          <button
-            type="button"
-            onClick={() => setShowLoadCreationModal(false)}
-            className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow"
-          >
-            Submit
-          </button>
+            {/* Form */}
+            <form onSubmit={handleLoadSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Shipper */}
+              <div className="col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Select Shipper <span className="text-red-600">*</span></label>
+                <select
+                  ref={(el) => (fieldRefs.current['shipperId'] = el)}
+                  name="shipperId"
+                  value={loadForm.shipperId}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 ${formErrors.shipperId ? 'border-red-400' : 'border-gray-300'}`}
+                >
+                  <option value="">-- Select Shipper --</option>
+                  {shippers.map((shipper) => (
+                    <option key={shipper._id} value={shipper._id}>
+                      {shipper.compName} ({shipper.email})
+                    </option>
+                  ))}
+                </select>
+                {formErrors.shipperId && <p className="text-xs text-red-600 mt-1">{formErrors.shipperId}</p>}
+              </div>
+
+              {/* From/To */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">From City <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['fromCity'] = el)}
+                  name="fromCity"
+                  value={loadForm.fromCity}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.fromCity ? 'border-red-400' : 'border-gray-300'}`}
+                  placeholder="e.g., Dallas"
+                />
+                {formErrors.fromCity && <p className="text-xs text-red-600 mt-1">{formErrors.fromCity}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">From State <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['fromState'] = el)}
+                  name="fromState"
+                  value={loadForm.fromState}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.fromState ? 'border-red-400' : 'border-gray-300'}`}
+                  placeholder="e.g., TX"
+                />
+                {formErrors.fromState && <p className="text-xs text-red-600 mt-1">{formErrors.fromState}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">To City <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['toCity'] = el)}
+                  name="toCity"
+                  value={loadForm.toCity}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.toCity ? 'border-red-400' : 'border-gray-300'}`}
+                  placeholder="e.g., Phoenix"
+                />
+                {formErrors.toCity && <p className="text-xs text-red-600 mt-1">{formErrors.toCity}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">To State <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['toState'] = el)}
+                  name="toState"
+                  value={loadForm.toState}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.toState ? 'border-red-400' : 'border-gray-300'}`}
+                  placeholder="e.g., AZ"
+                />
+                {formErrors.toState && <p className="text-xs text-red-600 mt-1">{formErrors.toState}</p>}
+              </div>
+
+              {/* Vehicle / Commodity */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Type <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['vehicleType'] = el)}
+                  name="vehicleType"
+                  value={loadForm.vehicleType}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.vehicleType ? 'border-red-400' : 'border-gray-300'}`}
+                  placeholder="e.g., Flatbed"
+                />
+                {formErrors.vehicleType && <p className="text-xs text-red-600 mt-1">{formErrors.vehicleType}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Commodity <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['commodity'] = el)}
+                  name="commodity"
+                  value={loadForm.commodity}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.commodity ? 'border-red-400' : 'border-gray-300'}`}
+                  placeholder="e.g., Steel Coils"
+                />
+                {formErrors.commodity && <p className="text-xs text-red-600 mt-1">{formErrors.commodity}</p>}
+              </div>
+
+              {/* Weight / Expected Price */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg) <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['weight'] = el)}
+                  name="weight"
+                  inputMode="decimal"
+                  placeholder="e.g., 12000.50"
+                  value={loadForm.weight}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.weight ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {formErrors.weight && <p className="text-xs text-red-600 mt-1">{formErrors.weight}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Expected Price ($) <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['rate'] = el)}
+                  name="rate"
+                  inputMode="decimal"
+                  placeholder="e.g., 2500 or 2500.50"
+                  value={loadForm.rate}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.rate ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {formErrors.rate && <p className="text-xs text-red-600 mt-1">{formErrors.rate}</p>}
+              </div>
+
+              {/* Container/PO/BOL */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Container No</label>
+                <input
+                  ref={(el) => (fieldRefs.current['containerNo'] = el)}
+                  name="containerNo"
+                  value={loadForm.containerNo || ''}
+                  onChange={handleChange}
+                  placeholder="Alphanumeric only"
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.containerNo ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {formErrors.containerNo && <p className="text-xs text-red-600 mt-1">{formErrors.containerNo}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">PO Number</label>
+                <input
+                  ref={(el) => (fieldRefs.current['poNumber'] = el)}
+                  name="poNumber"
+                  value={loadForm.poNumber || ''}
+                  onChange={handleChange}
+                  placeholder="Alphanumeric only"
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.poNumber ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {formErrors.poNumber && <p className="text-xs text-red-600 mt-1">{formErrors.poNumber}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">BOL Number</label>
+                <input
+                  ref={(el) => (fieldRefs.current['bolNumber'] = el)}
+                  name="bolNumber"
+                  value={loadForm.bolNumber || ''}
+                  onChange={handleChange}
+                  placeholder="Alphanumeric only"
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.bolNumber ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {formErrors.bolNumber && <p className="text-xs text-red-600 mt-1">{formErrors.bolNumber}</p>}
+              </div>
+
+              {/* Rate Type (EDITABLE now) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
+                <input
+                  ref={(el) => (fieldRefs.current['rateType'] = el)}
+                  name="rateType"
+                  value={loadForm.rateType}
+                  onChange={handleChange}
+                  placeholder="e.g., Flat Rate / Per Mile"
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.rateType ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {formErrors.rateType && <p className="text-xs text-red-600 mt-1">{formErrors.rateType}</p>}
+              </div>
+
+              {/* Dates (full field clickable) */}
+              <div onClick={() => openDatePicker('pickupDate')}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['pickupDate'] = el)}
+                  type="date"
+                  name="pickupDate"
+                  value={loadForm.pickupDate}
+                  onChange={handleChange}
+                  min={todayStr()}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 cursor-pointer ${formErrors.pickupDate ? 'border-red-400' : 'border-gray-300'}`}
+                  onClick={(e) => e.target.showPicker?.()}
+                />
+                {formErrors.pickupDate && <p className="text-xs text-red-600 mt-1">{formErrors.pickupDate}</p>}
+              </div>
+
+              <div onClick={() => openDatePicker('deliveryDate')}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Date <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['deliveryDate'] = el)}
+                  type="date"
+                  name="deliveryDate"
+                  value={loadForm.deliveryDate}
+                  onChange={handleChange}
+                  min={loadForm.pickupDate ? addDays(loadForm.pickupDate, 1) : todayStr()}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 cursor-pointer ${formErrors.deliveryDate ? 'border-red-400' : 'border-gray-300'}`}
+                  onClick={(e) => e.target.showPicker?.()}
+                />
+                {formErrors.deliveryDate && <p className="text-xs text-red-600 mt-1">{formErrors.deliveryDate}</p>}
+              </div>
+
+              <div onClick={() => openDatePicker('bidDeadline')}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bid Deadline <span className="text-red-600">*</span></label>
+                <input
+                  ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
+                  type="date"
+                  name="bidDeadline"
+                  value={loadForm.bidDeadline}
+                  onChange={handleChange}
+                  min={todayStr()}
+                  className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 cursor-pointer ${formErrors.bidDeadline ? 'border-red-400' : 'border-gray-300'}`}
+                  onClick={(e) => e.target.showPicker?.()}
+                />
+                {formErrors.bidDeadline && <p className="text-xs text-red-600 mt-1">{formErrors.bidDeadline}</p>}
+              </div>
+
+              {/* DRAYAGE-specific */}
+              {loadType === "DRAYAGE" && (
+                <>
+                  <div onClick={() => openDatePicker('returnDate')}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Date <span className="text-red-600">*</span></label>
+                    <input
+                      ref={(el) => (fieldRefs.current['returnDate'] = el)}
+                      type="date"
+                      name="returnDate"
+                      value={loadForm.returnDate}
+                      onChange={handleChange}
+                      min={todayStr()}
+                      className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 cursor-pointer ${formErrors.returnDate ? 'border-red-400' : 'border-gray-300'}`}
+                      onClick={(e) => e.target.showPicker?.()}
+                    />
+                    {formErrors.returnDate && <p className="text-xs text-red-600 mt-1">{formErrors.returnDate}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Location <span className="text-red-600">*</span></label>
+                    <input
+                      ref={(el) => (fieldRefs.current['returnLocation'] = el)}
+                      name="returnLocation"
+                      value={loadForm.returnLocation}
+                      onChange={handleChange}
+                      placeholder="Enter Return Location"
+                      className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.returnLocation ? 'border-red-400' : 'border-gray-300'}`}
+                    />
+                    {formErrors.returnLocation && <p className="text-xs text-red-600 mt-1">{formErrors.returnLocation}</p>}
+                  </div>
+                </>
+              )}
+
+              {/* Actions */}
+              <div className="col-span-2 flex justify-end gap-4 pt-8">
+                <button
+                  type="button"
+                  onClick={() => { setShowLoadCreationModal(false); setFormErrors({}); }}
+                  className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
+                  disabled={creatingLoad}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingLoad}
+                  className={`px-6 py-2 rounded-lg text-white font-semibold shadow flex items-center justify-center gap-2 ${creatingLoad ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                  title="Make sure at one time only one OTR is created"
+                >
+                  {creatingLoad ? (
+                    <>
+                      <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </form>
-    </div>
-  </div>
-)}
+      )}
+
 
 
 

@@ -11,7 +11,7 @@ const AddUserModal = ({ onClose }) => {
   const PASSWORD_COMBO = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,14}$/; // 8–14
   const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/; // SBIN0XXXXXX
   // 10 MB in BYTES
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+  const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 
   const ID_DOCS = [
@@ -76,122 +76,142 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
   const clearErr = (k) => setErrors(p => { const n = { ...p }; delete n[k]; return n; });
 
   const handleInputChange = (e) => {
-  const { name } = e.target;
-  let { value } = e.target;
+    const { name } = e.target;
+    let { value } = e.target;
 
-  // Name: only letters + single spaces
-  if (name === 'employeeName') {
-    value = value.replace(/[^A-Za-z\s]/g, '');
-  }
+    // Name: only letters + single spaces
+    if (name === 'employeeName') {
+      // sirf letters + single spaces, aur max 50 chars
+      value = value
+        .replace(/[^A-Za-z\s]/g, '')   // non-letters hatao
+        .replace(/\s{2,}/g, ' ')       // multiple spaces -> single
+        .slice(0, 50);                 // hard cap 50
+    }
 
-  // Email: no spaces
-  if (name === 'email') {
-    value = value.replace(/\s+/g, '');
-  }
+    // Email: no spaces
+    if (name === 'email') {
+      value = value.replace(/\s+/g, '');
+    }
 
-  // Mobiles: only digits, max 10
-  if (['mobileNo', 'alternateNo', 'emergencyNo'].includes(name)) {
-    value = value.replace(/\D+/g, '').slice(0, 10);
-  }
+    // Mobiles: only digits, max 10
+    if (['mobileNo', 'alternateNo', 'emergencyNo'].includes(name)) {
+      value = value.replace(/\D+/g, '').slice(0, 10);
+    }
 
-  // EmpId: no spaces
-  if (name === 'empId') {
-    value = value.replace(/\s+/g, '');
-  }
-
-  // Banking sanitization (yeh pehle karo, phir setFormData ek hi baar)
-  if (name === 'accountHolderName') {
-    value = value.replace(/[^A-Za-z\s]/g, '').replace(/\s{2,}/g, ' ').slice(0, 50);
-  }
-  if (name === 'accountNumber') {
-    value = value.replace(/\D/g, '').slice(0, 18);
-  }
-  if (name === 'ifscCode') {
-    value = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11);
-  }
-  if (name === 'basicSalary') {
-    value = value.replace(/\D/g, '');
-  }
-
-  // 🔑 finally set once
-  setFormData(prev => ({ ...prev, [name]: value }));
-};
+    // EmpId: no spaces
+    if (name === 'empId') {
+      value = value.replace(/\s+/g, '');
+    }
+    // Department: sirf letters + single spaces, max 50
+    if (name === 'department') {
+      value = value
+        .replace(/[^A-Za-z\s]/g, '')   // non-letters hatao
+        .replace(/\s{2,}/g, ' ')       // multiple spaces -> single
+        .slice(0, 50);                 // hard cap 50
+    }
+    // Designation: sirf letters + single spaces, max 50
+    if (name === 'designation') {
+      value = value
+        .replace(/[^A-Za-z\s]/g, '')   // non-letters hatao
+        .replace(/\s{2,}/g, ' ')       // multiple spaces -> single
+        .slice(0, 50);                 // hard cap 50
+    }
+    // Banking sanitization (yeh pehle karo, phir setFormData ek hi baar)
+    if (name === 'accountHolderName') {
+      value = value.replace(/[^A-Za-z\s]/g, '').replace(/\s{2,}/g, ' ').slice(0, 50);
+    }
+    if (name === 'accountNumber') {
+      value = value.replace(/\D/g, '').slice(0, 18);
+    }
+    if (name === 'ifscCode') {
+      value = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11);
+    }
+    if (name === 'basicSalary') {
+      value = value.replace(/\D/g, '');
+    }
+    // Password fields: hard cap 14
+    if (name === 'password' || name === 'confirmPassword') {
+      value = value.slice(0, 14);
+    }
+    // 🔑 finally set once
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
 
 
   const validateFile = (file, maxSizeBytes = MAX_FILE_BYTES) => {
-  const allowedTypes = [
-    'image/jpeg', 'image/png', 'image/jpg',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  ];
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/jpg',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
 
-  if (!allowedTypes.includes(file.type)) {
-    return {
-      valid: false,
-      error: 'Please upload PDF ,DOC,DOCX or image files only.'
-    };
-  }
+    if (!allowedTypes.includes(file.type)) {
+      return {
+        valid: false,
+        error: 'Please upload PDF ,DOC,DOCX or image files only.'
+      };
+    }
 
-  // > (strictly greater) => 10MB exactly allowed, >10MB blocked
-  if (file.size > maxSizeBytes) {
-    return {
-      valid: false,
-      error: `Please upload a file less than ${(maxSizeBytes / (1024 * 1024)).toFixed(0)} mb.`
-    };
-  }
+    // > (strictly greater) => 10MB exactly allowed, >10MB blocked
+    if (file.size > maxSizeBytes) {
+      return {
+        valid: false,
+        error: `Please upload a file less than ${(maxSizeBytes / (1024 * 1024)).toFixed(0)} mb.`
+      };
+    }
 
-  return { valid: true };
-};
+    return { valid: true };
+  };
 
 
 
   // REPLACE your existing handleFileChange with this:
-const handleFileChange = (e) => {
-  const { name, files: selected } = e.target;
-  if (!selected || selected.length === 0) return;
+  const handleFileChange = (e) => {
+    const { name, files: selected } = e.target;
+    if (!selected || selected.length === 0) return;
 
-  const list = Array.from(selected);
+    const list = Array.from(selected);
 
-  // Validate each file (type + size) using validateFile + MAX_FILE_BYTES
-  const firstBad = list
-    .map((f) => validateFile(f, MAX_FILE_BYTES))
-    .find((r) => !r.valid);
+    // Validate each file (type + size) using validateFile + MAX_FILE_BYTES
+    const firstBad = list
+      .map((f) => validateFile(f, MAX_FILE_BYTES))
+      .find((r) => !r.valid);
 
-  if (firstBad) {
-    // show error below field, clear selection
-    setFileErrors((prev) => ({ ...prev, [name]: firstBad.error }));
-    setFiles((prev) => ({ ...prev, [name]: null }));
-    setUploadStatus((prev) => ({ ...prev, [name]: { status: 'error', fileName: '' } }));
-    setFileNames((prev) => ({ ...prev, [name]: '' }));
-    return;
-  }
+    if (firstBad) {
+      // show error below field, clear selection
+      setFileErrors((prev) => ({ ...prev, [name]: firstBad.error }));
+      setFiles((prev) => ({ ...prev, [name]: null }));
+      setUploadStatus((prev) => ({ ...prev, [name]: { status: 'error', fileName: '' } }));
+      setFileNames((prev) => ({ ...prev, [name]: '' }));
+      return;
+    }
 
-  // Multiple files allow only for these fields
-  const isMulti = name === 'educationalDocs' || name === 'bankStatementOrSalarySlip';
-  const value = isMulti ? list : list[0];
+    // Multiple files allow only for these fields
+    const isMulti = name === 'educationalDocs' || name === 'bankStatementOrSalarySlip';
+    const value = isMulti ? list : list[0];
 
-  // save files
-  setFiles((prev) => ({ ...prev, [name]: value }));
+    // save files
+    setFiles((prev) => ({ ...prev, [name]: value }));
 
-  // show selected names
-  const displayNames = isMulti ? list.map((f) => f.name).join(', ') : list[0].name;
-  setFileNames((prev) => ({ ...prev, [name]: displayNames }));
+    // show selected names
+    const displayNames = isMulti ? list.map((f) => f.name).join(', ') : list[0].name;
+    setFileNames((prev) => ({ ...prev, [name]: displayNames }));
 
-  // status badge
-  setUploadStatus((prev) => ({
-    ...prev,
-    [name]: { status: 'selected', fileName: displayNames },
-  }));
+    // status badge
+    setUploadStatus((prev) => ({
+      ...prev,
+      [name]: { status: 'selected', fileName: displayNames },
+    }));
 
-  // clear any previous error
-  setFileErrors((prev) => {
-    const n = { ...prev };
-    delete n[name];
-    return n;
-  });
-};
+    // clear any previous error
+    setFileErrors((prev) => {
+      const n = { ...prev };
+      delete n[name];
+      return n;
+    });
+  };
 
 
 
@@ -207,14 +227,16 @@ const handleFileChange = (e) => {
   const validatePassword = () => {
     const v = formData.password;
     if (v.length < 8) return setErr('password', 'Please enter the minimum 8 characters.'), false;
-    if (v.length > 14 || !PASSWORD_COMBO.test(v))
-      return setErr('password', 'Please enter all combinations of passwords like uppercase ,lowercase,number or symbol'), false;
+    if (v.length > 14)
+      return setErr('password', 'Maximum 14 characters allowed.'), false;
+    if (!PASSWORD_COMBO.test(v))
+      return setErr('password', 'Please enter all combinations of passwords like uppercase, lowercase, and a number or symbol.'), false;
     clearErr('password'); return true;
   };
 
   const validateConfirmPassword = () => {
     if (formData.password !== formData.confirmPassword)
-      return setErr('confirmPassword', 'Passwords do not match.'), false;
+      return setErr('confirmPassword', 'Kindly ensure the  password and confirm password are the same'), false;
     clearErr('confirmPassword'); return true;
   };
 
@@ -336,10 +358,10 @@ const handleFileChange = (e) => {
       designation: validateDesignation,
       dateOfBirth: validateDob,
       dateOfJoining: validateDoj,
-       accountHolderName: validateAccountHolderName,
-  accountNumber: validateAccountNumber,
-  ifscCode: validateIfsc,
-  basicSalary: validateBasicSalary,
+      accountHolderName: validateAccountHolderName,
+      accountNumber: validateAccountNumber,
+      ifscCode: validateIfsc,
+      basicSalary: validateBasicSalary,
     };
     map[field]?.();
   };
@@ -632,6 +654,7 @@ const handleFileChange = (e) => {
                               value={formData[field.name]}
                               onChange={handleInputChange}
                               onBlur={() => handleBlur(field.name)}
+                              maxLength={14}
                               className="w-full px-4 py-4 pr-10 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500"
                             />
 
@@ -657,7 +680,7 @@ const handleFileChange = (e) => {
                           </div>
                           {errors[field.name] && <p className="text-red-600 text-xs whitespace-pre-line">{errors[field.name]}</p>}
                           {field.name === 'password' && (
-                            <p className="text-xs text-gray-500">Minimum 8 characters, include uppercase, lowercase, and a number or symbol.</p>
+                            <p className="text-xs text-gray-500">8–14 characters. Include uppercase, lowercase, and a number or symbol.</p>
                           )}
                         </>
                       ) : (
@@ -683,7 +706,7 @@ const handleFileChange = (e) => {
                               if (isDate) e.target.showPicker?.();
                             }}
                             inputMode={isMobileish ? 'numeric' : undefined}
-                            maxLength={isMobileish ? 10 : undefined}
+                            maxLength={isMobileish ? 10 : (field.name === 'employeeName' ? 50 : undefined)}
                             className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-300 bg-white shadow-sm hover:shadow-md"
                           />
 
