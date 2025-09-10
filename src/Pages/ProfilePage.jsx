@@ -1,5 +1,22 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+// --- date -> DD-MM-YYYY ---
+const formatDateDDMMYYYY = (input) => {
+  if (!input) return "";
+  const s = String(input);
+
+  // ISO "YYYY-MM-DD" ya "YYYY-MM-DDTHH:mm:ss"
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+
+  // Fallback: Date object / any parseable date
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
 
 const ProfilePage = () => {
     const [employee, setEmployee] = useState(null);
@@ -310,7 +327,8 @@ const ProfilePage = () => {
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800">{employee.employeeName || "No Name"}</h1>
                     <p className="text-sm text-gray-500 mt-1">
-                        {employee.designation || "Employee"} • {employee.dateOfJoining?.slice(0, 10)} • {employee.empId || ""}
+                        {employee.designation || "Employee"} • {formatDateDDMMYYYY(employee.dateOfJoining)} • {employee.empId || ""}
+
                     </p>
                 </div>
                 <span className="text-green-500 font-semibold text-sm">● {employee.status || "Active"}</span>

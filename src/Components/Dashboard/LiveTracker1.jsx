@@ -7,6 +7,7 @@ import { RedTruck, Checkcircle, locationMarker, ArrowDown, ArrowUp } from "../..
 import truckImg from '../../assets/Icons super admin/map-truckImage.png';
 import API_CONFIG from '../../config/api.js';
 
+
 // Custom Flatbed/Container Truck Icon using local image
 const createCustomTruckIcon = () => {
   return new L.Icon({
@@ -31,6 +32,76 @@ const destinationIcon = new L.Icon({
   iconSize: [25, 25],
   iconAnchor: [12, 25],
 });
+
+// --- Utils: date + status colors ---
+const formatDDMMYYYY = (d) => {
+  if (!d) return '-';
+  const dt = new Date(d);
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const yyyy = dt.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
+// loading / in-transit / delivered timeline color mapping
+const getStepColor = (label) => {
+  const L = String(label || '').toLowerCase();
+  if (L.includes('loading')) return { dot: 'bg-yellow-500', line: 'from-yellow-400 to-yellow-200', text: 'text-yellow-700' };
+  if (L.includes('in-transit')) return { dot: 'bg-blue-600', line: 'from-blue-500 to-blue-200', text: 'text-blue-700' };
+  if (L.includes('delivered')) return { dot: 'bg-green-700', line: 'from-green-600 to-green-300', text: 'text-green-700' };
+  return { dot: 'bg-gray-300', line: 'from-gray-300 to-gray-200', text: 'text-gray-700' };
+};
+// --- Step icons (hourglass, truck, check) ---
+const StepIcon = ({ label, size = 24, className = "" }) => {
+  const L = String(label || "").toLowerCase();
+
+  if (L.includes("loading")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="currentColor">
+        <path d="M6 3h12v4l-6 4-6-4V3z" />
+        <path d="M6 21v-4l6-4 6 4v4H6z" />
+      </svg>
+    );
+  }
+
+  if (L.includes("in-transit") || L.includes("in transit")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="currentColor">
+        <rect x="3" y="8" width="11" height="6" rx="1" />
+        <path d="M14 10h3l2 3v1h-5v-4z" />
+        <circle cx="7" cy="16.5" r="1.7" />
+        <circle cx="17" cy="16.5" r="1.7" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} className={className} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 13l4 4 10-10" />
+    </svg>
+  );
+};
+
+
+// active/inactive badge color
+const getActivity = (track) => {
+  const isInactive = String(track?.status || '').toLowerCase() === 'inactive';
+  return {
+    label: isInactive ? 'Inactive' : 'Active',
+    dotClass: isInactive ? 'bg-gray-400' : 'bg-green-500',
+    textClass: isInactive ? 'text-gray-600' : 'text-green-600'
+  };
+};
+
+// map polyline color by status
+const getRouteColorByStatus = (status) => {
+  const s = String(status || '').toLowerCase();
+  if (s === 'delivered') return '#15803d'; // dark green
+  if (s === 'in_transit') return '#2563eb'; // blue
+  if (s === 'loading') return '#f59e0b'; // yellow
+  return '#94a3b8'; // slate/gray fallback
+};
+
 
 export default function ConsignmentTracker() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,7 +131,7 @@ export default function ConsignmentTracker() {
         currentLocation: trackingData.currentLocation
       };
       setTruckPopupData(truckData);
-      
+
       // Calculate popup position relative to the map container
       const mapContainer = document.querySelector('.leaflet-container');
       if (mapContainer) {
@@ -69,7 +140,7 @@ export default function ConsignmentTracker() {
         const y = e.containerPoint.y + rect.top - 190; // Position at the top of the icon
         setTruckPopupPosition({ x, y });
       }
-      
+
       setShowTruckPopup(true);
     }
   };
@@ -80,7 +151,7 @@ export default function ConsignmentTracker() {
       const response = await axios.get(
         `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson`
       );
-      
+
       if (response.data.routes && response.data.routes.length > 0) {
         const coordinates = response.data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
         setRouteCoordinates(coordinates);
@@ -98,15 +169,15 @@ export default function ConsignmentTracker() {
   // Function to fetch route from current location to nearest point on main route
   const fetchCurrentLocationRoute = async (currentLocation, routeCoords) => {
     if (!currentLocation || routeCoords.length === 0) return;
-    
+
     try {
       // Find the nearest point on the route to current location
       let nearestPoint = routeCoords[0];
       let minDistance = Infinity;
-      
+
       routeCoords.forEach(point => {
         const distance = Math.sqrt(
-          Math.pow(currentLocation.lat - point[0], 2) + 
+          Math.pow(currentLocation.lat - point[0], 2) +
           Math.pow(currentLocation.lon - point[1], 2)
         );
         if (distance < minDistance) {
@@ -114,12 +185,12 @@ export default function ConsignmentTracker() {
           nearestPoint = point;
         }
       });
-      
+
       // Fetch route from current location to nearest point
       const response = await axios.get(
         `https://router.project-osrm.org/route/v1/driving/${currentLocation.lon},${currentLocation.lat};${nearestPoint[1]},${nearestPoint[0]}?overview=full&geometries=geojson`
       );
-      
+
       if (response.data.routes && response.data.routes.length > 0) {
         const coordinates = response.data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
         setCurrentLocationRoute(coordinates);
@@ -151,17 +222,17 @@ export default function ConsignmentTracker() {
       if (track) {
         // Store the complete tracking data for polyline
         setTrackingData(track);
-        
+
         // Debug: Log current location
         console.log("Current Location:", track.currentLocation);
         console.log("Origin:", track.originLatLng);
         console.log("Destination:", track.destinationLatLng);
-        
+
         // Fetch the road route if we have origin and destination
         if (track.originLatLng && track.destinationLatLng) {
           fetchRoute(track.originLatLng, track.destinationLatLng);
         }
-        
+
         // Fetch current location route after main route is loaded
         if (track.currentLocation) {
           // Wait a bit for main route to load, then fetch current location route
@@ -171,36 +242,43 @@ export default function ConsignmentTracker() {
             }
           }, 1000);
         }
-        
+
+        const activity = getActivity(track);
+
         const consignment = {
           id: track._id,
           number: track.shipmentNumber,
           location: `${track.originName} → ${track.destinationName}`,
           lat: track.originLatLng?.lat,
           lng: track.originLatLng?.lon,
+          activity, // {label, dotClass, textClass}
           deliveryProgress:
-            track.status === "delivered" ? 100 : track.status === "in_transit" ? 60 : 20,
+            track.status === "delivered" ? 100
+              : track.status === "in_transit" ? 60
+                : 20,
           status: [
             {
               label: "Loading",
               name: track.driverName || "Driver",
-              time: new Date(track.startedAt).toLocaleString(),
+              time: formatDDMMYYYY(track.startedAt),
               done: true,
             },
             {
               label: "In-Transit",
               name: track.driverName || "Driver",
-              time: new Date().toLocaleString(),
-              done: track.status !== "loading",
+              time: formatDDMMYYYY(Date.now()),
+              done: String(track.status).toLowerCase() !== "loading",
             },
             {
               label: "Delivered",
               name: track.driverName || "Driver",
-              time: new Date(track.load?.deliveryDate || Date.now()).toLocaleString(),
-              done: track.status === "delivered",
+              time: formatDDMMYYYY(track.load?.deliveryDate || Date.now()),
+              done: String(track.status).toLowerCase() === "delivered",
             },
           ],
+          mapLineColor: getRouteColorByStatus(track.status),
         };
+
         setConsignments([consignment]);
       } else {
         setConsignments([]);
@@ -237,11 +315,11 @@ export default function ConsignmentTracker() {
   // Function to fit map bounds to show all markers
   function FitBounds({ trackingData, routeCoordinates, currentLocationRoute }) {
     const map = useMap();
-    
+
     useEffect(() => {
       if (trackingData && (routeCoordinates.length > 0 || currentLocationRoute.length > 0)) {
         const bounds = L.latLngBounds();
-        
+
         // Add origin and destination
         if (trackingData.originLatLng) {
           bounds.extend([trackingData.originLatLng.lat, trackingData.originLatLng.lon]);
@@ -249,27 +327,27 @@ export default function ConsignmentTracker() {
         if (trackingData.destinationLatLng) {
           bounds.extend([trackingData.destinationLatLng.lat, trackingData.destinationLatLng.lon]);
         }
-        
+
         // Add current location
         if (trackingData.currentLocation) {
           bounds.extend([trackingData.currentLocation.lat, trackingData.currentLocation.lon]);
         }
-        
+
         // Add route coordinates
         routeCoordinates.forEach(coord => {
           bounds.extend(coord);
         });
-        
+
         // Add current location route coordinates
         currentLocationRoute.forEach(coord => {
           bounds.extend(coord);
         });
-        
+
         // Fit map to show all markers with some padding
         map.fitBounds(bounds, { padding: [50, 50] });
       }
     }, [trackingData, routeCoordinates, currentLocationRoute]);
-    
+
     return null;
   }
 
@@ -332,54 +410,46 @@ export default function ConsignmentTracker() {
         </div>
 
         {/* Search Bar */}
-        <div className="relative mb-8">
-          {/* Search Icon Container */}
-          <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none z-10">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-          </div>
-          
-          {/* Input Field */}
+        <form
+          className="relative mb-8"
+          onSubmit={(e) => { e.preventDefault(); fetchConsignments(); }}
+        >
+          {/* Input Field (LEFT ICON REMOVED) */}
           <input
             type="text"
-            placeholder="🔍 Search by Shipment Number..."
+            placeholder="Search by Shipment Number..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-16 pr-16 py-4 border-2 border-white/30 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 bg-white/60 backdrop-blur-xl shadow-lg hover:shadow-xl hover:bg-white/80"
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); fetchConsignments(); } }}
+            className="w-full pl-5 pr-16 py-4 border-2 border-white/30 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 bg-white/60 backdrop-blur-xl shadow-lg hover:shadow-xl hover:bg-white/80"
           />
-          
-          {/* Clear Button */}
-          {searchTerm && (
-            <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
-              <button 
-                onClick={() => setSearchTerm("")}
+
+          {/* Clear / Search Buttons on right */}
+          <div className="absolute inset-y-0 right-0 pr-4 flex items-center gap-2">
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => { setSearchTerm(''); fetchConsignments(); }}
                 className="w-8 h-8 bg-gradient-to-br from-red-500 to-pink-500 rounded-xl flex items-center justify-center hover:scale-110 transition-all duration-200 shadow-lg hover:shadow-xl"
+                title="Clear"
               >
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-            </div>
-          )}
-          
-          {/* Search Button */}
-          {!searchTerm && (
-            <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
-              <button className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center hover:scale-110 transition-all duration-200 shadow-lg hover:shadow-xl">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </button>
-            </div>
-          )}
-          
-          {/* Decorative Elements */}
-          <div className="absolute -top-1 -left-1 w-2 h-2 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-full animate-pulse"></div>
-          <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-gradient-to-br from-purple-400 to-pink-600 rounded-full animate-pulse delay-1000"></div>
-        </div>
+            )}
+            <button
+              type="submit"
+              className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center hover:scale-110 transition-all duration-200 shadow-lg hover:shadow-xl"
+              title="Search"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+          </div>
+        </form>
+
 
         {/* Shipments List */}
         {consignments.length === 0 ? (
@@ -410,9 +480,10 @@ export default function ConsignmentTracker() {
                     <p className="font-bold text-gray-800 text-sm">{item.number}</p>
                     <p className="text-xs text-gray-500 mt-1">{item.location}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-xs text-green-600 font-medium">Active</span>
+                      <div className={`w-2 h-2 rounded-full ${item.activity.dotClass} ${item.activity.label === 'Active' ? 'animate-pulse' : ''}`}></div>
+                      <span className={`text-xs font-medium ${item.activity.textClass}`}>{item.activity.label}</span>
                     </div>
+
                   </div>
                 </div>
                 <div className="text-lg transition-transform duration-200">
@@ -434,23 +505,32 @@ export default function ConsignmentTracker() {
                     {item.status.map((step, index) => (
                       <div key={index} className="flex items-start gap-4">
                         <div className="flex flex-col items-center">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
-                            step.done ? 'bg-green-500' : 'bg-gray-200'
-                          }`}>
-                            <img
-                              src={step.done ? Checkcircle : locationMarker}
-                              alt={step.label}
-                              className="w-4 h-4"
-                            />
-                          </div>
-                          {index < item.status.length - 1 && (
-                            <div className="w-0.5 h-8 bg-gradient-to-b from-green-400 to-green-200 my-1"></div>
-                          )}
+                          {(() => {
+                            const c = getStepColor(step.label);
+                            return (
+                              <>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${c.dot}`}>
+                                  <StepIcon label={step.label} className="text-white" />
+
+                                </div>
+                                {index < item.status.length - 1 && (
+                                  <div className={`w-0.5 h-8 bg-gradient-to-b ${c.line} my-1`}></div>
+                                )}
+                              </>
+                            );
+                          })()}
+
                         </div>
                         <div className="flex-1">
-                          <p className={`font-semibold text-sm ${step.done ? "text-green-600" : "text-gray-700"}`}>
-                            {step.label}
-                          </p>
+                          {(() => {
+                            const c = getStepColor(step.label);
+                            return (
+                              <p className={`font-semibold text-sm ${c.text}`}>
+                                {step.label}
+                              </p>
+                            );
+                          })()}
+
                           <p className="text-xs text-gray-600 mt-1">{step.name}</p>
                           <p className="text-xs text-gray-400 mt-1">{step.time}</p>
                         </div>
@@ -513,44 +593,44 @@ export default function ConsignmentTracker() {
             attribution='&copy; OpenStreetMap contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          
+
           {/* Origin Marker */}
           {trackingData?.originLatLng && (
-            <Marker 
-              position={[trackingData.originLatLng.lat, trackingData.originLatLng.lon]} 
+            <Marker
+              position={[trackingData.originLatLng.lat, trackingData.originLatLng.lon]}
               icon={originIcon}
             />
           )}
-          
+
           {/* Destination Marker */}
           {trackingData?.destinationLatLng && (
-            <Marker 
-              position={[trackingData.destinationLatLng.lat, trackingData.destinationLatLng.lon]} 
+            <Marker
+              position={[trackingData.destinationLatLng.lat, trackingData.destinationLatLng.lon]}
               icon={destinationIcon}
             />
           )}
-          
-                     {/* Current Location Truck Marker */}
-           {trackingData?.currentLocation && (
-             <Marker 
-               position={[trackingData.currentLocation.lat, trackingData.currentLocation.lon]} 
-               icon={createCustomTruckIcon()}
-               eventHandlers={{
-                 click: handleTruckClick
-               }}
-             />
-           )}
-          
+
+          {/* Current Location Truck Marker */}
+          {trackingData?.currentLocation && (
+            <Marker
+              position={[trackingData.currentLocation.lat, trackingData.currentLocation.lon]}
+              icon={createCustomTruckIcon()}
+              eventHandlers={{
+                click: handleTruckClick
+              }}
+            />
+          )}
+
           {/* Main Road Route Polyline */}
           {routeCoordinates.length > 0 && (
             <Polyline
               positions={routeCoordinates}
-              color="blue"
+              color={getRouteColorByStatus(trackingData?.status)}
               weight={4}
-              opacity={0.8}
+              opacity={0.9}
             />
           )}
-          
+
           {/* Current Location to Route Polyline */}
           {currentLocationRoute.length > 0 && (
             <Polyline
@@ -561,14 +641,14 @@ export default function ConsignmentTracker() {
               dashArray="10, 5"
             />
           )}
-          
+
           {/* Fit map bounds to show all markers */}
-          <FitBounds 
-            trackingData={trackingData} 
-            routeCoordinates={routeCoordinates} 
-            currentLocationRoute={currentLocationRoute} 
+          <FitBounds
+            trackingData={trackingData}
+            routeCoordinates={routeCoordinates}
+            currentLocationRoute={currentLocationRoute}
           />
-          
+
           {selectedShipment && (
             <RecenterMap lat={selectedShipment.lat} lng={selectedShipment.lng} />
           )}
@@ -577,7 +657,7 @@ export default function ConsignmentTracker() {
 
       {/* Truck Popup - Map Positioned */}
       {showTruckPopup && truckPopupData && (
-        <div 
+        <div
           className="fixed z-50 pointer-events-none"
           style={{
             left: `${truckPopupPosition.x}px`,
@@ -618,14 +698,14 @@ export default function ConsignmentTracker() {
               <p className="text-xs text-gray-600">Battery: <span className="font-semibold text-gray-800">{truckPopupData.batteryHealth}%</span></p>
             </div>
 
-            {/* Speed */}
+            {/* Speed */} 
             <div className="mb-1">
               <p className="text-xs text-gray-600">Speed: <span className="font-semibold text-gray-800">{truckPopupData.speed} km/h</span></p>
             </div>
           </div>
-          
+
           {/* Pointer Triangle */}
-          <div 
+          <div
             className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-3 border-r-3 border-t-3 border-transparent border-t-white"
             style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}
           ></div>

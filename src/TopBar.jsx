@@ -265,10 +265,11 @@ const Topbar = () => {
                   setProfileOpen(false);
                   navigate("/profile");
                 }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-gray-700"
+                className="cursor-pointer w-full text-left px-4 py-2 hover:bg-gray-100 text-gray-700"
               >
-                👤 Profile
+                👤 My Profile
               </button>
+
             </div>
           )}
         </div>
