@@ -138,6 +138,39 @@ const SearchableDropdown = ({
 };
 
 export default function DeliveryOrder() {
+  // ⬇️ put these near the top-level states
+  const MAX_DOC_MB = 10;
+  const ALLOWED_MIME = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'image/jpeg',
+    'image/png'
+  ];
+
+  // Validators
+  const isAlpha = (s = '') => /^[A-Za-z ]+$/.test(s.trim());
+  const isAlnum = (s = '') => /^[A-Za-z0-9]+$/.test(s.trim());
+  const isNonNegInt = (s) => /^\d+$/.test(String(s)) && Number(s) >= 0;
+  const isPosInt = (s) => /^\d+$/.test(String(s)) && Number(s) > 0;
+  // US 5/9, India 6, Canada format
+  const isZip = (s = '') =>
+    /^(\d{5}(-\d{4})?|\d{6}|[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d)$/.test(s.trim());
+
+  // Block invalid chars in integer-only inputs
+  const blockIntChars = (e) => {
+    if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+  };
+
+  const [errors, setErrors] = useState({
+    customers: [],      // [{billTo:'', dispatcherName:'', workOrderNo:'', lineHaul:'', fsc:'', other:''}]
+    carrier: {},        // { carrierName:'', equipmentType:'', fees:'' , chargeRows:[{name:'', quantity:'', amt:''}] }
+    shipper: {},        // { shipperName:'', containerNo:'', containerType:'' }
+    pickups: [],        // [{name:'', address:'', city:'', state:'', zipCode:'', weight:'', pickUpDate:''}]
+    drops: [],          // [{name:'', address:'', city:'', state:'', zipCode:'', weight:'', dropDate:''}]
+    docs: ''            // error string
+  });
+
   const [orders, setOrders] = useState([]);
   const [viewDoc, setViewDoc] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
@@ -724,12 +757,34 @@ export default function DeliveryOrder() {
   };
 
   // Handle file upload
+  // ⬇️ REPLACE your handleFileChange
   const handleFileChange = (e) => {
-    setFormData(prev => ({
-      ...prev,
-      docs: e.target.files[0]
-    }));
+    const file = e.target.files?.[0];
+    if (!file) {
+      setFormData(prev => ({ ...prev, docs: null }));
+      setErrors(prev => ({ ...prev, docs: 'Please upload a document.' }));
+      return;
+    }
+
+    if (!ALLOWED_MIME.includes(file.type)) {
+      setFormData(prev => ({ ...prev, docs: null }));
+      setErrors(prev => ({ ...prev, docs: 'Allowed types: PDF, DOC, DOCX, JPG, PNG.' }));
+      alertify.error('Allowed types: PDF, DOC, DOCX, JPG, PNG');
+      return;
+    }
+
+    const sizeMB = file.size / 1024 / 1024;
+    if (sizeMB > MAX_DOC_MB) {
+      setFormData(prev => ({ ...prev, docs: null }));
+      setErrors(prev => ({ ...prev, docs: 'Please upload less than 10 MB.' }));
+      alertify.error('Please upload less than 10 MB.');
+      return;
+    }
+
+    setFormData(prev => ({ ...prev, docs: file }));
+    setErrors(prev => ({ ...prev, docs: '' }));
   };
+
 
   // Handle charges popup
   const handleChargesClick = () => {
@@ -821,7 +876,7 @@ export default function DeliveryOrder() {
   // ✅ REPLACE: handleSubmit (remarks included in locations JSON + multipart)
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    if (!validateForm('add')) { return; }
     try {
       setSubmitting(true);
 
@@ -1053,6 +1108,135 @@ export default function DeliveryOrder() {
     }
   };
 
+  // ⬇️ ADD this function anywhere inside the component
+  const validateForm = (mode = formMode) => {
+    const next = {
+      customers: [],
+      carrier: {},
+      shipper: {},
+      pickups: [],
+      drops: [],
+      docs: ''
+    };
+
+    // --- Customers validation ---
+    (formData.customers || []).forEach((c, idx) => {
+      const rowErr = {};
+
+      // 1) Company (Bill To)
+      if (!c.billTo) rowErr.billTo = 'Please select the company name.';
+
+      // 2) Dispatcher
+      if (!c.dispatcherName) rowErr.dispatcherName = 'Please select the Dispatcher name.';
+
+      // 3) Work Order No (required + alphanumeric)
+      if (!c.workOrderNo) rowErr.workOrderNo = 'Please enter the Work Order Number.';
+      else if (!isAlnum(c.workOrderNo)) rowErr.workOrderNo = 'Work Order Number must be alphanumeric.';
+
+      // 4/5/6) Money-like fields: integer only, non-negative
+      if (c.lineHaul === '' || c.lineHaul === null) rowErr.lineHaul = 'Please enter the Line Haul.';
+      else if (!isNonNegInt(c.lineHaul)) rowErr.lineHaul = 'Line Haul must be a non-negative integer.';
+
+      if (c.fsc === '' || c.fsc === null) rowErr.fsc = 'Please enter the FSC.';
+      else if (!isNonNegInt(c.fsc)) rowErr.fsc = 'FSC must be a non-negative integer.';
+
+      if (c.other === '' || c.other === null) rowErr.other = 'Please enter the Other.';
+      else if (!isNonNegInt(c.other)) rowErr.other = 'Other must be a non-negative integer.';
+
+      next.customers[idx] = rowErr;
+    });
+
+    // --- Carrier section ---
+    if (!formData.carrierName) next.carrier.carrierName = 'Please enter the Carrier Name.';
+    else if (!isAlpha(formData.carrierName)) next.carrier.carrierName = 'Carrier Name should contain only letters.';
+
+    if (!formData.equipmentType) next.carrier.equipmentType = 'Please enter the Equipment Type .';
+
+    // Carrier Fees via charges[]
+    const rows = charges || [];
+    const hasAnyRow = rows.some(r => (r?.name || '').trim() || (r?.quantity || '') !== '' || (r?.amt || '') !== '');
+    if (!hasAnyRow) {
+      next.carrier.fees = 'Please add Carrier Fees .';
+    }
+    next.carrier.chargeRows = rows.map((r) => {
+      const rErr = {};
+      if (!r.name) rErr.name = 'Please enter the charge name';
+      else if (!isAlpha(r.name)) rErr.name = 'Name should contain only alphabets';
+      if (r.quantity === '' || r.quantity === null) rErr.quantity = 'Please enter the Quantity';
+      else if (!isPosInt(r.quantity)) rErr.quantity = 'Quantity must be a positive integer';
+      if (r.amt === '' || r.amt === null) rErr.amt = 'Please enter the amount';
+      else if (!isPosInt(r.amt)) rErr.amt = 'Amount must be a positive integer';
+      return rErr;
+    });
+
+    // If no rows at all or any row has an error, show main fees error
+    const anyChargeError = next.carrier.chargeRows.some(
+      r => r.name || r.quantity || r.amt
+    );
+    if (anyChargeError) next.carrier.fees = next.carrier.fees || 'Please correct Carrier Fees .';
+
+    // --- Shipper ---
+    if (!formData.shipperName) next.shipper.shipperName = 'Please enter the Shipper Name ';
+    else if (!isAlpha(formData.shipperName)) next.shipper.shipperName = 'Shipper Name should contain only alphabets';
+
+    if (!formData.containerNo) next.shipper.containerNo = 'Please enter the Container Number  .';
+    if (!formData.containerType) next.shipper.containerType = 'Please enter the Container Type  .';
+
+    // --- Pickup Locations ---
+    (formData.pickupLocations || []).forEach((l, i) => {
+      const lErr = {};
+      if (!l.name) lErr.name = 'Please enter the Location Name .';
+      if (!l.address) lErr.address = 'Please enter the address .';
+      if (!l.city) lErr.city = 'Please enter the city .';
+      if (!l.state) lErr.state = 'Please enter the state .';
+      if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
+      else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
+      if (l.weight === '' || l.weight === null) lErr.weight = 'Please enter the weight.';
+      else if (!isPosInt(l.weight)) lErr.weight = 'Weight must be digits and positive.';
+      if (!l.pickUpDate) lErr.pickUpDate = 'Please select the pickup date.';
+      next.pickups[i] = lErr;
+    });
+
+    // --- Drop Locations ---
+    (formData.dropLocations || []).forEach((l, i) => {
+      const lErr = {};
+      if (!l.name) lErr.name = 'Please enter the Location Name .';
+      if (!l.address) lErr.address = 'Please enter the address .';
+      if (!l.city) lErr.city = 'Please enter the city .';
+      if (!l.state) lErr.state = 'Please enter the state .';
+      if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
+      else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
+      if (l.weight === '' || l.weight === null) lErr.weight = 'Please enter the weight.';
+      else if (!isPosInt(l.weight)) lErr.weight = 'Weight must be digits and positive.';
+      if (!l.dropDate) lErr.dropDate = 'Please select the drop date.';
+      next.drops[i] = lErr;
+    });
+
+    // --- Docs (required on ADD; optional on EDIT unless you want to force it) ---
+    if (mode !== 'edit') {
+      if (!formData.docs) next.docs = 'Please upload a document.';
+    }
+
+    setErrors(next);
+
+    // Decide valid
+    const hasCustomerErr = next.customers.some(row => Object.keys(row || {}).length);
+    const hasPickErr = next.pickups.some(row => Object.keys(row || {}).length);
+    const hasDropErr = next.drops.some(row => Object.keys(row || {}).length);
+    const hasCarrierErr =
+      Object.keys(next.carrier || {}).length &&
+      (next.carrier.carrierName || next.carrier.equipmentType || next.carrier.fees ||
+        (Array.isArray(next.carrier.chargeRows) && next.carrier.chargeRows.some(r => r.name || r.quantity || r.amt)));
+
+    const valid = !(
+      hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || next.shipper.shipperName || next.shipper.containerNo || next.shipper.containerType || next.docs
+    );
+
+    if (!valid) {
+      alertify.error('Please fix the highlighted errors.');
+    }
+    return valid;
+  };
 
 
 
@@ -1378,7 +1562,7 @@ export default function DeliveryOrder() {
         doStatus: "Inactive",
         statusReason: deleteReason.trim()
       }, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
@@ -1386,12 +1570,12 @@ export default function DeliveryOrder() {
 
       if (response.data && response.data.success) {
         alertify.success('Delivery order marked as inactive successfully!');
-        
+
         // Close modal and reset
         setShowDeleteModal(false);
         setDeleteReason('');
         setOrderToDelete(null);
-        
+
         // Refresh the page to show updated data
         window.location.reload();
       } else {
@@ -1428,160 +1612,161 @@ export default function DeliveryOrder() {
   // Handle update order 
 
   const handleUpdateOrder = async (e) => {
-  e.preventDefault();
-  setSubmitting(true);
-  try {
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+    e.preventDefault();
+    if (!validateForm('edit')) { setSubmitting(false); return; }
+    setSubmitting(true);
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
-    // Make sure we send the real Mongo _id, not "DO-xxxxxx"
-    let orderId = editingOrder?._id;
-    if (!orderId) { alertify.error('Order ID missing'); return; }
-    if (String(orderId).startsWith('DO-')) {
-      orderId = orderId.replace(/^DO-/, '');
-    }
+      // Make sure we send the real Mongo _id, not "DO-xxxxxx"
+      let orderId = editingOrder?._id;
+      if (!orderId) { alertify.error('Order ID missing'); return; }
+      if (String(orderId).startsWith('DO-')) {
+        orderId = orderId.replace(/^DO-/, '');
+      }
 
-    // 👉 existing customers from the full order (to preserve loadNo & _id)
-    const prevCustomers = editingOrder?.fullData?.customers || [];
+      // 👉 existing customers from the full order (to preserve loadNo & _id)
+      const prevCustomers = editingOrder?.fullData?.customers || [];
 
-    // --- REQUIRED fields quick check (BillTo/Dispatcher/W/O)
-    for (let i = 0; i < (formData.customers?.length || 0); i++) {
-      const c = formData.customers[i] || {};
-      if (!c.billTo || !c.dispatcherName || !c.workOrderNo) {
-        alertify.error(`Customer ${i + 1} ke required fields (Bill To, Dispatcher, W/O) bharo`);
+      // --- REQUIRED fields quick check (BillTo/Dispatcher/W/O)
+      for (let i = 0; i < (formData.customers?.length || 0); i++) {
+        const c = formData.customers[i] || {};
+        if (!c.billTo || !c.dispatcherName || !c.workOrderNo) {
+          alertify.error(`Customer ${i + 1} ke required fields (Bill To, Dispatcher, W/O) bharo`);
+          return;
+        }
+      }
+
+      // --- Customers (⚠️ loadNo preserve)
+      const customers = (formData.customers || []).map((c, idx) => {
+        const preservedLoadNo =
+          prevCustomers[idx]?.loadNo ||
+          editingOrder?.doNum ||
+          c.loadNo ||
+          '';
+
+        if (!preservedLoadNo) {
+          alertify.error(`Customer ${idx + 1}: Load No missing`);
+          throw new Error('Missing loadNo');
+        }
+
+        return {
+          _id: prevCustomers[idx]?._id, // preserve subdoc id if present
+          loadNo: preservedLoadNo,      // ✅ REQUIRED
+          billTo: (c.billTo || '').trim(),
+          dispatcherName: (c.dispatcherName || '').trim(),
+          workOrderNo: (c.workOrderNo || '').trim(),
+          lineHaul: Number(c.lineHaul) || 0,
+          fsc: Number(c.fsc) || 0,
+          other: Number(c.other) || 0,
+          totalAmount:
+            (Number(c.lineHaul) || 0) +
+            (Number(c.fsc) || 0) +
+            (Number(c.other) || 0),
+        };
+      });
+
+      // --- Carrier
+      const carrierFees = (charges || [])
+        .filter(ch => ch?.name)
+        .map(ch => ({
+          name: ch.name,
+          quantity: Number(ch.quantity) || 0,
+          amount: Number(ch.amt) || 0,
+          total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
+        }));
+
+      const carrier = {
+        carrierName: formData.carrierName || '',
+        equipmentType: formData.equipmentType || '',
+        carrierFees,
+        totalCarrierFees: carrierFees.reduce((s, f) => s + (f.total || 0), 0),
+      };
+
+      // --- Shipper + per-location fields
+      const shipper = {
+        name: formData.shipperName || '',
+        containerNo: formData.containerNo || '',
+        containerType: formData.containerType || '',
+        pickUpLocations: (formData.pickupLocations || []).map(l => ({
+          name: l.name || '',
+          address: l.address || '',
+          city: l.city || '',
+          state: l.state || '',
+          zipCode: l.zipCode || '',
+          weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+          pickUpDate: l.pickUpDate || '',
+          remarks: l.remarks || ''
+        })),
+        dropLocations: (formData.dropLocations || []).map(l => ({
+          name: l.name || '',
+          address: l.address || '',
+          city: l.city || '',
+          state: l.state || '',
+          zipCode: l.zipCode || '',
+          weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+          dropDate: l.dropDate || '',
+          remarks: l.remarks || ''
+        })),
+      };
+
+      const updatePayload = {
+        customers,  // ✅ includes loadNo
+        carrier,
+        shipper,
+        remarks: formData.remarks || '',
+      };
+
+      // 1) JSON update
+      const res = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
+        updatePayload,
+        { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } }
+      );
+
+      if (!res?.data?.success) {
+        alertify.error(res?.data?.message || 'Update failed');
         return;
       }
-    }
 
-    // --- Customers (⚠️ loadNo preserve)
-    const customers = (formData.customers || []).map((c, idx) => {
-      const preservedLoadNo =
-        prevCustomers[idx]?.loadNo ||
-        editingOrder?.doNum ||
-        c.loadNo ||
-        '';
+      // 2) OPTIONAL document upload — same versioned base path to avoid 404
+      if (formData.docs && formData.docs instanceof File) {
+        try {
+          const fd = new FormData();
+          // NOTE: Change 'document' -> 'file' if your backend expects 'file'
+          fd.append('document', formData.docs);
 
-      if (!preservedLoadNo) {
-        alertify.error(`Customer ${idx + 1}: Load No missing`);
-        throw new Error('Missing loadNo');
-      }
+          const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}/upload`;
+          console.debug('Uploading document to:', uploadUrl, 'orderId:', orderId);
 
-      return {
-        _id: prevCustomers[idx]?._id, // preserve subdoc id if present
-        loadNo: preservedLoadNo,      // ✅ REQUIRED
-        billTo: (c.billTo || '').trim(),
-        dispatcherName: (c.dispatcherName || '').trim(),
-        workOrderNo: (c.workOrderNo || '').trim(),
-        lineHaul: Number(c.lineHaul) || 0,
-        fsc: Number(c.fsc) || 0,
-        other: Number(c.other) || 0,
-        totalAmount:
-          (Number(c.lineHaul) || 0) +
-          (Number(c.fsc) || 0) +
-          (Number(c.other) || 0),
-      };
-    });
+          const upRes = await axios.put(uploadUrl, fd, {
+            headers: { Authorization: `Bearer ${token}` }, // axios sets multipart boundary automatically
+            timeout: 20000,
+          });
 
-    // --- Carrier
-    const carrierFees = (charges || [])
-      .filter(ch => ch?.name)
-      .map(ch => ({
-        name: ch.name,
-        quantity: Number(ch.quantity) || 0,
-        amount: Number(ch.amt) || 0,
-        total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
-      }));
-
-    const carrier = {
-      carrierName: formData.carrierName || '',
-      equipmentType: formData.equipmentType || '',
-      carrierFees,
-      totalCarrierFees: carrierFees.reduce((s, f) => s + (f.total || 0), 0),
-    };
-
-    // --- Shipper + per-location fields
-    const shipper = {
-      name: formData.shipperName || '',
-      containerNo: formData.containerNo || '',
-      containerType: formData.containerType || '',
-      pickUpLocations: (formData.pickupLocations || []).map(l => ({
-        name: l.name || '',
-        address: l.address || '',
-        city: l.city || '',
-        state: l.state || '',
-        zipCode: l.zipCode || '',
-        weight: l.weight === '' ? 0 : Number(l.weight) || 0,
-        pickUpDate: l.pickUpDate || '',
-        remarks: l.remarks || ''
-      })),
-      dropLocations: (formData.dropLocations || []).map(l => ({
-        name: l.name || '',
-        address: l.address || '',
-        city: l.city || '',
-        state: l.state || '',
-        zipCode: l.zipCode || '',
-        weight: l.weight === '' ? 0 : Number(l.weight) || 0,
-        dropDate: l.dropDate || '',
-        remarks: l.remarks || ''
-      })),
-    };
-
-    const updatePayload = {
-      customers,  // ✅ includes loadNo
-      carrier,
-      shipper,
-      remarks: formData.remarks || '',
-    };
-
-    // 1) JSON update
-    const res = await axios.put(
-      `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
-      updatePayload,
-      { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } }
-    );
-
-    if (!res?.data?.success) {
-      alertify.error(res?.data?.message || 'Update failed');
-      return;
-    }
-
-    // 2) OPTIONAL document upload — same versioned base path to avoid 404
-    if (formData.docs && formData.docs instanceof File) {
-      try {
-        const fd = new FormData();
-        // NOTE: Change 'document' -> 'file' if your backend expects 'file'
-        fd.append('document', formData.docs);
-
-        const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}/upload`;
-        console.debug('Uploading document to:', uploadUrl, 'orderId:', orderId);
-
-        const upRes = await axios.put(uploadUrl, fd, {
-          headers: { Authorization: `Bearer ${token}` }, // axios sets multipart boundary automatically
-          timeout: 20000,
-        });
-
-        if (upRes?.data?.success) {
-          alertify.success('Document uploaded');
-        } else {
-          alertify.warning(upRes?.data?.message ? `Document upload failed: ${upRes.data.message}` : 'Document upload failed');
+          if (upRes?.data?.success) {
+            alertify.success('Document uploaded');
+          } else {
+            alertify.warning(upRes?.data?.message ? `Document upload failed: ${upRes.data.message}` : 'Document upload failed');
+          }
+        } catch (upErr) {
+          console.error('Upload error:', upErr?.response?.data || upErr);
+          const msg = upErr?.response?.data?.message || upErr?.message || 'Unknown error';
+          alertify.warning(`Order updated, but document upload failed: ${msg}`);
         }
-      } catch (upErr) {
-        console.error('Upload error:', upErr?.response?.data || upErr);
-        const msg = upErr?.response?.data?.message || upErr?.message || 'Unknown error';
-        alertify.warning(`Order updated, but document upload failed: ${msg}`);
       }
-    }
 
-    alertify.success('Delivery order updated!');
-    setShowAddOrderForm(false);
-    setEditingOrder(null);
-    fetchOrders();
-  } catch (err) {
-    console.error('Update error:', err?.response?.data || err);
-    alertify.error(err?.response?.data?.message || err.message || 'Failed to update delivery order');
-  } finally {
-    setSubmitting(false);
-  }
-};
+      alertify.success('Delivery order updated!');
+      setShowAddOrderForm(false);
+      setEditingOrder(null);
+      fetchOrders();
+    } catch (err) {
+      console.error('Update error:', err?.response?.data || err);
+      alertify.error(err?.response?.data?.message || err.message || 'Failed to update delivery order');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
 
 
@@ -2707,7 +2892,7 @@ export default function DeliveryOrder() {
                           if (!userStr) return null;
                           const user = JSON.parse(userStr);
                           const currentEmpId = user.empId;
-                          
+
                           // Only show delete button for empId "1234" and "VPL006"
                           if (currentEmpId === "1234" || currentEmpId === "VPL006") {
                             return (
@@ -2834,195 +3019,213 @@ export default function DeliveryOrder() {
               className="p-6 space-y-6"
             >
               {/* Customer Information Section */}
+              {/* Customer Information Section */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
-                  <button
-                    type="button"
-                    onClick={addCustomer}
-                    className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
-                  >
+                  <button type="button" onClick={addCustomer} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition">
                     + Add Customer
                   </button>
                 </div>
 
-                {formData.customers.map((customer, customerIndex) => (
-                  <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
-                      {formData.customers.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeCustomer(customerIndex)}
-                          className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
+                {formData.customers.map((customer, customerIndex) => {
+                  const cErr = errors.customers?.[customerIndex] || {};
+                  return (
+                    <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
+                        {formData.customers.length > 1 && (
+                          <button type="button" onClick={() => removeCustomer(customerIndex)} className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition">
+                            Remove
+                          </button>
+                        )}
+                      </div>
 
-                    {/* All 7 fields in one grid - 4 fields per line */}
-                    <div className="grid grid-cols-4 gap-4">
-                      {/* Bill To (Company) - dropdown */}
-                      {/* Bill To (Company) - dropdown */}
-                      {shippers.length > 0 ? (
-                        <SearchableDropdown
-                          value={customer.billTo || ''}
-                          onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
-                          options={[
-                            // Current value (if not in list)
-                            ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
-                              ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
-                              : []
-                            ),
-                            // Company options
-                            ...shippers.map(s => ({
-                              value: s.compName || '',
-                              label: s.compName || '(No name)'
-                            }))
-                          ]}
-                          placeholder="Select Company *"
-                          disabled={loadingShippers}
-                          loading={loadingShippers}
-                          searchPlaceholder="Search companies..."
-                        />
-                      ) : (
-                        // Fallback: companies load na ho to normal input
-                        <input
-                          type="text"
-                          value={customer.billTo}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                          required
-                          disabled={loadingShippers}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder={loadingShippers ? "Loading companies..." : "Bill To *"}
-                        />
-                      )}
+                      <div className="grid grid-cols-4 gap-4">
+                        {/* Select Company * */}
+                        <div>
+                          {shippers.length > 0 ? (
+                            <SearchableDropdown
+                              value={customer.billTo || ''}
+                              onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
+                              options={[
+                                ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
+                                  ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
+                                  : []),
+                                ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
+                              ]}
+                              placeholder="Select Company *"
+                              disabled={loadingShippers}
+                              loading={loadingShippers}
+                              searchPlaceholder="Search companies..."
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              value={customer.billTo}
+                              onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.billTo ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder={loadingShippers ? "Loading companies..." : "Select Company *"}
+                            />
+                          )}
+                          {cErr.billTo && <p className="text-red-600 text-xs mt-1">{cErr.billTo}</p>}
+                        </div>
 
+                        {/* Dispatcher * */}
+                        <div>
+                          {dispatchers.length > 0 ? (
+                            <SearchableDropdown
+                              value={customer.dispatcherName || ''}
+                              onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
+                              options={[
+                                ...(customer.dispatcherName &&
+                                  !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
+                                  ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
+                                  : []),
+                                ...dispatchers
+                                  .filter(d => (d.status || '').toLowerCase() === 'active')
+                                  .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
+                                  .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
+                              ]}
+                              placeholder="Select Dispatcher *"
+                              disabled={loadingDispatchers}
+                              loading={loadingDispatchers}
+                              searchPlaceholder="Search dispatchers..."
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              value={customer.dispatcherName}
+                              onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.dispatcherName ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder="Select Dispatcher *"
+                            />
+                          )}
+                          {cErr.dispatcherName && <p className="text-red-600 text-xs mt-1">{cErr.dispatcherName}</p>}
+                        </div>
 
-                      {/* Dispatcher Name - dropdown (aliasName from CMT) */}
-                      {dispatchers.length > 0 ? (
-                        <SearchableDropdown
-                          value={customer.dispatcherName || ''}
-                          onChange={(value) =>
-                            handleCustomerChange(customerIndex, 'dispatcherName', value)
-                          }
-                          options={[
-                            // Current value (agar list me na ho)
-                            ...(customer.dispatcherName &&
-                              !dispatchers.some(
-                                (d) => (d.aliasName || d.employeeName || '') === customer.dispatcherName
-                              )
-                              ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
-                              : []),
-                            // Alias list (fallback to employeeName if alias missing)
-                            ...dispatchers
-                              .filter((d) => (d.status || '').toLowerCase() === 'active')
-                              .sort((a, b) =>
-                                (a.aliasName || a.employeeName || '').localeCompare(
-                                  b.aliasName || b.employeeName || ''
-                                )
-                              )
-                              .map((d) => ({
-                                value: d.aliasName || d.employeeName,
-                                label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}`
-                              }))
-                          ]}
-                          placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Select Dispatcher *'}
-                          disabled={loadingDispatchers}
-                          loading={loadingDispatchers}
-                          searchPlaceholder="Search dispatchers..."
-                        />
-                      ) : (
-                        // Fallback: list na aaye to normal input allow karo
-                        <input
-                          type="text"
-                          value={customer.dispatcherName}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)
-                          }
-                          required
-                          disabled={loadingDispatchers}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Dispatcher Name *'}
-                        />
-                      )}
+                        {/* Work Order No * (alphanumeric) */}
+                        <div>
+                          <input
+                            type="text"
+                            value={customer.workOrderNo}
+                            onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
+                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.workOrderNo ? 'border-red-400' : 'border-gray-300'}`}
+                            placeholder="Work Order No *"
+                          />
+                          {cErr.workOrderNo && <p className="text-red-600 text-xs mt-1">{cErr.workOrderNo}</p>}
+                        </div>
 
-                      <input
-                        type="text"
-                        value={customer.workOrderNo}
-                        onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Work Order No *"
-                      />
-                      <input
-                        type="number"
-                        value={customer.lineHaul}
-                        onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Line Haul *"
-                      />
-                      <input
-                        type="number"
-                        value={customer.fsc}
-                        onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="FSC *"
-                      />
-                      <input
-                        type="number"
-                        value={customer.other}
-                        onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Other *"
-                      />
-                      <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
-                        <span className="text-black-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                        {/* Line Haul * (non-negative integer) */}
+                        <div>
+                          <input
+                            type="number"
+                            value={customer.lineHaul}
+                            onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
+                            onKeyDown={blockIntChars}
+                            min="0"
+                            step="1"
+                            inputMode="numeric"
+                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.lineHaul ? 'border-red-400' : 'border-gray-300'}`}
+                            placeholder="Line Haul *"
+                          />
+                          {cErr.lineHaul && <p className="text-red-600 text-xs mt-1">{cErr.lineHaul}</p>}
+                        </div>
+
+                        {/* FSC * */}
+                        <div>
+                          <input
+                            type="number"
+                            value={customer.fsc}
+                            onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
+                            onKeyDown={blockIntChars}
+                            min="0"
+                            step="1"
+                            inputMode="numeric"
+                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.fsc ? 'border-red-400' : 'border-gray-300'}`}
+                            placeholder="FSC *"
+                          />
+                          {cErr.fsc && <p className="text-red-600 text-xs mt-1">{cErr.fsc}</p>}
+                        </div>
+
+                        {/* Other * */}
+                        <div>
+                          <input
+                            type="number"
+                            value={customer.other}
+                            onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
+                            onKeyDown={blockIntChars}
+                            min="0"
+                            step="1"
+                            inputMode="numeric"
+                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.other ? 'border-red-400' : 'border-gray-300'}`}
+                            placeholder="Other *"
+                          />
+                          {cErr.other && <p className="text-red-600 text-xs mt-1">{cErr.other}</p>}
+                        </div>
+
+                        {/* Total (read-only) */}
+                        <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg flex items-center">
+                          <span className="text-black-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
 
               {/* Carrier Information Section */}
               <div className="bg-green-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
                 <div className="grid grid-cols-3 gap-4">
-                  <input
-                    type="text"
-                    name="carrierName"
-                    value={formData.carrierName}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Carrier Name *"
-                  />
-                  <input
-                    type="text"
-                    name="equipmentType"
-                    value={formData.equipmentType}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Equipment Type *"
-                  />
-                  <input
-                    type="number"
-                    name="carrierFees"
-                    value={formData.carrierFees}
-                    onChange={handleInputChange}
-                    onClick={handleChargesClick}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-pointer"
-                    placeholder="Carrier Fees * (Click to add charges)"
-                    readOnly
-                  />
+                  <div>
+                    <input
+                      type="text"
+                      name="carrierName"
+                      value={formData.carrierName}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.carrier?.carrierName ? 'border-red-400' : 'border-gray-300'}`}
+                      placeholder="Carrier Name *"
+                    />
+                    {errors.carrier?.carrierName && <p className="text-red-600 text-xs mt-1">{errors.carrier.carrierName}</p>}
+                  </div>
+
+                  <div>
+                    <input
+                      type="text"
+                      name="equipmentType"
+                      value={formData.equipmentType}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.carrier?.equipmentType ? 'border-red-400' : 'border-gray-300'}`}
+                      placeholder="Equipment Type *"
+                    />
+                    {errors.carrier?.equipmentType && <p className="text-red-600 text-xs mt-1">{errors.carrier.equipmentType}</p>}
+                  </div>
+
+                  {/* Carrier Fees is calculated from charges; click to open charges popup */}
+                  <div>
+                    <input
+                      type="text"
+                      name="carrierFees"
+                      value={formData.carrierFees}
+                      onClick={handleChargesClick}
+                      readOnly
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer ${errors.carrier?.fees ? 'border-red-400' : 'border-gray-300'}`}
+                      placeholder="Carrier Fees * (Click to add charges)"
+                    />
+                    {errors.carrier?.fees && <p className="text-red-600 text-xs mt-1">{errors.carrier.fees}</p>}
+                  </div>
                 </div>
+
+                {/* Optional: show row-level charge errors if your charges popup isn't open */}
+                {Array.isArray(errors.carrier?.chargeRows) && errors.carrier.chargeRows.some(r => r.name || r.quantity || r.amt) && (
+                  <div className="mt-3 text-xs text-red-600">
+                    Please correct the charge rows (Name*, Quantity*, Amount*).
+                  </div>
+                )}
               </div>
+
 
               {/* Shipper Information Section */}
               <div className="bg-purple-50 p-4 rounded-lg">
@@ -3030,284 +3233,386 @@ export default function DeliveryOrder() {
 
                 {/* Shipper Basic Info */}
                 <div className="grid grid-cols-4 gap-4 mb-4">
-                  <input
-                    type="text"
-                    name="shipperName"
-                    value={formData.shipperName}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Shipper Name *"
-                  />
-                  <input
-                    type="text"
-                    name="containerNo"
-                    value={formData.containerNo}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Container No *"
-                  />
-                  <input
-                    type="text"
-                    name="containerType"
-                    value={formData.containerType}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Container Type *"
-                  />
+                  <div>
+                    <input
+                      type="text"
+                      name="shipperName"
+                      value={formData.shipperName}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.shipper?.shipperName ? 'border-red-400' : 'border-gray-300'}`}
+                      placeholder="Shipper Name *"
+                    />
+                    {errors.shipper?.shipperName && <p className="text-red-600 text-xs mt-1">{errors.shipper.shipperName}</p>}
+                  </div>
 
+                  <div>
+                    <input
+                      type="text"
+                      name="containerNo"
+                      value={formData.containerNo}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.shipper?.containerNo ? 'border-red-400' : 'border-gray-300'}`}
+                      placeholder="Container No *"
+                    />
+                    {errors.shipper?.containerNo && <p className="text-red-600 text-xs mt-1">{errors.shipper.containerNo}</p>}
+                  </div>
+
+                  <div>
+                    <input
+                      type="text"
+                      name="containerType"
+                      value={formData.containerType}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.shipper?.containerType ? 'border-red-400' : 'border-gray-300'}`}
+                      placeholder="Container Type *"
+                    />
+                    {errors.shipper?.containerType && <p className="text-red-600 text-xs mt-1">{errors.shipper.containerType}</p>}
+                  </div>
                 </div>
 
+                {/* Pickup Locations */}
                 {/* Pickup Locations */}
                 <div className="bg-white p-4 rounded-lg mb-4">
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
-                    <button
-                      type="button"
-                      onClick={addPickupLocation}
-                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                    >
+                    <button type="button" onClick={addPickupLocation} className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition">
                       + Add Location
                     </button>
                   </div>
 
-                  {formData.pickupLocations.map((location, locationIndex) => (
-                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-                      <div className="flex justify-between items-center mb-3">
-                        <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
-                        {formData.pickupLocations.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removePickupLocation(locationIndex)}
-                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                          >
-                            Remove
-                          </button>
-                        )}
+                  {formData.pickupLocations.map((location, locationIndex) => {
+                    const lErr = errors.pickups?.[locationIndex] || {};
+                    return (
+                      <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                        <div className="flex justify-between items-center mb-3">
+                          <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
+                          {formData.pickupLocations.length > 1 && (
+                            <button type="button" onClick={() => removePickupLocation(locationIndex)} className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition">
+                              Remove
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <input
+                              type="text"
+                              value={location.name}
+                              onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.name ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder="Location Name *"
+                            />
+                            {lErr.name && <p className="text-red-600 text-xs mt-1">{lErr.name}</p>}
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              value={location.address}
+                              onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.address ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder="Address *"
+                            />
+                            {lErr.address && <p className="text-red-600 text-xs mt-1">{lErr.address}</p>}
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              value={location.city}
+                              onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.city ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder="City *"
+                            />
+                            {lErr.city && <p className="text-red-600 text-xs mt-1">{lErr.city}</p>}
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              value={location.state}
+                              onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.state ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder="State *"
+                            />
+                            {lErr.state && <p className="text-red-600 text-xs mt-1">{lErr.state}</p>}
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              value={location.zipCode}
+                              onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.zipCode ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder="Zip Code *"
+                            />
+                            {lErr.zipCode && <p className="text-red-600 text-xs mt-1">{lErr.zipCode}</p>}
+                          </div>
+
+                          <div>
+                            <input
+                              type="number"
+                              value={formData.pickupLocations?.[locationIndex]?.weight ?? ''}
+                              onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
+                              onKeyDown={blockIntChars}
+                              min="1"
+                              step="1"
+                              inputMode="numeric"
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.weight ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder="Weight (lbs) *"
+                            />
+                            {lErr.weight && <p className="text-red-600 text-xs mt-1">{lErr.weight}</p>}
+                          </div>
+
+                          {/* Make entire field area clickable by also focusing the input on container click */}
+                          <div onClick={(e) => e.currentTarget.querySelector('input')?.focus()}>
+                            <input
+                              type="datetime-local"
+                              value={location.pickUpDate}
+                              onChange={(e) => handlePickupLocationChange(locationIndex, 'pickUpDate', e.target.value)}
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.pickUpDate ? 'border-red-400' : 'border-gray-300'}`}
+                              placeholder="Pickup Date & Time *"
+                            />
+                            {lErr.pickUpDate && <p className="text-red-600 text-xs mt-1">{lErr.pickUpDate}</p>}
+                          </div>
+
+                          <textarea
+                            value={location.remarks || ''}
+                            onChange={(e) => handlePickupLocationChange(locationIndex, 'remarks', e.target.value)}
+                            className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 mt-2"
+                            placeholder="Pickup remarks (optional)"
+                          />
+                        </div>
                       </div>
-
-                      <div className="grid grid-cols-3 gap-4">
-                        <input
-                          type="text"
-                          value={location.name}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Location Name *"
-                        />
-                        <input
-                          type="text"
-                          value={location.address}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Address *"
-                        />
-                        <input
-                          type="text"
-                          value={location.city}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="City *"
-                        />
-                        <input
-                          type="text"
-                          value={location.state}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="State *"
-                        />
-                        <input
-                          type="text"
-                          value={location.zipCode}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Zip Code *"
-                        />
-                        <input
-                          type="number"
-                          value={formData.pickupLocations?.[locationIndex]?.weight ?? ''}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
-                          required
-                          inputMode="decimal"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Weight (lbs) *"
-                        />
-
-
-
-                        <input
-                          type="datetime-local"
-                          value={location.pickUpDate}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'pickUpDate', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Pickup Date & Time *"
-                        />
-                        <textarea
-                          value={location.remarks || ''}
-                          onChange={(e) => handlePickupLocationChange(locationIndex, 'remarks', e.target.value)}
-                          className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mt-2"
-                          placeholder="Pickup remarks (optional)"
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+
 
                 {/* Drop Locations */}
-                <div className="bg-white p-4 rounded-lg">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
-                    <button
-                      type="button"
-                      onClick={addDropLocation}
-                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                    >
-                      + Add Location
-                    </button>
-                  </div>
+                {/* Drop Locations */}
+<div className="bg-white p-4 rounded-lg">
+  <div className="flex justify-between items-center mb-3">
+    <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
+    <button
+      type="button"
+      onClick={addDropLocation}
+      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+    >
+      + Add Location
+    </button>
+  </div>
 
-                  {formData.dropLocations.map((location, locationIndex) => (
-                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-                      <div className="flex justify-between items-center mb-3">
-                        <h5 className="text-sm font-semibold text-gray-700">Drop Location {locationIndex + 1}</h5>
-                        {formData.dropLocations.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeDropLocation(locationIndex)}
-                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
+  {formData.dropLocations.map((location, locationIndex) => {
+    const dErr = errors.drops?.[locationIndex] || {};
+    return (
+      <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+        <div className="flex justify-between items-center mb-3">
+          <h5 className="text-sm font-semibold text-gray-700">
+            Drop Location {locationIndex + 1}
+          </h5>
+          {formData.dropLocations.length > 1 && (
+            <button
+              type="button"
+              onClick={() => removeDropLocation(locationIndex)}
+              className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+            >
+              Remove
+            </button>
+          )}
+        </div>
 
-                      <div className="grid grid-cols-3 gap-4">
-                        <input
-                          type="text"
-                          value={location.name}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'name', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Location Name *"
-                        />
-                        <input
-                          type="text"
-                          value={location.address}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'address', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Address *"
-                        />
-                        <input
-                          type="text"
-                          value={location.city}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'city', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="City *"
-                        />
-                        <input
-                          type="text"
-                          value={location.state}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'state', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="State *"
-                        />
-                        <input
-                          type="text"
-                          value={location.zipCode}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Zip Code *"
-                        />
-                        <input
-                          type="number"
-                          value={formData.dropLocations?.[locationIndex]?.weight ?? ''}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
-                          required
-                          inputMode="decimal"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Weight (lbs) *"
-                        />
+        <div className="grid grid-cols-3 gap-4">
+          {/* Location Name * */}
+          <div>
+            <input
+              type="text"
+              value={location.name}
+              onChange={(e) =>
+                handleDropLocationChange(locationIndex, 'name', e.target.value)
+              }
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                dErr.name ? 'border-red-400' : 'border-gray-300'
+              }`}
+              placeholder="Location Name *"
+            />
+            {dErr.name && (
+              <p className="text-red-600 text-xs mt-1">{dErr.name}</p>
+            )}
+          </div>
 
+          {/* Address * */}
+          <div>
+            <input
+              type="text"
+              value={location.address}
+              onChange={(e) =>
+                handleDropLocationChange(locationIndex, 'address', e.target.value)
+              }
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                dErr.address ? 'border-red-400' : 'border-gray-300'
+              }`}
+              placeholder="Address *"
+            />
+            {dErr.address && (
+              <p className="text-red-600 text-xs mt-1">{dErr.address}</p>
+            )}
+          </div>
 
-                        <input
-                          type="datetime-local"
-                          value={location.dropDate}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'dropDate', e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Drop Date & Time *"
-                        />
-                        <textarea
-                          value={location.remarks || ''}
-                          onChange={(e) => handleDropLocationChange(locationIndex, 'remarks', e.target.value)}
-                          className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mt-2"
-                          placeholder="Drop remarks (optional)"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {/* City * */}
+          <div>
+            <input
+              type="text"
+              value={location.city}
+              onChange={(e) =>
+                handleDropLocationChange(locationIndex, 'city', e.target.value)
+              }
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                dErr.city ? 'border-red-400' : 'border-gray-300'
+              }`}
+              placeholder="City *"
+            />
+            {dErr.city && (
+              <p className="text-red-600 text-xs mt-1">{dErr.city}</p>
+            )}
+          </div>
+
+          {/* State * */}
+          <div>
+            <input
+              type="text"
+              value={location.state}
+              onChange={(e) =>
+                handleDropLocationChange(locationIndex, 'state', e.target.value)
+              }
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                dErr.state ? 'border-red-400' : 'border-gray-300'
+              }`}
+              placeholder="State *"
+            />
+            {dErr.state && (
+              <p className="text-red-600 text-xs mt-1">{dErr.state}</p>
+            )}
+          </div>
+
+          {/* Zip Code * (alphanumeric + format) */}
+          <div>
+            <input
+              type="text"
+              value={location.zipCode}
+              onChange={(e) =>
+                handleDropLocationChange(locationIndex, 'zipCode', e.target.value)
+              }
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                dErr.zipCode ? 'border-red-400' : 'border-gray-300'
+              }`}
+              placeholder="Zip Code *"
+            />
+            {dErr.zipCode && (
+              <p className="text-red-600 text-xs mt-1">{dErr.zipCode}</p>
+            )}
+          </div>
+
+          {/* Weight * (digits only, positive; block e/E/+/-/.) */}
+          <div>
+            <input
+              type="number"
+              value={formData.dropLocations?.[locationIndex]?.weight ?? ''}
+              onChange={(e) =>
+                handleDropLocationChange(locationIndex, 'weight', e.target.value)
+              }
+              onKeyDown={blockIntChars}
+              min="1"
+              step="1"
+              inputMode="numeric"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                dErr.weight ? 'border-red-400' : 'border-gray-300'
+              }`}
+              placeholder="Weight (lbs) *"
+            />
+            {dErr.weight && (
+              <p className="text-red-600 text-xs mt-1">{dErr.weight}</p>
+            )}
+          </div>
+
+          {/* Drop Date * (make whole area clickable to open picker) */}
+          <div
+            onClick={(e) => {
+              const input = e.currentTarget.querySelector('input');
+              if (input?.showPicker) input.showPicker();
+              else input?.focus();
+            }}
+          >
+            <input
+              type="datetime-local"
+              value={location.dropDate}
+              onChange={(e) =>
+                handleDropLocationChange(locationIndex, 'dropDate', e.target.value)
+              }
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                dErr.dropDate ? 'border-red-400' : 'border-gray-300'
+              }`}
+              placeholder="Drop Date & Time *"
+            />
+            {dErr.dropDate && (
+              <p className="text-red-600 text-xs mt-1">{dErr.dropDate}</p>
+            )}
+          </div>
+
+          {/* Remarks (optional) */}
+          <textarea
+            value={location.remarks || ''}
+            onChange={(e) =>
+              handleDropLocationChange(locationIndex, 'remarks', e.target.value)
+            }
+            className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 mt-2"
+            placeholder="Drop remarks (optional)"
+          />
+        </div>
+      </div>
+    );
+  })}
+</div>
+
               </div>
 
               {/* Document Upload */}
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Document Upload</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Document Upload <span className="text-red-500">*</span></h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-center w-full">
-                    <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                    <label htmlFor="file-upload" className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${errors.docs ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100'}`}>
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                          <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
-                        </svg>
+                        {/* ...icon... */}
                         <p className="mb-2 text-sm text-gray-500">
                           <span className="font-semibold">Click to upload</span> or drag and drop
                         </p>
                         <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
                       </div>
-                      <input
-                        id="file-upload"
-                        type="file"
-                        className="hidden"
-                        onChange={handleFileChange}
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      />
+                      <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
                     </label>
                   </div>
+
+                  {errors.docs && <p className="text-red-600 text-xs">{errors.docs}</p>}
+
                   {formData.docs && (
                     <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
                       <div className="flex items-center space-x-3">
-                        <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
+                        {/* ...icon... */}
                         <div>
                           <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
                           <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
+                      <button type="button" onClick={() => setFormData(prev => ({ ...prev, docs: null }))} className="text-red-500 hover:text-red-700 transition-colors">
+                        {/* X icon */}
+                        Remove
                       </button>
                     </div>
                   )}
                 </div>
               </div>
+
 
 
 
@@ -4555,10 +4860,10 @@ export default function DeliveryOrder() {
                     <span className="text-red-700 font-medium">Warning</span>
                   </div>
                   <p className="text-red-600 text-sm mt-2">
-                    You are about to delete the delivery order <strong>{orderToDelete?.id}</strong> 
+                    You are about to delete the delivery order <strong>{orderToDelete?.id}</strong>
                     {orderToDelete?.customers?.[0]?.loadNo && (
                       <> with Load Number <strong>{orderToDelete.customers[0].loadNo}</strong></>
-                    )}. 
+                    )}.
                     This action will mark the order as inactive.
                   </p>
                 </div>
