@@ -12,6 +12,7 @@ export default function Loads() {
   const [previewImg, setPreviewImg] = useState(null);
   const [modalType, setModalType] = useState(null);
   const [selectedLoad, setSelectedLoad] = useState(null);
+  const [creatingDrayage, setCreatingDrayage] = useState(false);
   const [reason, setReason] = useState('');
   const [showAddLoadForm, setShowAddLoadForm] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -48,17 +49,49 @@ export default function Loads() {
   };
 
   // format to keep only digits and a single dot, and max 2 decimals 
+  // format to keep only digits and a single dot, allow trailing dot, and max 2 decimals
   const sanitizeMoney2 = (v) => {
-    if (!v) return '';
-    v = v.replace(/[^\d.]/g, '');          // remove non-digit/non-dot
-    const parts = v.split('.');
-    if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join(''); // keep only first dot
-    const [intP = '', decP = ''] = v.split('.');
-    const intClean = intP.replace(/^0+(?=\d)/, '') || (intP ? '0' : ''); // keep 0 if only decimals
-    const decClean = decP.slice(0, 2);
-    return decP !== '' && v.includes('.') ? `${intClean || '0'}.${decClean}` : intClean;
+    if (v == null) return '';
+    v = String(v);
+
+    // Keep only digits and dots
+    v = v.replace(/[^\d.]/g, '');
+
+    // Keep only the first dot, remove the rest
+    const firstDot = v.indexOf('.');
+    if (firstDot !== -1) {
+      v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+    }
+
+    const endsWithDot = v.endsWith('.');
+    let [intP = '', decP = ''] = v.split('.');
+
+    // Remove leading zeros but keep single 0 if needed
+    intP = intP.replace(/^0+(?=\d)/, '');
+
+    // If user typed only ".", show "0."
+    if (v === '.') return '0.';
+
+    // If there is a dot and user hasn't typed decimals yet, keep the dot visible
+    if (endsWithDot) return (intP || '0') + '.';
+
+    // If there is a dot with decimals, cap to 2 decimals
+    if (firstDot !== -1) {
+      decP = decP.slice(0, 2);
+      return (intP || '0') + (decP ? '.' + decP : '');
+    }
+
+    // No dot case
+    return intP;
   };
 
+  // Show date as DD-MM-YYYY without timezone drift
+  const toDMY = (val) => {
+    if (!val) return 'N/A';
+    const isoPart = String(val).split('T')[0];        // e.g., "2025-09-15"
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoPart);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : isoPart;   // => "15-09-2025"
+  };
   // Make full date field clickable
   const openDatePicker = (refName) => {
     const el = fieldRefs.current[refName];
@@ -124,15 +157,17 @@ export default function Loads() {
     vehicleType: (v) => v ? '' : 'Please enter the Vehicle Type.',
     commodity: (v) => v ? '' : 'Please enter the Commodity.',
     weight: (v) => {
-      if (!v) return 'Please enter the weight.';    // (As given in your sheet)
+      if (!v) return 'Please enter the Weight.';
       if (!MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
+      if (parseFloat(v) <= 0) return 'Please enter a weight more than 0.';
       return '';
     },
     rate: (v) => {
-      if (!v) return 'Please enter the Expected Price';
+      if (!v) return 'Please enter the Expected Price.';
       if (!MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
       return '';
     },
+
     rateType: (v) => v ? '' : '', // they only said "unable to enter"; not mandating text. Keep permissive.
     pickupDate: (v) => v ? '' : 'Please select the Pickup Date .',
     deliveryDate: (v, all) => {
@@ -177,17 +212,18 @@ export default function Loads() {
   // ✅ Submit
   const handleLoadSubmit = async (e) => {
     e.preventDefault();
+
+    // pehle se chal raha global guard
     if (creatingLoad) return;
 
-    // Client validation
+    // NEW: DRAYAGE single-shot guard
+    if (loadType === 'DRAYAGE' && creatingDrayage) return;
+
+    // client-side validation
     if (!validateAll()) return;
 
-    // Guard against negative / malformed numbers (extra safety)
-    const weightOk = MONEY2.test(loadForm.weight || '');
-    const rateOk = MONEY2.test(loadForm.rate || '');
-    if (!weightOk || !rateOk) return; // messages already set above
-
-    const token = sessionStorage.getItem("token");
+    // token fallback (sessionStorage || localStorage)
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     if (!token) {
       alertify.error("You're not logged in.");
       return;
@@ -195,28 +231,32 @@ export default function Loads() {
 
     const payload = {
       loadType,
-      shipperId: loadForm.shipperId,
-      fromCity: loadForm.fromCity.trim(),
-      fromState: loadForm.fromState.trim(),
-      toCity: loadForm.toCity.trim(),
-      toState: loadForm.toState.trim(),
-      vehicleType: loadForm.vehicleType.trim(),
-      commodity: loadForm.commodity.trim(),
-      weight: parseFloat(loadForm.weight),
-      rate: parseFloat(loadForm.rate),
-      rateType: loadForm.rateType.trim() || 'Flat Rate',
+      shipperId: (loadForm.shipperId || "").trim(),
+      fromCity: (loadForm.fromCity || "").trim(),
+      fromState: (loadForm.fromState || "").trim(),
+      toCity: (loadForm.toCity || "").trim(),
+      toState: (loadForm.toState || "").trim(),
+      vehicleType: (loadForm.vehicleType || "").trim(),
+      commodity: (loadForm.commodity || "").trim(),
+      // trailing dot safe parse: "12." -> "12"
+      weight: parseFloat((loadForm.weight || '').replace(/\.$/, '')),
+      rate: parseFloat((loadForm.rate || '').replace(/\.$/, '')),
+      rateType: (loadForm.rateType || 'Flat Rate').trim(),
       pickupDate: loadForm.pickupDate,
       deliveryDate: loadForm.deliveryDate,
       bidDeadline: loadForm.bidDeadline,
-      // map UI "Return Location" -> API "drayageLocation"
       ...(loadType === 'DRAYAGE' ? {
         returnDate: loadForm.returnDate,
-        drayageLocation: loadForm.returnLocation.trim(),
+        // backend compat: dono bhejo
+        returnLocation: (loadForm.returnLocation || '').trim(),
+        drayageLocation: (loadForm.returnLocation || '').trim(),
       } : {}),
     };
 
     try {
-      setCreatingLoad(true); // loader ON & prevent double submit (one OTR at a time)
+      setCreatingLoad(true);
+      if (loadType === 'DRAYAGE') setCreatingDrayage(true);
+
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`,
         payload,
@@ -231,6 +271,7 @@ export default function Loads() {
       if (res.data?.success) {
         alertify.success("✅ Load created successfully!");
         setShowLoadCreationModal(false);
+
         // reset form
         setLoadForm({
           shipperId: "",
@@ -250,7 +291,7 @@ export default function Loads() {
           returnLocation: "",
         });
         setFormErrors({});
-        fetchLoads();
+        fetchLoads(); // refresh table
       } else {
         alertify.error(res.data?.message || "❌ Load creation failed.");
       }
@@ -259,8 +300,10 @@ export default function Loads() {
       alertify.error(err?.response?.data?.message || "❌ Backend validation failed.");
     } finally {
       setCreatingLoad(false);
+      if (loadType === 'DRAYAGE') setCreatingDrayage(false);
     }
   };
+
 
   useEffect(() => {
     const fetchShippers = async () => {
@@ -308,305 +351,181 @@ export default function Loads() {
   const itemsPerPage = 9;
 
   // Fetch data from API
+  // Top pe, itemsPerPage aapka UI ke liye rahe — yeh sirf API se sab laayega.
+  const PAGE_SIZE = 200;   // ek request me kitne laane hain; aap 500/1000 bhi kar sakte ho (server allow kare to)
+
+  // Helper: API response se array nikaalo (aapke API me kabhi 'loads', kabhi 'data')
+  const pickArray = (data) => Array.isArray(data?.loads) ? data.loads : (Array.isArray(data?.data) ? data.data : []);
+
+  // REPLACE your fetchLoads with this:
   const fetchLoads = async () => {
     try {
       setLoading(true);
-      console.log('Fetching loads from:', `${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`);
 
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
-        timeout: 10000, // 10 second timeout
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true // Add this for authentication
-      });
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
 
-      console.log('API Response:', response);
+      let page = 1;
+      let allRaw = [];
+      const seen = new Set(); // _id dedupe (agar server same page de)
 
-      if (response.data && response.data.success && response.data.loads && Array.isArray(response.data.loads) && response.data.loads.length > 0) {
-        // Transform API data to match our component structure
-        const transformedLoads = response.data.loads.map((load, index) => {
-          try {
-            console.log(`Processing load ${index}:`, load);
-
-            // Check if load has required properties
-            if (!load || !load._id) {
-              console.warn(`Load ${index} is missing required properties:`, load);
-              return {
-                id: `LD-ERROR-${index}`,
-                loadNum: 'Invalid Data',
-                shipmentNumber: 'N/A',
-                origin: 'N/A',
-                destination: 'N/A',
-                rate: 0,
-                truckerName: 'N/A',
-                status: 'error',
-                createdAt: 'N/A',
-                createdBy: 'N/A',
-                docUpload: 'sample-doc.jpg',
-                remarks: 'Invalid load data'
-              };
-            }
-
-            // Handle origin - could be string or object with city/state
-            let originText = 'N/A';
-            if (load.origin) {
-              if (typeof load.origin === 'string') {
-                originText = load.origin;
-              } else if (load.origin.city && load.origin.state) {
-                originText = `${load.origin.city}, ${load.origin.state}`;
-              } else if (load.origin.city) {
-                originText = load.origin.city;
-              } else if (load.origin.addressLine1) {
-                originText = load.origin.addressLine1;
-              }
-            }
-
-            // Handle destination - could be string or object with city/state
-            let destinationText = 'N/A';
-            if (load.destination) {
-              if (typeof load.destination === 'string') {
-                destinationText = load.destination;
-              } else if (load.destination.city && load.destination.state) {
-                destinationText = `${load.destination.city}, ${load.destination.state}`;
-              } else if (load.destination.city) {
-                destinationText = load.destination.city;
-              } else if (load.destination.addressLine1) {
-                destinationText = load.destination.addressLine1;
-              }
-            }
-
-            // Get trucker name from assignedTo or acceptedBid
-            let truckerName = 'N/A';
-            if (load.assignedTo) {
-              if (typeof load.assignedTo === 'string') {
-                truckerName = load.assignedTo;
-              } else if (load.assignedTo.compName) {
-                truckerName = load.assignedTo.compName;
-              }
-            } else if (load.acceptedBid && load.acceptedBid.driverName) {
-              truckerName = load.acceptedBid.driverName;
-            } else if (load.carrier && load.carrier.compName) {
-              truckerName = load.carrier.compName;
-            }
-
-            // Map API status to component status
-            let status = 'available';
-            if (load.status) {
-              switch (load.status.toLowerCase()) {
-                case 'posted':
-                case 'bidding':
-                  status = 'available';
-                  break;
-                case 'assigned':
-                  status = 'assigned';
-                  break;
-                case 'in transit':
-                  status = 'in-transit';
-                  break;
-                case 'completed':
-                case 'delivered':
-                  status = 'completed';
-                  break;
-                default:
-                  status = load.status.toLowerCase();
-              }
-            }
-
-            const transformedLoad = {
-              id: `LD-${load._id?.slice(-6) || '000000'}`,
-              loadNum: load._id || 'N/A',
-              shipmentNumber: load.shipmentNumber || 'N/A',
-              origin: originText,
-              destination: destinationText,
-              rate: load.rate || 0,
-              truckerName: truckerName,
-              status: status,
-              createdAt: load.pickupDate ? new Date(load.pickupDate).toISOString().split('T')[0] :
-                load.createdAt ? new Date(load.createdAt).toISOString().split('T')[0] : 'N/A',
-              createdBy: `Shipper: ${load.shipper?.compName || 'N/A'}`,
-              docUpload: 'sample-doc.jpg',
-              remarks: load.commodity || load.notes || ''
-            };
-
-            console.log(`Transformed load ${index}:`, transformedLoad);
-            return transformedLoad;
-          } catch (error) {
-            console.error(`Error processing load ${index}:`, error, load);
-            return {
-              id: `LD-ERROR-${index}`,
-              loadNum: 'Error',
-              shipmentNumber: 'Error',
-              origin: 'Error',
-              destination: 'Error',
-              rate: 0,
-              truckerName: 'Error',
-              status: 'error',
-              createdAt: 'Error',
-              createdBy: 'Error',
-              docUpload: 'sample-doc.jpg',
-              remarks: 'Error processing data'
-            };
-          }
+      // 1) Try page/limit style pagination
+      while (true) {
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
+          timeout: 15000,
+          withCredentials: true,
+          headers,
+          params: { page, limit: PAGE_SIZE, sort: "-createdAt" },
         });
 
-        console.log('Transformed loads:', transformedLoads);
-        setLoads(transformedLoads);
-      } else {
-        console.error('API response format error:', response.data);
-        console.log('Response data structure:', {
-          success: response.data?.success,
-          hasLoads: !!response.data?.loads,
-          loadsLength: response.data?.loads?.length,
-          loadsType: typeof response.data?.loads,
-          dataKeys: response.data ? Object.keys(response.data) : []
+        let chunk = pickArray(res.data);
+
+        // Dedupe by _id to avoid infinite loop if server ignores 'page'
+        chunk = chunk.filter((l) => {
+          const id = l?._id || "";
+          if (!id || seen.has(id)) return false;
+          seen.add(id);
+          return true;
         });
 
-        // If API returns empty data, show empty state
-        if (response.data && response.data.success && (!response.data.loads || response.data.loads.length === 0)) {
-          console.log('API returned empty loads array');
-          setLoads([]);
-          return;
-        }
-        // Try alternative data structure
-        if (response.data && response.data.data) {
-          console.log('Trying alternative data structure:', response.data.data);
-          const transformedLoads = response.data.data.map((load, index) => {
-            try {
-              // Handle origin
-              let originText = 'N/A';
-              if (load.origin) {
-                if (typeof load.origin === 'string') {
-                  originText = load.origin;
-                } else if (load.origin.city && load.origin.state) {
-                  originText = `${load.origin.city}, ${load.origin.state}`;
-                } else if (load.origin.city) {
-                  originText = load.origin.city;
-                } else if (load.origin.addressLine1) {
-                  originText = load.origin.addressLine1;
-                }
-              }
+        allRaw = allRaw.concat(chunk);
 
-              // Handle destination
-              let destinationText = 'N/A';
-              if (load.destination) {
-                if (typeof load.destination === 'string') {
-                  destinationText = load.destination;
-                } else if (load.destination.city && load.destination.state) {
-                  destinationText = `${load.destination.city}, ${load.destination.state}`;
-                } else if (load.destination.city) {
-                  destinationText = load.destination.city;
-                } else if (load.destination.addressLine1) {
-                  destinationText = load.destination.addressLine1;
-                }
-              }
+        // Stop conditions
+        const hasMoreFlag = (res.data?.hasMore === true) || (res.data?.nextPageToken ? true : false);
+        if (!hasMoreFlag && chunk.length < PAGE_SIZE) break;  // last page
+        if (chunk.length === 0) break;                        // nothing new
 
-              // Get trucker name
-              let truckerName = 'N/A';
-              if (load.assignedTo) {
-                if (typeof load.assignedTo === 'string') {
-                  truckerName = load.assignedTo;
-                } else if (load.assignedTo.compName) {
-                  truckerName = load.assignedTo.compName;
-                }
-              } else if (load.acceptedBid && load.acceptedBid.driverName) {
-                truckerName = load.acceptedBid.driverName;
-              } else if (load.carrier && load.carrier.compName) {
-                truckerName = load.carrier.compName;
-              }
+        page += 1;
+        if (page > 50) break;                                 // safety cap
+      }
 
-              // Map status
-              let status = 'available';
-              if (load.status) {
-                switch (load.status.toLowerCase()) {
-                  case 'posted':
-                  case 'bidding':
-                    status = 'available';
-                    break;
-                  case 'assigned':
-                    status = 'assigned';
-                    break;
-                  case 'in transit':
-                    status = 'in-transit';
-                    break;
-                  case 'completed':
-                  case 'delivered':
-                    status = 'completed';
-                    break;
-                  default:
-                    status = load.status.toLowerCase();
-                }
-              }
-
-              return {
-                id: `LD-${load._id?.slice(-6) || '000000'}`,
-                loadNum: load._id || 'N/A',
-                shipmentNumber: load.shipmentNumber || 'N/A',
-                origin: originText,
-                destination: destinationText,
-                rate: load.rate || 0,
-                truckerName: truckerName,
-                status: status,
-                createdAt: load.pickupDate ? new Date(load.pickupDate).toISOString().split('T')[0] :
-                  load.createdAt ? new Date(load.createdAt).toISOString().split('T')[0] : 'N/A',
-                createdBy: `Shipper: ${load.shipper?.compName || 'N/A'}`,
-                docUpload: 'sample-doc.jpg',
-                remarks: load.commodity || load.notes || ''
-              };
-            } catch (error) {
-              console.error(`Error processing alternative load ${index}:`, error);
-              return {
-                id: `LD-ERROR-${index}`,
-                loadNum: 'Error',
-                shipmentNumber: 'Error',
-                origin: 'Error',
-                destination: 'Error',
-                rate: 0,
-                truckerName: 'Error',
-                status: 'error',
-                createdAt: 'Error',
-                createdBy: 'Error',
-                docUpload: 'sample-doc.jpg',
-                remarks: 'Error processing data'
-              };
-            }
+      // 2) If server ignored 'page' (still few items), try skip/offset style
+      if (allRaw.length > 0 && allRaw.length % PAGE_SIZE === 0) {
+        // keep pulling with skip until chunk < PAGE_SIZE
+        let skip = allRaw.length;
+        while (true) {
+          const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
+            timeout: 15000,
+            withCredentials: true,
+            headers,
+            params: { skip, limit: PAGE_SIZE, sort: "-createdAt" },
           });
-          setLoads(transformedLoads);
+          let chunk = pickArray(res.data).filter((l) => {
+            const id = l?._id || "";
+            if (!id || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          });
+          if (chunk.length === 0) break;
+          allRaw = allRaw.concat(chunk);
+          if (chunk.length < PAGE_SIZE) break;
+          skip += chunk.length;
+          if (skip > 100000) break; // safety
         }
       }
-    } catch (error) {
-      console.error('Error fetching loads:', error);
-      console.error('Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        url: error.config?.url
+
+      // 3) Fallback: if still empty, do one simple call
+      if (allRaw.length === 0) {
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
+          timeout: 15000, withCredentials: true, headers,
+        });
+        allRaw = pickArray(res.data);
+      }
+
+      // === Your existing transform logic (kept same) ===
+      const transformedLoads = allRaw.map((load, index) => {
+        try {
+          // origin
+          let originText = 'N/A';
+          if (load.origin) {
+            if (typeof load.origin === 'string') originText = load.origin;
+            else if (load.origin.city && load.origin.state) originText = `${load.origin.city}, ${load.origin.state}`;
+            else if (load.origin.city) originText = load.origin.city;
+            else if (load.origin.addressLine1) originText = load.origin.addressLine1;
+          }
+          // destination
+          let destinationText = 'N/A';
+          if (load.destination) {
+            if (typeof load.destination === 'string') destinationText = load.destination;
+            else if (load.destination.city && load.destination.state) destinationText = `${load.destination.city}, ${load.destination.state}`;
+            else if (load.destination.city) destinationText = load.destination.city;
+            else if (load.destination.addressLine1) destinationText = load.destination.addressLine1;
+          }
+          // trucker
+          let truckerName = 'N/A';
+          if (load.assignedTo) {
+            if (typeof load.assignedTo === 'string') truckerName = load.assignedTo;
+            else if (load.assignedTo.compName) truckerName = load.assignedTo.compName;
+          } else if (load.acceptedBid?.driverName) {
+            truckerName = load.acceptedBid.driverName;
+          } else if (load.carrier?.compName) {
+            truckerName = load.carrier.compName;
+          }
+          // status
+          let status = 'available';
+          if (load.status) {
+            switch (load.status.toLowerCase()) {
+              case 'posted':
+              case 'bidding': status = 'available'; break;
+              case 'assigned': status = 'assigned'; break;
+              case 'in transit': status = 'in-transit'; break;
+              case 'completed':
+              case 'delivered': status = 'completed'; break;
+              default: status = load.status.toLowerCase();
+            }
+          }
+
+          return {
+            id: `LD-${load._id?.slice(-6) || '000000'}`,
+            loadNum: load._id || 'N/A',
+            shipmentNumber: load.shipmentNumber || 'N/A',
+            origin: originText,
+            destination: destinationText,
+            rate: load.rate || 0,
+            truckerName,
+            status,
+            createdAt: load.pickupDate
+              ? new Date(load.pickupDate).toISOString().split('T')[0]
+              : load.createdAt
+                ? new Date(load.createdAt).toISOString().split('T')[0]
+                : 'N/A',
+            createdBy: `Shipper: ${load.shipper?.compName || 'N/A'}`,
+            docUpload: 'sample-doc.jpg',
+            remarks: load.commodity || load.notes || '',
+          };
+        } catch {
+          return {
+            id: `LD-ERROR-${index}`,
+            loadNum: 'Error',
+            shipmentNumber: 'Error',
+            origin: 'Error',
+            destination: 'Error',
+            rate: 0,
+            truckerName: 'Error',
+            status: 'error',
+            createdAt: 'Error',
+            createdBy: 'Error',
+            docUpload: 'sample-doc.jpg',
+            remarks: 'Error processing data'
+          };
+        }
       });
 
+      // Latest first
+      transformedLoads.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+      setLoads(transformedLoads);
+    } catch (error) {
+      console.error('Error fetching loads:', error);
       alertify.error(`Failed to load loads: ${error.response?.status || 'Network Error'}`);
-      // Fallback to sample data if API fails
-      const sampleLoads = [
-        {
-          id: 'LD-001',
-          loadNum: '6884a05c28ae6f73d1db8759',
-          shipmentNumber: 'SH-2024-001',
-          origin: 'New York, NY',
-          destination: 'Los Angeles, CA',
-          rate: 2500,
-          truckerName: 'John Trucker',
-          status: 'available',
-          createdAt: new Date().toISOString().split('T')[0],
-          createdBy: 'Employee 1234',
-          docUpload: 'sample-doc.jpg',
-          remarks: 'Available load for long distance haul'
-        }
-      ];
-      setLoads(sampleLoads);
     } finally {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchLoads();
@@ -945,7 +864,10 @@ export default function Loads() {
               <div className="flex items-center gap-2 text-gray-700"><Phone size={16} /> <span className="font-medium">Rate:</span> ${selectedLoad.rate.toLocaleString()}</div>
               <div className="flex items-center gap-2 text-gray-700"><Truck size={16} /> <span className="font-medium">Origin:</span> {selectedLoad.origin}</div>
               <div className="flex items-center gap-2 text-gray-700"><DollarSign size={16} /> <span className="font-medium">Destination:</span> {selectedLoad.destination}</div>
-              <div className="flex items-center gap-2 text-gray-700"><Calendar size={16} /> <span className="font-medium">Created:</span> {selectedLoad.createdAt}</div>
+              <div className="flex items-center gap-2 text-gray-700">
+                <Calendar size={16} /> <span className="font-medium">Created:</span> {toDMY(selectedLoad.createdAt)}
+              </div>
+
               {selectedLoad.remarks && (
                 <div className="flex items-center gap-2 text-gray-700"><FileText size={16} /> <span className="font-medium">Remarks:</span> {selectedLoad.remarks}</div>
               )}
@@ -1030,7 +952,8 @@ export default function Loads() {
                     </td>
                     <td className="py-2 px-3">
                       <div>
-                        <p className="text-sm text-gray-800">{load.createdAt}</p>
+                        <p className="text-sm text-gray-800">{toDMY(load.createdAt)}</p>
+
                         <p className="text-xs text-gray-500">by {load.createdBy}</p>
                       </div>
                     </td>
@@ -1073,8 +996,8 @@ export default function Loads() {
                 key={page}
                 onClick={() => handlePageChange(page)}
                 className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'border-gray-300 hover:bg-gray-50'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'border-gray-300 hover:bg-gray-50'
                   }`}
               >
                 {page}
@@ -1125,7 +1048,7 @@ export default function Loads() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} noValidate className="p-6 space-y-6">
               {/* First Row - Shipment Number & Trucker Name */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Shipment Number */}
@@ -1242,8 +1165,8 @@ export default function Loads() {
                   onClick={handleCloseModal}
                   disabled={submitting}
                   className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
-                      ? 'opacity-50 cursor-not-allowed text-gray-400'
-                      : 'text-gray-700 hover:bg-gray-50'
+                    ? 'opacity-50 cursor-not-allowed text-gray-400'
+                    : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   Cancel
@@ -1252,8 +1175,8 @@ export default function Loads() {
                   type="submit"
                   disabled={submitting}
                   className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:from-blue-600 hover:to-blue-700'
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-blue-600 hover:to-blue-700'
                     }`}
                 >
                   {submitting ? (
@@ -1274,6 +1197,15 @@ export default function Loads() {
       {showLoadCreationModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex justify-center items-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-8 border border-blue-300">
+            {/* NEW: Loader overlay (sirf DRAYAGE par) */}
+            {(loadType === "DRAYAGE" && creatingDrayage) && (
+              <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                  <span className="text-blue-700 font-semibold">Creating DRAYAGE load…</span>
+                </div>
+              </div>
+            )}
 
             {/* Header */}
             <div className="flex justify-between items-center mb-8">
@@ -1282,18 +1214,21 @@ export default function Loads() {
                 {["OTR", "DRAYAGE"].map((type) => (
                   <button
                     key={type}
-                    onClick={() => { setLoadType(type); setFormErrors({}); }}
+                    onClick={() => { if (!creatingDrayage) { setLoadType(type); setFormErrors({}); } }}
+                    disabled={creatingDrayage}
                     className={`px-6 py-2 rounded-full font-medium transition-all ${loadType === type ? "bg-blue-600 text-white" : "text-blue-700 hover:bg-blue-200"
-                      }`}
+                      } ${creatingDrayage ? "opacity-60 cursor-not-allowed" : ""}`}
+                    title={creatingDrayage ? "Submission in progress…" : ""}
                   >
                     {type}
                   </button>
                 ))}
               </div>
+
             </div>
 
             {/* Form */}
-            <form onSubmit={handleLoadSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={handleLoadSubmit} noValidate className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Shipper */}
               <div className="col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Select Shipper <span className="text-red-600">*</span></label>
@@ -1535,7 +1470,9 @@ export default function Loads() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Location <span className="text-red-600">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Return Location <span className="text-red-600">*</span>
+                    </label>
                     <input
                       ref={(el) => (fieldRefs.current['returnLocation'] = el)}
                       name="returnLocation"
@@ -1545,6 +1482,7 @@ export default function Loads() {
                       className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.returnLocation ? 'border-red-400' : 'border-gray-300'}`}
                     />
                     {formErrors.returnLocation && <p className="text-xs text-red-600 mt-1">{formErrors.returnLocation}</p>}
+
                   </div>
                 </>
               )}
@@ -1561,20 +1499,24 @@ export default function Loads() {
                 </button>
                 <button
                   type="submit"
-                  disabled={creatingLoad}
-                  className={`px-6 py-2 rounded-lg text-white font-semibold shadow flex items-center justify-center gap-2 ${creatingLoad ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                  disabled={creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)}
+                  className={`px-6 py-2 rounded-lg text-white font-semibold shadow flex items-center justify-center gap-2 ${(creatingLoad || (loadType === "DRAYAGE" && creatingDrayage))
+                    ? "bg-blue-400 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700"
                     }`}
-                  title="Make sure at one time only one OTR is created"
+                  title={loadType === "DRAYAGE" ? "Make sure at one time only one DRAYAGE is created" : undefined}
                 >
-                  {creatingLoad ? (
+                  {(creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)) ? (
                     <>
                       <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                       Submitting...
                     </>
                   ) : (
-                    'Submit'
+                    "Submit"
                   )}
                 </button>
+
+
               </div>
             </form>
           </div>

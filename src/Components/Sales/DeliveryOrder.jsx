@@ -1147,8 +1147,10 @@ export default function DeliveryOrder() {
     });
 
     // --- Carrier section ---
-    if (!formData.carrierName) next.carrier.carrierName = 'Please enter the Carrier Name.';
-    else if (!isAlpha(formData.carrierName)) next.carrier.carrierName = 'Carrier Name should contain only letters.';
+   if (!formData.carrierName?.trim()) {
+  next.carrier.carrierName = 'Please enter the Carrier Name.';
+}
+
 
     if (!formData.equipmentType) next.carrier.equipmentType = 'Please enter the Equipment Type .';
 
@@ -1191,8 +1193,12 @@ export default function DeliveryOrder() {
       if (!l.state) lErr.state = 'Please enter the state .';
       if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
       else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
-      if (l.weight === '' || l.weight === null) lErr.weight = 'Please enter the weight.';
-      else if (!isPosInt(l.weight)) lErr.weight = 'Weight must be digits and positive.';
+     if (l.weight === '' || l.weight === null) {
+  lErr.weight = 'Please enter the weight.';
+} else if (!isNonNegInt(l.weight)) {
+  lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
+}
+
       if (!l.pickUpDate) lErr.pickUpDate = 'Please select the pickup date.';
       next.pickups[i] = lErr;
     });
@@ -1206,8 +1212,12 @@ export default function DeliveryOrder() {
       if (!l.state) lErr.state = 'Please enter the state .';
       if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
       else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
-      if (l.weight === '' || l.weight === null) lErr.weight = 'Please enter the weight.';
-      else if (!isPosInt(l.weight)) lErr.weight = 'Weight must be digits and positive.';
+     if (l.weight === '' || l.weight === null) {
+  lErr.weight = 'Please enter the weight.';
+} else if (!isNonNegInt(l.weight)) {
+  lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
+}
+
       if (!l.dropDate) lErr.dropDate = 'Please select the drop date.';
       next.drops[i] = lErr;
     });
@@ -3355,7 +3365,7 @@ export default function DeliveryOrder() {
                               value={formData.pickupLocations?.[locationIndex]?.weight ?? ''}
                               onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
                               onKeyDown={blockIntChars}
-                              min="1"
+                              min="0"
                               step="1"
                               inputMode="numeric"
                               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.weight ? 'border-red-400' : 'border-gray-300'}`}
@@ -3522,7 +3532,7 @@ export default function DeliveryOrder() {
                 handleDropLocationChange(locationIndex, 'weight', e.target.value)
               }
               onKeyDown={blockIntChars}
-              min="1"
+              min="0"
               step="1"
               inputMode="numeric"
               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
