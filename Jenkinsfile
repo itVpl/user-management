@@ -115,7 +115,7 @@ pipeline {
           cp -r "$SRC/"* "$REL_DIR/"
 
           # permissions so nginx can read
-          sudo chown -R jenkins:jenkins "$REL_DIR"
+          # sudo chown -R jenkins:jenkins "$REL_DIR"
 
           # atomic switch
           ln -sfn "$REL_DIR" "$APP_DIR/current"
