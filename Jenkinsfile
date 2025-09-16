@@ -61,7 +61,7 @@ pipeline {
           npm config set audit false
           npm config set progress false
           npm config set prefer-offline true
-          npm config set jobs 1
+          
         '''
       }
     }
