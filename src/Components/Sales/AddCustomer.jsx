@@ -1,16 +1,154 @@
-import React, { useEffect, useState } from 'react';
+// src/pages/AddCustomer.jsx
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { User, Building2, FileText, PlusCircle, X } from 'lucide-react';
+import { User, Building2, FileText, PlusCircle, Eye, EyeOff, Search } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+/* ---------------- Reusable components ---------------- */
+const Input = React.memo(function Input({
+  name, label, placeholder, type = 'text', icon = null, required = false,
+  inputProps = {}, value, onChange, onBlur, error, rightNode = null, inputRef = null,
+}) {
+  return (
+    <div className="w-full">
+      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor={name}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</div>}
+        <input
+          ref={inputRef}
+          id={name}
+          autoComplete="off"
+          type={type}
+          name={name}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          aria-invalid={!!error}
+          className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+            icon ? 'pl-10' : ''
+          } ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''} ${
+            rightNode ? 'pr-10' : ''
+          }`}
+          {...inputProps}
+        />
+        {rightNode && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">{rightNode}</div>
+        )}
+      </div>
+      {error && (
+        <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+});
+
+const CustomerTable = React.memo(function CustomerTable({ customers }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+
+  const totalPages = Math.max(1, Math.ceil(customers.length / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [customers.length, totalPages, page]);
+
+  const pageData = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return customers.slice(start, start + pageSize);
+  }, [customers, page]);
+
+  return (
+    <div className="bg-white shadow rounded-xl overflow-auto">
+      <table className="min-w-full text-sm text-gray-700">
+        <thead className="bg-gray-100 text-xs uppercase text-gray-600">
+          <tr>
+            <th className="px-4 py-3 text-left">Company Name</th>
+            <th className="px-4 py-3 text-left">MC/DOT</th>
+            <th className="px-4 py-3 text-left">Country</th>
+            <th className="px-4 py-3 text-left">State</th>
+            <th className="px-4 py-3 text-left">City</th>
+            <th className="px-4 py-3 text-left">Phone</th>
+            <th className="px-4 py-3 text-left">Email</th>
+            <th className="px-4 py-3 text-left">Status</th>
+            <th className="px-4 py-3 text-left">Added On</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pageData.map((cust, index) => (
+            <tr key={index} className="hover:bg-gray-50 transition-all">
+              <td className="px-4 py-3 border-b border-gray-100">{cust.compName}</td>
+              <td className="px-4 py-3 border-b border-gray-100">{cust.mc_dot_no}</td>
+              <td className="px-4 py-3 border-b border-gray-100">{cust.country}</td>
+              <td className="px-4 py-3 border-b border-gray-100">{cust.state}</td>
+              <td className="px-4 py-3 border-b border-gray-100">{cust.city}</td>
+              <td className="px-4 py-3 border-b border-gray-100">{cust.phoneNo}</td>
+              <td className="px-4 py-3 border-b border-gray-100">{cust.email}</td>
+              <td className="px-4 py-3 border-b border-gray-100 capitalize">{cust.status}</td>
+              <td className="px-4 py-3 border-b border-gray-100">
+                {cust.addedAt ? new Date(cust.addedAt).toLocaleDateString() : 'N/A'}
+              </td>
+            </tr>
+          ))}
+          {pageData.length === 0 && (
+            <tr>
+              <td className="px-4 py-4 text-center text-gray-500" colSpan="9">
+                No customer data available
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between p-3">
+        <span className="text-xs text-gray-500">
+          Showing {customers.length ? (page - 1) * pageSize + 1 : 0}–
+          {Math.min(page * pageSize, customers.length)} of {customers.length}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className={`px-3 py-1 rounded border ${
+              page === 1 ? 'text-gray-400 border-gray-200' : 'border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            Prev
+          </button>
+          <span className="text-sm">Page {page} / {totalPages}</span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className={`px-3 py-1 rounded border ${
+              page === totalPages ? 'text-gray-400 border-gray-200' : 'border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/* ---------------- Page ---------------- */
 const initialForm = {
   compName: '',
   mc_dot_no: '',
   phoneNo: '',
   email: '',
   password: '',
+  confirmPassword: '',
   compAdd: '',
   country: '',
   state: '',
@@ -18,69 +156,56 @@ const initialForm = {
   zipcode: '',
 };
 
+const getToken = () =>
+  sessionStorage.getItem('token') ||
+  localStorage.getItem('token') ||
+  sessionStorage.getItem('authToken') ||
+  localStorage.getItem('authToken') ||
+  null;
+
+// Regex rules
+const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const phoneRegex = /^[0-9]{10}$/;
+const zipRegex = /^[A-Za-z0-9]{5,8}$/; // 5–8 alphanumeric
+const passComboRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*(\d|\W)).{8,14}$/;
+
 const AddCustomer = () => {
   const [customers, setCustomers] = useState([]);
   const [todayStats, setTodayStats] = useState({ totalAdded: 0 });
   const [totalStats, setTotalStats] = useState({ totalCustomers: 0, pendingCustomers: 0 });
   const [open, setOpen] = useState(false);
+
   const [formData, setFormData] = useState(initialForm);
-  const [formValid, setFormValid] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // field refs for focusing
+  const fieldRefs = useRef({});
+
+  // Password visible by default
+  const [showPassword, setShowPassword] = useState(true);
+  const [showConfirm, setShowConfirm] = useState(true);
+
+  // Search (debounced)
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     fetchAllCustomers();
     fetchTodayStats();
   }, []);
 
-  useEffect(() => {
-    setFormValid(validateForm(formData));
-  }, [formData]);
-
-  const validateForm = (data) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^[0-9]{10}$/;
-    const zipRegex = /^[0-9]{5,6}$/;
-
-    return (
-      data.compName.trim() !== '' &&
-      data.mc_dot_no.trim() !== '' &&
-      phoneRegex.test(data.phoneNo) &&
-      emailRegex.test(data.email) &&
-      data.password.trim().length >= 6 &&
-      data.compAdd.trim() !== '' &&
-      data.country.trim() !== '' &&
-      data.state.trim() !== '' &&
-      data.city.trim() !== '' &&
-      zipRegex.test(data.zipcode)
-    );
-  };
-
-  const handleBlur = (e) => {
-    const { name, value } = e.target;
-    let errorMsg = '';
-
-    if (name === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      errorMsg = 'Invalid email';
-    } else if (name === 'phoneNo' && !/^[0-9]{10}$/.test(value)) {
-      errorMsg = 'Phone must be 10 digits';
-    } else if (name === 'password' && value.length < 6) {
-      errorMsg = 'Password must be at least 6 characters';
-    } else if (name === 'zipcode' && !/^[0-9]{5,6}$/.test(value)) {
-      errorMsg = 'Zipcode must be 5 or 6 digits';
-    } else if (value.trim() === '') {
-      errorMsg = 'This field is required';
-    }
-
-    setErrors((prev) => ({ ...prev, [name]: errorMsg }));
-  };
-
   const fetchAllCustomers = async () => {
     try {
-      const token = sessionStorage.getItem('token');
-      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token = getToken();
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       if (res.data.success) {
         setCustomers(res.data.customers || []);
         setTotalStats(res.data.statistics || {});
@@ -92,49 +217,148 @@ const AddCustomer = () => {
 
   const fetchTodayStats = async () => {
     try {
-      const token = sessionStorage.getItem('token');
-      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/today-count`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.data.success) {
-        setTodayStats(res.data.todayStats || {});
-      }
+      const token = getToken();
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/today-count`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.data.success) setTodayStats(res.data.todayStats || {});
     } catch (error) {
       console.error("❌ Error fetching today's stats:", error);
     }
   };
+
+  // Local fallback count
+  const todaysCountLocal = useMemo(() => {
+    const t = new Date();
+    const y = t.getFullYear(), m = t.getMonth(), d = t.getDate();
+    return customers.filter(c => {
+      if (!c.addedAt) return false;
+      const dt = new Date(c.addedAt);
+      return dt.getFullYear() === y && dt.getMonth() === m && dt.getDate() === d;
+    }).length;
+  }, [customers]);
+  const todaysCountDisplay = Math.max(todayStats.totalAdded || 0, todaysCountLocal);
+
+  // Validators with exact messages
+  const validators = {
+    compName: v => (v.trim() ? '' : 'Please enter the company name.'),
+    mc_dot_no: v => (v.trim() ? '' : 'Please enter the Dot Number.'),
+    compAdd: v => (v.trim() ? '' : 'Please enter the company address.'),
+    email: v => {
+      if (!v.trim()) return 'Please enter the email id.';
+      if (/\s/.test(v)) return 'Please enter the valid email id.';
+      if (!emailRegex.test(v)) return 'Please enter the valid email id.';
+      return '';
+    },
+    phoneNo: v => {
+      if (!v.trim()) return 'Please enter the mobile number.';
+      if (!/^[0-9]+$/.test(v)) return 'Please enter the valid mobile number.';
+      if (!phoneRegex.test(v)) return 'Please enter the valid mobile number.';
+      if (!/^[6-9]/.test(v)) return 'Please enter the valid mobile number.';
+      return '';
+    },
+    password: v => {
+      if (v.length < 8) return 'Please enter the minimum 8 characters.';
+      if (v.length > 14) return 'Please enter the valid password.';
+      if (!passComboRegex.test(v))
+        return 'Please enter all combinations of passwords like uppercase ,lowercase,number or symbol';
+      return '';
+    },
+    confirmPassword: (v, data) =>
+      v !== data.password ? 'Kindly ensure the  password and confirm password are the same' : '',
+    country: v => (v.trim() ? '' : 'Please enter the country name.'),
+    state: v => (v.trim() ? '' : 'Please enter the state name.'),
+    city: v => (v.trim() ? '' : 'Please enter the city name.'),
+    zipcode: v => {
+      if (!v.trim()) return 'Please enter the Zip/Postal code.';
+      if (!zipRegex.test(v)) return 'Please enter the Zip/Postal code.';
+      return '';
+    },
+  };
+
+  const validateAll = useCallback((data) => {
+    const newErrors = {};
+    Object.entries(validators).forEach(([k, fn]) => {
+      const msg = fn(data[k], data);
+      if (msg) newErrors[k] = msg;
+    });
+    // duplicate email (front-end)
+    if (!newErrors.email && data.email) {
+      const exists = customers.some(
+        c => (c?.email || '').trim().toLowerCase() === data.email.trim().toLowerCase()
+      );
+      if (exists) newErrors.email = 'Already registered the customer with this email id.';
+    }
+    setErrors(newErrors);
+    return newErrors;
+  }, [customers]);
+
+  const focusField = (fieldName) => {
+    const el = fieldRefs.current?.[fieldName];
+    if (el?.focus) {
+      el.focus();
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleBlur = useCallback((e) => {
+    const { name, value } = e.target;
+    if (!validators[name]) return;
+    const msg = validators[name](value, formData);
+    setErrors(prev => ({ ...prev, [name]: msg }));
+  }, [formData]);
+
+  const handleChange = useCallback((e) => {
+    const { name, value } = e.target;
+    let v = value;
+    if (name === 'email') v = v.replace(/\s+/g, '');
+    if (name === 'phoneNo') v = v.replace(/\D+/g, '').slice(0, 10);
+    if (name === 'zipcode') v = v.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    setFormData(prev => ({ ...prev, [name]: v }));
+  }, []);
 
   const handleOpen = () => setOpen(true);
   const handleClose = () => {
     setOpen(false);
     setFormData(initialForm);
     setErrors({});
+    setShowPassword(true);
+    setShowConfirm(true);
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async () => {
-    if (!formValid) {
-      toast.error('Please fill all fields correctly!');
+  const handleSubmit = async (e) => {
+    e?.preventDefault?.();
+    const token = getToken();
+    if (!token) {
+      // keep toast for non-field issue
+      toast.error('Token not found. Please login again.');
       return;
     }
 
-    const token = sessionStorage.getItem('token');
-    if (!token) {
-      toast.error('Token not found. Please login again.');
+    // validate all — NO error toast, only inline + focus first field
+    const newErrors = validateAll(formData);
+    const keys = Object.keys(newErrors);
+    if (keys.length > 0) {
+      focusField(keys[0]);
+      return;
+    }
+
+    // safety duplicate check
+    const exists = customers.some(
+      c => (c?.email || '').trim().toLowerCase() === formData.email.trim().toLowerCase()
+    );
+    if (exists) {
+      setErrors(prev => ({ ...prev, email: 'Already registered the customer with this email id.' }));
+      focusField('email');
       return;
     }
 
     try {
       setLoading(true);
       const cleanedData = Object.fromEntries(
-        Object.entries(formData).map(([k, v]) => [k, v.trim()])
+        Object.entries(formData).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
       );
-
-      console.log('🚀 Submitting Data:', cleanedData);
 
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-customer`,
@@ -142,54 +366,46 @@ const AddCustomer = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-             if (res.data.success) {
-         toast.success('✅ Customer added successfully!');
-         handleClose();
-         fetchAllCustomers();
-         fetchTodayStats(); // Also refresh today's stats
-       } else {
-         toast.error('❌ Failed: ' + res.data.message || 'Unknown error');
-       }
-         } catch (error) {
-       console.error("❌ Error in Add Customer:", error?.response?.data || error.message);
-       toast.error("❌ Failed: " + (error?.response?.data?.message || 'Unexpected error'));
-     } finally {
+      if (res?.data?.success) {
+        toast.success('Customer Created successfully!.'); // success popup ok
+        handleClose();
+        await fetchAllCustomers();
+        await fetchTodayStats();
+      } else {
+        // server message — optional toast (not field-level)
+        toast.error('❌ Failed: ' + (res?.data?.message || 'Unknown error'));
+      }
+    } catch (error) {
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        'Unexpected error';
+
+      if (
+        error?.response?.status === 409 ||
+        /already.*(registered|exists)/i.test(msg) ||
+        /duplicate/i.test(msg)
+      ) {
+        setErrors(prev => ({ ...prev, email: 'Already registered the customer with this email id.' }));
+        focusField('email');
+      } else {
+        toast.error('❌ Failed: ' + msg); // non-field error toast is fine
+      }
+    } finally {
       setLoading(false);
     }
   };
 
-  const renderInput = (name, placeholder, type = 'text', icon = null) => (
-    <div className="relative">
-      {icon && (
-        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-          {icon}
-        </div>
-      )}
-      <input
-        type={type}
-        name={name}
-        placeholder={placeholder}
-        value={formData[name]}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-          icon ? 'pl-10' : ''
-        } ${errors[name] ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
-      />
-      {errors[name] && (
-        <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
-          {errors[name]}
-        </p>
-      )}
-    </div>
-  );
+  const filteredCustomers = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter(c => (c?.compName || '').toLowerCase().includes(q));
+  }, [customers, debouncedSearch]);
 
   return (
     <div className="p-6">
-      {/* Top Stats */}
+      {/* Stats + Search + Add */}
       <div className="flex gap-4 mb-6 flex-wrap items-center justify-between">
         <div className="flex gap-4 flex-wrap">
           <div className="bg-white w-[250px] shadow-md rounded-2xl px-4 py-3 flex items-center space-x-4">
@@ -198,7 +414,7 @@ const AddCustomer = () => {
             </div>
             <div>
               <h2 className="text-sm font-medium text-gray-600">Total Customers</h2>
-              <p className="text-xl font-bold text-green-600">{totalStats.totalCustomers}</p>
+              <p className="text-xl font-bold text-green-600">{totalStats.totalCustomers || 0}</p>
             </div>
           </div>
 
@@ -208,78 +424,39 @@ const AddCustomer = () => {
             </div>
             <div>
               <h2 className="text-sm font-medium text-gray-600">Today's Customers</h2>
-              <p className="text-xl font-bold text-blue-600">{todayStats.totalAdded}</p>
+              <p className="text-xl font-bold text-blue-600">{Math.max(todaysCountDisplay, 0)}</p>
             </div>
           </div>
-
-          {/* <div className="bg-white w-[250px] shadow-md rounded-2xl px-4 py-3 flex items-center space-x-4">
-            <div className="bg-yellow-100 p-2 rounded-lg">
-              <FileText className="w-6 h-6 text-yellow-600" />
-            </div>
-            <div>
-              <h2 className="text-sm font-medium text-gray-600">Pending Docs</h2>
-              <p className="text-xl font-bold text-yellow-600">{totalStats.pendingCustomers}</p>
-            </div>
-          </div> */}
         </div>
 
-        {/* Add Button */}
-        <button
-          onClick={handleOpen}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition flex items-center gap-2 mt-4 sm:mt-0"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Add Customer
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by company name"
+              className="w-64 px-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          </div>
+
+          <button
+            onClick={handleOpen}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition flex items-center gap-2"
+          >
+            <PlusCircle className="w-5 h-5" />
+            Add Customer
+          </button>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white shadow rounded-xl overflow-auto">
-        <table className="min-w-full text-sm text-gray-700">
-          <thead className="bg-gray-100 text-xs uppercase text-gray-600">
-            <tr>
-              <th className="px-4 py-3 text-left">Company Name</th>
-              <th className="px-4 py-3 text-left">MC/DOT</th>
-              <th className="px-4 py-3 text-left">Country</th>
-              <th className="px-4 py-3 text-left">State</th>
-              <th className="px-4 py-3 text-left">City</th>
-              <th className="px-4 py-3 text-left">Phone</th>
-              <th className="px-4 py-3 text-left">Email</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left">Added On</th>
-            </tr>
-          </thead>
-          <tbody>
-            {customers.map((cust, index) => (
-              <tr key={index} className="hover:bg-gray-50 transition-all">
-                <td className="px-4 py-3 border-b border-gray-100">{cust.compName}</td>
-                <td className="px-4 py-3 border-b border-gray-100">{cust.mc_dot_no}</td>
-                <td className="px-4 py-3 border-b border-gray-100">{cust.country}</td>
-                <td className="px-4 py-3 border-b border-gray-100">{cust.state}</td>
-                <td className="px-4 py-3 border-b border-gray-100">{cust.city}</td>
-                <td className="px-4 py-3 border-b border-gray-100">{cust.phoneNo}</td>
-                <td className="px-4 py-3 border-b border-gray-100">{cust.email}</td>
-                <td className="px-4 py-3 border-b border-gray-100 capitalize">{cust.status}</td>
-                <td className="px-4 py-3 border-b border-gray-100">
-                  {cust.addedAt ? new Date(cust.addedAt).toLocaleDateString() : 'N/A'}
-                </td>
-              </tr>
-            ))}
-            {customers.length === 0 && (
-              <tr>
-                <td className="px-4 py-4 text-center text-gray-500" colSpan="9">
-                  No customer data available
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Table hidden while modal open */}
+      {!open && <CustomerTable customers={filteredCustomers} />}
 
-             {/* Enhanced Modal */}
-       {open && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-transparent p-4">
-           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative scrollbar-hide">
+      {/* Modal */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/10 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -292,8 +469,8 @@ const AddCustomer = () => {
                     <p className="text-blue-100">Enter customer information below</p>
                   </div>
                 </div>
-                <button 
-                  onClick={handleClose} 
+                <button
+                  onClick={handleClose}
                   className="text-white hover:text-gray-200 text-2xl font-bold transition-colors"
                 >
                   ×
@@ -301,111 +478,274 @@ const AddCustomer = () => {
               </div>
             </div>
 
-                         {/* Form */}
-             <div className="p-8">
-               <div className="space-y-6">
-                 {/* Company Information */}
-                 <div className="space-y-4">
-                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
-                     <Building2 className="text-blue-600" size={20} />
-                     Company Information
-                   </h3>
-                   
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                     {renderInput('compName', 'Company Name', 'text', <Building2 className="w-5 h-5" />)}
-                     {renderInput('mc_dot_no', 'MC/DOT Number', 'text', <FileText className="w-5 h-5" />)}
-                     {renderInput('compAdd', 'Company Address', 'text', <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                     </svg>)}
-                   </div>
-                 </div>
-
-                 {/* Contact Information */}
-                 <div className="space-y-4">
-                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
-                     <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                     </svg>
-                     Contact Information
-                   </h3>
-                   
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                     {renderInput('email', 'Email Address', 'email', <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                     </svg>)}
-                     {renderInput('phoneNo', 'Phone Number', 'tel', <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                     </svg>)}
-                     {renderInput('password', 'Password', 'password', <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                     </svg>)}
-                   </div>
-                 </div>
-
-                                 {/* Location Information */}
-                 <div className="space-y-4">
-                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
-                     <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                     </svg>
-                     Location Details
-                   </h3>
-                   
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     {renderInput('country', 'Country', 'text', <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                     </svg>)}
-                     {renderInput('state', 'State/Province', 'text', <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                     </svg>)}
-                     {renderInput('city', 'City', 'text', <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                     </svg>)}
-                     {renderInput('zipcode', 'Zip/Postal Code', 'text', <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                     </svg>)}
-                   </div>
-                 </div>
-
-                {/* Additional Info */}
-                <div className="space-y-4">
+            {/* Form */}
+            <form className="p-8" onSubmit={handleSubmit}>
+              <div className="space-y-8">
+                {/* Company Information */}
+                <div>
                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
-                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Additional Information
+                    <Building2 className="text-blue-600" size={20} />
+                    Company Information
                   </h3>
-                  
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-sm font-medium text-blue-800">Form Validation</span>
-                    </div>
-                    <p className="text-xs text-blue-700">
-                      All fields are required. Email must be valid format. Phone number must be 10 digits. Password must be at least 6 characters.
-                    </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Input
+                      name="compName"
+                      label="Company Name"
+                      required
+                      placeholder="Enter company name"
+                      icon={<Building2 className="w-5 h-5" />}
+                      value={formData.compName}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.compName}
+                      inputRef={el => (fieldRefs.current.compName = el)}
+                    />
+
+                    <Input
+                      name="mc_dot_no"
+                      label="MC/DOT Number"
+                      required
+                      placeholder="Enter MC/DOT number"
+                      icon={<FileText className="w-5 h-5" />}
+                      value={formData.mc_dot_no}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.mc_dot_no}
+                      inputRef={el => (fieldRefs.current.mc_dot_no = el)}
+                    />
+
+                    <Input
+                      name="compAdd"
+                      label="Company Address"
+                      required
+                      placeholder="Enter company address"
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      }
+                      value={formData.compAdd}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.compAdd}
+                      inputRef={el => (fieldRefs.current.compAdd = el)}
+                    />
                   </div>
+                </div>
+
+                {/* Contact Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Contact Information
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Input
+                      name="email"
+                      label="Email Address"
+                      required
+                      placeholder="e.g. abc@gmail.com"
+                      value={formData.email}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.email}
+                      inputProps={{ inputMode: 'email', autoCapitalize: 'none', autoCorrect: 'off' }}
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                        </svg>
+                      }
+                      inputRef={el => (fieldRefs.current.email = el)}
+                    />
+
+                    <Input
+                      name="phoneNo"
+                      label="Mobile Number"
+                      required
+                      placeholder="10-digit mobile"
+                      value={formData.phoneNo}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.phoneNo}
+                      inputProps={{ inputMode: 'numeric', maxLength: 10, pattern: '[0-9]*' }}
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                      }
+                      inputRef={el => (fieldRefs.current.phoneNo = el)}
+                    />
+
+                    <Input
+                      name="password"
+                      label="Password"
+                      required
+                      placeholder="8–14 chars, mix cases & num/symbol"
+                      value={formData.password}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.password}
+                      inputProps={{ autoCapitalize: 'none', autoCorrect: 'off' }}
+                      type={showPassword ? 'text' : 'password'}
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      }
+                      rightNode={
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(s => !s)}
+                          className="p-1"
+                          aria-label="Toggle password visibility"
+                        >
+                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      }
+                      inputRef={el => (fieldRefs.current.password = el)}
+                    />
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <Input
+                      name="confirmPassword"
+                      label="Confirm Password"
+                      required
+                      placeholder="Re-enter password"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.confirmPassword}
+                      inputProps={{ autoCapitalize: 'none', autoCorrect: 'off' }}
+                      type={showConfirm ? 'text' : 'password'}
+                      rightNode={
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirm(s => !s)}
+                          className="p-1"
+                          aria-label="Toggle confirm password visibility"
+                        >
+                          {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      }
+                      inputRef={el => (fieldRefs.current.confirmPassword = el)}
+                    />
+                  </div>
+                </div>
+
+                {/* Location Details */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Location Details
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input
+                      name="country"
+                      label="Country"
+                      required
+                      placeholder="Enter country"
+                      value={formData.country}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.country}
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      }
+                      inputRef={el => (fieldRefs.current.country = el)}
+                    />
+                    <Input
+                      name="state"
+                      label="State"
+                      required
+                      placeholder="Enter state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.state}
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      }
+                      inputRef={el => (fieldRefs.current.state = el)}
+                    />
+                    <Input
+                      name="city"
+                      label="City"
+                      required
+                      placeholder="Enter city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.city}
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      }
+                      inputRef={el => (fieldRefs.current.city = el)}
+                    />
+                    <Input
+                      name="zipcode"
+                      label="Zip/Postal Code"
+                      required
+                      placeholder="5–8 letters/numbers"
+                      value={formData.zipcode}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.zipcode}
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                      }
+                      inputRef={el => (fieldRefs.current.zipcode = el)}
+                    />
+                  </div>
+                </div>
+
+                {/* Tip */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-medium text-blue-800">Form Validation</span>
+                  </div>
+                  <p className="text-xs text-blue-700">
+                    Required fields have (<span className="text-red-500">*</span>). Email without spaces. Mobile 10 digits starting 6–9. Password 8–14 with upper, lower & number/symbol.
+                  </p>
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Actions */}
               <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-gray-200">
-                <button 
-                  onClick={handleClose} 
-                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleSubmit}
-                  disabled={!formValid || loading}
-                  className={`px-6 py-3 rounded-xl font-semibold text-white transition-all duration-200 flex items-center gap-2 ${
-                    formValid && !loading 
-                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl' 
+                  type="submit"
+                  disabled={loading}
+                  className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${
+                    !loading
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
                       : 'bg-gray-300 cursor-not-allowed'
                   }`}
                 >
@@ -422,26 +762,26 @@ const AddCustomer = () => {
                   )}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
-       )}
+      )}
 
-       {/* Toast Container */}
-       <ToastContainer
-         position="top-right"
-         autoClose={3000}
-         hideProgressBar={false}
-         newestOnTop={false}
-         closeOnClick
-         rtl={false}
-         pauseOnFocusLoss
-         draggable
-         pauseOnHover
-         theme="light"
-       />
-     </div>
-   );
- };
+      {/* Toasts (only success + non-field/server errors) */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+    </div>
+  );
+};
 
 export default AddCustomer;

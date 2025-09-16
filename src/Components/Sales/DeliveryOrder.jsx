@@ -147,15 +147,136 @@ export default function DeliveryOrder() {
     'image/jpeg',
     'image/png'
   ];
+  const sanitizeAlnum = (s = "") => s.replace(/[^A-Za-z0-9]/g, "");
+  // money (>= 0, max 2 decimals)
+  const isMoney2dp = (s = '') => {
+    if (s === '' || s === null) return false;
+    const str = String(s).trim();
+    if (!/^(\d+(\.\d{0,2})?)$/.test(str)) return false;
+    return Number(str) >= 0;
+  };
+  // ========= Clickable Date Input =========
+  const ClickableDateInput = ({
+    value,
+    onChange,
+    placeholder = 'mm/dd/yyyy --:-- --',
+    error,
+    min,
+    max,
+    mode = 'datetime', // 'date' | 'time' | 'datetime'
+    className = '',
+  }) => {
+    const inputRef = React.useRef(null);
+
+    const openPicker = () => {
+      if (!inputRef.current) return;
+      // Try to open native picker (Chrome/Edge)
+      try { inputRef.current.showPicker?.(); } catch { }
+      // Fallbacks
+      inputRef.current.focus();
+      // Safari/Firefox kuch cases me click se open hota hai
+      try { inputRef.current.click(); } catch { }
+    };
+
+    const type =
+      mode === 'date' ? 'date' :
+        mode === 'time' ? 'time' : 'datetime-local';
+
+    return (
+      <div
+        className={`relative cursor-pointer ${className}`}
+        role="button"
+        tabIndex={0}
+        onClick={openPicker}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } }}
+      >
+        <input
+          ref={inputRef}
+          type={type}
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          min={min}
+          max={max}
+          placeholder={placeholder}
+          className={`w-full px-4 py-3 border rounded-lg bg-white focus:outline-none focus:ring-2
+          ${error ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-gray-300 focus:ring-blue-500'}`}
+        />
+        {/* Calendar icon (clicks pass-through to wrapper) */}
+        <Calendar
+          size={18}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+        />
+        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      </div>
+    );
+  };
+  // ===== Scroll & focus first error (no popup) =====
+  const focusFirstError = () => {
+    // wait till React paints error classes
+    requestAnimationFrame(() => {
+      // priority: any element we tagged as an error field
+      const el =
+        document.querySelector('.error-field') ||
+        document.querySelector('[aria-invalid="true"]');
+
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        try {
+          // focus inputs; if wrapper div, try a child input
+          if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+          else {
+            const input = el.querySelector('input, textarea, select, [tabindex]');
+            input?.focus?.({ preventScroll: true });
+          }
+        } catch { }
+      } else {
+        // fallback: scroll to top of form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  };
+
+  // typing/paste sanitize: keeps only digits + one dot, trims to 2 dp
+  const clamp2dp = (s = '') => {
+    let t = String(s).replace(/[^\d.]/g, '');
+    const parts = t.split('.');
+    if (parts.length > 2) t = parts[0] + '.' + parts.slice(1).join('');
+    const [int = '0', dec = ''] = t.split('.');
+    return dec !== '' ? `${int}.${dec.slice(0, 2)}` : int;
+  };
+
+  // numeric to 2dp (for totals/payloads)
+  const toNum2 = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  };
+
+  // block e/E/+/- but allow dot
+  const blockMoneyChars = (e) => {
+    if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+  };
 
   // Validators
-  const isAlpha = (s = '') => /^[A-Za-z ]+$/.test(s.trim());
+
   const isAlnum = (s = '') => /^[A-Za-z0-9]+$/.test(s.trim());
   const isNonNegInt = (s) => /^\d+$/.test(String(s)) && Number(s) >= 0;
-  const isPosInt = (s) => /^\d+$/.test(String(s)) && Number(s) > 0;
+
   // US 5/9, India 6, Canada format
-  const isZip = (s = '') =>
-    /^(\d{5}(-\d{4})?|\d{6}|[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d)$/.test(s.trim());
+  // ZIP: only alphanumeric (no space/dash)
+  // Supports: US 5 or 9 (contiguous), India 6, Canada A1A1A1
+  const isZip = (s = '') => {
+    const v = String(s).trim();
+    return (
+      /^\d{5}(\d{4})?$/.test(v)     // 12345 or 123456789
+      || /^\d{6}$/.test(v)          // 560001 (India)
+      || /^[A-Za-z]\d[A-Za-z]\d[A-Za-z]\d$/.test(v) // A1A1A1 (Canada, no space)
+    );
+  };
+
+  // sanitize & keyguard for zip
+  const sanitizeAlphaNum = (s = '') => s.replace(/[^A-Za-z0-9]/g, '');
+
+
 
   // Block invalid chars in integer-only inputs
   const blockIntChars = (e) => {
@@ -640,6 +761,15 @@ export default function DeliveryOrder() {
 
   // Handle customer input changes
   const handleCustomerChange = (index, field, value) => {
+    // ✅ Work Order Number = only alphanumeric
+    if (field === 'workOrderNo') {
+      value = sanitizeAlnum(value);
+    }
+    // money fields sanitize while typing
+    if (['lineHaul', 'fsc', 'other'].includes(field)) {
+      value = clamp2dp(value);
+    }
+
     setFormData(prev => {
       const updatedCustomers = [...prev.customers];
       updatedCustomers[index] = {
@@ -648,10 +778,11 @@ export default function DeliveryOrder() {
       };
 
       // Calculate total amount for this customer
-      const lineHaul = parseInt(updatedCustomers[index].lineHaul) || 0;
-      const fsc = parseInt(updatedCustomers[index].fsc) || 0;
-      const other = parseInt(updatedCustomers[index].other) || 0;
-      updatedCustomers[index].totalAmount = lineHaul + fsc + other;
+      const lh = parseFloat(updatedCustomers[index].lineHaul) || 0;
+      const fsc = parseFloat(updatedCustomers[index].fsc) || 0;
+      const oth = parseFloat(updatedCustomers[index].other) || 0;
+      updatedCustomers[index].totalAmount = +(lh + fsc + oth).toFixed(2); // 3.66
+
 
       return {
         ...prev,
@@ -664,19 +795,23 @@ export default function DeliveryOrder() {
   const handlePickupLocationChange = (index, field, value) => {
     setFormData(prev => {
       const updated = [...prev.pickupLocations];
-      updated[index] = { ...updated[index], [field]: value };
+      const val = field === 'zipCode' ? sanitizeAlphaNum(value) : value;
+      updated[index] = { ...updated[index], [field]: val };
       return { ...prev, pickupLocations: updated };
     });
   };
+
 
   // Handle drop location input changes
   const handleDropLocationChange = (index, field, value) => {
     setFormData(prev => {
       const updated = [...prev.dropLocations];
-      updated[index] = { ...updated[index], [field]: value };
+      const val = field === 'zipCode' ? sanitizeAlphaNum(value) : value;
+      updated[index] = { ...updated[index], [field]: val };
       return { ...prev, dropLocations: updated };
     });
   };
+
 
   // Add new customer
   const addCustomer = () => {
@@ -791,78 +926,162 @@ export default function DeliveryOrder() {
     console.log('Charges popup opened, current charges state:', charges);
     setShowChargesPopup(true);
   };
+  // ===== Carrier Fees validation state & helpers =====
+  const [chargeErrors, setChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
+  const [chargesPopupError, setChargesPopupError] = useState('');
+
+  // keep errors array size in sync with charges rows
+  useEffect(() => {
+    setChargeErrors(prev =>
+      (charges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
+    );
+  }, [charges]);
+
+  // only letters & spaces (for charge name)
+  const onlyAlpha = (s = '') => s.replace(/[^A-Za-z ]/g, '');
+
+  // positive integers only (typing-friendly; empty allowed)
+  const clampPosInt = (s = '') => s.replace(/[^\d]/g, '');
+
+  // block e/E/+/-/. in number inputs (no negatives/scientific)
+  const blockIntNoSign = (e) => {
+    if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+  };
 
   // Handle charges input change
+  // ✅ Replace your handleChargeChange with this
   const handleChargeChange = (index, field, value) => {
-    const updatedCharges = [...charges];
-    updatedCharges[index] = {
-      ...updatedCharges[index],
-      [field]: value
-    };
+    const updated = [...charges];
 
-    // Calculate total for this charge
-    if (field === 'quantity' || field === 'amt') {
-      const quantity = field === 'quantity' ? value : updatedCharges[index].quantity;
-      const amt = field === 'amt' ? value : updatedCharges[index].amt;
-      updatedCharges[index].total = (parseFloat(quantity) || 0) * (parseFloat(amt) || 0);
-    }
+    if (field === 'name') value = onlyAlpha(value);
+    if (field === 'quantity' || field === 'amt') value = clampPosInt(value);
 
-    setCharges(updatedCharges);
+    updated[index] = { ...updated[index], [field]: value };
+
+    // total = quantity * amount (integers; zero allowed for live calc)
+    const q = parseInt(updated[index].quantity, 10) || 0;
+    const a = parseInt(updated[index].amt, 10) || 0;
+    updated[index].total = q * a;
+
+    setCharges(updated);
+
+    // clear inline error as user fixes the field
+    setChargeErrors(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index] };
+      if (field === 'name') next[index].name = '';
+      if (field === 'quantity') next[index].quantity = '';
+      if (field === 'amt') next[index].amt = '';
+      return next;
+    });
+    setChargesPopupError('');
   };
 
-  // Add new charge
+  // ✅ Replace your addCharge with this (keeps errors array in sync)
   const addCharge = () => {
-    setCharges(prev => [...prev, {
-      name: '',
-      quantity: '',
-      amt: '',
-      total: 0
-    }]);
+    setCharges(prev => [...prev, { name: '', quantity: '', amt: '', total: 0 }]);
+    setChargeErrors(prev => [...prev, { name: '', quantity: '', amt: '' }]);
   };
 
-  // Remove charge
+  // ✅ Replace your removeCharge with this (keeps errors array in sync)
   const removeCharge = (index) => {
     if (charges.length > 1) {
       setCharges(prev => prev.filter((_, i) => i !== index));
+      setChargeErrors(prev => prev.filter((_, i) => i !== index));
     }
   };
 
-  // Apply charges to carrier fees
+  // ✅ Replace your applyCharges with this (popup-inside validation)
   const applyCharges = async () => {
-    const totalCharges = charges.reduce((sum, charge) => sum + (charge.total || 0), 0);
-    setFormData(prev => ({
-      ...prev,
-      carrierFees: totalCharges.toString()
-    }));
-
-    // Also update the charges state to ensure it's properly set for updates
-    console.log('Applying charges:', charges);
-    console.log('Total charges:', totalCharges);
-
-    // If we're in edit mode, immediately update the carrier fees
-    if (editingOrder && editingOrder._id) {
-      try {
-        const carrierFeesData = charges.filter(charge => charge.name && charge.quantity && charge.amt).map(charge => ({
-          name: charge.name,
-          quantity: parseInt(charge.quantity) || 0,
-          amount: parseInt(charge.amt) || 0,
-          total: parseInt(charge.total) || 0
-        }));
-
-        console.log('Updating carrier fees immediately:', carrierFeesData);
-
-        const result = await updateCarrierFees(editingOrder._id, carrierFeesData);
-        if (result) {
-          alertify.success('Carrier fees updated successfully!');
-          setCarrierFeesJustUpdated(true); // Set flag to prevent duplicate alerts
-        }
-      } catch (error) {
-        console.error('Error updating carrier fees:', error);
-        alertify.error('Failed to update carrier fees');
-      }
+    // 1) Nothing entered at all?
+    const allEmpty = (charges || []).every(
+      ch => !(ch?.name?.trim()) && !(String(ch?.quantity ?? '') !== '') && !(String(ch?.amt ?? '') !== '')
+    );
+    if (allEmpty) {
+      setChargesPopupError('Please add Carrier Fees .');
+      setChargeErrors(charges.map(() => ({ name: '', quantity: '', amt: '' })));
+      return;
     }
 
+    // 2) Row-wise validation
+    const nextErrs = (charges || []).map((ch) => {
+      const row = { name: '', quantity: '', amt: '' };
+      const hasAny = (ch?.name || ch?.quantity || ch?.amt);
+
+      if (hasAny) {
+        // Name: required + alphabets only
+        if (!ch?.name?.trim()) row.name = 'Please enter the charge name';
+        else if (!/^[A-Za-z ]+$/.test(ch.name.trim())) row.name = 'Name should contain only alphabets';
+
+        // Quantity: required + positive integer
+        if (ch?.quantity === '' || ch?.quantity === undefined) row.quantity = 'Please enter the Quantity';
+        else if (!/^[1-9]\d*$/.test(String(ch.quantity))) row.quantity = 'Quantity must be a positive integer';
+
+        // Amount: required + positive integer
+        if (ch?.amt === '' || ch?.amt === undefined) row.amt = 'Please enter the amount';
+        else if (!/^[1-9]\d*$/.test(String(ch.amt))) row.amt = 'Amount must be a positive integer';
+      }
+      return row;
+    });
+
+    const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
+    setChargeErrors(nextErrs);
+
+    if (hasErrors) {
+      setChargesPopupError('Please correct the charge rows (Name*, Quantity*, Amount*).');
+      return; // keep popup open
+    }
+
+    // 3) Valid -> compute & apply to form
+    const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
+    setFormData(prev => ({ ...prev, carrierFees: String(totalCharges) }));
+
+    // If editing, push immediately to backend (optional – your previous logic)
+    if (editingOrder && editingOrder._id) {
+      const carrierFeesData = (charges || []).map(ch => ({
+        name: ch.name.trim(),
+        quantity: parseInt(ch.quantity, 10) || 0,
+        amount: parseInt(ch.amt, 10) || 0,
+        total: parseInt(ch.total, 10) || 0,
+      }));
+      await updateCarrierFees(editingOrder._id, carrierFeesData);
+    }
+
+    setChargesPopupError('');
     setShowChargesPopup(false);
+  };
+
+
+
+  // --- SHIPPER NAME: helpers ---
+  const blockNonAlphaKeys = (e) => {
+    // allow controls
+    const ctrl = e.ctrlKey || e.metaKey;
+    const allow = [
+      'Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'Home', 'End'
+    ];
+    if (allow.includes(e.key) || (ctrl && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) return;
+
+    // block non-letters/non-space single chars
+    if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
+  };
+
+  const sanitizeAlphaSpaces = (s = '') => s.replace(/[^A-Za-z ]/g, '');
+
+  // Real-time shipper name handler (sanitizes + clears/sets error)
+  const handleShipperNameChange = (e) => {
+    const raw = e.target.value;
+    const val = sanitizeAlphaSpaces(raw);
+
+    setFormData(prev => ({ ...prev, shipperName: val }));
+
+    setErrors(prev => {
+      const next = { ...prev, shipper: { ...(prev.shipper || {}) } };
+      if (!val.trim()) next.shipper.shipperName = 'Please enter the Shipper Name ';
+      else if (!/^[A-Za-z ]+$/.test(val.trim())) next.shipper.shipperName = 'Shipper Name should contain only alphabets';
+      else next.shipper.shipperName = '';
+      return next;
+    });
   };
 
   // Close charges popup
@@ -876,7 +1095,8 @@ export default function DeliveryOrder() {
   // ✅ REPLACE: handleSubmit (remarks included in locations JSON + multipart)
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm('add')) { return; }
+    if (!validateForm('add')) { focusFirstError(); return; }
+
     try {
       setSubmitting(true);
 
@@ -905,15 +1125,22 @@ export default function DeliveryOrder() {
       const empId = user.empId || "EMP001";
 
       // customers
-      const customersWithTotals = formData.customers.map(c => ({
-        billTo: c.billTo,
-        dispatcherName: c.dispatcherName,
-        workOrderNo: c.workOrderNo,
-        lineHaul: parseInt(c.lineHaul) || 0,
-        fsc: parseInt(c.fsc) || 0,
-        other: parseInt(c.other) || 0,
-        totalAmount: (parseInt(c.lineHaul) || 0) + (parseInt(c.fsc) || 0) + (parseInt(c.other) || 0)
-      }));
+      const customersWithTotals = formData.customers.map(c => {
+        const lh = toNum2(c.lineHaul);
+        const fsc = toNum2(c.fsc);
+        const oth = toNum2(c.other);
+        return {
+          billTo: c.billTo,
+          dispatcherName: c.dispatcherName,
+          workOrderNo: c.workOrderNo,
+          lineHaul: lh,
+          fsc: fsc,
+          other: oth,
+          totalAmount: toNum2(lh + fsc + oth),
+        };
+      });
+
+
 
       // carrier (from charges)
       const carrierData = {
@@ -1135,51 +1362,68 @@ export default function DeliveryOrder() {
 
       // 4/5/6) Money-like fields: integer only, non-negative
       if (c.lineHaul === '' || c.lineHaul === null) rowErr.lineHaul = 'Please enter the Line Haul.';
-      else if (!isNonNegInt(c.lineHaul)) rowErr.lineHaul = 'Line Haul must be a non-negative integer.';
+      else if (!isMoney2dp(c.lineHaul)) rowErr.lineHaul = 'Enter a non-negative amount (max 2 decimals).';
 
       if (c.fsc === '' || c.fsc === null) rowErr.fsc = 'Please enter the FSC.';
-      else if (!isNonNegInt(c.fsc)) rowErr.fsc = 'FSC must be a non-negative integer.';
+      else if (!isMoney2dp(c.fsc)) rowErr.fsc = 'Enter a non-negative amount (max 2 decimals).';
 
       if (c.other === '' || c.other === null) rowErr.other = 'Please enter the Other.';
-      else if (!isNonNegInt(c.other)) rowErr.other = 'Other must be a non-negative integer.';
+      else if (!isMoney2dp(c.other)) rowErr.other = 'Enter a non-negative amount (max 2 decimals).';
+
 
       next.customers[idx] = rowErr;
     });
 
     // --- Carrier section ---
-   if (!formData.carrierName?.trim()) {
-  next.carrier.carrierName = 'Please enter the Carrier Name.';
-}
-
-
-    if (!formData.equipmentType) next.carrier.equipmentType = 'Please enter the Equipment Type .';
+    // --- Carrier section ---
+    if (!formData.carrierName?.trim()) next.carrier.carrierName = 'Please enter the Carrier Name.';
+    if (!formData.equipmentType?.trim()) next.carrier.equipmentType = 'Please enter the Equipment Type .';
 
     // Carrier Fees via charges[]
     const rows = charges || [];
-    const hasAnyRow = rows.some(r => (r?.name || '').trim() || (r?.quantity || '') !== '' || (r?.amt || '') !== '');
+    const hasAnyRow = rows.some(r =>
+      (r?.name?.trim()) || (String(r?.quantity ?? '') !== '') || (String(r?.amt ?? '') !== '')
+    );
     if (!hasAnyRow) {
       next.carrier.fees = 'Please add Carrier Fees .';
     }
+
     next.carrier.chargeRows = rows.map((r) => {
       const rErr = {};
-      if (!r.name) rErr.name = 'Please enter the charge name';
-      else if (!isAlpha(r.name)) rErr.name = 'Name should contain only alphabets';
-      if (r.quantity === '' || r.quantity === null) rErr.quantity = 'Please enter the Quantity';
-      else if (!isPosInt(r.quantity)) rErr.quantity = 'Quantity must be a positive integer';
-      if (r.amt === '' || r.amt === null) rErr.amt = 'Please enter the amount';
-      else if (!isPosInt(r.amt)) rErr.amt = 'Amount must be a positive integer';
+
+      // Name: required + alphabets only
+      if (!r.name?.trim()) rErr.name = 'Please enter the charge name';
+      else if (!/^[A-Za-z ]+$/.test(r.name.trim())) rErr.name = 'Name should contain only alphabets';
+
+      // Quantity: required + positive integer
+      if (r.quantity === '' || r.quantity === null || r.quantity === undefined) {
+        rErr.quantity = 'Please enter the Quantity';
+      } else if (!/^[1-9]\d*$/.test(String(r.quantity))) {
+        rErr.quantity = 'Quantity must be a positive integer';
+      }
+
+      // Amount: required + positive integer
+      if (r.amt === '' || r.amt === null || r.amt === undefined) {
+        rErr.amt = 'Please enter the amount';
+      } else if (!/^[1-9]\d*$/.test(String(r.amt))) {
+        rErr.amt = 'Amount must be a positive integer';
+      }
+
       return rErr;
     });
 
-    // If no rows at all or any row has an error, show main fees error
-    const anyChargeError = next.carrier.chargeRows.some(
-      r => r.name || r.quantity || r.amt
-    );
-    if (anyChargeError) next.carrier.fees = next.carrier.fees || 'Please correct Carrier Fees .';
+    const anyChargeError = next.carrier.chargeRows.some(r => r.name || r.quantity || r.amt);
+    if (anyChargeError) {
+      next.carrier.fees = next.carrier.fees || 'Please correct the charge rows (Name*, Quantity*, Amount*).';
+    }
+
 
     // --- Shipper ---
-    if (!formData.shipperName) next.shipper.shipperName = 'Please enter the Shipper Name ';
-    else if (!isAlpha(formData.shipperName)) next.shipper.shipperName = 'Shipper Name should contain only alphabets';
+    if (!formData.shipperName?.trim()) {
+      next.shipper.shipperName = 'Please enter the Shipper Name ';
+    } else if (!/^[A-Za-z ]+$/.test(formData.shipperName.trim())) {
+      next.shipper.shipperName = 'Shipper Name should contain only alphabets';
+    }
 
     if (!formData.containerNo) next.shipper.containerNo = 'Please enter the Container Number  .';
     if (!formData.containerType) next.shipper.containerType = 'Please enter the Container Type  .';
@@ -1192,12 +1436,14 @@ export default function DeliveryOrder() {
       if (!l.city) lErr.city = 'Please enter the city .';
       if (!l.state) lErr.state = 'Please enter the state .';
       if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
+      else if (!/^[A-Za-z0-9]+$/.test(l.zipCode)) lErr.zipCode = 'Zip code must be alphanumeric only.';
       else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
-     if (l.weight === '' || l.weight === null) {
-  lErr.weight = 'Please enter the weight.';
-} else if (!isNonNegInt(l.weight)) {
-  lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
-}
+
+      if (l.weight === '' || l.weight === null) {
+        lErr.weight = 'Please enter the weight.';
+      } else if (!isNonNegInt(l.weight)) {
+        lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
+      }
 
       if (!l.pickUpDate) lErr.pickUpDate = 'Please select the pickup date.';
       next.pickups[i] = lErr;
@@ -1212,11 +1458,11 @@ export default function DeliveryOrder() {
       if (!l.state) lErr.state = 'Please enter the state .';
       if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
       else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
-     if (l.weight === '' || l.weight === null) {
-  lErr.weight = 'Please enter the weight.';
-} else if (!isNonNegInt(l.weight)) {
-  lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
-}
+      if (l.weight === '' || l.weight === null) {
+        lErr.weight = 'Please enter the weight.';
+      } else if (!isNonNegInt(l.weight)) {
+        lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
+      }
 
       if (!l.dropDate) lErr.dropDate = 'Please select the drop date.';
       next.drops[i] = lErr;
@@ -1242,9 +1488,7 @@ export default function DeliveryOrder() {
       hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || next.shipper.shipperName || next.shipper.containerNo || next.shipper.containerType || next.docs
     );
 
-    if (!valid) {
-      alertify.error('Please fix the highlighted errors.');
-    }
+
     return valid;
   };
 
@@ -1623,7 +1867,7 @@ export default function DeliveryOrder() {
 
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
-    if (!validateForm('edit')) { setSubmitting(false); return; }
+    if (!validateForm('edit')) { setSubmitting(false); focusFirstError(); return; }
     setSubmitting(true);
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -1660,20 +1904,23 @@ export default function DeliveryOrder() {
           throw new Error('Missing loadNo');
         }
 
+        const lh = toNum2(c.lineHaul);
+        const fsc = toNum2(c.fsc);
+        const oth = toNum2(c.other);
+
         return {
-          _id: prevCustomers[idx]?._id, // preserve subdoc id if present
-          loadNo: preservedLoadNo,      // ✅ REQUIRED
+          _id: prevCustomers[idx]?._id,
+          loadNo: preservedLoadNo,
           billTo: (c.billTo || '').trim(),
           dispatcherName: (c.dispatcherName || '').trim(),
           workOrderNo: (c.workOrderNo || '').trim(),
-          lineHaul: Number(c.lineHaul) || 0,
-          fsc: Number(c.fsc) || 0,
-          other: Number(c.other) || 0,
-          totalAmount:
-            (Number(c.lineHaul) || 0) +
-            (Number(c.fsc) || 0) +
-            (Number(c.other) || 0),
+          lineHaul: lh,
+          fsc: fsc,
+          other: oth,
+          totalAmount: toNum2(lh + fsc + oth),
         };
+
+
       });
 
       // --- Carrier
@@ -3121,6 +3368,12 @@ export default function DeliveryOrder() {
                             value={customer.workOrderNo}
                             onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
                             className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.workOrderNo ? 'border-red-400' : 'border-gray-300'}`}
+                            // ⬇️ native guard + user-friendly tooltip
+                            pattern="[A-Za-z0-9]+"
+                            title="Only letters and numbers are allowed."
+                            // optional: space disable (space alphanumeric nahi hai)
+                            onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                            autoComplete="off"
                             placeholder="Work Order No *"
                           />
                           {cErr.workOrderNo && <p className="text-red-600 text-xs mt-1">{cErr.workOrderNo}</p>}
@@ -3132,10 +3385,12 @@ export default function DeliveryOrder() {
                             type="number"
                             value={customer.lineHaul}
                             onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
-                            onKeyDown={blockIntChars}
+
                             min="0"
-                            step="1"
-                            inputMode="numeric"
+                            step="0.01"
+                            inputMode="decimal"
+                            onKeyDown={blockMoneyChars}
+
                             className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.lineHaul ? 'border-red-400' : 'border-gray-300'}`}
                             placeholder="Line Haul *"
                           />
@@ -3148,10 +3403,11 @@ export default function DeliveryOrder() {
                             type="number"
                             value={customer.fsc}
                             onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
-                            onKeyDown={blockIntChars}
+
                             min="0"
-                            step="1"
-                            inputMode="numeric"
+                            step="0.01"
+                            inputMode="decimal"
+                            onKeyDown={blockMoneyChars}
                             className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.fsc ? 'border-red-400' : 'border-gray-300'}`}
                             placeholder="FSC *"
                           />
@@ -3164,10 +3420,11 @@ export default function DeliveryOrder() {
                             type="number"
                             value={customer.other}
                             onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
-                            onKeyDown={blockIntChars}
+
                             min="0"
-                            step="1"
-                            inputMode="numeric"
+                            step="0.01"
+                            inputMode="decimal"
+                            onKeyDown={blockMoneyChars}
                             className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.other ? 'border-red-400' : 'border-gray-300'}`}
                             placeholder="Other *"
                           />
@@ -3176,7 +3433,7 @@ export default function DeliveryOrder() {
 
                         {/* Total (read-only) */}
                         <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg flex items-center">
-                          <span className="text-black-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                          <span className="text-black-700 font-medium">Total: ${Number(customer.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
@@ -3228,12 +3485,7 @@ export default function DeliveryOrder() {
                   </div>
                 </div>
 
-                {/* Optional: show row-level charge errors if your charges popup isn't open */}
-                {Array.isArray(errors.carrier?.chargeRows) && errors.carrier.chargeRows.some(r => r.name || r.quantity || r.amt) && (
-                  <div className="mt-3 text-xs text-red-600">
-                    Please correct the charge rows (Name*, Quantity*, Amount*).
-                  </div>
-                )}
+
               </div>
 
 
@@ -3245,14 +3497,26 @@ export default function DeliveryOrder() {
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <div>
                     <input
-                      type="text"
                       name="shipperName"
                       value={formData.shipperName}
-                      onChange={handleInputChange}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.shipper?.shipperName ? 'border-red-400' : 'border-gray-300'}`}
-                      placeholder="Shipper Name *"
+                      onChange={handleShipperNameChange}
+                      onKeyDown={blockNonAlphaKeys}
+                      onPaste={(e) => {
+                        // paste sanitize
+                        e.preventDefault();
+                        const text = (e.clipboardData || window.clipboardData).getData('text');
+                        const clean = sanitizeAlphaSpaces(text);
+                        handleShipperNameChange({ target: { value: clean } });
+                      }}
+                      pattern="[A-Za-z ]+"
+                      title="Only alphabets and spaces are allowed"
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2
+    ${errors?.shipper?.shipperName ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500'}`}
                     />
-                    {errors.shipper?.shipperName && <p className="text-red-600 text-xs mt-1">{errors.shipper.shipperName}</p>}
+                    {errors?.shipper?.shipperName && (
+                      <p className="mt-1 text-xs text-red-600">{errors.shipper.shipperName}</p>
+                    )}
+
                   </div>
 
                   <div>
@@ -3376,12 +3640,11 @@ export default function DeliveryOrder() {
 
                           {/* Make entire field area clickable by also focusing the input on container click */}
                           <div onClick={(e) => e.currentTarget.querySelector('input')?.focus()}>
-                            <input
-                              type="datetime-local"
-                              value={location.pickUpDate}
-                              onChange={(e) => handlePickupLocationChange(locationIndex, 'pickUpDate', e.target.value)}
-                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.pickUpDate ? 'border-red-400' : 'border-gray-300'}`}
-                              placeholder="Pickup Date & Time *"
+                            <ClickableDateInput
+                              value={formData.pickupLocations[0]?.pickUpDate || ''}
+                              onChange={(val) => handlePickupLocationChange(0, 'pickUpDate', val)}
+                              error={errors.pickups?.[0]?.pickUpDate}
+                              mode="datetime"
                             />
                             {lErr.pickUpDate && <p className="text-red-600 text-xs mt-1">{lErr.pickUpDate}</p>}
                           </div>
@@ -3401,188 +3664,181 @@ export default function DeliveryOrder() {
 
                 {/* Drop Locations */}
                 {/* Drop Locations */}
-<div className="bg-white p-4 rounded-lg">
-  <div className="flex justify-between items-center mb-3">
-    <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
-    <button
-      type="button"
-      onClick={addDropLocation}
-      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-    >
-      + Add Location
-    </button>
-  </div>
+                <div className="bg-white p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
+                    <button
+                      type="button"
+                      onClick={addDropLocation}
+                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                    >
+                      + Add Location
+                    </button>
+                  </div>
 
-  {formData.dropLocations.map((location, locationIndex) => {
-    const dErr = errors.drops?.[locationIndex] || {};
-    return (
-      <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-        <div className="flex justify-between items-center mb-3">
-          <h5 className="text-sm font-semibold text-gray-700">
-            Drop Location {locationIndex + 1}
-          </h5>
-          {formData.dropLocations.length > 1 && (
-            <button
-              type="button"
-              onClick={() => removeDropLocation(locationIndex)}
-              className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-            >
-              Remove
-            </button>
-          )}
-        </div>
+                  {formData.dropLocations.map((location, locationIndex) => {
+                    const dErr = errors.drops?.[locationIndex] || {};
+                    return (
+                      <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                        <div className="flex justify-between items-center mb-3">
+                          <h5 className="text-sm font-semibold text-gray-700">
+                            Drop Location {locationIndex + 1}
+                          </h5>
+                          {formData.dropLocations.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeDropLocation(locationIndex)}
+                              className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          {/* Location Name * */}
-          <div>
-            <input
-              type="text"
-              value={location.name}
-              onChange={(e) =>
-                handleDropLocationChange(locationIndex, 'name', e.target.value)
-              }
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                dErr.name ? 'border-red-400' : 'border-gray-300'
-              }`}
-              placeholder="Location Name *"
-            />
-            {dErr.name && (
-              <p className="text-red-600 text-xs mt-1">{dErr.name}</p>
-            )}
-          </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          {/* Location Name * */}
+                          <div>
+                            <input
+                              type="text"
+                              value={location.name}
+                              onChange={(e) =>
+                                handleDropLocationChange(locationIndex, 'name', e.target.value)
+                              }
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${dErr.name ? 'border-red-400' : 'border-gray-300'
+                                }`}
+                              placeholder="Location Name *"
+                            />
+                            {dErr.name && (
+                              <p className="text-red-600 text-xs mt-1">{dErr.name}</p>
+                            )}
+                          </div>
 
-          {/* Address * */}
-          <div>
-            <input
-              type="text"
-              value={location.address}
-              onChange={(e) =>
-                handleDropLocationChange(locationIndex, 'address', e.target.value)
-              }
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                dErr.address ? 'border-red-400' : 'border-gray-300'
-              }`}
-              placeholder="Address *"
-            />
-            {dErr.address && (
-              <p className="text-red-600 text-xs mt-1">{dErr.address}</p>
-            )}
-          </div>
+                          {/* Address * */}
+                          <div>
+                            <input
+                              type="text"
+                              value={location.address}
+                              onChange={(e) =>
+                                handleDropLocationChange(locationIndex, 'address', e.target.value)
+                              }
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${dErr.address ? 'border-red-400' : 'border-gray-300'
+                                }`}
+                              placeholder="Address *"
+                            />
+                            {dErr.address && (
+                              <p className="text-red-600 text-xs mt-1">{dErr.address}</p>
+                            )}
+                          </div>
 
-          {/* City * */}
-          <div>
-            <input
-              type="text"
-              value={location.city}
-              onChange={(e) =>
-                handleDropLocationChange(locationIndex, 'city', e.target.value)
-              }
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                dErr.city ? 'border-red-400' : 'border-gray-300'
-              }`}
-              placeholder="City *"
-            />
-            {dErr.city && (
-              <p className="text-red-600 text-xs mt-1">{dErr.city}</p>
-            )}
-          </div>
+                          {/* City * */}
+                          <div>
+                            <input
+                              type="text"
+                              value={location.city}
+                              onChange={(e) =>
+                                handleDropLocationChange(locationIndex, 'city', e.target.value)
+                              }
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${dErr.city ? 'border-red-400' : 'border-gray-300'
+                                }`}
+                              placeholder="City *"
+                            />
+                            {dErr.city && (
+                              <p className="text-red-600 text-xs mt-1">{dErr.city}</p>
+                            )}
+                          </div>
 
-          {/* State * */}
-          <div>
-            <input
-              type="text"
-              value={location.state}
-              onChange={(e) =>
-                handleDropLocationChange(locationIndex, 'state', e.target.value)
-              }
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                dErr.state ? 'border-red-400' : 'border-gray-300'
-              }`}
-              placeholder="State *"
-            />
-            {dErr.state && (
-              <p className="text-red-600 text-xs mt-1">{dErr.state}</p>
-            )}
-          </div>
+                          {/* State * */}
+                          <div>
+                            <input
+                              type="text"
+                              value={location.state}
+                              onChange={(e) =>
+                                handleDropLocationChange(locationIndex, 'state', e.target.value)
+                              }
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${dErr.state ? 'border-red-400' : 'border-gray-300'
+                                }`}
+                              placeholder="State *"
+                            />
+                            {dErr.state && (
+                              <p className="text-red-600 text-xs mt-1">{dErr.state}</p>
+                            )}
+                          </div>
 
-          {/* Zip Code * (alphanumeric + format) */}
-          <div>
-            <input
-              type="text"
-              value={location.zipCode}
-              onChange={(e) =>
-                handleDropLocationChange(locationIndex, 'zipCode', e.target.value)
-              }
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                dErr.zipCode ? 'border-red-400' : 'border-gray-300'
-              }`}
-              placeholder="Zip Code *"
-            />
-            {dErr.zipCode && (
-              <p className="text-red-600 text-xs mt-1">{dErr.zipCode}</p>
-            )}
-          </div>
+                          {/* Zip Code * (alphanumeric + format) */}
+                          <div>
+                            <input
+                              type="text"
+                              value={location.zipCode}
+                              onChange={(e) =>
+                                handleDropLocationChange(locationIndex, 'zipCode', e.target.value)
+                              }
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${dErr.zipCode ? 'border-red-400' : 'border-gray-300'
+                                }`}
+                              placeholder="Zip Code *"
+                            />
+                            {dErr.zipCode && (
+                              <p className="text-red-600 text-xs mt-1">{dErr.zipCode}</p>
+                            )}
+                          </div>
 
-          {/* Weight * (digits only, positive; block e/E/+/-/.) */}
-          <div>
-            <input
-              type="number"
-              value={formData.dropLocations?.[locationIndex]?.weight ?? ''}
-              onChange={(e) =>
-                handleDropLocationChange(locationIndex, 'weight', e.target.value)
-              }
-              onKeyDown={blockIntChars}
-              min="0"
-              step="1"
-              inputMode="numeric"
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                dErr.weight ? 'border-red-400' : 'border-gray-300'
-              }`}
-              placeholder="Weight (lbs) *"
-            />
-            {dErr.weight && (
-              <p className="text-red-600 text-xs mt-1">{dErr.weight}</p>
-            )}
-          </div>
+                          {/* Weight * (digits only, positive; block e/E/+/-/.) */}
+                          <div>
+                            <input
+                              type="number"
+                              value={formData.dropLocations?.[locationIndex]?.weight ?? ''}
+                              onChange={(e) =>
+                                handleDropLocationChange(locationIndex, 'weight', e.target.value)
+                              }
+                              onKeyDown={blockIntChars}
+                              min="0"
+                              step="1"
+                              inputMode="numeric"
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${dErr.weight ? 'border-red-400' : 'border-gray-300'
+                                }`}
+                              placeholder="Weight (lbs) *"
+                            />
+                            {dErr.weight && (
+                              <p className="text-red-600 text-xs mt-1">{dErr.weight}</p>
+                            )}
+                          </div>
 
-          {/* Drop Date * (make whole area clickable to open picker) */}
-          <div
-            onClick={(e) => {
-              const input = e.currentTarget.querySelector('input');
-              if (input?.showPicker) input.showPicker();
-              else input?.focus();
-            }}
-          >
-            <input
-              type="datetime-local"
-              value={location.dropDate}
-              onChange={(e) =>
-                handleDropLocationChange(locationIndex, 'dropDate', e.target.value)
-              }
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                dErr.dropDate ? 'border-red-400' : 'border-gray-300'
-              }`}
-              placeholder="Drop Date & Time *"
-            />
-            {dErr.dropDate && (
-              <p className="text-red-600 text-xs mt-1">{dErr.dropDate}</p>
-            )}
-          </div>
+                          {/* Drop Date * (make whole area clickable to open picker) */}
+                          <div
+                            onClick={(e) => {
+                              const input = e.currentTarget.querySelector('input');
+                              if (input?.showPicker) input.showPicker();
+                              else input?.focus();
+                            }}
+                          >
+                            <input
+                              type="datetime-local"
+                              value={location.dropDate}
+                              onChange={(e) =>
+                                handleDropLocationChange(locationIndex, 'dropDate', e.target.value)
+                              }
+                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${dErr.dropDate ? 'border-red-400' : 'border-gray-300'
+                                }`}
+                              placeholder="Drop Date & Time *"
+                            />
+                            {dErr.dropDate && (
+                              <p className="text-red-600 text-xs mt-1">{dErr.dropDate}</p>
+                            )}
+                          </div>
 
-          {/* Remarks (optional) */}
-          <textarea
-            value={location.remarks || ''}
-            onChange={(e) =>
-              handleDropLocationChange(locationIndex, 'remarks', e.target.value)
-            }
-            className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 mt-2"
-            placeholder="Drop remarks (optional)"
-          />
-        </div>
-      </div>
-    );
-  })}
-</div>
+                          {/* Remarks (optional) */}
+                          <textarea
+                            value={location.remarks || ''}
+                            onChange={(e) =>
+                              handleDropLocationChange(locationIndex, 'remarks', e.target.value)
+                            }
+                            className="col-span-3 w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 mt-2"
+                            placeholder="Drop remarks (optional)"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
               </div>
 
@@ -4152,7 +4408,8 @@ export default function DeliveryOrder() {
       {showChargesPopup && (
         <div className="fixed inset-0 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
-            {/* Header with gradient background */}
+
+            {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 -m-8 mb-6 p-6 rounded-t-xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -4173,19 +4430,27 @@ export default function DeliveryOrder() {
             </div>
 
             <div className="space-y-6">
-              {/* Charges Table Header */}
+
+              {/* Popup-wide error banner (INSIDE the popup) */}
+              {chargesPopupError && (
+                <div className="mb-4 -mt-2 px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-200">
+                  {chargesPopupError}
+                </div>
+              )}
+
+              {/* Table header */}
               <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  <span>Name</span>
+                  <span>Name <span className="text-red-500">*</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg">#</span>
-                  <span>Quantity</span>
+                  <span>Quantity <span className="text-red-500">*</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4" />
-                  <span>Amount</span>
+                  <span>Amount <span className="text-red-500">*</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold">$</span>
@@ -4194,34 +4459,69 @@ export default function DeliveryOrder() {
                 <div className="text-center">Action</div>
               </div>
 
-              {/* Charges Rows */}
+              {/* Rows */}
               {charges.map((charge, index) => (
-                <div key={index} className="grid grid-cols-5 gap-4 items-center p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                  <input
-                    type="text"
-                    value={charge.name}
-                    onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    placeholder="Enter charge name"
-                  />
-                  <input
-                    type="number"
-                    value={charge.quantity}
-                    onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    placeholder="0"
-                  />
-                  <input
-                    type="number"
-                    value={charge.amt}
-                    onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    placeholder="0.00"
-                  />
-                  <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg font-semibold text-gray-800 border border-green-200">
-                    ${charge.total.toFixed(2)}
+                <div key={index} className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  {/* Name */}
+                  <div>
+                    <input
+                      type="text"
+                      value={charge.name}
+                      onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all
+                  ${chargeErrors[index]?.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'}`}
+                      placeholder="Enter charge name"
+                    />
+                    {chargeErrors[index]?.name && (
+                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].name}</p>
+                    )}
                   </div>
-                  <div className="flex justify-center">
+
+                  {/* Quantity */}
+                  <div>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      onKeyDown={blockIntNoSign}
+                      value={charge.quantity}
+                      onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all
+                  ${chargeErrors[index]?.quantity ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'}`}
+                      placeholder="0"
+                    />
+                    {chargeErrors[index]?.quantity && (
+                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].quantity}</p>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      onKeyDown={blockIntNoSign}
+                      value={charge.amt}
+                      onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all
+                  ${chargeErrors[index]?.amt ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'}`}
+                      placeholder="0"
+                    />
+                    {chargeErrors[index]?.amt && (
+                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].amt}</p>
+                    )}
+                  </div>
+
+                  {/* Row total */}
+                  <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg font-semibold text-gray-800 border border-green-200">
+                    ${Number(charge.total || 0).toFixed(2)}
+                  </div>
+
+                  {/* Delete */}
+                  <div className="flex justify-center pt-1">
                     <button
                       type="button"
                       onClick={() => removeCharge(index)}
@@ -4239,7 +4539,7 @@ export default function DeliveryOrder() {
                 </div>
               ))}
 
-              {/* Add Charge Button */}
+              {/* Add row */}
               <div className="flex justify-center">
                 <button
                   type="button"
@@ -4251,7 +4551,7 @@ export default function DeliveryOrder() {
                 </button>
               </div>
 
-              {/* Total and Apply Button */}
+              {/* Total & Apply */}
               <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-xl border border-gray-200">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
@@ -4261,7 +4561,7 @@ export default function DeliveryOrder() {
                     <div>
                       <div className="text-sm text-gray-600 font-medium">Total Charges</div>
                       <div className="text-2xl font-bold text-gray-800">
-                        ${charges.reduce((sum, charge) => sum + (charge.total || 0), 0).toFixed(2)}
+                        ${(charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -4283,10 +4583,12 @@ export default function DeliveryOrder() {
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
       )}
+
 
       {/* Edit Order Modal */}
       {showEditModal && editingOrder && (
