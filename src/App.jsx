@@ -55,8 +55,7 @@ import CustomerLoads from "./Pages/CustomerLoads.jsx";
 import DailyRateRequest from "./Components/CMT-Manager/DailyRateRequest.jsx";
 import OfficeInventory from "./Components/HRDashboard/OfficeInventory.jsx";
 import DinnerStatus from "./Pages/DinnerStatus.jsx";
-
-
+import TruckerReport from "./Components/CMT/TruckerReport.jsx";
 
 
 function App() {
@@ -73,7 +72,8 @@ function App() {
     setLoading(false);
   }, []);
 
-  if (loading) return <div className="p-10">Loading... <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>  </div>;
+  if (loading) return <div className="p-10">Loading... <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full 
+   animate-spin"></div>  </div>;
 
   return (
     <Routes>
@@ -139,9 +139,8 @@ function App() {
         <Route path="/DailyRateRequest" element={<DailyRateRequest/>}/>
         <Route path="/OfficeInventory" element={<OfficeInventory/>}/>
         <Route path="/dinner-status" element={<DinnerStatus/>}/>
-
+        <Route path="/TruckerReport" element={<TruckerReport/>}/>
         
-
       </Route>
 {/* 
       Optional: Catch-all route */} 
