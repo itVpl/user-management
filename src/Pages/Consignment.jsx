@@ -13,6 +13,10 @@ export default function Consignment() {
   const [selectedConsignment, setSelectedConsignment] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
+
   // Fetch consignments from API
   const fetchConsignments = async () => {
     try {
@@ -142,14 +146,32 @@ export default function Consignment() {
     setShowViewModal(true);
   };
 
-  // Filter consignments based on search term
-  const filteredConsignments = consignments.filter(consignment =>
-    consignment.shipmentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    consignment.shipperName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    consignment.truckerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    consignment.driverName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    consignment.vehicleNo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter consignments based on search term and sort by creation date (latest first - LIFO)
+  const filteredConsignments = consignments
+    .filter(consignment =>
+      consignment.shipmentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      consignment.shipperName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      consignment.truckerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      consignment.driverName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      consignment.vehicleNo.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredConsignments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentConsignments = filteredConsignments.slice(startIndex, endIndex);
+
+  // Handle page change
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  // Reset to first page when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   // Get status color
   const getStatusColor = (status) => {
@@ -263,7 +285,7 @@ export default function Consignment() {
                    </tr>
                  </thead>
                 <tbody>
-                                     {filteredConsignments.map((consignment, index) => (
+                                     {currentConsignments.map((consignment, index) => (
                      <tr key={consignment.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                        <td className="py-2 px-3">
                          <span className="font-medium text-gray-700">{consignment.sNo}</span>
@@ -339,6 +361,44 @@ export default function Consignment() {
           </>
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && filteredConsignments.length > 0 && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="text-sm text-gray-600">
+            Showing {startIndex + 1} to {Math.min(endIndex, filteredConsignments.length)} of {filteredConsignments.length} consignments
+            {searchTerm && ` (filtered from ${consignments.length} total)`}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+            >
+              Previous
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* View Details Modal */}
       {showViewModal && selectedConsignment && (
