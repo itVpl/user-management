@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import * as XLSX from "xlsx"; // ✅ Import xlsx
+import * as XLSX from "xlsx";
 import { Phone, CheckCircle, XCircle, BarChart3, Clock } from "lucide-react";
 
 const formatDateTime = (date) => {
@@ -15,12 +15,54 @@ const formatDateTime = (date) => {
 };
 
 const formatDuration = (ms) => {
-  let seconds = Math.floor(ms / 1000);
+  const safe = Number(ms || 0);
+  let seconds = Math.floor(safe / 1000);
   const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
   seconds %= 3600;
   const m = String(Math.floor(seconds / 60)).padStart(2, "0");
   const s = String(seconds % 60).padStart(2, "0");
   return `${h}:${m}:${s}`;
+};
+
+// ---- Status helpers ----
+const normalizeCallStatus = (rec, alias) => {
+  const talkMs = Number(rec.talkTimeMS || 0);
+  const last = (rec.lastLegDisposition || "").toLowerCase();
+  const direction = (rec.direction || "").toLowerCase();
+
+  // 1) Answered: any positive talk time (most reliable), or explicit "answered"
+  if (talkMs > 0 || last === "answered") return "Answered";
+
+  // 2) Missed vs Not-Connected decided by direction (and 0 talk time)
+  if (direction === "incoming") return "Missed";
+  if (direction === "outgoing") {
+    // Outgoing, 0 talk time => Not-Connected
+    return "Not-Connected";
+  }
+
+  // 3) Edge: sometimes providers mark "connected" but talk time is 0
+  if (last === "connected") return "Connected";
+
+  // Fallbacks
+  if (["busy", "no answer", "declined", "voicemail", "canceled", "cancelled", "abandoned"].includes(last)) {
+    // If we can’t trust direction, default to Not-Connected for no-talk calls
+    return "Not-Connected";
+  }
+
+  // Default safe bucket
+  return "Not-Connected";
+};
+
+const STATUS_BADGE = {
+  "Answered":  "bg-green-100 text-green-800",     // 🟢
+  "Connected": "bg-blue-100 text-blue-800",       // 🔵
+  "Not-Connected": "bg-red-100 text-red-800",     // 🔴
+  "Missed": "bg-orange-100 text-orange-800",      // 🟠
+};
+
+const CONVERSION_BADGE = {
+  "Converted": "bg-green-100 text-green-800",     // 🟢
+  "Open":      "bg-yellow-100 text-yellow-800",   // 🟡
 };
 
 const UserCallDashboard = () => {
@@ -38,22 +80,20 @@ const UserCallDashboard = () => {
     totalTalkTime: "00:00:00",
   });
 
-  // Pagination states
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
-  // ✅ Excel Export Function
-  // const exportToExcel = () => {
-  //   if (records.length === 0) return;
+  // Optional: Excel Export (kept ready)
+  const exportToExcel = () => {
+    if (records.length === 0) return;
+    const worksheet = XLSX.utils.json_to_sheet(records);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Call Records");
+    const fileName = `CallRecords_${selectedDate}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
 
-  //   const worksheet = XLSX.utils.json_to_sheet(records);
-  //   const workbook = XLSX.utils.book_new();
-  //   XLSX.utils.book_append_sheet(workbook, worksheet, "Call Records");
-
-  //   const fileName = `CallRecords_${selectedDate}.xlsx`;
-  //   XLSX.writeFile(workbook, fileName);
-  // };
-  
   const fetchData = async (alias, date) => {
     const start = new Date(`${date}T00:00:00`);
     const isToday = date === new Date().toISOString().split("T")[0];
@@ -65,7 +105,10 @@ const UserCallDashboard = () => {
     try {
       const res = await axios.get(
         "https://vpl-liveproject-1.onrender.com/api/v1/analytics/8x8/call-records/filter",
-        { params: { callerName: alias, calleeName: alias, from, to } }
+        {
+          // IMPORTANT: Keep both to fetch when user is caller or callee
+          params: { callerName: alias, calleeName: alias, from, to },
+        }
       );
 
       const rawData = res.data?.data || [];
@@ -87,37 +130,50 @@ const UserCallDashboard = () => {
       let totalTalkTimeMS = 0;
       let incoming = 0;
       let outgoing = 0;
+      let answered = 0;
+      let missed = 0;
 
       const transformed = rawData.map((record) => {
+        // Sum talk time
+        const talkMs = Number(record.talkTimeMS || 0);
+        totalTalkTimeMS += talkMs;
+
+        // Direction counts (rely on provider field)
+        const dir = (record.direction || "").toLowerCase();
+        if (dir === "incoming") incoming++;
+        if (dir === "outgoing") outgoing++;
+
+        // Normalize status
+        const normStatus = normalizeCallStatus(record, alias);
+
+        // Answered/Missed tallies
+        if (normStatus === "Answered") answered++;
+        if (normStatus === "Missed") missed++;
+
+        // Display fields
         const dateObj = new Date(record.startTime);
-        const date = dateObj.toLocaleDateString("en-GB");
+        const date = dateObj.toLocaleDateString("en-GB"); // dd/mm/yyyy
         const time = dateObj.toLocaleTimeString("en-US", {
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
         });
 
+        // Conversion status: talk < 20s -> Open, else Converted
+        const conversionStatus = talkMs < 20000 ? "Open" : "Converted";
 
-      
-
-        totalTalkTimeMS += Number(record.talkTimeMS || 0);
-        if (record.direction === "Incoming") incoming++;
-        if (record.direction === "Outgoing") outgoing++;
-
+        // For "Called No" column we’ll keep callee (as in your UI)
         return {
           date,
           callee: record.callee,
           callTime: time,
-          callDuration: record.talkTime || "00:00:00",
-          callStatus: record.lastLegDisposition || "Unknown",
-          conversionStatus:
-            (record.talkTimeMS || 0) < 20000 ? "Open" : "Converted",
+          callDuration: record.talkTime || formatDuration(talkMs),
+          callStatus: normStatus,
+          conversionStatus,
         };
       });
 
       const total = transformed.length;
-      const answered = transformed.filter((r) => r.callStatus === "Connected").length;
-      const missed = total - answered;
 
       setRecords(transformed);
       setStats({
@@ -130,21 +186,18 @@ const UserCallDashboard = () => {
       });
     } catch (err) {
       console.error("❌ API Error fetching filtered calls:", err);
+      // keep previous UI; optionally reset
     }
   };
 
-  // Pagination calculations
+  // Pagination derived
   const totalPages = Math.ceil(records.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentRecords = records.slice(startIndex, endIndex);
 
-  // Handle page change
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
+  const handlePageChange = (page) => setCurrentPage(page);
 
-  // Reset to first page when date changes
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedDate]);
@@ -155,20 +208,18 @@ const UserCallDashboard = () => {
       console.warn("❌ No user in sessionStorage");
       return;
     }
-
     const user = JSON.parse(storedUser);
     const alias = user.aliasName;
     if (!alias) {
       console.warn("❌ aliasName missing in user object");
       return;
     }
-
     fetchData(alias, selectedDate);
   }, [selectedDate]);
 
   return (
     <>
-      {/* Stats Cards - One Line Like Delivery Order */}
+      {/* Stat Cards */}
       <div className="flex justify-between items-center mb-6 mt-4">
         <div className="flex items-center gap-6">
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
@@ -182,6 +233,7 @@ const UserCallDashboard = () => {
               </div>
             </div>
           </div>
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
@@ -193,17 +245,19 @@ const UserCallDashboard = () => {
               </div>
             </div>
           </div>
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                <XCircle className="text-red-600" size={20} />
+              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                <XCircle className="text-orange-600" size={20} />
               </div>
               <div>
                 <p className="text-sm text-gray-600">Missed</p>
-                <p className="text-xl font-bold text-red-600">{stats.missed}</p>
+                <p className="text-xl font-bold text-orange-600">{stats.missed}</p>
               </div>
             </div>
           </div>
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
@@ -215,6 +269,7 @@ const UserCallDashboard = () => {
               </div>
             </div>
           </div>
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -226,6 +281,7 @@ const UserCallDashboard = () => {
               </div>
             </div>
           </div>
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
@@ -238,8 +294,8 @@ const UserCallDashboard = () => {
             </div>
           </div>
         </div>
-        
-        {/* Date Field - Right Side */}
+
+        {/* Date + (Optional) Export */}
         <div className="flex items-center gap-2">
           <input
             type="date"
@@ -248,69 +304,77 @@ const UserCallDashboard = () => {
             onChange={(e) => setSelectedDate(e.target.value)}
             max={new Date().toISOString().split("T")[0]}
           />
+          {/* <button
+            onClick={exportToExcel}
+            className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+          >
+            Export
+          </button> */}
         </div>
       </div>
 
-        {/* Table Section */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+      {/* Table */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <tr>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Called No</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Call Time</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Call Duration</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Call Status</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Conversion Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentRecords.length > 0 ? (
+                currentRecords.map((r, index) => (
+                  <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">{r.date}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">{r.callee}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">{r.callTime}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-bold text-blue-600">{r.callDuration}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${STATUS_BADGE[r.callStatus] || "bg-gray-100 text-gray-800"}`}
+                        title={r.callStatus}
+                      >
+                        {r.callStatus === "Answered" && <CheckCircle className="w-3 h-3" />}
+                        {r.callStatus === "Connected" && <BarChart3 className="w-3 h-3" />}
+                        {r.callStatus === "Not-Connected" && <XCircle className="w-3 h-3" />}
+                        {r.callStatus === "Missed" && <XCircle className="w-3 h-3" />}
+                        {r.callStatus}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${CONVERSION_BADGE[r.conversionStatus] || "bg-gray-100 text-gray-800"}`}
+                      >
+                        {r.conversionStatus}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
                 <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Called No</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Call Time</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Call Duration</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Call Status</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Conversion Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentRecords.length > 0 ? (
-                  currentRecords.map((r, index) => (
-                    <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{r.date}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{r.callee}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{r.callTime}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-bold text-blue-600">{r.callDuration}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
-                          r.callStatus === "Connected"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}>
-                          {r.callStatus === "Connected" ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                          {r.callStatus}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
-                          r.conversionStatus === "Converted"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}>
-                          {r.conversionStatus}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <div className="text-center py-12">
+                  <td colSpan={6} className="text-center py-12">
                     <Phone className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500 text-lg">No call records found</p>
                     <p className="text-gray-400 text-sm">Try changing the date</p>
-                  </div>
-                )}
-              </tbody>
-            </table>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -334,8 +398,8 @@ const UserCallDashboard = () => {
                 onClick={() => handlePageChange(page)}
                 className={`px-3 py-2 border rounded-lg transition-colors ${
                   currentPage === page
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'border-gray-300 hover:bg-gray-50'
+                    ? "bg-blue-500 text-white border-blue-500"
+                    : "border-gray-300 hover:bg-gray-50"
                 }`}
               >
                 {page}

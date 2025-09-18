@@ -1,11 +1,39 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { FaPhone, FaEnvelope, FaCalendar, FaClock, FaUser, FaCheckCircle, FaTimesCircle, FaExclamationTriangle, FaPlus, FaSearch } from 'react-icons/fa';
 import API_CONFIG from '../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+// ===== Helpers & regex =====
+// Local YYYY-MM-DD (timezone-safe)
+const toLocalISO = (d = new Date()) => {
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(Date.now() - tz).toISOString().split('T')[0];
+};
+
+
+// Next Follow-Up min date: max(today, followUpDate + 1 day)
+const getNextMinDate = (followUpDate) => {
+  const today = toLocalISO();
+  if (!followUpDate) return today;
+  const d = new Date(followUpDate);
+  d.setDate(d.getDate() + 1);            // strictly greater than followUpDate
+  const gt = toLocalISO(d);
+  return gt > today ? gt : today;        // also never before today
+};
+
+const onlyLetters = /^[A-Za-z ]+$/;                  // alphabets + space
+const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;     // simple robust email
+const phoneRe = /^[6-9]\d{9}$/;                      // 10 digits, starts 6-9
+const clampDigits = (s) => s.replace(/\D/g, '').slice(0, 10);
 
 export default function DailyFollowUp() {
+  const [errors, setErrors] = useState({});
+  const [formMessage, setFormMessage] = useState('');        // inline banner for submit/update
+  const followUpDateRef = useRef(null);   // Add form ke liye
+  const editFollowUpDateRef = useRef(null); // Edit form ke liye
+  const nextFollowUpDateRef = useRef(null);        // Add modal ke liye
+  const editNextFollowUpDateRef = useRef(null);    // Edit modal ke liye
   const [followUps, setFollowUps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -13,9 +41,10 @@ export default function DailyFollowUp() {
   const [submitting, setSubmitting] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
-  const [viewLoading, setViewLoading] = useState(false);
+  const [viewLoadingId, setViewLoadingId] = useState(null); // id of row being viewed
+  const [editLoadingId, setEditLoadingId] = useState(null); // id of row being edited
+
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
   const [showAddNewFollowUpForm, setShowAddNewFollowUpForm] = useState(false);
   const [newFollowUpData, setNewFollowUpData] = useState({
     followUpType: 'call',
@@ -32,8 +61,8 @@ export default function DailyFollowUp() {
     followUpDate: '',
     contactPerson: '',
     concernedPerson: '',
-    followUpType: 'call',
-    status: 'pending',
+    followUpType: '',    // <-- default blank (Select)
+    status: '',          // <-- default blank (Select)
     creditCheck: '',
     remark: '',
     followupNotes: '',
@@ -41,14 +70,15 @@ export default function DailyFollowUp() {
     documents: null
   });
 
+
   // Fetch follow-ups from API
   const fetchFollowUps = async () => {
     try {
       setLoading(true);
-      
+
       // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
+
       if (!token) {
         alertify.error('Authentication required. Please login again.');
         return;
@@ -65,10 +95,18 @@ export default function DailyFollowUp() {
       if (response.data.success) {
         // Transform API data to match our table structure
         const transformedData = response.data.data.map((item, index) => {
-          // Get the latest follow-up from the followUps array
-          const latestFollowUp = item.followUps && item.followUps.length > 0 
-            ? item.followUps[item.followUps.length - 1] 
-            : null;
+          const latestFollowUp = item.followUps?.length ? item.followUps[item.followUps.length - 1] : null;
+
+          // Use root callingDate for main Follow-Up Date (for Today card correctness)
+          const followUpDate = item.callingDate ? new Date(item.callingDate).toISOString().split('T')[0] : '';
+
+          // Next follow-up (from latest history)
+          const nextFollowUpDate = latestFollowUp?.nextFollowUpDate
+            ? new Date(latestFollowUp.nextFollowUpDate).toISOString().split('T')[0]
+            : '';
+
+          // Type: prefer latest history type, else fallback to any root field if present
+          const followUpType = (latestFollowUp?.followUpType || item.followUpType || '').trim();
 
           return {
             id: item._id,
@@ -76,9 +114,9 @@ export default function DailyFollowUp() {
             customerName: item.customerName,
             customerPhone: item.phone,
             customerEmail: item.email,
-            followUpDate: latestFollowUp ? new Date(latestFollowUp.followUpDate).toISOString().split('T')[0] : '',
-            followUpType: latestFollowUp ? latestFollowUp.followUpType : '',
-            nextFollowUpDate: latestFollowUp ? new Date(latestFollowUp.nextFollowUpDate).toISOString().split('T')[0] : '',
+            followUpDate,
+            followUpType,
+            nextFollowUpDate,
             status: item.status,
             creditCheck: item.creditCheck,
             remark: item.remarks,
@@ -89,6 +127,7 @@ export default function DailyFollowUp() {
             createdBy: item.createdBy?.employeeName || 'Unknown'
           };
         });
+
 
         setFollowUps(transformedData);
       } else {
@@ -121,14 +160,7 @@ export default function DailyFollowUp() {
     return 'bg-gray-100 text-gray-700';
   };
 
-  // Priority color helper
-  const priorityColor = (priority) => {
-    if (priority === 'high') return 'bg-red-100 text-red-700';
-    if (priority === 'normal') return 'bg-blue-100 text-blue-700';
-    if (priority === 'low') return 'bg-gray-100 text-gray-700';
-    return 'bg-gray-100 text-gray-700';
-  };
-
+  
   // Filter follow-ups based on search term
   const filteredFollowUps = followUps.filter(followUp =>
     followUp.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -139,240 +171,226 @@ export default function DailyFollowUp() {
 
   // Handle form input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  const { name } = e.target;
+  let value = e.target.value;
+
+  // Email: never allow spaces
+  if (name === 'customerEmail') {
+    value = value.replace(/\s/g, '');
+  }
+
+  // Phone: digits only, max 10
+  if (name === 'customerPhone') {
+    value = clampDigits(value); // keeps only 0-9 and trims to 10
+  }
+
+  // Names: allow letters + spaces (including in-between)
+  if (['customerName', 'contactPerson', 'concernedPerson'].includes(name)) {
+    // strip anything that's not A–Z or space
+    value = value.replace(/[^A-Za-z ]/g, '');
+    // collapse multiple spaces to single
+    value = value.replace(/\s{2,}/g, ' ');
+    // NOTE: no trim here — user ko abhi trailing space type karne do
+  }
+
+  setFormData((prev) => ({ ...prev, [name]: value }));
+
+  // clear field error as user types
+  if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
+};
+
+
+  const validateForm = () => {
+    const e = {};
+    // Name
+    if (!formData.customerName.trim()) e.customerName = 'Please enter the customer name.';
+    else if (!onlyLetters.test(formData.customerName.trim())) e.customerName = 'Only alphabets are allowed.';
+
+    // Email
+    if (!formData.customerEmail) e.customerEmail = 'Please enter the email id.';
+    else if (/\s/.test(formData.customerEmail)) e.customerEmail = 'Email should not contain spaces.';
+    else if (!emailRe.test(formData.customerEmail)) e.customerEmail = 'Please enter the valid email id.';
+
+    // Phone
+    if (!formData.customerPhone) e.customerPhone = 'Please enter the mobile number.';
+    else if (!phoneRe.test(formData.customerPhone)) e.customerPhone = 'Please enter the valid mobile number.';
+
+    // Follow-Up Date (today or future)
+    const today = toLocalISO();
+    if (!formData.followUpDate) e.followUpDate = 'Please select the Follow-Up Date.';
+    else if (formData.followUpDate < today) e.followUpDate = 'Follow-Up Date cannot be in the past.';
+
+    // Contact Person
+    if (!formData.contactPerson.trim()) {
+      e.contactPerson = 'Please enter the Contact Person name.';
+    } else if (!onlyLetters.test(formData.contactPerson.trim())) {
+      e.contactPerson = 'Only alphabets are allowed.';
+    }
+
+    // Concerned Person
+    if (!formData.concernedPerson.trim()) {
+      e.concernedPerson = 'Please enter the Concerned Person name.';
+    } else if (!onlyLetters.test(formData.concernedPerson.trim())) {
+      e.concernedPerson = 'Only alphabets are allowed.';
+    }
+
+
+    // Follow-Up Type / Status must be selected
+    if (!formData.followUpType) e.followUpType = 'Please select the Follow-Up Type.';
+    if (!formData.status) e.status = 'Please select the status.';
+    // Follow-Up Date (today or future)
+    if (!formData.followUpDate) {
+      e.followUpDate = 'Please select the Follow-Up Date.';
+    } else if (formData.followUpDate < toLocalISO()) {
+      // safety: manual typing se past na ja sake
+      e.followUpDate = 'Follow-Up Date cannot be in the past.';
+    }
+
+    // Next follow-up date: today/future only AND strictly > followUpDate
+    if (formData.nextFollowUpDate) {
+      const today = toLocalISO();
+      if (formData.nextFollowUpDate < today) {
+        e.nextFollowUpDate = 'Next Follow-Up Date cannot be in the past.';
+      }
+      if (formData.followUpDate && formData.nextFollowUpDate <= formData.followUpDate) {
+        e.nextFollowUpDate = 'Next Follow-Up Date must be greater than the Follow-Up Date.';
+      }
+    }
+
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Check if we're in edit mode
+    setFormMessage('');
     if (showEditModal && selectedFollowUp) {
       await handleUpdateFollowUp();
       return;
     }
-    
+
+    if (!validateForm()) {
+      setFormMessage('Please fix the highlighted fields.');
+      return;
+    }
+
     try {
       setSubmitting(true);
-      
-      // Prepare API data according to the API specification
+
       const apiData = {
-        customerName: formData.customerName,
-        address: formData.customerAddress,
+        customerName: formData.customerName.trim(),
+        address: formData.customerAddress?.trim(),
         phone: formData.customerPhone,
-        contactPerson: formData.contactPerson,
-        concernedPerson: formData.concernedPerson,
-        email: formData.customerEmail,
-        remarks: formData.remark,
+        contactPerson: formData.contactPerson.trim(),
+        concernedPerson: formData.concernedPerson.trim(),
+        email: formData.customerEmail.trim(),
+        remarks: formData.remark?.trim(),
         callingDate: formData.followUpDate,
         status: formData.status,
-        creditCheck: formData.creditCheck,
-        followUpType: formData.followUpType.charAt(0).toUpperCase() + formData.followUpType.slice(1), // Capitalize first letter
-        followUpNotes: formData.followupNotes,
-        nextFollowUpDate: formData.nextFollowUpDate
+        creditCheck: formData.creditCheck?.trim(),
+        followUpType: formData.followUpType.charAt(0).toUpperCase() + formData.followUpType.slice(1),
+        followUpNotes: formData.followupNotes?.trim(),
+        nextFollowUpDate: formData.nextFollowUpDate || undefined
       };
 
-      // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
       if (!token) {
-        alertify.error('Authentication required. Please login again.');
+        setFormMessage('Authentication required. Please login again.');
         return;
       }
 
-      // Make API call with authentication
-      const response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/sales-followup/create`, apiData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+      await axios.post(`${API_CONFIG.BASE_URL}/api/v1/sales-followup/create`, apiData, {
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         withCredentials: true
       });
 
-      if (response.status === 200 || response.status === 201) {
-        // Create new follow-up for local state
-        const newFollowUp = {
-          id: `FU-${Date.now().toString().slice(-6)}`,
-          customerName: formData.customerName,
-          customerPhone: formData.customerPhone,
-          customerEmail: formData.customerEmail,
-          customerAddress: formData.customerAddress,
-          followUpDate: formData.followUpDate,
-          contactPerson: formData.contactPerson,
-          concernedPerson: formData.concernedPerson,
-          followUpType: formData.followUpType,
-          status: formData.status,
-          creditCheck: formData.creditCheck,
-          remark: formData.remark,
-          followupNotes: formData.followupNotes,
-          nextFollowUpDate: formData.nextFollowUpDate,
-          createdAt: new Date().toISOString().split('T')[0],
-          createdBy: 'Employee 1234'
-        };
-
-        setFollowUps(prevFollowUps => [newFollowUp, ...prevFollowUps]);
-        
-        // Close modal and reset form
-        setShowAddFollowUpForm(false);
-        setFormData({
-          customerName: '',
-          customerPhone: '',
-          customerEmail: '',
-          customerAddress: '',
-          followUpDate: '',
-          contactPerson: '',
-          concernedPerson: '',
-          followUpType: 'call',
-          status: 'pending',
-          creditCheck: '',
-          remark: '',
-          followupNotes: '',
-          nextFollowUpDate: '',
-          documents: null
-        });
-
-        alertify.success('✅ Follow-up created successfully!');
-      }
+      // No popups; just refresh list & close modal
+      await fetchFollowUps();
+      setShowAddFollowUpForm(false);
+      setFormData({
+        customerName: '', customerPhone: '', customerEmail: '', customerAddress: '',
+        followUpDate: '', contactPerson: '', concernedPerson: '',
+        followUpType: '', status: '', creditCheck: '', remark: '',
+        followupNotes: '', nextFollowUpDate: '', documents: null
+      });
     } catch (error) {
       console.error('Error creating follow-up:', error);
-      if (error.response) {
-        // Server responded with error
-        alertify.error(`Error: ${error.response.data.message || 'Failed to create follow-up'}`);
-      } else if (error.request) {
-        // Network error
-        alertify.error('Network error. Please check your connection.');
-      } else {
-        // Other error
-        alertify.error('Error creating follow-up. Please try again.');
-      }
+      // show generic inline message (no backend popup)
+      setFormMessage('Something went wrong while creating the follow-up. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
+
 
   // Handle update follow-up
   const handleUpdateFollowUp = async () => {
+    setFormMessage('');
+    if (!validateForm()) {
+      setFormMessage('Please fix the highlighted fields.');
+      return;
+    }
+
     try {
       setSubmitting(true);
-      
-      // Prepare API data for update - send all form data
+
       const apiData = {
-        customerName: formData.customerName,
-        address: formData.customerAddress,
+        customerName: formData.customerName.trim(),
+        address: formData.customerAddress?.trim(),
         phone: formData.customerPhone,
-        contactPerson: formData.contactPerson,
-        concernedPerson: formData.concernedPerson,
-        email: formData.customerEmail,
-        remarks: formData.remark,
+        contactPerson: formData.contactPerson.trim(),
+        concernedPerson: formData.concernedPerson.trim(),
+        email: formData.customerEmail.trim(),
+        remarks: formData.remark?.trim(),
         callingDate: formData.followUpDate,
         status: formData.status,
-        creditCheck: formData.creditCheck,
+        creditCheck: formData.creditCheck?.trim(),
         followUpType: formData.followUpType.charAt(0).toUpperCase() + formData.followUpType.slice(1),
-        followUpNotes: formData.followupNotes,
-        nextFollowUpDate: formData.nextFollowUpDate
+        followUpNotes: formData.followupNotes?.trim(),
+        nextFollowUpDate: formData.nextFollowUpDate || undefined
       };
 
-      // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
       if (!token) {
-        alertify.error('Authentication required. Please login again.');
+        setFormMessage('Authentication required. Please login again.');
         return;
       }
 
-      // Make API call for update
-      const response = await axios.put(
-        `${API_CONFIG.BASE_URL}/api/v1/sales-followup/${selectedFollowUp._id}`, 
-        apiData, 
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          withCredentials: true
-        }
-      );
+      await axios.put(`${API_CONFIG.BASE_URL}/api/v1/sales-followup/${selectedFollowUp._id}`, apiData, {
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        withCredentials: true
+      });
 
-      if (response.status === 200 || response.status === 201) {
-        // Update the follow-up in local state
-        setFollowUps(prevFollowUps => 
-          prevFollowUps.map(followUp => 
-            followUp.id === selectedFollowUp._id 
-              ? {
-                  ...followUp,
-                  customerName: formData.customerName,
-                  phone: formData.customerPhone,
-                  email: formData.customerEmail,
-                  address: formData.customerAddress,
-                  contactPerson: formData.contactPerson,
-                  concernedPerson: formData.concernedPerson,
-                  followUpDate: formData.followUpDate,
-                  followUpType: formData.followUpType,
-                  status: formData.status,
-                  creditCheck: formData.creditCheck,
-                  remark: formData.remark,
-                  followupNotes: formData.followupNotes,
-                  nextFollowUpDate: formData.nextFollowUpDate
-                }
-              : followUp
-          )
-        );
-        
-        // Close modal and reset form
-        setShowEditModal(false);
-        setSelectedFollowUp(null);
-        setFormData({
-          customerName: '',
-          customerPhone: '',
-          customerEmail: '',
-          customerAddress: '',
-          followUpDate: '',
-          contactPerson: '',
-          concernedPerson: '',
-          followUpType: 'call',
-          status: 'pending',
-          creditCheck: '',
-          remark: '',
-          followupNotes: '',
-          nextFollowUpDate: '',
-          documents: null
-        });
-
-        alertify.success('✅ Follow-up updated successfully!');
-        
-        // Refresh the data
-        fetchFollowUps();
-      }
+      await fetchFollowUps();
+      setShowEditModal(false);
+      setSelectedFollowUp(null);
+      setFormData({
+        customerName: '', customerPhone: '', customerEmail: '', customerAddress: '',
+        followUpDate: '', contactPerson: '', concernedPerson: '',
+        followUpType: '', status: '', creditCheck: '', remark: '',
+        followupNotes: '', nextFollowUpDate: '', documents: null
+      });
     } catch (error) {
       console.error('Error updating follow-up:', error);
-      if (error.response) {
-        // Server responded with error
-        alertify.error(`Error: ${error.response.data.message || 'Failed to update follow-up'}`);
-      } else if (error.request) {
-        // Network error
-        alertify.error('Network error. Please check your connection.');
-      } else {
-        // Other error
-        alertify.error('Error updating follow-up. Please try again.');
-      }
+      setFormMessage('Something went wrong while updating the follow-up. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
+
   // Handle view follow-up
   const handleViewFollowUp = async (followUp) => {
+    const id = followUp.id || followUp._id;
     try {
-      setViewLoading(true);
+      setViewLoadingId(id);
       setSelectedFollowUp(followUp);
-      
+
       // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
+
       if (!token) {
         alertify.error('Authentication required. Please login again.');
         return;
@@ -403,18 +421,19 @@ export default function DailyFollowUp() {
         alertify.error('Error loading follow-up details. Please try again.');
       }
     } finally {
-      setViewLoading(false);
+      setViewLoadingId(null);
     }
   };
 
   // Handle edit follow-up
   const handleEditFollowUp = async (followUp) => {
+    const id = followUp.id || followUp._id;
     try {
-      setEditLoading(true);
-      
+      setEditLoadingId(id);
+
       // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
+
       if (!token) {
         alertify.error('Authentication required. Please login again.');
         return;
@@ -430,12 +449,12 @@ export default function DailyFollowUp() {
 
       if (response.data.success) {
         const followUpData = response.data.data;
-        
+
         // Get the latest follow-up from the followUps array for pre-filling
         const latestFollowUpDetails = followUpData.followUps && followUpData.followUps.length > 0
           ? followUpData.followUps[followUpData.followUps.length - 1]
           : {}; // Default to empty object if no follow-ups
-        
+
         // Pre-fill form with existing data
         setFormData({
           customerName: followUpData.customerName || '',
@@ -453,7 +472,7 @@ export default function DailyFollowUp() {
           nextFollowUpDate: latestFollowUpDetails.nextFollowUpDate ? new Date(latestFollowUpDetails.nextFollowUpDate).toISOString().split('T')[0] : '',
           documents: null
         });
-        
+
         setSelectedFollowUp(followUpData);
         setShowEditModal(true);
         alertify.success('✅ Follow-up data loaded for editing!');
@@ -470,7 +489,7 @@ export default function DailyFollowUp() {
         alertify.error('Error loading follow-up details. Please try again.');
       }
     } finally {
-      setEditLoading(false);
+      setEditLoadingId(null);
     }
   };
 
@@ -479,6 +498,8 @@ export default function DailyFollowUp() {
     setShowAddFollowUpForm(false);
     setShowEditModal(false);
     setShowAddNewFollowUpForm(false);
+    setViewLoadingId(null);
+    setEditLoadingId(null);
     setFormData({
       customerName: '',
       customerPhone: '',
@@ -500,6 +521,8 @@ export default function DailyFollowUp() {
       followUpNotes: '',
       nextFollowUpDate: ''
     });
+    
+
   };
 
   const handleNewFollowUpInputChange = (e) => {
@@ -512,13 +535,13 @@ export default function DailyFollowUp() {
 
   const handleAddNewFollowUp = async (e) => {
     e.preventDefault();
-    
+
     try {
       setSubmitting(true);
-      
+
       // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
+
       if (!token) {
         alertify.error('Authentication required. Please login again.');
         return;
@@ -542,20 +565,20 @@ export default function DailyFollowUp() {
 
       if (response.data.success) {
         alertify.success('New follow-up added successfully!');
-        
+
         // Close the add new follow-up form
         setShowAddNewFollowUpForm(false);
-        
+
         // Reset the new follow-up data
         setNewFollowUpData({
           followUpType: 'call',
           followUpNotes: '',
           nextFollowUpDate: ''
         });
-        
+
         // Refresh the follow-ups data
         await fetchFollowUps();
-        
+
         // Refresh the edit form data
         await handleEditFollowUp(selectedFollowUp);
       } else {
@@ -633,7 +656,10 @@ export default function DailyFollowUp() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{followUps.filter(fu => fu.followUpDate === new Date().toISOString().split('T')[0]).length}</p>
+                <p className="text-xl font-bold text-purple-600">
+                  {followUps.filter(fu => fu.followUpDate === toLocalISO()).length}
+                </p>
+
               </div>
             </div>
           </div>
@@ -660,75 +686,75 @@ export default function DailyFollowUp() {
 
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-                     <table className="w-full">
-             <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-               <tr>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S. No</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Customer Name</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Contact (Phone)</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Follow-Up Date</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Follow-Up Type</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Next Follow-Up Date</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
-               </tr>
-             </thead>
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <tr>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S. No</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Customer Name</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Contact (Phone)</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Follow-Up Date</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Follow-Up Type</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Next Follow-Up Date</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+              </tr>
+            </thead>
             <tbody>
-                             {filteredFollowUps.map((followUp, index) => (
-                 <tr key={followUp.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                   <td className="py-2 px-3">
-                     <span className="font-medium text-gray-700">{followUp.sNo}</span>
-                   </td>
-                   <td className="py-2 px-3">
-                     <span className="font-medium text-gray-700">{followUp.customerName}</span>
-                   </td>
-                   <td className="py-2 px-3">
-                     <span className="font-medium text-gray-700">{followUp.customerPhone}</span>
-                   </td>
-                   <td className="py-2 px-3">
-                     <span className="font-medium text-gray-700">{followUp.customerEmail}</span>
-                   </td>
-                   <td className="py-2 px-3">
-                     <span className="font-medium text-gray-700">{followUp.followUpDate}</span>
-                   </td>
-                   <td className="py-2 px-3">
-                     <div className="flex items-center gap-2">
-                       {followUp.followUpType === 'Call' && <FaPhone className="text-blue-500" size={14} />}
-                       {followUp.followUpType === 'Email' && <FaEnvelope className="text-green-500" size={14} />}
-                       <span className="font-medium text-gray-700">{followUp.followUpType}</span>
-                     </div>
-                   </td>
-                   <td className="py-2 px-3">
-                     <span className="font-medium text-gray-700">{followUp.nextFollowUpDate}</span>
-                   </td>
-                   <td className="py-2 px-3">
-                     <div className="flex items-center gap-2">
-                       <button
-                         onClick={() => handleViewFollowUp(followUp)}
-                         disabled={viewLoading}
-                         className={`px-3 py-1 text-white text-xs rounded-md transition-colors ${
-                           viewLoading 
-                             ? 'bg-gray-400 cursor-not-allowed' 
-                             : 'bg-blue-500 hover:bg-blue-600'
-                         }`}
-                       >
-                         {viewLoading ? 'Loading...' : 'View'}
-                       </button>
-                                               <button
-                          onClick={() => handleEditFollowUp(followUp)}
-                          disabled={editLoading}
-                          className={`px-3 py-1 text-white text-xs rounded-md transition-colors ${
-                            editLoading 
-                              ? 'bg-gray-400 cursor-not-allowed' 
-                              : 'bg-green-500 hover:bg-green-600'
+              {filteredFollowUps.map((followUp, index) => (
+                <tr key={followUp.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                  <td className="py-2 px-3">
+                    <span className="font-medium text-gray-700">{followUp.sNo}</span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <span className="font-medium text-gray-700">{followUp.customerName}</span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <span className="font-medium text-gray-700">{followUp.customerPhone}</span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <span className="font-medium text-gray-700">{followUp.customerEmail}</span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <span className="font-medium text-gray-700">{followUp.followUpDate}</span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-2">
+                      {(followUp.followUpType || '').toLowerCase() === 'call' && <FaPhone className="text-blue-500" size={14} />}
+                      {(followUp.followUpType || '').toLowerCase() === 'email' && <FaEnvelope className="text-green-500" size={14} />}
+                      <span className="font-medium text-gray-700">
+                        {followUp.followUpType ? (followUp.followUpType[0].toUpperCase() + followUp.followUpType.slice(1).toLowerCase()) : ''}
+                      </span>
+
+                    </div>
+                  </td>
+                  <td className="py-2 px-3">
+                    <span className="font-medium text-gray-700">{followUp.nextFollowUpDate}</span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleViewFollowUp(followUp)}
+                        disabled={viewLoadingId === followUp.id}
+                        className={`px-3 py-1 text-white text-xs rounded-md transition-colors ${viewLoadingId === followUp.id ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
                           }`}
-                        >
-                          {editLoading ? 'Loading...' : 'Edit'}
-                        </button>
-                     </div>
-                   </td>
-                 </tr>
-               ))}
+                      >
+                        {viewLoadingId === followUp.id ? 'Loading...' : 'View'}
+                      </button>
+
+                      <button
+                        onClick={() => handleEditFollowUp(followUp)}
+                        disabled={editLoadingId === followUp.id}
+                        className={`px-3 py-1 text-white text-xs rounded-md transition-colors ${editLoadingId === followUp.id ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'
+                          }`}
+                      >
+                        {editLoadingId === followUp.id ? 'Loading...' : 'Edit'}
+                      </button>
+
+
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -770,184 +796,284 @@ export default function DailyFollowUp() {
               </div>
             </div>
 
-                         {/* Form */}
-             <form onSubmit={handleSubmit} className="p-6">
-                               <div className="grid grid-cols-3 gap-6 max-h-[60vh] overflow-y-auto pr-2 scrollbar-hide">
-                                 {/* Customer Information */}
-                 <div className="bg-blue-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
-                   <h3 className="text-lg font-semibold text-blue-800 mb-4">Customer Information</h3>
-                                      <div className="space-y-4">
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name *</label>
-                       <input
-                         type="text"
-                         name="customerName"
-                         value={formData.customerName}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Enter customer name"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
-                       <input
-                         type="tel"
-                         name="customerPhone"
-                         value={formData.customerPhone}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Enter phone number"
-                       />
-                     </div>
-                                           <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
-                        <input
-                          type="email"
-                          name="customerEmail"
-                          value={formData.customerEmail}
-                          onChange={handleInputChange}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter email address"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                        <textarea
-                          name="customerAddress"
-                          value={formData.customerAddress}
-                          onChange={handleInputChange}
-                          rows="3"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter customer address"
-                        />
-                      </div>
-                    </div>
-                  </div>
+            {/* Form */}
+            <form noValidate onInvalid={(e) => e.preventDefault()} onSubmit={handleSubmit} className="p-6">
 
-                                 {/* Follow-Up Details */}
-                 <div className="bg-green-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
-                   <h3 className="text-lg font-semibold text-green-800 mb-4">Follow-Up Details</h3>
-                   <div className="space-y-4">
-                                         <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Date *</label>
-                       <input
-                         type="date"
-                         name="followUpDate"
-                         value={formData.followUpDate}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       />
-                     </div>
-                                         <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Contact Person *</label>
-                       <input
-                         type="text"
-                         name="contactPerson"
-                         value={formData.contactPerson}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                         placeholder="Enter contact person name"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Concerned Person *</label>
-                       <input
-                         type="text"
-                         name="concernedPerson"
-                         value={formData.concernedPerson}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                         placeholder="Enter concerned person name"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Type *</label>
-                       <select
-                         name="followUpType"
-                         value={formData.followUpType}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       >
-                         <option value="call">Call</option>
-                         <option value="email">Email</option>
-                       </select>
-                     </div>
+              <div className="grid grid-cols-3 gap-6 max-h-[60vh] overflow-y-auto pr-2 scrollbar-hide">
+                {/* Customer Information */}
+                <div className="bg-blue-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
+                  <h3 className="text-lg font-semibold text-blue-800 mb-4">Customer Information</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-2">Customer Name *</label>
+                      <input
+                        id="customerName"
+                        type="text"
+                        name="customerName"
+                        value={formData.customerName}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.customerName}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.customerName ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter customer name"
+                      />
+                      {errors.customerName && <p className="text-red-600 text-xs mt-1">{errors.customerName}</p>}
+
+                    </div>
+                    <div>
+                      <label htmlFor="customerPhone" className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
+                      <input
+                        id="customerPhone"
+                        type="tel"
+                        name="customerPhone"
+                        value={formData.customerPhone}
+                        onChange={handleInputChange}
+                        onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                        inputMode="numeric"
+                        maxLength={10}
+                        aria-invalid={!!errors.customerPhone}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.customerPhone ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter 10-digit mobile number"
+                      />
+                      {errors.customerPhone && <p className="text-red-600 text-xs mt-1">{errors.customerPhone}</p>}
+
+
+                    </div>
+                    <div>
+                      <label htmlFor="customerEmail" className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+                      <input
+                        id="customerEmail"
+                        type="email"
+                        name="customerEmail"
+                        value={formData.customerEmail}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.customerEmail}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.customerEmail ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter email address"
+                      />
+                      {errors.customerEmail && <p className="text-red-600 text-xs mt-1">{errors.customerEmail}</p>}
+
+
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                      <textarea
+                        name="customerAddress"
+                        value={formData.customerAddress}
+                        onChange={handleInputChange}
+                        rows="3"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter customer address"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                                 {/* Others */}
-                 <div className="bg-purple-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
-                   <h3 className="text-lg font-semibold text-purple-800 mb-4">Others</h3>
-                   <div className="space-y-4">
-                                         <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Status *</label>
-                       <select
-                         name="status"
-                         value={formData.status}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                       >
-                         <option value="New">New</option>
-                         <option value="In Progress">In Progress</option>
-                         <option value="Qualified">Qualified</option>
-                         <option value="Proposal Sent">Proposal Sent</option>
-                         <option value="Negotiation">Negotiation</option>
-                         <option value="Closed Won">Closed Won</option>
-                         <option value="Closed Lost">Closed Lost</option>
-                         <option value="On Hold">On Hold</option>
-                       </select>
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check</label>
-                       <input
-                         type="text"
-                         name="creditCheck"
-                         value={formData.creditCheck}
-                         onChange={handleInputChange}
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                         placeholder="Enter credit check details"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Remark</label>
-                       <input
-                         type="text"
-                         name="remark"
-                         value={formData.remark}
-                         onChange={handleInputChange}
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                         placeholder="Enter any remarks"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes</label>
-                       <textarea
-                         name="followupNotes"
-                         value={formData.followupNotes}
-                         onChange={handleInputChange}
-                         rows="3"
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                         placeholder="Enter detailed follow-up notes"
-                       />
-                     </div>
-                                         <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Next Follow-Up Date</label>
-                       <input
-                         type="date"
-                         name="nextFollowUpDate"
-                         value={formData.nextFollowUpDate}
-                         onChange={handleInputChange}
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                       />
-                     </div>
+                {/* Follow-Up Details */}
+                <div className="bg-green-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
+                  <h3 className="text-lg font-semibold text-green-800 mb-4">Follow-Up Details</h3>
+                  <div className="space-y-4">
+                    {/* Follow-Up Date */}
+                    <div
+                      className="cursor-pointer"
+                      onClick={() => {
+                        // Chrome: showPicker, fallback: focus
+                        if (followUpDateRef.current?.showPicker) followUpDateRef.current.showPicker();
+                        else followUpDateRef.current?.focus();
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (followUpDateRef.current?.showPicker) followUpDateRef.current.showPicker();
+                          else followUpDateRef.current?.focus();
+                        }
+                      }}
+                    >
+                      <label htmlFor="followUpDate" className="block text-sm font-medium text-gray-700 mb-2">
+                        Follow-Up Date *
+                      </label>
+                      <input
+                        id="followUpDate"
+                        ref={followUpDateRef}
+                        type="date"
+                        name="followUpDate"
+                        value={formData.followUpDate}
+                        onChange={handleInputChange}
+                        min={toLocalISO()}  // present & future only
+                        aria-invalid={!!errors.followUpDate}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.followUpDate ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                      />
+                    </div>
+                    {errors.followUpDate && (
+                      <p className="text-red-600 text-xs mt-1">{errors.followUpDate}</p>
+                    )}
+
+                    <div>
+                      <label htmlFor="contactPerson" className="block text-sm font-medium text-gray-700 mb-2">
+                        Contact Person *
+                      </label>
+                      <input
+                        id="contactPerson"
+                        type="text"
+                        name="contactPerson"
+                        value={formData.contactPerson}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.contactPerson}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.contactPerson ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter contact person name"
+                      />
+                      {errors.contactPerson && (
+                        <p className="text-red-600 text-xs mt-1">{errors.contactPerson}</p>
+                      )}
+
+                    </div>
+                    <div>
+                      <label htmlFor="concernedPerson" className="block text-sm font-medium text-gray-700 mb-2">
+                        Concerned Person *
+                      </label>
+                      <input
+                        id="concernedPerson"
+                        type="text"
+                        name="concernedPerson"
+                        value={formData.concernedPerson}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.concernedPerson}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.concernedPerson ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter concerned person name"
+                      />
+                      {errors.concernedPerson && (
+                        <p className="text-red-600 text-xs mt-1">{errors.concernedPerson}</p>
+                      )}
+
+                    </div>
+                    <div>
+                      <label htmlFor="followUpType" className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Type *</label>
+                      <select
+                        id="followUpType"
+                        name="followUpType"
+                        value={formData.followUpType}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.followUpType}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.followUpType ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                      >
+                        <option value="">Select</option>
+                        <option value="call">Call</option>
+                        <option value="email">Email</option>
+                      </select>
+                      {errors.followUpType && <p className="text-red-600 text-xs mt-1">{errors.followUpType}</p>}
+
+
+                    </div>
+                  </div>
+                </div>
+
+                {/* Others */}
+                <div className="bg-purple-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
+                  <h3 className="text-lg font-semibold text-purple-800 mb-4">Others</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">Status *</label>
+                      <select
+                        id="status"
+                        name="status"
+                        value={formData.status}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.status}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.status ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                      >
+                        <option value="">Select</option>
+                        <option value="New">New</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Qualified">Qualified</option>
+                        <option value="Proposal Sent">Proposal Sent</option>
+                        <option value="Negotiation">Negotiation</option>
+                        <option value="Closed Won">Closed Won</option>
+                        <option value="Closed Lost">Closed Lost</option>
+                        <option value="On Hold">On Hold</option>
+                      </select>
+                      {errors.status && <p className="text-red-600 text-xs mt-1">{errors.status}</p>}
+
+
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check</label>
+                      <input
+                        type="text"
+                        name="creditCheck"
+                        value={formData.creditCheck}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter credit check details"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Remark</label>
+                      <input
+                        type="text"
+                        name="remark"
+                        value={formData.remark}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter any remarks"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes</label>
+                      <textarea
+                        name="followupNotes"
+                        value={formData.followupNotes}
+                        onChange={handleInputChange}
+                        rows="3"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter detailed follow-up notes"
+                      />
+                    </div>
+                    {/* Next Follow-Up Date */}
+                    <div
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (nextFollowUpDateRef.current?.showPicker) nextFollowUpDateRef.current.showPicker();
+                        else nextFollowUpDateRef.current?.focus();
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (nextFollowUpDateRef.current?.showPicker) nextFollowUpDateRef.current.showPicker();
+                          else nextFollowUpDateRef.current?.focus();
+                        }
+                      }}
+                    >
+                      <label htmlFor="nextFollowUpDate" className="block text-sm font-medium text-gray-700 mb-2">
+                        Next Follow-Up Date
+                      </label>
+                      <input
+                        id="nextFollowUpDate"
+                        ref={nextFollowUpDateRef}
+                        type="date"
+                        name="nextFollowUpDate"
+                        value={formData.nextFollowUpDate}
+                        onChange={handleInputChange}
+                        min={getNextMinDate(formData.followUpDate)}   // ✅ present/future & > followUpDate
+                        aria-invalid={!!errors.nextFollowUpDate}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.nextFollowUpDate ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                      />
+                    </div>
+                    {errors.nextFollowUpDate && (
+                      <p className="text-red-600 text-xs mt-1">{errors.nextFollowUpDate}</p>
+                    )}
+
                   </div>
                 </div>
               </div>
@@ -958,22 +1084,20 @@ export default function DailyFollowUp() {
                   type="button"
                   onClick={handleCloseModal}
                   disabled={submitting}
-                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed text-gray-400' 
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed text-gray-400'
+                    : 'text-gray-700 hover:bg-gray-50'
+                    }`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${
-                    submitting 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : 'hover:from-blue-600 hover:to-blue-700'
-                  }`}
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-blue-600 hover:to-blue-700'
+                    }`}
                 >
                   {submitting ? (
                     <div className="flex items-center gap-2">
@@ -987,595 +1111,690 @@ export default function DailyFollowUp() {
               </div>
             </form>
           </div>
-                 </div>
-       )}
+        </div>
+      )}
 
-       {/* View Follow-Up Modal */}
-       {showViewModal && selectedFollowUp && (
-         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-           <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
-             scrollbarWidth: 'none',
-             msOverflowStyle: 'none',
-           }}>
-             {/* Header */}
-             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
-               <div className="flex justify-between items-center">
-                 <div className="flex items-center gap-3">
-                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                     <FaPhone className="text-white" size={24} />
-                   </div>
-                   <div>
-                     <h2 className="text-xl font-bold">Follow-Up Details</h2>
-                     <p className="text-blue-100">Customer Follow-Up Information</p>
-                   </div>
-                 </div>
-                 <button
-                   onClick={() => setShowViewModal(false)}
-                   className="text-white hover:text-gray-200 text-2xl font-bold"
-                 >
-                   ×
-                 </button>
-               </div>
-             </div>
+      {/* View Follow-Up Modal */}
+      {showViewModal && selectedFollowUp && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <FaPhone className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Follow-Up Details</h2>
+                    <p className="text-blue-100">Customer Follow-Up Information</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
 
-             {/* Content */}
-             <div className="p-6 space-y-6">
-               {/* Customer Information */}
-               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6">
-                 <div className="flex items-center gap-2 mb-4">
-                   <FaUser className="text-blue-600" size={20} />
-                   <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
-                 </div>
-                 <div className="grid grid-cols-2 gap-6">
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                       <FaUser className="text-blue-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Customer Name</p>
-                       <p className="font-semibold text-gray-800">{selectedFollowUp.customerName || 'N/A'}</p>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                       <FaPhone className="text-green-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Phone Number</p>
-                       <p className="font-semibold text-gray-800">{selectedFollowUp.phone || 'N/A'}</p>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                       <FaEnvelope className="text-purple-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Email Address</p>
-                       <p className="font-semibold text-gray-800">{selectedFollowUp.email || 'N/A'}</p>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                       <FaUser className="text-orange-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Contact Person</p>
-                       <p className="font-semibold text-gray-800">{selectedFollowUp.contactPerson || 'N/A'}</p>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                       <FaUser className="text-red-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Concerned Person</p>
-                       <p className="font-semibold text-gray-800">{selectedFollowUp.concernedPerson || 'N/A'}</p>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                       <FaCalendar className="text-gray-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Created Date</p>
-                       <p className="font-semibold text-gray-800">
-                         {selectedFollowUp.createdAt ? new Date(selectedFollowUp.createdAt).toLocaleDateString('en-US', {
-                           year: 'numeric',
-                           month: 'long',
-                           day: 'numeric'
-                         }) : 'N/A'}
-                       </p>
-                     </div>
-                   </div>
-                 </div>
-                 {selectedFollowUp.address && (
-                   <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
-                     <div className="flex items-center gap-2 mb-2">
-                       <FaUser className="text-gray-600" size={16} />
-                       <p className="text-sm font-medium text-gray-700">Address</p>
-                     </div>
-                     <p className="text-gray-800">{selectedFollowUp.address}</p>
-                   </div>
-                 )}
-               </div>
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Customer Information */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <FaUser className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <FaUser className="text-blue-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Customer Name</p>
+                      <p className="font-semibold text-gray-800">{selectedFollowUp.customerName || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <FaPhone className="text-green-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Phone Number</p>
+                      <p className="font-semibold text-gray-800">{selectedFollowUp.phone || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <FaEnvelope className="text-purple-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Email Address</p>
+                      <p className="font-semibold text-gray-800">{selectedFollowUp.email || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                      <FaUser className="text-orange-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Contact Person</p>
+                      <p className="font-semibold text-gray-800">{selectedFollowUp.contactPerson || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <FaUser className="text-red-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Concerned Person</p>
+                      <p className="font-semibold text-gray-800">{selectedFollowUp.concernedPerson || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                      <FaCalendar className="text-gray-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Created Date</p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedFollowUp.createdAt ? new Date(selectedFollowUp.createdAt).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        }) : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {selectedFollowUp.address && (
+                  <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FaUser className="text-gray-600" size={16} />
+                      <p className="text-sm font-medium text-gray-700">Address</p>
+                    </div>
+                    <p className="text-gray-800">{selectedFollowUp.address}</p>
+                  </div>
+                )}
+              </div>
 
-               {/* Follow-Up Details */}
-               <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 mb-6">
-                 <div className="flex items-center gap-2 mb-4">
-                   <FaPhone className="text-green-600" size={20} />
-                   <h3 className="text-lg font-bold text-gray-800">Follow-Up Details</h3>
-                 </div>
-                 <div className="grid grid-cols-2 gap-6">
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                       <FaCalendar className="text-blue-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Calling Date</p>
-                       <p className="font-semibold text-gray-800">
-                         {selectedFollowUp.callingDate ? new Date(selectedFollowUp.callingDate).toLocaleDateString('en-US', {
-                           year: 'numeric',
-                           month: 'long',
-                           day: 'numeric'
-                         }) : 'N/A'}
-                       </p>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                       <FaPhone className="text-green-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Status</p>
-                       <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(selectedFollowUp.status)}`}>
-                         {selectedFollowUp.status || 'N/A'}
-                       </span>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                       <FaUser className="text-purple-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Credit Check</p>
-                       <p className="font-semibold text-gray-800">{selectedFollowUp.creditCheck || 'N/A'}</p>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                       <FaUser className="text-orange-600" size={16} />
-                     </div>
-                     <div>
-                       <p className="text-sm text-gray-600">Created By</p>
-                       <p className="font-semibold text-gray-800">{selectedFollowUp.createdBy?.employeeName || 'N/A'}</p>
-                     </div>
-                   </div>
-                 </div>
-                 {selectedFollowUp.remarks && (
-                   <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
-                     <div className="flex items-center gap-2 mb-2">
-                       <FaUser className="text-gray-600" size={16} />
-                       <p className="text-sm font-medium text-gray-700">Remarks</p>
-                     </div>
-                     <p className="text-gray-800">{selectedFollowUp.remarks}</p>
-                   </div>
-                 )}
-               </div>
+              {/* Follow-Up Details */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 mb-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <FaPhone className="text-green-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Follow-Up Details</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <FaCalendar className="text-blue-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Calling Date</p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedFollowUp.callingDate ? new Date(selectedFollowUp.callingDate).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        }) : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <FaPhone className="text-green-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Status</p>
+                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(selectedFollowUp.status)}`}>
+                        {selectedFollowUp.status || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <FaUser className="text-purple-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Credit Check</p>
+                      <p className="font-semibold text-gray-800">{selectedFollowUp.creditCheck || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                      <FaUser className="text-orange-600" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Created By</p>
+                      <p className="font-semibold text-gray-800">{selectedFollowUp.createdBy?.employeeName || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+                {selectedFollowUp.remarks && (
+                  <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FaUser className="text-gray-600" size={16} />
+                      <p className="text-sm font-medium text-gray-700">Remarks</p>
+                    </div>
+                    <p className="text-gray-800">{selectedFollowUp.remarks}</p>
+                  </div>
+                )}
+              </div>
 
-               {/* Follow-Ups History */}
-               {selectedFollowUp.followUps && selectedFollowUp.followUps.length > 0 && (
-                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
-                   <div className="flex items-center gap-2 mb-4">
-                     <FaCalendar className="text-purple-600" size={20} />
-                     <h3 className="text-lg font-bold text-gray-800">Follow-Ups History</h3>
-                   </div>
-                   <div className="space-y-4">
-                     {selectedFollowUp.followUps.map((followUp, index) => (
-                       <div key={followUp._id} className="bg-white rounded-lg p-4 border border-gray-200">
-                         <div className="flex items-center justify-between mb-2">
-                           <div className="flex items-center gap-2">
-                             <span className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-bold text-purple-600">
-                               {index + 1}
-                             </span>
-                             <span className="text-sm font-medium text-gray-700">
-                               {new Date(followUp.createdAt).toLocaleDateString('en-US', {
-                                 year: 'numeric',
-                                 month: 'short',
-                                 day: 'numeric'
-                               })}
-                             </span>
-                           </div>
-                           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
-                             followUp.followUpType === 'Call' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                           }`}>
-                             {followUp.followUpType === 'Call' ? <FaPhone size={12} /> : <FaEnvelope size={12} />}
-                             {followUp.followUpType}
-                           </span>
-                         </div>
-                         {followUp.followUpNotes && (
-                           <p className="text-sm text-gray-600 mb-2">{followUp.followUpNotes}</p>
-                         )}
-                         {followUp.nextFollowUpDate && (
-                           <div className="flex items-center gap-2 text-xs text-gray-500">
-                             <FaCalendar size={12} />
-                             <span>Next Follow-Up: {new Date(followUp.nextFollowUpDate).toLocaleDateString('en-US', {
-                               year: 'numeric',
-                               month: 'short',
-                               day: 'numeric'
-                             })}</span>
-                           </div>
-                         )}
-                       </div>
-                     ))}
-                   </div>
-                 </div>
-               )}
-             </div>
-           </div>
-         </div>
-       )}
+              {/* Follow-Ups History */}
+              {selectedFollowUp.followUps && selectedFollowUp.followUps.length > 0 && (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FaCalendar className="text-purple-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Follow-Ups History</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {selectedFollowUp.followUps.map((followUp, index) => (
+                      <div key={followUp._id} className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-bold text-purple-600">
+                              {index + 1}
+                            </span>
+                            <span className="text-sm font-medium text-gray-700">
+                              {new Date(followUp.createdAt).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </span>
+                          </div>
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${followUp.followUpType === 'Call' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                            }`}>
+                            {followUp.followUpType === 'Call' ? <FaPhone size={12} /> : <FaEnvelope size={12} />}
+                            {followUp.followUpType}
+                          </span>
+                        </div>
+                        {followUp.followUpNotes && (
+                          <p className="text-sm text-gray-600 mb-2">{followUp.followUpNotes}</p>
+                        )}
+                        {followUp.nextFollowUpDate && (
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <FaCalendar size={12} />
+                            <span>Next Follow-Up: {new Date(followUp.nextFollowUpDate).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-       {/* Edit Follow-Up Modal */}
-       {showEditModal && selectedFollowUp && (
-         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-           <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full">
-             {/* Header */}
-             <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-               <div className="flex justify-between items-center">
-                 <div className="flex items-center gap-3">
-                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                     <FaPhone className="text-white" size={24} />
-                   </div>
-                   <div>
-                     <h2 className="text-xl font-bold">Edit Follow-Up</h2>
-                     <p className="text-green-100">Update customer follow-up information</p>
-                   </div>
-                 </div>
-                 <button
-                   onClick={handleCloseModal}
-                   className="text-white hover:text-gray-200 text-2xl font-bold"
-                 >
-                   ×
-                 </button>
-               </div>
-             </div>
+      {/* Edit Follow-Up Modal */}
+      {showEditModal && selectedFollowUp && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <FaPhone className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Edit Follow-Up</h2>
+                    <p className="text-green-100">Update customer follow-up information</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
 
-             {/* Form */}
-             <form onSubmit={handleSubmit} className="p-6">
-               <div className="grid grid-cols-3 gap-6 max-h-[60vh] overflow-y-auto pr-2 scrollbar-hide">
-                 {/* Customer Information */}
-                 <div className="bg-blue-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
-                   <h3 className="text-lg font-semibold text-blue-800 mb-4">Customer Information</h3>
-                   <div className="space-y-4">
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name *</label>
-                       <input
-                         type="text"
-                         name="customerName"
-                         value={formData.customerName}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Enter customer name"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
-                       <input
-                         type="tel"
-                         name="customerPhone"
-                         value={formData.customerPhone}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Enter phone number"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
-                       <input
-                         type="email"
-                         name="customerEmail"
-                         value={formData.customerEmail}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Enter email address"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                       <textarea
-                         name="customerAddress"
-                         value={formData.customerAddress}
-                         onChange={handleInputChange}
-                         rows="3"
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="Enter customer address"
-                       />
-                     </div>
-                   </div>
-                 </div>
 
-                 {/* Follow-Up Details */}
-                 <div className="bg-green-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
-                   <h3 className="text-lg font-semibold text-green-800 mb-4">Follow-Up Details</h3>
-                   <div className="space-y-4">
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Date *</label>
-                       <input
-                         type="date"
-                         name="followUpDate"
-                         value={formData.followUpDate}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Contact Person *</label>
-                       <input
-                         type="text"
-                         name="contactPerson"
-                         value={formData.contactPerson}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                         placeholder="Enter contact person name"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Concerned Person *</label>
-                       <input
-                         type="text"
-                         name="concernedPerson"
-                         value={formData.concernedPerson}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                         placeholder="Enter concerned person name"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Type *</label>
-                       <select
-                         name="followUpType"
-                         value={formData.followUpType}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       >
-                         <option value="call">Call</option>
-                         <option value="email">Email</option>
-                       </select>
-                     </div>
-                   </div>
-                 </div>
+            {/* Form */}
+            <form noValidate onInvalid={(e) => e.preventDefault()} onSubmit={handleSubmit} className="p-6">
 
-                 {/* Others */}
-                 <div className="bg-purple-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
-                   <h3 className="text-lg font-semibold text-purple-800 mb-4">Others</h3>
-                   <div className="space-y-4">
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Status *</label>
-                       <select
-                         name="status"
-                         value={formData.status}
-                         onChange={handleInputChange}
-                         required
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                       >
-                         <option value="New">New</option>
-                         <option value="In Progress">In Progress</option>
-                         <option value="Qualified">Qualified</option>
-                         <option value="Proposal Sent">Proposal Sent</option>
-                         <option value="Negotiation">Negotiation</option>
-                         <option value="Closed Won">Closed Won</option>
-                         <option value="Closed Lost">Closed Lost</option>
-                         <option value="On Hold">On Hold</option>
-                       </select>
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check</label>
-                       <input
-                         type="text"
-                         name="creditCheck"
-                         value={formData.creditCheck}
-                         onChange={handleInputChange}
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                         placeholder="Enter credit check details"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Remark</label>
-                       <input
-                         type="text"
-                         name="remark"
-                         value={formData.remark}
-                         onChange={handleInputChange}
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                         placeholder="Enter any remarks"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes</label>
-                       <textarea
-                         name="followupNotes"
-                         value={formData.followupNotes}
-                         onChange={handleInputChange}
-                         rows="3"
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                         placeholder="Enter detailed follow-up notes"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Next Follow-Up Date</label>
-                       <input
-                         type="date"
-                         name="nextFollowUpDate"
-                         value={formData.nextFollowUpDate}
-                         onChange={handleInputChange}
-                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                       />
-                     </div>
-                   </div>
-                 </div>
-               </div>
+              <div className="grid grid-cols-3 gap-6 max-h-[60vh] overflow-y-auto pr-2 scrollbar-hide">
+                {/* Customer Information */}
+                <div className="bg-blue-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
+                  <h3 className="text-lg font-semibold text-blue-800 mb-4">Customer Information</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-2">Customer Name *</label>
+                      <input
+                        id="customerName"
+                        type="text"
+                        name="customerName"
+                        value={formData.customerName}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.customerName}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.customerName ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter customer name"
+                      />
+                      {errors.customerName && <p className="text-red-600 text-xs mt-1">{errors.customerName}</p>}
 
-               {/* Form Actions */}
-               <div className="flex justify-between items-center pt-6 border-t border-gray-200 mt-6">
-                 <button
-                   type="button"
-                   onClick={() => setShowAddNewFollowUpForm(true)}
-                   disabled={submitting}
-                   className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors flex items-center gap-2 ${
-                     submitting 
-                       ? 'opacity-50 cursor-not-allowed' 
-                       : 'hover:from-blue-600 hover:to-blue-700'
-                   }`}
-                 >
-                   <FaPlus size={16} />
-                   Add New Follow-Up
-                 </button>
-                 <div className="flex gap-4">
-                   <button
-                     type="button"
-                     onClick={handleCloseModal}
-                     disabled={submitting}
-                     className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${
-                       submitting 
-                         ? 'opacity-50 cursor-not-allowed text-gray-400' 
-                         : 'text-gray-700 hover:bg-gray-50'
-                     }`}
-                   >
-                     Cancel
-                   </button>
-                   <button
-                     type="submit"
-                     disabled={submitting}
-                     className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${
-                       submitting 
-                         ? 'opacity-50 cursor-not-allowed' 
-                         : 'hover:from-green-600 hover:to-green-700'
-                     }`}
-                   >
-                     {submitting ? (
-                       <div className="flex items-center gap-2">
-                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                         Updating...
-                       </div>
-                     ) : (
-                       'Update Follow-Up'
-                     )}
-                   </button>
-                 </div>
-               </div>
-             </form>
-           </div>
-         </div>
-       )}
 
-       {/* Add New Follow-Up Modal */}
-       {showAddNewFollowUpForm && selectedFollowUp && (
-         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-           <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full">
-             {/* Header */}
-             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
-               <div className="flex justify-between items-center">
-                 <div className="flex items-center gap-3">
-                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                     <FaPlus className="text-white" size={24} />
-                   </div>
-                   <div>
-                     <h2 className="text-xl font-bold">Add New Follow-Up</h2>
-                     <p className="text-blue-100">Add a new follow-up entry for this customer</p>
-                   </div>
-                 </div>
-                 <button
-                   onClick={() => setShowAddNewFollowUpForm(false)}
-                   className="text-white hover:text-gray-200 text-2xl font-bold"
-                 >
-                   ×
-                 </button>
-               </div>
-             </div>
+                    </div>
+                    <div>
+                      <label htmlFor="customerPhone" className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
+                      <input
+                        id="customerPhone"
+                        type="tel"
+                        name="customerPhone"
+                        value={formData.customerPhone}
+                        onChange={handleInputChange}
+                        onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                        inputMode="numeric"
+                        maxLength={10}
+                        aria-invalid={!!errors.customerPhone}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.customerPhone ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter 10-digit mobile number"
+                      />
+                      {errors.customerPhone && <p className="text-red-600 text-xs mt-1">{errors.customerPhone}</p>}
 
-             {/* Form */}
-             <form onSubmit={handleAddNewFollowUp} className="p-6">
-               <div className="space-y-6">
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Type *</label>
-                   <select
-                     name="followUpType"
-                     value={newFollowUpData.followUpType}
-                     onChange={handleNewFollowUpInputChange}
-                     required
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   >
-                     <option value="call">Call</option>
-                     <option value="email">Email</option>
-                   </select>
-                 </div>
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Notes</label>
-                   <textarea
-                     name="followUpNotes"
-                     value={newFollowUpData.followUpNotes}
-                     onChange={handleNewFollowUpInputChange}
-                     rows="4"
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                     placeholder="Enter detailed follow-up notes"
-                   />
-                 </div>
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2">Next Follow-Up Date</label>
-                   <input
-                     type="date"
-                     name="nextFollowUpDate"
-                     value={newFollowUpData.nextFollowUpDate}
-                     onChange={handleNewFollowUpInputChange}
-                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   />
-                 </div>
-               </div>
 
-               {/* Form Actions */}
-               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200 mt-6">
-                 <button
-                   type="button"
-                   onClick={() => setShowAddNewFollowUpForm(false)}
-                   disabled={submitting}
-                   className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${
-                     submitting 
-                       ? 'opacity-50 cursor-not-allowed text-gray-400' 
-                       : 'text-gray-700 hover:bg-gray-50'
-                   }`}
-                 >
-                   Cancel
-                 </button>
-                 <button
-                   type="submit"
-                   disabled={submitting}
-                   className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${
-                     submitting 
-                       ? 'opacity-50 cursor-not-allowed' 
-                       : 'hover:from-blue-600 hover:to-blue-700'
-                   }`}
-                 >
-                   {submitting ? (
-                     <div className="flex items-center gap-2">
-                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                       Adding...
-                     </div>
-                   ) : (
-                     'Add Follow-Up'
-                   )}
-                 </button>
-               </div>
-             </form>
-           </div>
-         </div>
-       )}
-     </div>
-   );
+                    </div>
+                    <div>
+                      <label htmlFor="customerEmail" className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+                      <input
+                        id="customerEmail"
+                        type="email"
+                        name="customerEmail"
+                        value={formData.customerEmail}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.customerEmail}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.customerEmail ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter email address"
+                      />
+                      {errors.customerEmail && <p className="text-red-600 text-xs mt-1">{errors.customerEmail}</p>}
+
+
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                      <textarea
+                        name="customerAddress"
+                        value={formData.customerAddress}
+                        onChange={handleInputChange}
+                        rows="3"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter customer address"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Follow-Up Details */}
+                <div className="bg-green-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
+                  <h3 className="text-lg font-semibold text-green-800 mb-4">Follow-Up Details</h3>
+                  <div className="space-y-4">
+                    {/* Follow-Up Date */}
+                    <div
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (editFollowUpDateRef.current?.showPicker) editFollowUpDateRef.current.showPicker();
+                        else editFollowUpDateRef.current?.focus();
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (editFollowUpDateRef.current?.showPicker) editFollowUpDateRef.current.showPicker();
+                          else editFollowUpDateRef.current?.focus();
+                        }
+                      }}
+                    >
+                      <label htmlFor="editFollowUpDate" className="block text-sm font-medium text-gray-700 mb-2">
+                        Follow-Up Date *
+                      </label>
+                      <input
+                        id="editFollowUpDate"
+                        ref={editFollowUpDateRef}
+                        type="date"
+                        name="followUpDate"
+                        value={formData.followUpDate}
+                        onChange={handleInputChange}
+                        min={toLocalISO()}
+                        aria-invalid={!!errors.followUpDate}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.followUpDate ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                      />
+                    </div>
+                    {errors.followUpDate && (
+                      <p className="text-red-600 text-xs mt-1">{errors.followUpDate}</p>
+                    )}
+
+                    <div>
+                      <label htmlFor="contactPerson" className="block text-sm font-medium text-gray-700 mb-2">
+                        Contact Person *
+                      </label>
+                      <input
+                        id="contactPerson"
+                        type="text"
+                        name="contactPerson"
+                        value={formData.contactPerson}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.contactPerson}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.contactPerson ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter contact person name"
+                      />
+                      {errors.contactPerson && (
+                        <p className="text-red-600 text-xs mt-1">{errors.contactPerson}</p>
+                      )}
+
+                    </div>
+                    <div>
+                      <label htmlFor="concernedPerson" className="block text-sm font-medium text-gray-700 mb-2">
+                        Concerned Person *
+                      </label>
+                      <input
+                        id="concernedPerson"
+                        type="text"
+                        name="concernedPerson"
+                        value={formData.concernedPerson}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.concernedPerson}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.concernedPerson ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                        placeholder="Enter concerned person name"
+                      />
+                      {errors.concernedPerson && (
+                        <p className="text-red-600 text-xs mt-1">{errors.concernedPerson}</p>
+                      )}
+
+                    </div>
+                    <div>
+                      <label htmlFor="followUpType" className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Type *</label>
+                      <select
+                        id="followUpType"
+                        name="followUpType"
+                        value={formData.followUpType}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.followUpType}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.followUpType ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                      >
+                        <option value="">Select</option>
+                        <option value="call">Call</option>
+                        <option value="email">Email</option>
+                      </select>
+                      {errors.followUpType && <p className="text-red-600 text-xs mt-1">{errors.followUpType}</p>}
+
+
+                    </div>
+                  </div>
+                </div>
+
+                {/* Others */}
+                <div className="bg-purple-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
+                  <h3 className="text-lg font-semibold text-purple-800 mb-4">Others</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">Status *</label>
+                      <select
+                        id="status"
+                        name="status"
+                        value={formData.status}
+                        onChange={handleInputChange}
+                        aria-invalid={!!errors.status}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.status ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                      >
+                        <option value="">Select</option>
+                        <option value="New">New</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Qualified">Qualified</option>
+                        <option value="Proposal Sent">Proposal Sent</option>
+                        <option value="Negotiation">Negotiation</option>
+                        <option value="Closed Won">Closed Won</option>
+                        <option value="Closed Lost">Closed Lost</option>
+                        <option value="On Hold">On Hold</option>
+                      </select>
+                      {errors.status && <p className="text-red-600 text-xs mt-1">{errors.status}</p>}
+
+
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check</label>
+                      <input
+                        type="text"
+                        name="creditCheck"
+                        value={formData.creditCheck}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter credit check details"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Remark</label>
+                      <input
+                        type="text"
+                        name="remark"
+                        value={formData.remark}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter any remarks"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes</label>
+                      <textarea
+                        name="followupNotes"
+                        value={formData.followupNotes}
+                        onChange={handleInputChange}
+                        rows="3"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter detailed follow-up notes"
+                      />
+                    </div>
+                    {/* Next Follow-Up Date */}
+                    <div
+                      className="cursor-pointer"
+                      onClick={() => {
+                        if (editNextFollowUpDateRef.current?.showPicker) editNextFollowUpDateRef.current.showPicker();
+                        else editNextFollowUpDateRef.current?.focus();
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (editNextFollowUpDateRef.current?.showPicker) editNextFollowUpDateRef.current.showPicker();
+                          else editNextFollowUpDateRef.current?.focus();
+                        }
+                      }}
+                    >
+                      <label htmlFor="editNextFollowUpDate" className="block text-sm font-medium text-gray-700 mb-2">
+                        Next Follow-Up Date
+                      </label>
+                      <input
+                        id="editNextFollowUpDate"
+                        ref={editNextFollowUpDateRef}
+                        type="date"
+                        name="nextFollowUpDate"
+                        value={formData.nextFollowUpDate}
+                        onChange={handleInputChange}
+                        min={getNextMinDate(formData.followUpDate)}   // ✅ same rule
+                        aria-invalid={!!errors.nextFollowUpDate}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.nextFollowUpDate ? 'border-red-400' : 'border-gray-300'
+                          }`}
+                      />
+                    </div>
+                    {errors.nextFollowUpDate && (
+                      <p className="text-red-600 text-xs mt-1">{errors.nextFollowUpDate}</p>
+                    )}
+
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex justify-between items-center pt-6 border-t border-gray-200 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowAddNewFollowUpForm(true)}
+                  disabled={submitting}
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors flex items-center gap-2 ${submitting
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-blue-600 hover:to-blue-700'
+                    }`}
+                >
+                  <FaPlus size={16} />
+                  Add New Follow-Up
+                </button>
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    disabled={submitting}
+                    className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
+                      ? 'opacity-50 cursor-not-allowed text-gray-400'
+                      : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${submitting
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:from-green-600 hover:to-green-700'
+                      }`}
+                  >
+                    {submitting ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Updating...
+                      </div>
+                    ) : (
+                      'Update Follow-Up'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Follow-Up Modal */}
+      {showAddNewFollowUpForm && selectedFollowUp && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <FaPlus className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Add New Follow-Up</h2>
+                    <p className="text-blue-100">Add a new follow-up entry for this customer</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAddNewFollowUpForm(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAddNewFollowUp} className="p-6">
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Type *</label>
+                  <select
+                    name="followUpType"
+                    value={newFollowUpData.followUpType}
+                    onChange={handleNewFollowUpInputChange}
+
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="call">Call</option>
+                    <option value="email">Email</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Notes</label>
+                  <textarea
+                    name="followUpNotes"
+                    value={newFollowUpData.followUpNotes}
+                    onChange={handleNewFollowUpInputChange}
+                    rows="4"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter detailed follow-up notes"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Next Follow-Up Date</label>
+                  <input
+                    type="date"
+                    name="nextFollowUpDate"
+                    value={newFollowUpData.nextFollowUpDate}
+                    onChange={handleNewFollowUpInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex justify-end gap-4 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowAddNewFollowUpForm(false)}
+                  disabled={submitting}
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed text-gray-400'
+                    : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-blue-600 hover:to-blue-700'
+                    }`}
+                >
+                  {submitting ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Adding...
+                    </div>
+                  ) : (
+                    'Add Follow-Up'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 } 
