@@ -1,15 +1,18 @@
+// LeaveApproval.jsx (FINAL UPDATED)
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   Calendar, Clock, User, CheckCircle, XCircle, AlertCircle,
-  Search, Filter, Eye, ArrowLeft, ArrowRight
+  Search, Filter, Eye, MessageSquare
 } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
+
 // ------------------ CONFIG ------------------
 const API_BASE = `${API_CONFIG.BASE_URL}/api/v1/leave`;
 const ENDPOINTS = {
+  listAllPrimary: `${API_BASE}/all`,
   listPendingForManagerPrimary: `${API_BASE}/pending-manager-approval`,
   listPendingForManagerFallback: `${API_BASE}/pending-manager-approv`,
   managerApprove: (id) => `${API_BASE}/manager-approve/${id}`,
@@ -18,7 +21,6 @@ const ENDPOINTS = {
 // Employee details API (by empId)
 const EMP_API = `${API_CONFIG.BASE_URL}/api/v1/inhouseUser`;
 
-// toggle for consoles
 const DEBUG = true;
 const dbg = (...a) => DEBUG && console.log('[LeaveApproval]', ...a);
 
@@ -35,41 +37,31 @@ const deriveDateFromObjectId = (id) => {
   } catch { return null; }
 };
 
-/** Robust date parser for ISO, YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY, and messy spaces */
 const parseDate = (value) => {
   if (value === null || value === undefined) return null;
   if (value instanceof Date && !isNaN(value)) return value;
-
   if (typeof value === 'number') {
     const d = new Date(value);
     return isNaN(d) ? null : d;
   }
   if (typeof value !== 'string') return null;
 
-  let s = value.trim();
-
-  // strip brackets + collapse spaces
-  s = s.replace(/[\[\]]/g, '').replace(/\s+/g, '');
-
-  // ignore ranges like "...to..."
+  let s = value.trim().replace(/[\[\]]/g, '').replace(/\s+/g, '');
   if (s.includes('to')) return null;
 
-  // native first (handles ISO)
   let d = new Date(s);
   if (!isNaN(d)) return d;
 
-  // DD-MM-YYYY or DD/MM/YYYY (2-digit year allowed)
   let m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
   if (m) {
     const day = Number(m[1]);
     const mon = Number(m[2]) - 1;
     let year = Number(m[3]);
-    if (year < 100) year = 2000 + year; // '25' -> 2025
+    if (year < 100) year = 2000 + year;
     d = new Date(year, mon, day);
     return isNaN(d) ? null : d;
   }
 
-  // YYYY-MM-DD
   m = s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
   if (m) {
     d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
@@ -95,7 +87,6 @@ const calcDurationInclusive = (startRaw, endRaw) => {
   return Math.round((b - a) / (1000 * 60 * 60 * 24)) + 1;
 };
 
-// Likely API keys
 const pickStart = (l) => getFirstNonEmpty(l.startDate, l.fromDate, l.dateFrom, l.start, l.from, l.dates?.[0]);
 const pickEnd   = (l) => getFirstNonEmpty(l.endDate,   l.toDate,   l.dateTo,   l.end,   l.to,   l.dates?.[1], pickStart(l));
 const pickCreatedAny = (l) => getFirstNonEmpty(
@@ -119,14 +110,31 @@ const getEmployeeNameLocal = (l) => {
   const full = [fn, ln].filter(Boolean).join(' ').trim();
   return getFirstNonEmpty(l.employeeName, l.name, l.fullName, l.employee?.name, l.employee?.fullName, l.user?.name, full) || '';
 };
+
 const getEmployeeId = (l) =>
   getFirstNonEmpty(l.employeeId, l.empId, l.empID, l.employeeCode, l.employee?.empId, l.employee?.employeeId, l.user?.empId) || 'N/A';
-const getDepartment = (l) =>
-  getFirstNonEmpty(l.department, l.employee?.department, l.user?.department) || 'N/A';
-const getPosition = (l) =>
-  getFirstNonEmpty(l.position, l.designation, l.employee?.position, l.user?.position) || 'N/A';
 
-// ---------- Employee name hydration ----------
+// 🔁 Expanded synonyms for Department + Position
+const getDepartment = (l) =>
+  getFirstNonEmpty(
+    l.department, l.dept, l.deptName, l.departmentName,
+    l.employee?.department, l.employee?.dept, l.employee?.departmentName,
+    l.user?.department, l.user?.dept, l.user?.departmentName
+  ) || 'N/A';
+
+const getPosition = (l) =>
+  getFirstNonEmpty(
+    // direct on row
+    l.position, l.designation, l.Designation, l.title, l.role, l.jobTitle, l.job_title, l.job, l.post,
+    // nested employee
+    l.employee?.position, l.employee?.designation, l.employee?.Designation,
+    l.employee?.title, l.employee?.role, l.employee?.jobTitle, l.employee?.job_title, l.employee?.job, l.employee?.post,
+    // nested user
+    l.user?.position, l.user?.designation, l.user?.Designation,
+    l.user?.title, l.user?.role, l.user?.jobTitle, l.user?.job_title, l.user?.job, l.user?.post
+  ) || 'N/A';
+
+// ---------- Employee hydration helpers ----------
 const extractNameFromEmployeeResp = (data) => {
   const emp = data?.employee || data?.user || data?.data || data;
   if (!emp) return '';
@@ -139,30 +147,50 @@ const extractNameFromEmployeeResp = (data) => {
   return (explicit || '').trim();
 };
 
+const extractDepartmentFromEmployeeResp = (data) => {
+  const emp = data?.employee || data?.user || data?.data || data;
+  return getFirstNonEmpty(emp?.department, emp?.dept, emp?.departmentName, emp?.deptName) || '';
+};
+
+const extractPositionFromEmployeeResp = (data) => {
+  const emp = data?.employee || data?.user || data?.data || data;
+  return getFirstNonEmpty(
+    emp?.position, emp?.designation, emp?.Designation,
+    emp?.title, emp?.role, emp?.jobTitle, emp?.job_title, emp?.job, emp?.post
+  ) || '';
+};
+
 const hydrateEmployeeNames = async (rows) => {
+  // cache now stores name + dept + pos
   const cache = new Map();
 
   const targets = rows.filter(
     (r) =>
-      (!r._norm?.employeeName || r._norm.employeeName === 'N/A') &&
-      r._norm?.employeeId &&
-      r._norm.employeeId !== 'N/A'
+      (
+        (!r._norm?.employeeName || r._norm.employeeName === 'N/A') ||
+        (!r._norm?.department   || r._norm.department   === 'N/A') ||
+        (!r._norm?.position     || r._norm.position     === 'N/A')
+      ) &&
+      r._norm?.employeeId && r._norm.employeeId !== 'N/A'
   );
   const uniqueEmpIds = [...new Set(targets.map((r) => r._norm.employeeId))];
-  dbg('Hydrating employee names for empIds:', uniqueEmpIds);
+  dbg('Hydrating employee fields for empIds:', uniqueEmpIds);
 
   await Promise.all(
     uniqueEmpIds.map(async (empId) => {
       try {
         const url = `${EMP_API}/${encodeURIComponent(empId)}`;
         const { data } = await axios.get(url, { withCredentials: true });
+
         const name = extractNameFromEmployeeResp(data) || data?.employeeName || data?.name;
-        if (name) {
-          cache.set(empId, name);
-          dbg('Name hydrated:', empId, '->', name);
-        } else {
-          dbg('No name found in emp API for', empId, data);
-        }
+        const dept = extractDepartmentFromEmployeeResp(data);
+        const pos  = extractPositionFromEmployeeResp(data);
+
+        cache.set(empId, {
+          name: (name || '').trim(),
+          dept: (dept || '').trim(),
+          pos : (pos  || '').trim()
+        });
       } catch (e) {
         dbg('emp fetch fail', empId, e?.response?.status || e?.message);
       }
@@ -171,19 +199,78 @@ const hydrateEmployeeNames = async (rows) => {
 
   rows.forEach((r) => {
     const empId = r._norm?.employeeId;
-    if (empId && cache.has(empId)) {
-      r._norm.employeeName = cache.get(empId);
-    }
+    const info = empId && cache.get(empId);
+    if (!info) return;
+
+    if (info.name) r._norm.employeeName = r._norm.employeeName === 'N/A' ? info.name : (r._norm.employeeName || info.name);
+    if (info.dept && (!r._norm.department || r._norm.department === 'N/A')) r._norm.department = info.dept;
+    if (info.pos  && (!r._norm.position   || r._norm.position   === 'N/A')) r._norm.position   = info.pos;
   });
 
   return rows;
+};
+
+// ------------------ LOCAL PERSISTENCE (for fallback mode) ------------------
+const DECISION_KEY = 'vpl_leave_decisions_v1';
+const saveDecisionToCache = (rowWithNorm) => {
+  try {
+    const list = JSON.parse(localStorage.getItem(DECISION_KEY) || '[]');
+    const id = rowWithNorm?._id || rowWithNorm?.id;
+    if (!id) return;
+    const idx = list.findIndex(x => (x._id || x.id) === id);
+    const base = {
+      _id: id,
+      leaveType: rowWithNorm.leaveType || null,
+      managerRemarks: rowWithNorm.managerRemarks || '',
+      startRaw: pickStart(rowWithNorm),
+      endRaw: pickEnd(rowWithNorm),
+      createdRaw: pickCreatedAny(rowWithNorm),
+      status: getStatus(rowWithNorm),
+      _norm: {
+        employeeName: getEmployeeNameLocal(rowWithNorm) || rowWithNorm?._norm?.employeeName || 'N/A',
+        employeeId: getEmployeeId(rowWithNorm),
+        department: getDepartment(rowWithNorm),
+        position: getPosition(rowWithNorm),
+        status: getStatus(rowWithNorm),
+        reason: pickReason(rowWithNorm),
+        startRaw: pickStart(rowWithNorm),
+        endRaw: pickEnd(rowWithNorm),
+        createdRaw: pickCreatedAny(rowWithNorm),
+        createdFinal: pickCreatedAny(rowWithNorm) || deriveDateFromObjectId(id),
+      },
+    };
+    if (idx >= 0) list[idx] = { ...list[idx], ...base };
+    else list.push(base);
+    localStorage.setItem(DECISION_KEY, JSON.stringify(list));
+  } catch {}
+};
+
+const loadDecisionCache = () => {
+  try { return JSON.parse(localStorage.getItem(DECISION_KEY) || '[]'); }
+  catch { return []; }
+};
+
+// ------------------ Pagination helper (compact window) ------------------
+const makePages = (total, current, delta = 1) => {
+  if (total <= 1) return [1];
+  const set = new Set([1, total]);
+  for (let i = current - delta; i <= current + delta; i++) {
+    if (i > 1 && i < total) set.add(i);
+  }
+  const pages = [...set].sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < pages.length; i++) {
+    out.push(pages[i]);
+    if (i < pages.length - 1 && pages[i + 1] - pages[i] > 1) out.push('ellipsis');
+  }
+  return out;
 };
 
 // ------------------ COMPONENT ------------------
 const LeaveApproval = () => {
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(''); // search NAME only
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -194,79 +281,110 @@ const LeaveApproval = () => {
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState(null);
   const [managerRemarks, setManagerRemarks] = useState('');
+  const [remarksError, setRemarksError] = useState(''); // validation
 
-  // Fetch pending leaves for manager approval
+  // Fetch data
   const fetchLeaveRequests = async () => {
+    let usedFallback = false;
     try {
       setLoading(true);
-      const tryUrls = [ENDPOINTS.listPendingForManagerPrimary, ENDPOINTS.listPendingForManagerFallback];
-      let success = false, lastErr = null;
+      let dataList = [];
 
-      for (const url of tryUrls) {
-        try {
-          dbg('GET', url);
-          const { data } = await axios.get(url, { withCredentials: true });
-          dbg('RAW:', data);
-
-          const rawList = Array.isArray(data?.leaves) ? data.leaves
-                        : Array.isArray(data) ? data
-                        : (data?.leaves || []);
-
-          const normalized = (rawList || []).map((l, i) => {
-            const startRaw = pickStart(l);
-            const endRaw   = pickEnd(l);
-            const createdRaw = pickCreatedAny(l);
-            const createdFromId = !createdRaw ? deriveDateFromObjectId(l._id) : null;
-            const createdFinal = createdRaw || createdFromId;
-
-            const localName = getEmployeeNameLocal(l);
-
-            const norm = {
-              ...l,
-              _norm: {
-                employeeName: localName || 'N/A',
-                employeeId:   getEmployeeId(l),
-                department:   getDepartment(l),
-                position:     getPosition(l),
-                status:       getStatus(l),
-                reason:       pickReason(l),
-                startRaw, endRaw,
-                createdRaw,
-                createdFinal,       // Date | null
-                createdFromId: !!createdFromId,
-              }
-            };
-            dbg(`Row[${i}]`, {
-              id: l._id,
-              emp: `${norm._norm.employeeName} / ${norm._norm.employeeId}`,
-              status: norm._norm.status,
-              startRaw, endRaw,
-              createdRaw,
-              createdFromId: norm._norm.createdFromId,
-              createdFinal: createdFinal ? createdFinal.toString() : null
-            });
-            return norm;
-          });
-
-          const withNames = await hydrateEmployeeNames(normalized);
-          setLeaveRequests(withNames);
-          success = true;
-          break;
-        } catch (e) {
-          lastErr = e;
-          if (e?.response?.status && e.response.status !== 404) throw e;
-          dbg('404 on', url, '— trying fallback…');
+      // Try ALL
+      try {
+        dbg('GET', ENDPOINTS.listAllPrimary);
+        const { data } = await axios.get(ENDPOINTS.listAllPrimary, { withCredentials: true });
+        dataList = Array.isArray(data?.leaves) ? data.leaves : (Array.isArray(data) ? data : []);
+      } catch (eAll) {
+        dbg('ALL failed, fallback to pending…', eAll?.response?.status || eAll?.message);
+        // Fallback chain
+        const tryUrls = [ENDPOINTS.listPendingForManagerPrimary, ENDPOINTS.listPendingForManagerFallback];
+        let gotPending = false;
+        for (const url of tryUrls) {
+          try {
+            dbg('GET', url);
+            const { data } = await axios.get(url, { withCredentials: true });
+            const rawList = Array.isArray(data?.leaves) ? data.leaves
+                          : Array.isArray(data) ? data
+                          : (data?.leaves || []);
+            dataList = rawList;
+            gotPending = true;
+            usedFallback = true;
+            break;
+          } catch (e) {
+            if (e?.response?.status && e.response.status !== 404) throw e;
+            dbg('404 on', url, '— trying next…');
+          }
+        }
+        if (!gotPending) {
+          alertify.error('No leave list endpoint found. Check /leave/all or /pending-manager-approval.');
+          dataList = [];
         }
       }
 
-      if (!success) {
-        dbg('Both endpoints 404/failed', lastErr);
-        alertify.error('Pending approvals endpoint not found (404). Please confirm the route.');
-        setLeaveRequests([]);
+      const normalized = (dataList || []).map((l) => {
+        const startRaw = pickStart(l);
+        const endRaw   = pickEnd(l);
+        const createdRaw = pickCreatedAny(l);
+        const createdFromId = !createdRaw ? deriveDateFromObjectId(l._id) : null;
+        const createdFinal = createdRaw || createdFromId;
+        const localName = getEmployeeNameLocal(l);
+
+        return {
+          ...l,
+          _norm: {
+            employeeName: localName || 'N/A',
+            employeeId:   getEmployeeId(l),
+            department:   getDepartment(l),
+            position:     getPosition(l),
+            status:       getStatus(l),
+            reason:       pickReason(l),
+            startRaw, endRaw,
+            createdRaw,
+            createdFinal,
+            createdFromId: !!createdFromId,
+          }
+        };
+      });
+
+      // Merge cached decisions if we are in fallback mode
+      let merged = normalized;
+      if (usedFallback) {
+        const cached = loadDecisionCache();
+        if (Array.isArray(cached) && cached.length) {
+          const existingIds = new Set(merged.map(r => (r._id || r.id)));
+          cached.forEach(c => {
+            const id = c._id || c.id;
+            if (!id) return;
+            if (!existingIds.has(id)) {
+              merged.push({
+                ...c,
+                managerRemarks: c.managerRemarks || '',
+                _norm: {
+                  ...(c._norm || {}),
+                  status: (c._norm?.status || c.status || 'pending'),
+                }
+              });
+            } else {
+              merged = merged.map(r => {
+                if ((r._id || r.id) !== id) return r;
+                return {
+                  ...r,
+                  managerRemarks: c.managerRemarks || r.managerRemarks || '',
+                  status: c.status || r.status,
+                  _norm: { ...r._norm, status: c._norm?.status || c.status || r._norm?.status }
+                };
+              });
+            }
+          });
+        }
       }
+
+      const withNames = await hydrateEmployeeNames(merged);
+      setLeaveRequests(withNames);
     } catch (err) {
       dbg('Fetch error:', err);
-      alertify.error(err?.response?.data?.message || 'Failed to fetch pending approvals');
+      alertify.error(err?.response?.data?.message || 'Failed to fetch leave requests');
       setLeaveRequests([]);
     } finally {
       setLoading(false);
@@ -293,33 +411,34 @@ const LeaveApproval = () => {
     );
   };
 
-  // filter/search using normalized values
+  // Search + status filter
   const filteredLeaves = leaveRequests.filter(l => {
-    const nm  = (l._norm?.employeeName || '').toLowerCase();
-    const typ = (l.leaveType || '').toLowerCase();
-    const rsn = (l._norm?.reason || '').toLowerCase();
-    const matchesSearch = nm.includes(searchTerm.toLowerCase()) ||
-                          typ.includes(searchTerm.toLowerCase()) ||
-                          rsn.includes(searchTerm.toLowerCase());
-    const st = l._norm?.status || 'pending';
+    const nm = (l._norm?.employeeName || '').toLowerCase();
+    const matchesSearch = nm.includes(searchTerm.toLowerCase());
+    const st = (l._norm?.status || 'pending').toLowerCase();
     const matchesStatus = statusFilter === 'all' || st === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  // pagination
+  // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage));
   const startIndex = (currentPage - 1) * recordsPerPage;
   const endIndex   = startIndex + recordsPerPage;
   const currentLeaves = filteredLeaves.slice(startIndex, endIndex);
 
+  // Clamp current page if filters reduce total pages
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openAction = (leave, type) => {
     setSelectedLeave(leave);
     setActionType(type);
     setManagerRemarks('');
+    setRemarksError('');
     setShowActionModal(true);
   };
 
-  // ---- NEW: local optimistic update helper (keeps row; just changes status)
   const applyLocalDecision = (leaveId, newStatus, remarks = '') => {
     setLeaveRequests(prev =>
       prev.map(r => {
@@ -327,31 +446,31 @@ const LeaveApproval = () => {
         if (!match) return r;
         const updated = {
           ...r,
-          status: newStatus,                // in case raw consumer exists
+          status: newStatus,
           managerRemarks: remarks?.trim(),
-          _norm: {
-            ...r._norm,
-            status: newStatus,             // UI reads from _norm.status
-          }
+          _norm: { ...r._norm, status: newStatus }
         };
+        saveDecisionToCache(updated);
         return updated;
       })
     );
-    // also update details modal selection if open
     setSelectedLeave(prev => {
-      if (!prev) return prev;
-      if ((prev._id || prev.id) !== leaveId) return prev;
-      return {
-        ...prev,
-        status: newStatus,
-        managerRemarks: remarks?.trim(),
-        _norm: { ...prev._norm, status: newStatus }
-      };
+      if (!prev || (prev._id || prev.id) !== leaveId) return prev;
+      const updated = { ...prev, status: newStatus, managerRemarks: remarks?.trim(), _norm: { ...prev._norm, status: newStatus } };
+      saveDecisionToCache(updated);
+      return updated;
     });
   };
 
   const submitManagerDecision = async () => {
     if (!selectedLeave || !actionType) return;
+    // Remarks required on reject
+    if (actionType === 'rejected' && !managerRemarks.trim()) {
+      setRemarksError('Please enter the remarks.');
+      alertify.error('Please enter the remarks.');
+      return;
+    }
+
     const leaveId = selectedLeave._id || selectedLeave.id;
     setActionLoading(p => ({ ...p, [leaveId]: actionType }));
     try {
@@ -359,18 +478,12 @@ const LeaveApproval = () => {
       const url = ENDPOINTS.managerApprove(leaveId);
       dbg('PATCH', url, payload);
       const { data } = await axios.patch(url, payload, { withCredentials: true });
-      dbg('PATCH resp:', data);
 
       if (data?.success) {
-        // ✅ Keep row, just change status locally
         applyLocalDecision(leaveId, actionType, managerRemarks);
-
         alertify.success(`Leave ${actionType} successfully`);
         setShowActionModal(false);
         setShowDetailsModal(false);
-
-        // ❌ DO NOT refetch here, otherwise approved/rejected will vanish (pending API)
-        // await fetchLeaveRequests();
       } else {
         alertify.error(data?.message || `Failed to ${actionType} leave`);
       }
@@ -388,7 +501,7 @@ const LeaveApproval = () => {
         <div className="flex justify-center items-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading pending approvals...</p>
+            <p className="text-gray-600">Loading leave requests...</p>
           </div>
         </div>
       </div>
@@ -406,7 +519,7 @@ const LeaveApproval = () => {
                 <Calendar className="text-blue-600" size={20} />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Pending for Manager</p>
+                <p className="text-sm text-gray-600">Total Requests</p>
                 <p className="text-xl font-bold text-gray-800">{leaveRequests.length}</p>
               </div>
             </div>
@@ -456,34 +569,35 @@ const LeaveApproval = () => {
         </div>
       </div>
 
-      {/* Search + Filter */}
+      {/* Search + Status (one line) */}
       <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="flex flex-col md:flex-row gap-4 flex-1">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Search by employee name, leave type, or reason..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Filter className="text-gray-400" size={18} />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
+        <div className="flex flex-row items-center justify-between gap-4 flex-wrap">
+          {/* LEFT: Search */}
+          <div className="relative flex-1 min-w-[260px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search by employee name..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* RIGHT: Status filter */}
+          <div className="flex items-center gap-2 w-[220px]">
+            <Filter className="text-gray-400 shrink-0" size={18} />
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
         </div>
       </div>
@@ -509,9 +623,10 @@ const LeaveApproval = () => {
                 const emp = leave._norm?.employeeId || 'N/A';
                 const startRaw = leave._norm?.startRaw;
                 const endRaw   = leave._norm?.endRaw;
-                const createdFinal = leave._norm?.createdFinal; // Date | null
+                const createdFinal = leave._norm?.createdFinal;
                 const status = leave._norm?.status || 'pending';
                 const reason = leave._norm?.reason || leave.reason || 'N/A';
+                const remarks = leave.managerRemarks || '';
 
                 const duration = calcDurationInclusive(startRaw, endRaw);
                 const durationText = duration ? `${duration} ${duration === 1 ? 'day' : 'days'}` : '—';
@@ -547,7 +662,17 @@ const LeaveApproval = () => {
                       <p className="text-gray-700 max-w-xs truncate" title={reason}>{reason}</p>
                     </td>
 
-                    <td className="py-4 px-6">{getStatusBadge(status)}</td>
+                    <td className="py-4 px-6">
+                      <div className="flex flex-col gap-1">
+                        {getStatusBadge(status)}
+                        {status !== 'pending' && remarks ? (
+                          <div className="flex items-start gap-1 text-xs italic text-gray-600 mt-1" title={remarks}>
+                            {/* <MessageSquare size={12} className="mt-0.5" />
+                            <span className="line-clamp-1">“{remarks}”</span> */}
+                          </div>
+                        ) : null}
+                      </div>
+                    </td>
 
                     <td className="py-4 px-6">
                       <p className="text-sm text-gray-600">
@@ -611,52 +736,71 @@ const LeaveApproval = () => {
           <div className="text-center py-12">
             <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">
-              {searchTerm || statusFilter !== 'all' ? 'No leave requests found matching your criteria' : 'No pending approvals found'}
+              {searchTerm || statusFilter !== 'all' ? 'No leave requests found matching your criteria' : 'No leave requests found'}
             </p>
             <p className="text-gray-400 text-sm">
-              {searchTerm || statusFilter !== 'all' ? 'Try adjusting your search or filter criteria' : 'When employees submit leave, pending approvals will appear here'}
+              {searchTerm || statusFilter !== 'all' ? 'Try adjusting your search or filter criteria' : 'When employees submit leave, they will appear here'}
             </p>
           </div>
         )}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Pagination (compact + smooth) */}
+      {Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage)) > 1 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredLeaves.length)} of {filteredLeaves.length} requests
+            Showing {filteredLeaves.length ? startIndex + 1 : 0} to {Math.min(endIndex, filteredLeaves.length)} of {filteredLeaves.length} requests
           </div>
+
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              « First
+            </button>
+
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ArrowLeft size={16} />
-              Previous
+              ‹ Prev
             </button>
 
             <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                    currentPage === page ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
+              {makePages(Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage)), currentPage, 1).map((p, idx) =>
+                p === 'ellipsis' ? (
+                  <span key={`e-${idx}`} className="px-2 text-gray-500 select-none">…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                      currentPage === p ? 'bg-blue-500 text-white shadow' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
             </div>
 
             <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              onClick={() => setCurrentPage(p => Math.min(Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage)), p + 1))}
+              disabled={currentPage === Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage))}
+              className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Next
-              <ArrowRight size={16} />
+              Next ›
+            </button>
+
+            <button
+              onClick={() => setCurrentPage(Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage)))}
+              disabled={currentPage === Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage))}
+              className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Last »
             </button>
           </div>
         </div>
@@ -705,6 +849,7 @@ const LeaveApproval = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Position</p>
                     <p className="text-gray-800">{selectedLeave._norm?.position || getPosition(selectedLeave)}</p>
+                    
                   </div>
                 </div>
               </div>
@@ -748,14 +893,23 @@ const LeaveApproval = () => {
                   <AlertCircle className="text-purple-600" size={18} />
                   <h3 className="text-lg font-bold text-purple-700">Status & Actions</h3>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-gray-600 mb-2">Current Status</p>
                     {getStatusBadge(selectedLeave._norm?.status || getStatus(selectedLeave))}
+                    {(selectedLeave._norm?.status || getStatus(selectedLeave)) !== 'pending' && (selectedLeave.managerRemarks) ? (
+                      <div className="mt-3 p-3 rounded-lg bg-white/70 border border-purple-100">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">
+                          <MessageSquare size={14} />
+                          <span>Manager Remarks</span>
+                        </div>
+                        <p className="text-gray-800">{selectedLeave.managerRemarks}</p>
+                      </div>
+                    ) : null}
                   </div>
 
                   {(selectedLeave._norm?.status || getStatus(selectedLeave)) === 'pending' && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <button
                         onClick={() => openAction(selectedLeave, 'approved')}
                         disabled={actionLoading[selectedLeave._id]}
@@ -765,9 +919,7 @@ const LeaveApproval = () => {
                             : 'bg-green-500 text-white hover:bg-green-600'
                         }`}
                       >
-                        {actionLoading[selectedLeave._id] === 'approved'
-                          ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          : <CheckCircle size={16} />}
+                        <CheckCircle size={16} />
                         Approve
                       </button>
 
@@ -780,9 +932,7 @@ const LeaveApproval = () => {
                             : 'bg-red-500 text-white hover:bg-red-600'
                         }`}
                       >
-                        {actionLoading[selectedLeave._id] === 'rejected'
-                          ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          : <XCircle size={16} />}
+                        <XCircle size={16} />
                         Reject
                       </button>
                     </div>
@@ -812,29 +962,33 @@ const LeaveApproval = () => {
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Manager Remarks</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Manager Remarks{actionType === 'rejected' ? <span className="text-red-600"> *</span> : null}
+                </label>
                 <textarea
                   value={managerRemarks}
-                  onChange={(e) => setManagerRemarks(e.target.value)}
-                  placeholder="Add a note for the employee (optional)"
-                  className="w-full min-h-[90px] p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => { setManagerRemarks(e.target.value); if (remarksError) setRemarksError(''); }}
+                  placeholder={actionType === 'rejected' ? 'Please enter the remarks.' : 'Add a note for the employee (optional)'}
+                  className={`w-full min-h-[100px] p-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                    remarksError ? 'border-red-500 focus:ring-red-400' : 'border-gray-300 focus:ring-blue-500'
+                  }`}
                 />
+                {remarksError ? <p className="mt-1 text-xs text-red-600">{remarksError}</p> : null}
               </div>
               <div className="flex items-center justify-end gap-2">
                 <button
-                  onClick={() => setShowActionModal(false)}
+                  onClick={() => { setShowActionModal(false); setRemarksError(''); }}
                   className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={submitManagerDecision}
-                  disabled={actionLoading[selectedLeave._id]}
                   className={`px-4 py-2 rounded-lg text-white font-semibold transition ${
                     actionType === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
-                  } ${actionLoading[selectedLeave._id] ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  }`}
                 >
-                  {actionLoading[selectedLeave._id] ? 'Working...' : actionType === 'approved' ? 'Confirm Approve' : 'Confirm Reject'}
+                  {actionType === 'approved' ? 'Confirm Approve' : 'Confirm Reject'}
                 </button>
               </div>
             </div>
