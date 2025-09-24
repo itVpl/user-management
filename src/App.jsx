@@ -58,6 +58,7 @@ import DinnerStatus from "./Pages/DinnerStatus.jsx";
 import TruckerReport from "./Components/CMT/TruckerReport.jsx";
 
 
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -78,6 +79,7 @@ function App() {
   return (
     <Routes>
       {/* Public Routes */}
+      
       <Route
         path="/"
         element={<Login setIsAuthenticated={setIsAuthenticated} />}

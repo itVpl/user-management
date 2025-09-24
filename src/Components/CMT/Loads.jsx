@@ -1197,15 +1197,7 @@ export default function Loads() {
       {showLoadCreationModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex justify-center items-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-8 border border-blue-300">
-            {/* NEW: Loader overlay (sirf DRAYAGE par) */}
-            {(loadType === "DRAYAGE" && creatingDrayage) && (
-              <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
-                  <span className="text-blue-700 font-semibold">Creating DRAYAGE load…</span>
-                </div>
-              </div>
-            )}
+            
 
             {/* Header */}
             <div className="flex justify-between items-center mb-8">
@@ -1487,37 +1479,47 @@ export default function Loads() {
                 </>
               )}
 
+              
               {/* Actions */}
-              <div className="col-span-2 flex justify-end gap-4 pt-8">
-                <button
-                  type="button"
-                  onClick={() => { setShowLoadCreationModal(false); setFormErrors({}); }}
-                  className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
-                  disabled={creatingLoad}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)}
-                  className={`px-6 py-2 rounded-lg text-white font-semibold shadow flex items-center justify-center gap-2 ${(creatingLoad || (loadType === "DRAYAGE" && creatingDrayage))
-                    ? "bg-blue-400 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700"
-                    }`}
-                  title={loadType === "DRAYAGE" ? "Make sure at one time only one DRAYAGE is created" : undefined}
-                >
-                  {(creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)) ? (
-                    <>
-                      <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Submitting...
-                    </>
-                  ) : (
-                    "Submit"
-                  )}
-                </button>
+<div className="col-span-2 flex justify-end gap-4 pt-8">
+  <button
+    type="button"
+    onClick={() => { setShowLoadCreationModal(false); setFormErrors({}); }}
+    className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
+    disabled={creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)}
+  >
+    Cancel
+  </button>
 
+  {(() => {
+    const isSubmitting = creatingLoad || (loadType === "DRAYAGE" && creatingDrayage);
+    return (
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        aria-busy={isSubmitting}
+        className={[
+          "relative inline-flex items-center justify-center gap-2",
+          "px-6 py-2 rounded-lg text-white font-semibold shadow",
+          isSubmitting ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700",
+          "min-w-[150px]" // width stable rahe
+        ].join(" ")}
+        title={loadType === "DRAYAGE" ? "Make sure at one time only one DRAYAGE is created" : undefined}
+      >
+        {isSubmitting && (
+          <span
+            className="inline-block h-4 w-4 border-2 border-white/90 border-t-transparent rounded-full animate-spin"
+            aria-hidden="true"
+          />
+        )}
+        <span>
+          {isSubmitting ? (loadType === "DRAYAGE" ? "Creating Drayage…" : "Submitting…") : "Submit"}
+        </span>
+      </button>
+    );
+  })()}
+</div>
 
-              </div>
             </form>
           </div>
         </div>

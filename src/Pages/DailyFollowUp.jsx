@@ -26,6 +26,29 @@ const onlyLetters = /^[A-Za-z ]+$/;                  // alphabets + space
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;     // simple robust email
 const phoneRe = /^[6-9]\d{9}$/;                      // 10 digits, starts 6-9
 const clampDigits = (s) => s.replace(/\D/g, '').slice(0, 10);
+// ---- DUPLICATE ERROR PARSER (NEW) ----
+const parseDuplicateError = (error) => {
+  const res = error?.response;
+  const msg = (res?.data?.message || res?.data?.error || '').toString().toLowerCase();
+
+  // Common cases: HTTP 409 (Conflict) ya 400 with “already exists / duplicate / E11000”
+  const status = res?.status;
+  const isDup =
+    status === 409 ||
+    /already\s*exists|duplicate|e11000|unique/i.test(msg);
+
+  if (!isDup) return null;
+
+  // Try to detect which field it is about
+  const isPhone = /phone|mobile/.test(msg);
+  const isEmail = /email/.test(msg);
+
+  return {
+    phone: isPhone ? 'Mobile number already registered.' : undefined,
+    email: isEmail ? 'Email already registered.' : undefined,
+    generic: (!isPhone && !isEmail) ? 'Phone/Email already registered.' : undefined
+  };
+};
 
 export default function DailyFollowUp() {
   const [errors, setErrors] = useState({});
@@ -316,12 +339,36 @@ export default function DailyFollowUp() {
         followupNotes: '', nextFollowUpDate: '', documents: null
       });
     } catch (error) {
-      console.error('Error creating follow-up:', error);
-      // show generic inline message (no backend popup)
-      setFormMessage('Something went wrong while creating the follow-up. Please try again.');
-    } finally {
-      setSubmitting(false);
+  console.error('Error creating follow-up:', error);
+
+  const dup = parseDuplicateError(error);
+  if (dup) {
+    setErrors((prev) => ({
+      ...prev,
+      ...(dup.phone ? { customerPhone: dup.phone } : {}),
+      ...(dup.email ? { customerEmail: dup.email } : {}),
+      // Agar generic mila aur specific detect nahi hua:
+      ...(!dup.phone && !dup.email ? {
+        customerPhone: prev.customerPhone || 'Mobile number may already be registered.',
+        customerEmail: prev.customerEmail || 'Email may already be registered.'
+      } : {})
+    }));
+
+    setFormMessage('Please fix the highlighted fields.');
+    // Optionally: focus first errored field
+    if (dup.phone && document?.getElementById('customerPhone')) {
+      document.getElementById('customerPhone').focus();
+    } else if (dup.email && document?.getElementById('customerEmail')) {
+      document.getElementById('customerEmail').focus();
     }
+  } else {
+    // generic inline message (no popup)
+    setFormMessage('Something went wrong while creating the follow-up. Please try again.');
+  }
+} finally {
+  setSubmitting(false);
+}
+
   };
 
 
@@ -373,11 +420,26 @@ export default function DailyFollowUp() {
         followupNotes: '', nextFollowUpDate: '', documents: null
       });
     } catch (error) {
-      console.error('Error updating follow-up:', error);
-      setFormMessage('Something went wrong while updating the follow-up. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+  console.error('Error updating follow-up:', error);
+
+  const dup = parseDuplicateError(error);
+  if (dup) {
+    setErrors((prev) => ({
+      ...prev,
+      ...(dup.phone ? { customerPhone: dup.phone } : {}),
+      ...(dup.email ? { customerEmail: dup.email } : {}),
+      ...(!dup.phone && !dup.email ? {
+        customerPhone: prev.customerPhone || 'Mobile number may already be registered.',
+        customerEmail: prev.customerEmail || 'Email may already be registered.'
+      } : {})
+    }));
+    setFormMessage('Please fix the highlighted fields.');
+  } else {
+    setFormMessage('Something went wrong while updating the follow-up. Please try again.');
+  }
+} finally {
+  setSubmitting(false);
+}
   };
 
 
