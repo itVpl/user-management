@@ -1,5 +1,7 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import axios from 'axios';
+import API_CONFIG from '../../config/api.js';
+
 
 const AddUserModal = ({ onClose, mode = 'create' }) => {
   // === Regex & helpers ===
@@ -108,27 +110,44 @@ const AddUserModal = ({ onClose, mode = 'create' }) => {
 
     // Password: hard cap 14
     if (name === 'password' || name === 'confirmPassword') value = value.slice(0, 14);
-// LIVE errors for banking fields (show while typing)
-if (name === 'accountHolderName') {
-  const v = value.trim();
-  if (v && !/^[A-Za-z ]+$/.test(v)) setErr('accountHolderName','Please enter the valid account holder name.');
-  else clearErr('accountHolderName');
-}
-if (name === 'accountNumber') {
-  const v = value;
-  if (v && (v.length < 9 || v.length > 18)) setErr('accountNumber','Please enter the valid account number.');
-  else clearErr('accountNumber');
-}
-if (name === 'ifscCode') {
-  const v = value;
-  if (v && (v.length !== 11 || !IFSC_PATTERN.test(v))) setErr('ifscCode','Please enter the valid IFSC Code.');
-  else clearErr('ifscCode');
-}
-if (name === 'basicSalary') {
-  const v = value;
-  if (v && +v <= 0) setErr('basicSalary','Please enter basic salary more than 0.');
-  else clearErr('basicSalary');
-}
+    // LIVE errors for banking fields (show while typing)
+    if (name === 'accountHolderName') {
+      const v = value.trim();
+      if (v && !/^[A-Za-z ]+$/.test(v)) setErr('accountHolderName', 'Please enter the valid account holder name.');
+      else clearErr('accountHolderName');
+    }
+    if (name === 'accountNumber') {
+      const v = value;
+      if (v && (v.length < 9 || v.length > 18)) setErr('accountNumber', 'Please enter the valid account number.');
+      else clearErr('accountNumber');
+    }
+    if (name === 'ifscCode') {
+      const v = value;
+      if (v && (v.length !== 11 || !IFSC_PATTERN.test(v))) setErr('ifscCode', 'Please enter the valid IFSC Code.');
+      else clearErr('ifscCode');
+    }
+    if (name === 'basicSalary') {
+      const v = value;
+      if (v && +v <= 0) setErr('basicSalary', 'Please enter basic salary more than 0.');
+      else clearErr('basicSalary');
+    }
+    if (name === 'department') {
+      const v = value.trim();
+      if (!v) setErr('department', 'Please enter the department name.');
+      else if (v.length < 2 || v.length > 50 || !NAME_ALPHA.test(v))
+        setErr('department', 'Please enter the valid department name.');
+      else clearErr('department');
+    }
+    if (name === 'designation') {
+      const v = value.trim();
+      if (!v) {
+        setErr('designation', 'Pleas enter the designation  name.');
+      } else if (v.length < 2 || v.length > 50 || !NAME_ALPHA.test(v)) {
+        setErr('designation', 'Please enter the valid designation name.');
+      } else {
+        clearErr('designation');
+      }
+    }
 
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -230,10 +249,26 @@ if (name === 'basicSalary') {
   };
   const validateDept = () => {
     const v = formData.department.trim();
-    if (!v) return setErr('department', 'Pleas enter the department name.'), false;
-    if (v.length < 2 || v.length > 50 || !NAME_ALPHA.test(v)) return setErr('department', 'Please enter the valid department name.'), false;
-    clearErr('department'); return true;
+    if (!v) {
+      setErr('department', 'Please enter the department name.');
+      return false;
+    }
+    if (v.length < 2) {
+      setErr('department', 'Please enter the valid department name.');
+      return false;
+    }
+    if (v.length > 50) {
+      setErr('department', 'Please enter the valid department name.');
+      return false;
+    }
+    if (!NAME_ALPHA.test(v)) {
+      setErr('department', 'Please enter the valid department name.');
+      return false;
+    }
+    clearErr('department');
+    return true;
   };
+
   const validateDesignation = () => {
     const v = formData.designation.trim();
     if (!v) return setErr('designation', 'Pleas enter the designation  name.'), false;
@@ -312,10 +347,10 @@ if (name === 'basicSalary') {
   // === Scroll-to-first-invalid setup ===
   const fieldRefs = useRef({});
   const fieldOrder = useMemo(() => [
-    'empId','password','confirmPassword','employeeName','sex','email','mobileNo',
-    'alternateNo','emergencyNo','department','designation','dateOfBirth','dateOfJoining',
+    'empId', 'password', 'confirmPassword', 'employeeName', 'sex', 'email', 'mobileNo',
+    'alternateNo', 'emergencyNo', 'department', 'designation', 'dateOfBirth', 'dateOfJoining',
     // banking
-    'accountHolderName','accountNumber','ifscCode','basicSalary'
+    'accountHolderName', 'accountNumber', 'ifscCode', 'basicSalary'
   ], []);
 
   const validatorsMap = {
@@ -392,14 +427,14 @@ if (name === 'basicSalary') {
 
       // API call
       const response = await axios.post(
-        'https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser',
+        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser`,
         submitData,
         {
           headers: { 'Content-Type': 'multipart/form-data' },
           withCredentials: true,
           timeout: 60000,
           onUploadProgress: (pe) => {
-            const pct = Math.round((pe.loaded * 100) / pe.total);
+            const pct = Math.round((pe.loaded * 100) / (pe.total || 1));
             console.log('Upload progress:', pct + '%');
           },
         }
@@ -440,6 +475,73 @@ if (name === 'basicSalary') {
         }
       });
 
+      // ---- Field-wise error mapping (duplicates + enums etc.) ----
+      const res = err?.response;
+      const rawMsg = res?.data?.message || res?.data || err?.message || '';
+      const msg = String(rawMsg);
+      let handledFieldError = false;
+
+      // Mongo duplicate key pattern: E11000 ... dup key: { email: "x@y.com" }
+      const dupKeyMatch = msg.match(/dup key:\s*\{\s*([^:]+):\s*"?([^"}]+)"?\s*\}/i);
+      if (dupKeyMatch) {
+        const field = dupKeyMatch[1].trim().toLowerCase();
+        const setDup = (k, text) => {
+          setErrors((p) => ({ ...p, [k]: text }));
+          scrollToField(k);
+        };
+        if (field.includes('empid') || field === 'empid' || field.includes('employeeid')) {
+          setDup('empId', 'Employee already registered with this Employee ID.');
+          handledFieldError = true;
+        } else if (field.includes('email')) {
+          setDup('email', 'Employee already registered with this email.');
+          handledFieldError = true;
+        } else if (field.includes('mobile') || field.includes('mobileno') || field.includes('phone')) {
+          setDup('mobileNo', 'Employee already registered with this mobile number.');
+          handledFieldError = true;
+        }
+      }
+
+      if (!handledFieldError) {
+        const lower = msg.toLowerCase();
+        const setInline = (k, text) => {
+          setErrors((p) => ({ ...p, [k]: text }));
+          scrollToField(k);
+        };
+
+        // Human-readable duplicate messages
+        if (!handledFieldError && lower.includes('emp') && lower.includes('already')) {
+          setInline('empId', 'Employee already registered with this Employee ID.');
+          handledFieldError = true;
+        }
+        if (!handledFieldError && lower.includes('email') && lower.includes('already')) {
+          setInline('email', 'Employee already registered with this email.');
+          handledFieldError = true;
+        }
+        if (!handledFieldError && (lower.includes('mobile') || lower.includes('phone')) && lower.includes('already')) {
+          setInline('mobileNo', 'Employee already registered with this mobile number.');
+          handledFieldError = true;
+        }
+
+        // 🔴 ENUM (Department) → inline error (NO POPUP)
+        if (
+          !handledFieldError &&
+          (
+            /is not a valid enum value for path [`'"]department[`'"]/.test(lower) ||
+            (lower.includes('department') && lower.includes('enum') && lower.includes('valid'))
+          )
+        ) {
+          setInline('department', 'Please select a valid department.');
+          handledFieldError = true;
+        }
+      }
+
+      // Agar field-level error handle ho gaya, to generic popup NAHIN dikhana
+      if (handledFieldError) {
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Fallback generic modal
       let errorMessage = 'Failed to add user';
       if (err.response) {
         errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
@@ -448,7 +550,6 @@ if (name === 'basicSalary') {
       } else {
         errorMessage = err.message;
       }
-      // show in-app error modal (no window popup)
       setErrorModal(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -476,7 +577,7 @@ if (name === 'basicSalary') {
 
   // helper for key filtering
   const allowKey = (e, type) => {
-    const nav = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Home','End'];
+    const nav = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
     if (nav.includes(e.key)) return;
     if (type === 'digit' && !/^\d$/.test(e.key)) e.preventDefault();
     if (type === 'ifsc' && !/^[A-Za-z0-9]$/.test(e.key)) e.preventDefault();
@@ -603,7 +704,7 @@ if (name === 'basicSalary') {
                             onBlur={() => handleBlur(field.name)}
                             onKeyDown={(e) => {
                               if (isEmail || isMobileish) {
-                                if (e.key === ' ' ) e.preventDefault();
+                                if (e.key === ' ') e.preventDefault();
                               }
                               if (isMobileish) allowKey(e, 'digit');
                             }}
@@ -614,7 +715,12 @@ if (name === 'basicSalary') {
                             }
                             onClick={(e) => { if (isDate) e.target.showPicker?.(); }}
                             inputMode={isMobileish ? 'numeric' : undefined}
-                            maxLength={isMobileish ? 10 : (field.name === 'employeeName' ? 50 : undefined)}
+                            maxLength={
+                              isMobileish
+                                ? 10
+                                : (['employeeName', 'department', 'designation'].includes(field.name) ? 50 : undefined)
+                            }
+
                             className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-300 bg-white shadow-sm hover:shadow-md"
                           />
                           {errors[field.name] && <p className="text-red-600 text-xs">{errors[field.name]}</p>}
@@ -751,12 +857,11 @@ if (name === 'basicSalary') {
                                 {uploadStatus[doc.key].fileName}
                               </span>
                             </div>
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              uploadStatus[doc.key].status === 'success' ? 'bg-green-100 text-green-800' :
+                            <span className={`text-xs px-2 py-1 rounded-full ${uploadStatus[doc.key].status === 'success' ? 'bg-green-100 text-green-800' :
                               uploadStatus[doc.key].status === 'error' ? 'bg-red-100 text-red-800' :
-                              uploadStatus[doc.key].status === 'uploading' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-blue-100 text-blue-800'
-                            }`}>
+                                uploadStatus[doc.key].status === 'uploading' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-blue-100 text-blue-800'
+                              }`}>
                               {uploadStatus[doc.key].status}
                             </span>
                           </div>
@@ -793,30 +898,29 @@ if (name === 'basicSalary') {
                       </label>
 
                       <input
-  ref={(el) => (fieldRefs.current[field.name] = el)}
-  name={field.name}
-  type="text"
-  placeholder={field.placeholder}
-  value={formData[field.name]}
-  onChange={handleInputChange}
-  onBlur={() => handleBlur(field.name)}
-  onKeyDown={(e) => {
-    if (isNumeric) allowKey(e, 'digit');
-    if (isIFSC) allowKey(e, 'ifsc');
-  }}
-  inputMode={isNumeric ? 'numeric' : undefined}
-  pattern={isNumeric ? '\\d*' : isIFSC ? '[A-Za-z0-9]*' : undefined}
-  maxLength={field.name === 'accountNumber' ? 18 : field.name === 'ifscCode' ? 11 : undefined}
-  className={`w-full px-4 py-4 border-2 rounded-xl transition-all duration-300 bg-white shadow-sm hover:shadow-md ${
-    errors[field.name]
-      ? 'border-red-400 focus:ring-red-200 focus:border-red-500'
-      : 'border-gray-200 focus:ring-orange-200 focus:border-orange-500'
-  }`}
-/>
-{errors[field.name] && <p className="text-red-600 text-xs">{errors[field.name]}</p>}
+                        ref={(el) => (fieldRefs.current[field.name] = el)}
+                        name={field.name}
+                        type="text"
+                        placeholder={field.placeholder}
+                        value={formData[field.name]}
+                        onChange={handleInputChange}
+                        onBlur={() => handleBlur(field.name)}
+                        onKeyDown={(e) => {
+                          if (isNumeric) allowKey(e, 'digit');
+                          if (isIFSC) allowKey(e, 'ifsc');
+                        }}
+                        inputMode={isNumeric ? 'numeric' : undefined}
+                        pattern={isNumeric ? '\\d*' : isIFSC ? '[A-Za-z0-9]*' : undefined}
+                        maxLength={field.name === 'accountNumber' ? 18 : field.name === 'ifscCode' ? 11 : undefined}
+                        className={`w-full px-4 py-4 border-2 rounded-xl transition-all duration-300 bg-white shadow-sm hover:shadow-md ${errors[field.name]
+                          ? 'border-red-400 focus:ring-red-200 focus:border-red-500'
+                          : 'border-gray-200 focus:ring-orange-200 focus:border-orange-500'
+                          }`}
+                      />
+                      {errors[field.name] && <p className="text-red-600 text-xs">{errors[field.name]}</p>}
 
 
-                      
+
                     </div>
                   );
                 })}
@@ -855,12 +959,11 @@ if (name === 'basicSalary') {
                         </div>
                         <div className="ml-2">
                           {uploadStatus[key] && (
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              uploadStatus[key].status === 'success' ? 'bg-green-100 text-green-800' :
+                            <span className={`text-xs px-2 py-1 rounded-full ${uploadStatus[key].status === 'success' ? 'bg-green-100 text-green-800' :
                               uploadStatus[key].status === 'error' ? 'bg-red-100 text-red-800' :
-                              uploadStatus[key].status === 'uploading' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-blue-100 text-blue-800'
-                            }`}>
+                                uploadStatus[key].status === 'uploading' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-blue-100 text-blue-800'
+                              }`}>
                               {uploadStatus[key].status}
                             </span>
                           )}

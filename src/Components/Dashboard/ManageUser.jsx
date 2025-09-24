@@ -49,6 +49,7 @@ const getCreatedAt = (u) => {
 
 
 const ManageUser = () => {
+  const [downloading, setDownloading] = useState(false);
   const [users, setUsers] = useState([]);
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,22 +168,23 @@ const ManageUser = () => {
   };
 
   const downloadFile = async (url, name) => {
+    const safe = sanitizeFileName(name || url.split('/').pop() || 'file');
     try {
-      const resp = await fetch(url, { credentials: 'include' });
+      const resp = await fetch(url, { credentials: 'include', mode: 'cors' });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const blob = await resp.blob();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = name || url.split('/').pop() || 'file';
+      a.download = safe;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(a.href);
     } catch (e) {
-      // fallback
+      // hard fallback: just open
       const a = document.createElement('a');
       a.href = url;
-      a.download = name || url.split('/').pop() || 'file';
+      a.download = safe;
       a.target = '_blank';
       document.body.appendChild(a);
       a.click();
@@ -191,6 +193,29 @@ const ManageUser = () => {
   };
 
 
+
+  // Put this helper near your other helpers
+  const sanitizeFileName = (name = 'file') => {
+    // strip query/hash, keep basename, remove illegal chars
+    const base = name.split(/[?#]/)[0].split('/').pop() || 'file';
+    return base
+      .replace(/[:*?"<>|\\]/g, '_')     // Windows-illegal
+      .replace(/\s+/g, ' ')              // tidy spaces
+      .trim()
+      .slice(0, 150);                    // keep it reasonable
+  };
+
+  const makeUniqueName = (existing, desired) => {
+    if (!existing.has(desired)) { existing.add(desired); return desired; }
+    const dot = desired.lastIndexOf('.');
+    const stem = dot > 0 ? desired.slice(0, dot) : desired;
+    const ext = dot > 0 ? desired.slice(dot) : '';
+    let i = 2, candidate = `${stem} (${i})${ext}`;
+    while (existing.has(candidate)) { i += 1; candidate = `${stem} (${i})${ext}`; }
+    existing.add(candidate);
+    return candidate;
+  };
+
   const downloadAllFiles = async (files) => {
     if (!files || !files.length) return;
     try {
@@ -198,27 +223,78 @@ const ManageUser = () => {
         import('jszip'),
         import('file-saver'),
       ]);
-      const zip = new JSZip();
 
-      await Promise.allSettled(
+      const zip = new JSZip();
+      const usedNames = new Set();
+      let added = 0;
+      let skipped = 0;
+
+      // Fetch each file robustly
+      const results = await Promise.all(
         files.map(async (doc, i) => {
-          const cleanName =
-            (doc?.name ? `${doc.name}-` : '') + (doc?.url?.split('/').pop() || `doc-${i + 1}`);
-          const res = await fetch(doc.url, { credentials: 'include' });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const blob = await res.blob();
-          zip.file(cleanName, blob);
+          try {
+            const url = String(doc?.url || '');
+            if (!url) throw new Error('Empty URL');
+
+            // try to fetch; include credentials if your URLs need cookies
+            const res = await fetch(url, { credentials: 'include', mode: 'cors' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            // crude checks to skip HTML error pages served as 200
+            const ct = (res.headers.get('content-type') || '').toLowerCase();
+            const blob = await res.blob();
+            if (!blob || blob.size === 0) throw new Error('Empty file');
+            if (ct.includes('text/html')) throw new Error('HTML page, not a file');
+
+            // pick a clean, unique filename
+            const rawName =
+              (doc?.name ? `${doc.name}-` : '') + (url.split('/').pop() || `doc-${i + 1}`);
+            const clean = sanitizeFileName(rawName);
+            const finalName = makeUniqueName(usedNames, clean);
+
+            // add to zip
+            zip.file(finalName, blob, { binary: true });
+            added += 1;
+            return { ok: true };
+          } catch (err) {
+            console.warn('Skip file:', doc?.url, err?.message || err);
+            skipped += 1;
+            return { ok: false, err };
+          }
         })
       );
-      const zipped = await zip.generateAsync({ type: 'blob' });
+
+      if (added === 0) {
+        // nothing valid fetched — fall back to individual downloads
+        await Promise.allSettled(
+          files.map((doc) => downloadFile(doc.url, sanitizeFileName(doc.url.split('/').pop())))
+        );
+        return;
+      }
+
+      const zipped = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 },
+        streamFiles: true,
+      });
+
       saveAs(zipped, `documents_${Date.now()}.zip`);
+
+      // Optional: toast/message
+      if (skipped > 0) {
+        // eslint-disable-next-line no-alert
+        alert(`Downloaded ${added} file(s). Skipped ${skipped} that looked invalid or blocked.`);
+      }
     } catch (err) {
-      // fallback: individual
+      console.error('ZIP build failed, fallback to individual:', err);
+      // fallback: individual downloads
       await Promise.allSettled(
-        files.map((doc) => downloadFile(doc.url, doc.url.split('/').pop()))
+        files.map((doc) => downloadFile(doc.url, sanitizeFileName(doc.url.split('/').pop())))
       );
     }
   };
+
 
 
   const getFileIcon = (url) => {
@@ -375,145 +451,166 @@ const ManageUser = () => {
             </thead>
             <tbody>
               {currentUsers.length === 0 ? (
-  <tr>
-    <td colSpan="3" className="p-6 text-center text-gray-600">
-      No Employee Found.
-    </td>
-  </tr>
-) : (
-              currentUsers.map((user, idx) => {
-                const globalIndex = indexOfFirstUser + idx;
-                return (
-                  <React.Fragment key={user._id}>
-                    <tr className="border-b">
-                      <td className="flex items-center p-3">
-                        <button onClick={() => toggleExpand(globalIndex)} className="mr-2">
-                          <img src={ArrowDown} alt="" />
-                        </button>
-                        <img src={AdminIcon} className="w-6 h-6 mr-2" alt="Admin" />
-                        <div>
-                          <div className="font-semibold">{user.employeeName}</div>
-                          <div className="text-xs text-gray-500">{user.email}</div>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <select
-                          value={user.role}
-                          onChange={(e) => handleRoleChange(user.empId, e.target.value)}
-                          className="d px-2 py-1 text-sm"
-                        >
-                          <option value="superadmin">Superadmin</option>
-                          <option value="admin">Admin</option>
-                          <option value="employee">Employee</option>
-                          <option value="hr">HR</option>
-                          <option value="teamlead">Team Lead</option>
-                          {/* Add more roles as needed */}
-                        </select>
-                      </td>
+                <tr>
+                  <td colSpan="3" className="p-6 text-center text-gray-600">
+                    No Employee Found.
+                  </td>
+                </tr>
+              ) : (
+                currentUsers.map((user, idx) => {
+                  const globalIndex = indexOfFirstUser + idx;
+                  return (
+                    <React.Fragment key={user._id}>
+                      <tr className="border-b">
+                        <td className="flex items-center p-3">
+                          <button onClick={() => toggleExpand(globalIndex)} className="mr-2">
+                            <img src={ArrowDown} alt="" />
+                          </button>
+                          <img src={AdminIcon} className="w-6 h-6 mr-2" alt="Admin" />
+                          <div>
+                            <div className="font-semibold">{user.employeeName}</div>
+                            <div className="text-xs text-gray-500">{user.email}</div>
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <select
+                            value={user.role}
+                            onChange={(e) => handleRoleChange(user.empId, e.target.value)}
+                            className="d px-2 py-1 text-sm"
+                          >
+                            <option value="superadmin">Superadmin</option>
+                            <option value="admin">Admin</option>
+                            <option value="employee">Employee</option>
+                            <option value="hr">HR</option>
+                            <option value="teamlead">Team Lead</option>
+                            {/* Add more roles as needed */}
+                          </select>
+                        </td>
 
-                      <td className="p-3">
-                        <div className="flex items-center space-x-2">
-                          <div className="inline-flex bg-gray-200 rounded-full overflow-hidden text-xs font-medium">
+                        <td className="p-3">
+                          <div className="flex items-center space-x-2">
+                            <div className="inline-flex bg-gray-200 rounded-full overflow-hidden text-xs font-medium">
+                              <button
+                                onClick={() => toggleStatus(globalIndex)}
+                                className={`cursor-pointer px-4 py-1 transition ${user.isActive ? 'bg-green-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+                                  }`}
+                              >
+                                Active
+                              </button>
+                              <button
+                                onClick={() => toggleStatus(globalIndex)}
+                                className={`px-4 cursor-pointer py-1 transition ${!user.isActive ? 'bg-gray-500 text-white' : 'text-gray-500 hover:bg-gray-100'
+                                  }`}
+                              >
+                                De-Activate
+                              </button>
+                            </div>
                             <button
-                              onClick={() => toggleStatus(globalIndex)}
-                              className={`cursor-pointer px-4 py-1 transition ${user.isActive ? 'bg-green-600 text-white' : 'text-gray-500 hover:bg-gray-100'
-                                }`}
+                              onClick={() => handleEditUser(user)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors duration-200 flex items-center space-x-1"
+                              title="Edit User"
                             >
-                              Active
-                            </button>
-                            <button
-                              onClick={() => toggleStatus(globalIndex)}
-                              className={`px-4 cursor-pointer py-1 transition ${!user.isActive ? 'bg-gray-500 text-white' : 'text-gray-500 hover:bg-gray-100'
-                                }`}
-                            >
-                              De-Activate
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                              </svg>
+                              <span>Edit</span>
                             </button>
                           </div>
-                          <button
-                            onClick={() => handleEditUser(user)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors duration-200 flex items-center space-x-1"
-                            title="Edit User"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                            </svg>
-                            <span>Edit</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
 
-                    {expandedIndex === globalIndex && (() => {
-                      const allDocs = [
-                        ...extractDocumentUrls(user.identityDocs),
-                        ...extractDocumentUrls(user.previousCompanyDocs)
-                      ];
-                      return (
-                        <tr className="bg-gray-50">
-                          <td colSpan="3" className="p-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <h3 className="font-semibold text-lg mb-2">Personal Details</h3>
-                                <ul className="text-sm space-y-1">
-                                  <li><strong>Employee ID:</strong> {user.empId}</li>
-                                  <li><strong>Name:</strong> {user.employeeName}</li>
-                                  <li><strong>Department:</strong> {user.department}</li>
-                                  <li><strong>Designation:</strong> {user.designation}</li>
-                                  <li><strong>Date of Joining:</strong> {formatDateDisplay(user.dateOfJoining)}</li>
-                                  {user.dateOfBirth && (
-                                    <li><strong>Date of Birth:</strong> {formatDateDisplay(user.dateOfBirth)}</li>
-                                  )}
-                                  <li><strong>Mobile:</strong> {user.mobileNo}</li>
-                                  <li><strong>Alternate No:</strong> {user.alternateNo}</li>
-                                  <li><strong>Account No:</strong> {user.bankDetails.accountNumber}</li>
-                                  <li><strong>Emergency Number:</strong> {user.emergencyNo}</li>
-                                  <li><strong>Email:</strong> {user.email}</li>
-                                  <li><strong>Sex:</strong> {user.sex}</li>
-                                  <li><strong>Account holder name:</strong> {user.bankDetails.accountHolderName}</li>
-                                  <li><strong>IFSC Code:</strong> {user.bankDetails.ifscCode}</li>
-                                </ul>
-                              </div>
-
-                              <div>
-                                <h3 className="font-semibold text-lg mb-2">Documents</h3>
-                                <div className="grid grid-cols-4 gap-4 mb-4">
-                                  {allDocs.map((doc, i) => (
-                                    <div key={i} className="flex flex-col items-center">
-                                      <span className="text-xs text-gray-700 mb-2 font-semibold text-center capitalize">
-                                        {doc.name.replace(/([A-Z])/g, ' $1').trim()}
-                                      </span>
-                                      {getFilePreview(doc)}
-                                    </div>
-                                  ))}
+                      {expandedIndex === globalIndex && (() => {
+                        const allDocs = [
+                          ...extractDocumentUrls(user.identityDocs),
+                          ...extractDocumentUrls(user.previousCompanyDocs)
+                        ];
+                        return (
+                          <tr className="bg-gray-50">
+                            <td colSpan="3" className="p-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <h3 className="font-semibold text-lg mb-2">Personal Details</h3>
+                                  <ul className="text-sm space-y-1">
+                                    <li><strong>Employee ID:</strong> {user.empId}</li>
+                                    <li><strong>Name:</strong> {user.employeeName}</li>
+                                    <li><strong>Department:</strong> {user.department}</li>
+                                    <li><strong>Designation:</strong> {user.designation}</li>
+                                    <li><strong>Date of Joining:</strong> {formatDateDisplay(user.dateOfJoining)}</li>
+                                    {user.dateOfBirth && (
+                                      <li><strong>Date of Birth:</strong> {formatDateDisplay(user.dateOfBirth)}</li>
+                                    )}
+                                    <li><strong>Mobile:</strong> {user.mobileNo}</li>
+                                    <li><strong>Alternate No:</strong> {user.alternateNo}</li>
+                                    <li><strong>Account No:</strong> {user.bankDetails.accountNumber}</li>
+                                    <li><strong>Emergency Number:</strong> {user.emergencyNo}</li>
+                                    <li><strong>Email:</strong> {user.email}</li>
+                                    <li><strong>Sex:</strong> {user.sex}</li>
+                                    <li><strong>Account holder name:</strong> {user.bankDetails.accountHolderName}</li>
+                                    <li><strong>IFSC Code:</strong> {user.bankDetails.ifscCode}</li>
+                                  </ul>
                                 </div>
-                                <button
-                                  onClick={() => downloadAllFiles(allDocs)}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors duration-200 flex items-center space-x-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                  </svg>
-                                  <span>Download All</span>
-                                </button>
+
+                                <div>
+                                  <h3 className="font-semibold text-lg mb-2">Documents</h3>
+                                  <div className="grid grid-cols-4 gap-4 mb-4">
+                                    {allDocs.map((doc, i) => (
+                                      <div key={i} className="flex flex-col items-center">
+                                        <span className="text-xs text-gray-700 mb-2 font-semibold text-center capitalize">
+                                          {doc.name.replace(/([A-Z])/g, ' $1').trim()}
+                                        </span>
+                                        {getFilePreview(doc)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        setDownloading(true);
+                                        await downloadAllFiles(allDocs);   // aapka existing function
+                                      } finally {
+                                        setDownloading(false);
+                                      }
+                                    }}
+                                    disabled={downloading}
+                                    className={`px-6 py-2 rounded-lg font-semibold transition-colors duration-200 flex items-center space-x-2
+              ${downloading ? 'bg-blue-400 cursor-not-allowed text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                                    title={downloading ? 'Preparing…' : 'Download all documents as ZIP'}
+                                  >
+                                    {downloading ? (
+                                      <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        <span>Preparing…</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span>Download All</span>
+                                      </>
+                                    )}
+                                  </button>
+
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })()}
-                  </React.Fragment>
-                );
-              })
-            )}
+                            </td>
+                          </tr>
+                        );
+                      })()}
+                    </React.Fragment>
+                  );
+                })
+              )}
             </tbody>
           </table>
 
           <div className="flex justify-between items-center mt-4 text-sm">
             <span>
-  {filteredUsers.length === 0
-    ? 'Showing 0 of 0 entries'
-    : `Showing ${indexOfFirstUser + 1} to ${Math.min(indexOfLastUser, filteredUsers.length)} of ${filteredUsers.length} entries`}
-</span>
+              {filteredUsers.length === 0
+                ? 'Showing 0 of 0 entries'
+                : `Showing ${indexOfFirstUser + 1} to ${Math.min(indexOfLastUser, filteredUsers.length)} of ${filteredUsers.length} entries`}
+            </span>
 
             <div className="flex gap-2">
               <button
@@ -587,6 +684,16 @@ const ManageUser = () => {
 // ==== REPLACE your existing EditUserModal with this ====
 // ==== REPLACE your existing EditUserModal with this ====
 const EditUserModal = ({ user, onClose, onUpdate }) => {
+  // ---- key filters (prevent invalid keystrokes) ----
+  const allowKey = (e, type) => {
+    const nav = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
+    if (nav.includes(e.key)) return;
+    if (type === 'digit' && !/^\d$/.test(e.key)) e.preventDefault();
+    if (type === 'alnum' && !/^[A-Za-z0-9]$/.test(e.key)) e.preventDefault();
+  };
+
+  // IFSC regex (SBIN0XXXXXX style)
+  const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
   const [formData, setFormData] = React.useState({
     employeeName: user.employeeName || '',
     email: user.email || '',
@@ -631,17 +738,17 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
   const maxDobStr = maxDob.toISOString().split('T')[0];
 
   // ---- refs for auto-scroll to first error ----
-  const scrollAreaRef  = React.useRef(null);
-  const employeeNameRef= React.useRef(null);
-  const sexRef         = React.useRef(null);
-  const emailRef       = React.useRef(null);
-  const mobileNoRef    = React.useRef(null);
+  const scrollAreaRef = React.useRef(null);
+  const employeeNameRef = React.useRef(null);
+  const sexRef = React.useRef(null);
+  const emailRef = React.useRef(null);
+  const mobileNoRef = React.useRef(null);
   const alternateNoRef = React.useRef(null);
   const emergencyNoRef = React.useRef(null);
-  const departmentRef  = React.useRef(null);
+  const departmentRef = React.useRef(null);
   const designationRef = React.useRef(null);
-  const dobRef         = React.useRef(null);
-  const dojRef         = React.useRef(null);
+  const dobRef = React.useRef(null);
+  const dojRef = React.useRef(null);
 
   const clickDate = (ref) => ref.current?.showPicker?.() ?? ref.current?.focus?.();
 
@@ -659,7 +766,16 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     if (['mobileNo', 'alternateNo', 'emergencyNo'].includes(name)) {
       v = v.replace(/\D/g, '').slice(0, 10); // digits only; max 10
     }
-
+    // ✅ NEW: Strict banking sanitization
+    if (name === 'basicSalary') {
+      v = v.replace(/\D/g, ''); // digits only
+    }
+    if (name === 'accountNumber') {
+      v = v.replace(/\D/g, '').slice(0, 18); // digits only, max 18
+    }
+    if (name === 'ifscCode') {
+      v = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11); // alnum uppercase, max 11
+    }
     setFormData((prev) => ({ ...prev, [name]: v }));
     setErrors((prev) => ({ ...prev, [name]: '' })); // clear field error on change
   };
@@ -680,6 +796,21 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     }
     return { valid: true };
   };
+  // LIVE errors (run after setFormData if needed, ya isi function me above ki tarah)
+  useEffect(() => {
+    const vAcc = formData.accountNumber || '';
+    if (vAcc && (vAcc.length < 9 || vAcc.length > 18)) {
+      setErrors((p) => ({ ...p, accountNumber: 'Please enter the valid account number.' }));
+    }
+    const vIfsc = (formData.ifscCode || '').toUpperCase();
+    if (vIfsc && (vIfsc.length !== 11 || !IFSC_PATTERN.test(vIfsc))) {
+      setErrors((p) => ({ ...p, ifscCode: 'Please enter the valid IFSC Code.' }));
+    }
+    const vSalary = formData.basicSalary || '';
+    if (vSalary && Number(vSalary) <= 0) {
+      setErrors((p) => ({ ...p, basicSalary: 'Please enter basic salary more than 0.' }));
+    }
+  }, [formData.accountNumber, formData.ifscCode, formData.basicSalary]);
 
   const handleFileChange = (e) => {
     const { name, files: selected } = e.target;
@@ -828,7 +959,26 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     } else if (formData.dateOfJoining > todayStr) {
       v.dateOfJoining = 'Please select the date of joining.';
     }
+    // 13) Basic Salary (optional field but if present must be > 0)
+    if (formData.basicSalary !== '' && Number(formData.basicSalary) <= 0) {
+      v.basicSalary = 'Please enter basic salary more than 0.';
+    }
 
+    // 14) Account Number (optional but if present must be 9-18 digits)
+    if (formData.accountNumber) {
+      const acc = String(formData.accountNumber || '').replace(/\D/g, '');
+      if (acc.length < 9 || acc.length > 18) {
+        v.accountNumber = 'Please enter the valid account number.';
+      }
+    }
+
+    // 15) IFSC Code (optional but if present must be valid)
+    if (formData.ifscCode) {
+      const code = String(formData.ifscCode || '').toUpperCase();
+      if (code.length !== 11 || !IFSC_PATTERN.test(code)) {
+        v.ifscCode = 'Please enter the valid IFSC Code.';
+      }
+    }
     setErrors(v);
     const hasErrors = Object.keys(v).length > 0;
     if (hasErrors) {
@@ -836,19 +986,19 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
 
       // error priority + scroll/focus
       const order = [
-        'employeeName','sex','email','mobileNo','alternateNo',
-        'emergencyNo','department','designation','dateOfBirth','dateOfJoining',
+        'employeeName', 'sex', 'email', 'mobileNo', 'alternateNo',
+        'emergencyNo', 'department', 'designation', 'dateOfBirth', 'dateOfJoining',
       ];
       const refMap = {
         employeeName: employeeNameRef,
-        sex:          sexRef,
-        email:        emailRef,
-        mobileNo:     mobileNoRef,
-        alternateNo:  alternateNoRef,
-        emergencyNo:  emergencyNoRef,
-        department:   departmentRef,
-        designation:  designationRef,
-        dateOfBirth:  dobRef,
+        sex: sexRef,
+        email: emailRef,
+        mobileNo: mobileNoRef,
+        alternateNo: alternateNoRef,
+        emergencyNo: emergencyNoRef,
+        department: departmentRef,
+        designation: designationRef,
+        dateOfBirth: dobRef,
         dateOfJoining: dojRef,
       };
       const firstKey = order.find((k) => v[k]);
@@ -1074,11 +1224,14 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                   <label className="block text-sm font-bold text-gray-700">Basic Salary</label>
                   <input
                     name="basicSalary"
-                    type="number"
+                    type="text"
                     value={formData.basicSalary}
                     onChange={handleInputChange}
+                    onKeyDown={(e) => allowKey(e, 'digit')}
+                    inputMode="numeric"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
                   />
+                  {errors.basicSalary && <p className="text-red-600 text-xs mt-1">{errors.basicSalary}</p>}
                 </div>
 
                 {/* DOB (<= maxDob) */}
@@ -1131,8 +1284,13 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                     type="text"
                     value={formData.accountNumber}
                     onChange={handleInputChange}
+                    onKeyDown={(e) => allowKey(e, 'digit')}
+                    inputMode="numeric"
+                    pattern="\d*"
+                    maxLength={18}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
                   />
+                  {errors.accountNumber && <p className="text-red-600 text-xs mt-1">{errors.accountNumber}</p>}
                 </div>
                 <div className="space-y-3">
                   <label className="block text-sm font-bold text-gray-700">IFSC Code</label>
@@ -1141,8 +1299,12 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                     type="text"
                     value={formData.ifscCode}
                     onChange={handleInputChange}
+                    onKeyDown={(e) => allowKey(e, 'alnum')}
+                    maxLength={11}
+                    inputMode="text"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
                   />
+                  {errors.ifscCode && <p className="text-red-600 text-xs mt-1">{errors.ifscCode}</p>}
                 </div>
               </div>
             </div>

@@ -206,7 +206,7 @@ export default function DeliveryOrder() {
           size={18}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
         />
-        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        {/* {error && <p className="mt-1 text-xs text-red-600">{error}</p>} */}
       </div>
     );
   };
@@ -255,6 +255,46 @@ export default function DeliveryOrder() {
   const blockMoneyChars = (e) => {
     if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
   };
+  
+// LIVE typing ke liye: ek hi dot allow, trailing dot ko preserve, max 2 dp
+const clamp2dpLive = (s = '') => {
+  let t = String(s).replace(/[^\d.]/g, '');
+
+  // sirf pehla dot rakho
+  const firstDot = t.indexOf('.');
+  if (firstDot !== -1) {
+    const before = t.slice(0, firstDot);
+    const after  = t.slice(firstDot + 1).replace(/\./g, '');
+    t = `${before}.${after}`;
+  }
+
+  if (t === '.') return '0.';         // sirf dot -> 0.
+  if (t.endsWith('.')) return t;      // trailing dot rehne do (user abhi digits likhega)
+
+  if (firstDot !== -1) {
+    const [int, dec = ''] = t.split('.');
+    return `${int}.${dec.slice(0, 2)}`;
+  }
+  return t;
+};
+
+// Blur pe normalize (optional): "12." -> "12", "12.3" -> "12.3", "12.345" -> "12.34"
+const ensureMoney2dp = (s = '') => {
+  let t = String(s).replace(/[^\d.]/g, '');
+  if (!t) return '';
+  // multiple dots fix
+  const firstDot = t.indexOf('.');
+  if (firstDot !== -1) {
+    const before = t.slice(0, firstDot);
+    const after  = t.slice(firstDot + 1).replace(/\./g, '');
+    t = `${before}.${after}`;
+  }
+  if (t === '.' || t === '0.') return '0';
+  if (t.endsWith('.')) t = t.slice(0, -1);
+  const [int, dec = ''] = t.split('.');
+  return dec ? `${int}.${dec.slice(0, 2)}` : int;
+};
+
 
   // Validators
 
@@ -276,7 +316,8 @@ export default function DeliveryOrder() {
   // sanitize & keyguard for zip
   const sanitizeAlphaNum = (s = '') => s.replace(/[^A-Za-z0-9]/g, '');
 
-
+// Weight ke liye: sirf digits
+const digitsOnly = (s = '') => s.replace(/\D/g, '');
 
   // Block invalid chars in integer-only inputs
   const blockIntChars = (e) => {
@@ -396,13 +437,9 @@ const errBox = (has) =>
   // Charges popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
   const [charges, setCharges] = useState([
-    {
-      name: '',
-      quantity: '',
-      amt: '',
-      total: 0
-    }
-  ]);
+  { name: '', quantity: '', amt: '', total: 0 }
+]);
+
 
   // Form state for Add Delivery Order
   // REPLACE THIS BLOCK: formData ka initial state (weight shipper se hata kar pickup/drop locations me dala)
@@ -779,8 +816,9 @@ const errBox = (has) =>
     }
     // money fields sanitize while typing
     if (['lineHaul', 'fsc', 'other'].includes(field)) {
-      value = clamp2dp(value);
-    }
+  value = clamp2dpLive(value);  // ✅ live typing friendly
+}
+
 
     setFormData(prev => {
       const updatedCustomers = [...prev.customers];
@@ -804,25 +842,37 @@ const errBox = (has) =>
   };
 
   // Handle pickup location input changes
-  const handlePickupLocationChange = (index, field, value) => {
-    setFormData(prev => {
-      const updated = [...prev.pickupLocations];
-      const val = field === 'zipCode' ? sanitizeAlphaNum(value) : value;
-      updated[index] = { ...updated[index], [field]: val };
-      return { ...prev, pickupLocations: updated };
-    });
-  };
+ const handlePickupLocationChange = (index, field, value) => {
+  setFormData(prev => {
+    const updated = [...prev.pickupLocations];
+    // ZIP => alphanumeric only, WEIGHT => digits only
+    const val =
+      field === 'zipCode' ? sanitizeAlphaNum(value)
+    : field === 'weight'  ? digitsOnly(value)
+    : value;
+
+    updated[index] = { ...updated[index], [field]: val };
+    return { ...prev, pickupLocations: updated };
+  });
+};
+
 
 
   // Handle drop location input changes
   const handleDropLocationChange = (index, field, value) => {
-    setFormData(prev => {
-      const updated = [...prev.dropLocations];
-      const val = field === 'zipCode' ? sanitizeAlphaNum(value) : value;
-      updated[index] = { ...updated[index], [field]: val };
-      return { ...prev, dropLocations: updated };
-    });
-  };
+  setFormData(prev => {
+    const updated = [...prev.dropLocations];
+    // ZIP => alphanumeric only, WEIGHT => digits only
+    const val =
+      field === 'zipCode' ? sanitizeAlphaNum(value)
+    : field === 'weight'  ? digitsOnly(value)
+    : value;
+
+    updated[index] = { ...updated[index], [field]: val };
+    return { ...prev, dropLocations: updated };
+  });
+};
+
 
 
   // Add new customer
@@ -1005,63 +1055,78 @@ const errBox = (has) =>
 
   // ✅ Replace your applyCharges with this (popup-inside validation)
   const applyCharges = async () => {
-    // 1) Nothing entered at all?
-    const allEmpty = (charges || []).every(
-      ch => !(ch?.name?.trim()) && !(String(ch?.quantity ?? '') !== '') && !(String(ch?.amt ?? '') !== '')
+  // 1) sab rows bilkul khaali?
+  const allEmpty = (charges || []).every(
+    ch => !(ch?.name?.trim()) &&
+          !(String(ch?.quantity ?? '') !== '') &&
+          !(String(ch?.amt ?? '') !== '')
+  );
+
+  if (allEmpty) {
+    // row 0 pe inline errors dikhane ke liye
+    const errs = (charges || []).map((_, i) =>
+      i === 0
+        ? {
+            name: 'Please enter the charge name',
+            quantity: 'Please enter the Quantity',
+            amt: 'Please enter the amount',
+          }
+        : { name: '', quantity: '', amt: '' }
     );
-    if (allEmpty) {
-      setChargesPopupError('Please add Carrier Fees .');
-      setChargeErrors(charges.map(() => ({ name: '', quantity: '', amt: '' })));
-      return;
+    setChargeErrors(errs);
+    setChargesPopupError('Please add Carrier Fees .');
+    focusFirstError?.();
+    return;
+  }
+
+  // 2) row-by-row validation (exact messages)
+  const nextErrs = (charges || []).map((ch) => {
+    const row = { name: '', quantity: '', amt: '' };
+    const hasAny = (ch?.name || ch?.quantity || ch?.amt);
+
+    if (hasAny) {
+      const nm = (ch?.name || '').trim();
+      if (!nm) row.name = 'Please enter the charge name';
+      else if (!/^[A-Za-z ]+$/.test(nm)) row.name = 'Name should contain only alphabets';
+
+      const qRaw = String(ch?.quantity ?? '');
+      if (qRaw === '') row.quantity = 'Please enter the Quantity';
+      else if (!/^[1-9]\d*$/.test(qRaw)) row.quantity = 'Quantity must be a positive integer';
+
+      const aRaw = String(ch?.amt ?? '');
+      if (aRaw === '') row.amt = 'Please enter the amount';
+      else if (!/^[1-9]\d*$/.test(aRaw)) row.amt = 'Amount must be a positive integer';
     }
+    return row;
+  });
 
-    // 2) Row-wise validation
-    const nextErrs = (charges || []).map((ch) => {
-      const row = { name: '', quantity: '', amt: '' };
-      const hasAny = (ch?.name || ch?.quantity || ch?.amt);
+  const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
+  setChargeErrors(nextErrs);
 
-      if (hasAny) {
-        // Name: required + alphabets only
-        if (!ch?.name?.trim()) row.name = 'Please enter the charge name';
-        else if (!/^[A-Za-z ]+$/.test(ch.name.trim())) row.name = 'Name should contain only alphabets';
+  if (hasErrors) {
+    setChargesPopupError('Please correct the charge rows (Name*, Quantity*, Amount*).');
+    focusFirstError?.();
+    return;
+  }
 
-        // Quantity: required + positive integer
-        if (ch?.quantity === '' || ch?.quantity === undefined) row.quantity = 'Please enter the Quantity';
-        else if (!/^[1-9]\d*$/.test(String(ch.quantity))) row.quantity = 'Quantity must be a positive integer';
+  // 3) valid -> totals apply
+  const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
+  setFormData(prev => ({ ...prev, carrierFees: String(totalCharges) }));
 
-        // Amount: required + positive integer
-        if (ch?.amt === '' || ch?.amt === undefined) row.amt = 'Please enter the amount';
-        else if (!/^[1-9]\d*$/.test(String(ch.amt))) row.amt = 'Amount must be a positive integer';
-      }
-      return row;
-    });
+  if (editingOrder && editingOrder._id) {
+    const carrierFeesData = (charges || []).map(ch => ({
+      name: ch.name.trim(),
+      quantity: parseInt(ch.quantity, 10) || 0,
+      amount: parseInt(ch.amt, 10) || 0,
+      total: (parseInt(ch.quantity,10)||0) * (parseInt(ch.amt,10)||0),
+    }));
+    await updateCarrierFees(editingOrder._id, carrierFeesData);
+  }
 
-    const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
-    setChargeErrors(nextErrs);
+  setChargesPopupError('');
+  setShowChargesPopup(false);
+};
 
-    if (hasErrors) {
-      setChargesPopupError('Please correct the charge rows (Name*, Quantity*, Amount*).');
-      return; // keep popup open
-    }
-
-    // 3) Valid -> compute & apply to form
-    const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
-    setFormData(prev => ({ ...prev, carrierFees: String(totalCharges) }));
-
-    // If editing, push immediately to backend (optional – your previous logic)
-    if (editingOrder && editingOrder._id) {
-      const carrierFeesData = (charges || []).map(ch => ({
-        name: ch.name.trim(),
-        quantity: parseInt(ch.quantity, 10) || 0,
-        amount: parseInt(ch.amt, 10) || 0,
-        total: parseInt(ch.total, 10) || 0,
-      }));
-      await updateCarrierFees(editingOrder._id, carrierFeesData);
-    }
-
-    setChargesPopupError('');
-    setShowChargesPopup(false);
-  };
 
 
 
@@ -1638,9 +1703,10 @@ const errBox = (has) =>
             billTo: c.billTo || '',
             dispatcherName: c.dispatcherName || '',
             workOrderNo: c.workOrderNo || '',
-            lineHaul: c.lineHaul ?? '',
-            fsc: c.fsc ?? '',
-            other: c.other ?? '',
+            lineHaul: ensureMoney2dp(String(c.lineHaul ?? '')),
+fsc: ensureMoney2dp(String(c.fsc ?? '')),
+other: ensureMoney2dp(String(c.other ?? '')),
+
             totalAmount: (Number(c.lineHaul) || 0) + (Number(c.fsc) || 0) + (Number(c.other) || 0)
           })),
           carrierName: fullOrderData.carrier?.carrierName || '',
@@ -3523,7 +3589,8 @@ const errBox = (has) =>
                       pattern="[A-Za-z ]+"
                       title="Only alphabets and spaces are allowed"
                       className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2
-    ${errors?.shipper?.shipperName ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500'}`}
+    ${errors?.shipper?.shipperName ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-purple-500'}`}
+                      placeholder="Shipper Name *"
                     />
                     {errors?.shipper?.shipperName && (
                       <p className="mt-1 text-xs text-red-600">{errors.shipper.shipperName}</p>
@@ -4443,12 +4510,7 @@ const errBox = (has) =>
 
             <div className="space-y-6">
 
-              {/* Popup-wide error banner (INSIDE the popup) */}
-              {chargesPopupError && (
-                <div className="mb-4 -mt-2 px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-200">
-                  {chargesPopupError}
-                </div>
-              )}
+              
 
               {/* Table header */}
               <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
@@ -4477,13 +4539,35 @@ const errBox = (has) =>
                   {/* Name */}
                   <div>
                     <input
-                      type="text"
-                      value={charge.name}
-                      onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all
-                  ${chargeErrors[index]?.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'}`}
-                      placeholder="Enter charge name"
-                    />
+  type="text"
+  value={charge.name}
+  onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
+  onKeyDown={(e) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    const allow = ['Backspace','Delete','Tab','Enter','Escape','ArrowLeft','ArrowRight','Home','End'];
+    if (allow.includes(e.key) || (ctrl && ['a','c','v','x'].includes(e.key.toLowerCase()))) return;
+    if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
+  }}
+  onBlur={() => {
+    setChargeErrors((prev) => {
+      const next = [...prev];
+      const v = (charge.name || '').trim();
+      next[index] = { ...(next[index] || {}) };
+      if (!v) next[index].name = 'Please enter the charge name';
+      else if (!/^[A-Za-z ]+$/.test(v)) next[index].name = 'Name should contain only alphabets';
+      else next[index].name = '';
+      return next;
+    });
+  }}
+  aria-invalid={Boolean(chargeErrors[index]?.name)}
+  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+    chargeErrors[index]?.name
+      ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+      : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+  }`}
+  placeholder="Enter charge name"
+/>
+
                     {chargeErrors[index]?.name && (
                       <p className="mt-1 text-xs text-red-600">{chargeErrors[index].name}</p>
                     )}
@@ -4492,17 +4576,33 @@ const errBox = (has) =>
                   {/* Quantity */}
                   <div>
                     <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      onKeyDown={blockIntNoSign}
-                      value={charge.quantity}
-                      onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all
-                  ${chargeErrors[index]?.quantity ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'}`}
-                      placeholder="0"
-                    />
+  type="number"
+  min={1}
+  step={1}
+  inputMode="numeric"
+  onKeyDown={blockIntNoSign}
+  value={charge.quantity}
+  onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
+  onBlur={() => {
+    setChargeErrors((prev) => {
+      const next = [...prev];
+      const raw = String(charge.quantity ?? '');
+      next[index] = { ...(next[index] || {}) };
+      if (raw === '') next[index].quantity = 'Please enter the Quantity';
+      else if (!/^[1-9]\d*$/.test(raw)) next[index].quantity = 'Quantity must be a positive integer';
+      else next[index].quantity = '';
+      return next;
+    });
+  }}
+  aria-invalid={Boolean(chargeErrors[index]?.quantity)}
+  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+    chargeErrors[index]?.quantity
+      ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+      : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+  }`}
+  placeholder="0"
+/>
+
                     {chargeErrors[index]?.quantity && (
                       <p className="mt-1 text-xs text-red-600">{chargeErrors[index].quantity}</p>
                     )}
@@ -4511,17 +4611,33 @@ const errBox = (has) =>
                   {/* Amount */}
                   <div>
                     <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      onKeyDown={blockIntNoSign}
-                      value={charge.amt}
-                      onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all
-                  ${chargeErrors[index]?.amt ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'}`}
-                      placeholder="0"
-                    />
+  type="number"
+  min={1}
+  step={1}
+  inputMode="numeric"
+  onKeyDown={blockIntNoSign}
+  value={charge.amt}
+  onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
+  onBlur={() => {
+    setChargeErrors((prev) => {
+      const next = [...prev];
+      const raw = String(charge.amt ?? '');
+      next[index] = { ...(next[index] || {}) };
+      if (raw === '') next[index].amt = 'Please enter the amount';
+      else if (!/^[1-9]\d*$/.test(raw)) next[index].amt = 'Amount must be a positive integer';
+      else next[index].amt = '';
+      return next;
+    });
+  }}
+  aria-invalid={Boolean(chargeErrors[index]?.amt)}
+  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+    chargeErrors[index]?.amt
+      ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+      : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+  }`}
+  placeholder="0"
+/>
+
                     {chargeErrors[index]?.amt && (
                       <p className="mt-1 text-xs text-red-600">{chargeErrors[index].amt}</p>
                     )}
@@ -4752,14 +4868,19 @@ const errBox = (has) =>
                 {/* Line Haul */}
                 <div>
                   <input
-                    type="text"
-                    value={customer.lineHaul}
-                    onKeyDown={blockMoneyChars}
-                    onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
-                    className={errCls(!!errors.customers?.[customerIndex]?.lineHaul)}
-                    placeholder="Line Haul *"
-                    inputMode="decimal"
-                  />
+  type="text"
+  value={String(customer.lineHaul ?? '')}
+  onKeyDown={blockMoneyChars}
+  onChange={(e) =>
+    handleCustomerChange(customerIndex, 'lineHaul', e.target.value)
+  }
+  onBlur={(e) =>
+    handleCustomerChange(customerIndex, 'lineHaul', ensureMoney2dp(e.target.value))
+  }
+  className={errCls(!!errors.customers?.[customerIndex]?.lineHaul)}
+  placeholder="Line Haul *"
+  inputMode="decimal"
+/>
                   {errors.customers?.[customerIndex]?.lineHaul && (
                     <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].lineHaul}</p>
                   )}
@@ -4768,14 +4889,19 @@ const errBox = (has) =>
                 {/* FSC */}
                 <div>
                   <input
-                    type="text"
-                    value={customer.fsc}
-                    onKeyDown={blockMoneyChars}
-                    onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
-                    className={errCls(!!errors.customers?.[customerIndex]?.fsc)}
-                    placeholder="FSC *"
-                    inputMode="decimal"
-                  />
+  type="text"
+  value={String(customer.fsc ?? '')}
+  onKeyDown={blockMoneyChars}
+  onChange={(e) =>
+    handleCustomerChange(customerIndex, 'fsc', e.target.value)
+  }
+  onBlur={(e) =>
+    handleCustomerChange(customerIndex, 'fsc', ensureMoney2dp(e.target.value))
+  }
+  className={errCls(!!errors.customers?.[customerIndex]?.fsc)}
+  placeholder="FSC *"
+  inputMode="decimal"
+/>
                   {errors.customers?.[customerIndex]?.fsc && (
                     <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].fsc}</p>
                   )}
@@ -4784,14 +4910,19 @@ const errBox = (has) =>
                 {/* Other */}
                 <div>
                   <input
-                    type="text"
-                    value={customer.other}
-                    onKeyDown={blockMoneyChars}
-                    onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
-                    className={errCls(!!errors.customers?.[customerIndex]?.other)}
-                    placeholder="Other *"
-                    inputMode="decimal"
-                  />
+  type="text"
+  value={String(customer.other ?? '')}
+  onKeyDown={blockMoneyChars}
+  onChange={(e) =>
+    handleCustomerChange(customerIndex, 'other', e.target.value)
+  }
+  onBlur={(e) =>
+    handleCustomerChange(customerIndex, 'other', ensureMoney2dp(e.target.value))
+  }
+  className={errCls(!!errors.customers?.[customerIndex]?.other)}
+  placeholder="Other *"
+  inputMode="decimal"
+/>
                   {errors.customers?.[customerIndex]?.other && (
                     <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].other}</p>
                   )}
@@ -4998,12 +5129,12 @@ const errBox = (has) =>
                   {/* Zip */}
                   <div>
                     <input
-                      type="text"
-                      value={location.zipCode}
-                      onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
-                      className={errCls(!!errors.pickups?.[locationIndex]?.zipCode)}
-                      placeholder="Zip Code *"
-                    />
+  type="text"
+  value={location.zipCode}
+  onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
+  className={errCls(!!errors.pickups?.[locationIndex]?.zipCode)}
+  placeholder="Zip Code *"
+/>
                     {errors.pickups?.[locationIndex]?.zipCode && (
                       <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].zipCode}</p>
                     )}
@@ -5012,14 +5143,14 @@ const errBox = (has) =>
                   {/* Weight */}
                   <div>
                     <input
-                      type="text"
-                      value={location.weight}
-                      onKeyDown={blockIntChars}
-                      onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
-                      className={errCls(!!errors.pickups?.[locationIndex]?.weight)}
-                      placeholder="Weight (lbs) *"
-                      inputMode="numeric"
-                    />
+  type="text"
+  value={location.weight}
+  onKeyDown={blockIntChars}   // -, +, e, E, . ko block karta hai
+  onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
+  className={errCls(!!errors.pickups?.[locationIndex]?.weight)}
+  placeholder="Weight (lbs) *"
+  inputMode="numeric"
+/>
                     {errors.pickups?.[locationIndex]?.weight && (
                       <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].weight}</p>
                     )}
@@ -5137,12 +5268,12 @@ const errBox = (has) =>
                   {/* Zip */}
                   <div>
                     <input
-                      type="text"
-                      value={location.zipCode}
-                      onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
-                      className={errCls(!!errors.drops?.[locationIndex]?.zipCode)}
-                      placeholder="Zip Code *"
-                    />
+  type="text"
+  value={location.zipCode}
+  onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
+  className={errCls(!!errors.drops?.[locationIndex]?.zipCode)}
+  placeholder="Zip Code *"
+/>
                     {errors.drops?.[locationIndex]?.zipCode && (
                       <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].zipCode}</p>
                     )}
@@ -5151,14 +5282,14 @@ const errBox = (has) =>
                   {/* Weight */}
                   <div>
                     <input
-                      type="text"
-                      value={location.weight}
-                      onKeyDown={blockIntChars}
-                      onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
-                      className={errCls(!!errors.drops?.[locationIndex]?.weight)}
-                      placeholder="Weight (lbs) *"
-                      inputMode="numeric"
-                    />
+  type="text"
+  value={location.weight}
+  onKeyDown={blockIntChars}
+  onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
+  className={errCls(!!errors.drops?.[locationIndex]?.weight)}
+  placeholder="Weight (lbs) *"
+  inputMode="numeric"
+/>
                     {errors.drops?.[locationIndex]?.weight && (
                       <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].weight}</p>
                     )}

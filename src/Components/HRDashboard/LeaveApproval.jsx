@@ -676,7 +676,7 @@ const LeaveApproval = () => {
 
                     <td className="py-4 px-6">
                       <p className="text-sm text-gray-600">
-                        {createdFinal ? createdFinal.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—'}
+                        {formatDateDisplay(createdFinal)}
                       </p>
                     </td>
 

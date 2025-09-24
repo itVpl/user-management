@@ -643,7 +643,7 @@ const Dashboard = () => {
               subtitle="This Month"
             />
             <StatCard
-              title="Today's DO"
+              title="Total DO"
               value={doData.todayStats.totalAdded}
               icon={Target}
               color="bg-gradient-to-r from-emerald-500 to-emerald-600"
@@ -659,7 +659,7 @@ const Dashboard = () => {
               subtitle="Today"
             />
             <StatCard
-              title="Approved DO"
+              title="Today’s DO"
               value={doData.todayStats.approved}
               icon={Award}
               color="bg-gradient-to-r from-purple-500 to-purple-600"
