@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   Target,
@@ -11,6 +11,7 @@ import {
   Clock,
 } from "lucide-react";
 import API_CONFIG from '../../config/api.js';
+
 /* ============ AXIOS INSTANCE (JWT attach) ============ */
 const api = axios.create({
   baseURL: `${API_CONFIG.BASE_URL}`,
@@ -56,12 +57,36 @@ const normalizeDept = (d) => {
   const v = (d || "").toString().trim().toLowerCase();
   if (v === "sales") return "Sales";
   if (v === "cmt") return "CMT";
-  return null; // only allow Sales/CMT; others => no report
+  return null; // HR/Admin => consolidated
 };
 
 const toDateInputValue = (d = new Date()) => {
   const dt = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return dt.toISOString().slice(0, 10); // YYYY-MM-DD
+};
+
+const formatDDMMYYYY = (dStr) => {
+  if (!dStr) return "—";
+  const dt = new Date(dStr);
+  if (isNaN(dt)) return "—";
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const yyyy = dt.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
+// Treat these as placeholders -> don't prefill / don't show in summary
+const isPlaceholderReason = (val) => {
+  const s = String(val || "").trim().toLowerCase();
+  return (
+    s === "" ||
+    s === "reason not provided yet" ||
+    s === "not provided" ||
+    s === "n/a" ||
+    s === "na" ||
+    s === "-" ||
+    s === "none"
+  );
 };
 
 const prettyName = (key) => {
@@ -89,7 +114,7 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-/* ============ SKELETON ============ */
+/* ============ SKELETON & CARD ============ */
 const SkeletonCard = () => (
   <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 p-5">
     <div className="w-12 h-12 rounded-full bg-gray-100 animate-pulse mb-3" />
@@ -98,11 +123,8 @@ const SkeletonCard = () => (
   </div>
 );
 
-/* ============ CARD WRAPPER ============ */
 const Card = ({ children, className = "" }) => (
-  <div
-    className={`bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow ${className}`}
-  >
+  <div className={`bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow ${className}`}>
     {children}
   </div>
 );
@@ -112,52 +134,52 @@ const DailyTarget = () => {
   const { empId, department: deptFromUser } = getUserInfo();
 
   const [date, setDate] = useState(toDateInputValue());
-  const department = useMemo(() => normalizeDept(deptFromUser), [deptFromUser]); // LOCKED to user's dept
+  const department = useMemo(() => normalizeDept(deptFromUser), [deptFromUser]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [serverMsg, setServerMsg] = useState(null);
   const [report, setReport] = useState(null);
-   // Reason modal state
+
+  // Reason modal state
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [reasonText, setReasonText] = useState("");
   const [reasonLoading, setReasonLoading] = useState(false);
   const [reasonError, setReasonError] = useState(null);
-  // ===== Dept-wide data for HR/Admin =====
-const [deptAllLoading, setDeptAllLoading] = useState(false);
-const [deptAllError, setDeptAllError] = useState(null);
-const [salesDept, setSalesDept] = useState(null); // full object => { date, summary, employees[] }
-const [cmtDept, setCmtDept] = useState(null);
 
-// Fetch BOTH dept reports for selected date (NO empId)
-useEffect(() => {
-  if (department) return; // ye block sirf HR/Admin ke liye
+  // Clickable date
+  const dateInputRef = useRef(null);
 
-  const run = async () => {
-    setDeptAllLoading(true);
-    setDeptAllError(null);
-    try {
-      const [salesRes, cmtRes] = await Promise.all([
-        api.get("/api/v1/inhouseUser/sales/report", { params: { date } }),
-        api.get("/api/v1/inhouseUser/cmt/report",   { params: { date } }),
-      ]);
+  // HR/Admin consolidated
+  const [deptAllLoading, setDeptAllLoading] = useState(false);
+  const [deptAllError, setDeptAllError] = useState(null);
+  const [salesDept, setSalesDept] = useState(null);
+  const [cmtDept, setCmtDept] = useState(null);
 
-      // Exact shape (as you sent):
-      // res.data = { success, message, data: { date, summary, employees: [...] } }
-      setSalesDept(salesRes?.data?.data || null);
-      setCmtDept(cmtRes?.data?.data || null);
-    } catch (e) {
-      const msg = e?.response?.data?.message || e?.response?.data?.error || e.message || "Failed to load department reports";
-      setDeptAllError(msg);
-      setSalesDept(null);
-      setCmtDept(null);
-    } finally {
-      setDeptAllLoading(false);
-    }
-  };
-  run();
-}, [date, department]);
-
+  // HR/Admin: fetch both departments
+  useEffect(() => {
+    if (department) return;
+    const run = async () => {
+      setDeptAllLoading(true);
+      setDeptAllError(null);
+      try {
+        const [salesRes, cmtRes] = await Promise.all([
+          api.get("/api/v1/inhouseUser/sales/report", { params: { date } }),
+          api.get("/api/v1/inhouseUser/cmt/report",   { params: { date } }),
+        ]);
+        setSalesDept(salesRes?.data?.data || null);
+        setCmtDept(cmtRes?.data?.data || null);
+      } catch (e) {
+        const msg = e?.response?.data?.message || e?.response?.data?.error || e.message || "Failed to load department reports";
+        setDeptAllError(msg);
+        setSalesDept(null);
+        setCmtDept(null);
+      } finally {
+        setDeptAllLoading(false);
+      }
+    };
+    run();
+  }, [date, department]);
 
   const endpoint = useMemo(() => {
     if (department === "Sales") return "/api/v1/inhouseUser/sales/report";
@@ -166,54 +188,55 @@ useEffect(() => {
   }, [department]);
 
   const canRequest = endpoint && empId && date;
+
   const SummaryCard = ({ title, value, sub }) => (
-  <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 p-4">
-    <p className="text-xs uppercase tracking-wide text-gray-500">{title}</p>
-    <p className="text-xl font-bold text-gray-800 mt-1">{value}</p>
-    {sub ? <p className="text-xs text-gray-500 mt-0.5">{sub}</p> : null}
-  </div>
-);
+    <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 p-4">
+      <p className="text-xs uppercase tracking-wide text-gray-500">{title}</p>
+      <p className="text-xl font-bold text-gray-800 mt-1">{value}</p>
+      {sub ? <p className="text-xs text-gray-500 mt-0.5">{sub}</p> : null}
+    </div>
+  );
 
-const EmployeesTable = ({ rows, type }) => (
-  <div className="overflow-auto rounded-xl border border-gray-100">
-    <table className="min-w-[880px] w-full text-sm">
-      <thead className="bg-gray-50 text-gray-700">
-        <tr>
-          <th className="text-left px-4 py-3 font-semibold">Emp ID</th>
-          <th className="text-left px-4 py-3 font-semibold">Name</th>
-          <th className="text-left px-4 py-3 font-semibold">Designation</th>
-          <th className="text-left px-4 py-3 font-semibold">Talk Time</th>
-          {type === "sales" ? (
-            <th className="text-left px-4 py-3 font-semibold">Delivery Orders</th>
-          ) : (
-            <th className="text-left px-4 py-3 font-semibold">Truckers Added</th>
-          )}
-          <th className="text-left px-4 py-3 font-semibold">Status</th>
-          <th className="text-left px-4 py-3 font-semibold">Reason</th>
-        </tr>
-      </thead>
-      <tbody>
-        {(rows || []).map((r, i) => (
-          <tr key={i} className="odd:bg-white even:bg-gray-50">
-            <td className="px-4 py-3">{r.empId}</td>
-            <td className="px-4 py-3">{r.employeeName}</td>
-            <td className="px-4 py-3">{r.designation || "-"}</td>
-            <td className="px-4 py-3">{r?.talkTime?.formatted || "-"}</td>
+  const EmployeesTable = ({ rows, type }) => (
+    <div className="overflow-auto rounded-xl border border-gray-100">
+      <table className="min-w-[880px] w-full text-sm">
+        <thead className="bg-gray-50 text-gray-700">
+          <tr>
+            <th className="text-left px-4 py-3 font-semibold">Emp ID</th>
+            <th className="text-left px-4 py-3 font-semibold">Name</th>
+            <th className="text-left px-4 py-3 font-semibold">Designation</th>
+            <th className="text-left px-4 py-3 font-semibold">Talk Time</th>
             {type === "sales" ? (
-              <td className="px-4 py-3">{r?.deliveryOrdersCount ?? 0}</td>
+              <th className="text-left px-4 py-3 font-semibold">Delivery Orders</th>
             ) : (
-              <td className="px-4 py-3">{r?.truckerCount ?? 0}</td>
+              <th className="text-left px-4 py-3 font-semibold">Truckers Added</th>
             )}
-            <td className="px-4 py-3"><StatusBadge status={r?.status || "-"} /></td>
-            <td className="px-4 py-3 text-gray-700">{r?.reason || ""}</td>
+            <th className="text-left px-4 py-3 font-semibold">Status</th>
+            <th className="text-left px-4 py-3 font-semibold">Reason</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+        </thead>
+        <tbody>
+          {(rows || []).map((r, i) => (
+            <tr key={i} className="odd:bg-white even:bg-gray-50">
+              <td className="px-4 py-3">{r.empId}</td>
+              <td className="px-4 py-3">{r.employeeName}</td>
+              <td className="px-4 py-3">{r.designation || "-"}</td>
+              <td className="px-4 py-3">{r?.talkTime?.formatted || "-"}</td>
+              {type === "sales" ? (
+                <td className="px-4 py-3">{r?.deliveryOrdersCount ?? 0}</td>
+              ) : (
+                <td className="px-4 py-3">{r?.truckerCount ?? 0}</td>
+              )}
+              <td className="px-4 py-3"><StatusBadge status={r?.status || "-"} /></td>
+              <td className="px-4 py-3 text-gray-700">{r?.reason || ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
-
+  // fetch self report
   useEffect(() => {
     const fetchReport = async () => {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -253,23 +276,48 @@ const EmployeesTable = ({ rows, type }) => (
     fetchReport();
   }, [endpoint, empId, date, canRequest, department]);
 
-   const handleSubmitReason = async () => {
+  /* ===== Save Reason with 404 fallback & validation ===== */
+  const REASON_ENDPOINTS = useMemo(() => ([
+    "/api/v1/inhouseUser/target/reason",
+    "/api/v1/inhouseUser/sales/target/reason",
+    "/api/v1/inhouseUser/cmt/target/reason",
+    "/api/v1/inhouseUser/daily-target/reason",
+  ]), []);
+
+  const handleSubmitReason = async () => {
+    if (!reasonText.trim()) {
+      setReasonError("Please enter the reason.");
+      return;
+    }
     try {
-      setReasonError(null);
-      if (!reasonText.trim()) {
-        setReasonError("Reason is required.");
-        return;
-      }
       setReasonLoading(true);
+      setReasonError(null);
 
-      // POST reason
-      await api.post("/api/v1/inhouseUser/target/reason", {
-        empId,
-        date,
-        reason: reasonText.trim(),
-      });
+      const payload = { empId, date, reason: reasonText.trim() };
+      let success = false;
+      let lastErr = null;
 
-      // Optimistically reflect in UI
+      for (const ep of REASON_ENDPOINTS) {
+        try {
+          const res = await api.post(ep, payload);
+          if (res?.data?.success !== false) {
+            success = true;
+            break;
+          }
+        } catch (e) {
+          lastErr = e;
+          const status = e?.response?.status;
+          if (status !== 404) break; // only keep trying on 404
+        }
+      }
+
+      if (!success) {
+        const data = lastErr?.response?.data;
+        const msg = data?.message || data?.error || lastErr?.message || "Failed to submit reason";
+        throw new Error(msg);
+      }
+
+      // optimistic UI
       setReport((prev) =>
         prev ? { ...prev, reason: reasonText.trim(), statusMessage: prev.statusMessage || "" } : prev
       );
@@ -277,15 +325,13 @@ const EmployeesTable = ({ rows, type }) => (
       setIsReasonOpen(false);
       setReasonText("");
     } catch (e) {
-      const data = e?.response?.data;
-      const msg = data?.message || data?.error || e?.message || "Failed to submit reason";
-      setReasonError(msg);
+      setReasonError(e.message || "Failed to submit reason");
     } finally {
       setReasonLoading(false);
     }
   };
 
-  // No empId stored
+  // ===== Early returns =====
   if (!empId) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6">
@@ -303,111 +349,117 @@ const EmployeesTable = ({ rows, type }) => (
     );
   }
 
-  // Dept not allowed (e.g., HR/Admin) — Show consolidated Sales + CMT with summary + employees
-if (!department) {
-  const salesSummary = salesDept?.summary;
-  const cmtSummary = cmtDept?.summary;
+  // HR/Admin view
+  if (!department) {
+    const salesSummary = salesDept?.summary;
+    const cmtSummary = cmtDept?.summary;
 
-  return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
-            <Target className="w-6 h-6 text-white" />
+    return (
+      <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
+        {/* Header */}
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
+              <Target className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">Department Reports</h1>
+              <p className="text-gray-600">Sales &amp; CMT — {formatDDMMYYYY(date)}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Department Reports</h1>
-            <p className="text-gray-600">Sales & CMT — {date}</p>
+
+          {/* Full clickable date field */}
+          <div
+            className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 cursor-pointer flex items-center"
+            onClick={() => dateInputRef.current?.showPicker?.() ?? dateInputRef.current?.focus()}
+            role="button"
+            aria-label="Change date"
+          >
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={date}
+              max={toDateInputValue(new Date())}
+              onChange={(e) => setDate(e.target.value)}
+              className="bg-transparent outline-none cursor-pointer"
+              aria-label="Date"
+            />
           </div>
         </div>
 
-        <input
-          type="date"
-          value={date}
-          max={toDateInputValue(new Date())}
-          onChange={(e) => setDate(e.target.value)}
-          className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700"
-        />
+        {/* Loading / Error */}
+        {deptAllLoading && (
+          <div className="min-h-[120px] flex items-center justify-center">
+            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+          </div>
+        )}
+        {!deptAllLoading && deptAllError && (
+          <Card className="p-8 text-center max-w-xl mx-auto border-red-200">
+            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4 ring-1 ring-red-100">
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Couldn’t load reports</h3>
+            <p className="text-red-600">{deptAllError}</p>
+          </Card>
+        )}
+
+        {/* SALES & CMT */}
+        {!deptAllLoading && !deptAllError && (
+          <div className="space-y-8">
+            {/* Sales */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Sales — All Users</h3>
+                <span className="text-sm text-gray-600">
+                  Total: <b>{salesDept?.employees?.length || 0}</b>
+                </span>
+              </div>
+
+              {salesSummary ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                  <SummaryCard title="Dept Status" value={salesSummary.departmentStatus} />
+                  <SummaryCard title="Employees" value={`${salesSummary.totalEmployees}`} sub={`Completed ${salesSummary.completedEmployees} / Incomplete ${salesSummary.incompleteEmployees}`} />
+                  <SummaryCard title="Total Talk Time" value={salesSummary.totalTalkTime?.formatted} sub={`Avg ${salesSummary.avgTalkTime?.formatted}`} />
+                  <SummaryCard title="Delivery Orders" value={`${salesSummary.totalDeliveryOrders}`} sub={`Req ${salesSummary.targets?.deliveryOrders?.required}/user`} />
+                </div>
+              ) : null}
+
+              {salesDept?.employees?.length ? (
+                <EmployeesTable rows={salesDept.employees} type="sales" />
+              ) : (
+                <div className="text-sm text-gray-600">No Sales data for this date.</div>
+              )}
+            </Card>
+
+            {/* CMT */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">CMT — All Users</h3>
+                <span className="text-sm text-gray-600">
+                  Total: <b>{cmtDept?.employees?.length || 0}</b>
+                </span>
+              </div>
+
+              {cmtSummary ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                  <SummaryCard title="Dept Status" value={cmtSummary.departmentStatus} />
+                  <SummaryCard title="Employees" value={`${cmtSummary.totalEmployees}`} sub={`Completed ${cmtSummary.completedEmployees} / Incomplete ${cmtSummary.incompleteEmployees}`} />
+                  <SummaryCard title="Total Talk Time" value={cmtSummary.totalTalkTime?.formatted} sub={`Avg ${cmtSummary.avgTalkTime?.formatted}`} />
+                  <SummaryCard title="Truckers Added" value={`${cmtSummary.totalTruckerCount}`} sub={`Req ${cmtSummary.targets?.truckers?.required}/user`} />
+                </div>
+              ) : null}
+
+              {cmtDept?.employees?.length ? (
+                <EmployeesTable rows={cmtDept.employees} type="cmt" />
+              ) : (
+                <div className="text-sm text-gray-600">No CMT data for this date.</div>
+              )}
+            </Card>
+          </div>
+        )}
       </div>
-
-      {/* Loading / Error */}
-      {deptAllLoading && (
-        <div className="min-h-[120px] flex items-center justify-center">
-          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-        </div>
-      )}
-      {!deptAllLoading && deptAllError && (
-        <Card className="p-8 text-center max-w-xl mx-auto border-red-200">
-          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4 ring-1 ring-red-100">
-            <XCircle className="w-8 h-8 text-red-600" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">Couldn’t load reports</h3>
-          <p className="text-red-600">{deptAllError}</p>
-        </Card>
-      )}
-
-      {/* SALES */}
-      {!deptAllLoading && !deptAllError && (
-        <div className="space-y-8">
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Sales — All Users</h3>
-              <span className="text-sm text-gray-600">
-                Total: <b>{salesDept?.employees?.length || 0}</b>
-              </span>
-            </div>
-
-            {/* Sales Summary */}
-            {salesSummary ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-                <SummaryCard title="Dept Status" value={salesSummary.departmentStatus} />
-                <SummaryCard title="Employees" value={`${salesSummary.totalEmployees}`} sub={`Completed ${salesSummary.completedEmployees} / Incomplete ${salesSummary.incompleteEmployees}`} />
-                <SummaryCard title="Total Talk Time" value={salesSummary.totalTalkTime?.formatted} sub={`Avg ${salesSummary.avgTalkTime?.formatted}`} />
-                <SummaryCard title="Delivery Orders" value={`${salesSummary.totalDeliveryOrders}`} sub={`Req ${salesSummary.targets?.deliveryOrders?.required}/user`} />
-              </div>
-            ) : null}
-
-            {/* Sales Employees */}
-            {salesDept?.employees?.length ? (
-              <EmployeesTable rows={salesDept.employees} type="sales" />
-            ) : (
-              <div className="text-sm text-gray-600">No Sales data for this date.</div>
-            )}
-          </Card>
-
-          {/* CMT */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">CMT — All Users</h3>
-              <span className="text-sm text-gray-600">
-                Total: <b>{cmtDept?.employees?.length || 0}</b>
-              </span>
-            </div>
-
-            {/* CMT Summary */}
-            {cmtSummary ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-                <SummaryCard title="Dept Status" value={cmtSummary.departmentStatus} />
-                <SummaryCard title="Employees" value={`${cmtSummary.totalEmployees}`} sub={`Completed ${cmtSummary.completedEmployees} / Incomplete ${cmtSummary.incompleteEmployees}`} />
-                <SummaryCard title="Total Talk Time" value={cmtSummary.totalTalkTime?.formatted} sub={`Avg ${cmtSummary.avgTalkTime?.formatted}`} />
-                <SummaryCard title="Truckers Added" value={`${cmtSummary.totalTruckerCount}`} sub={`Req ${cmtSummary.targets?.truckers?.required}/user`} />
-              </div>
-            ) : null}
-
-            {/* CMT Employees */}
-            {cmtDept?.employees?.length ? (
-              <EmployeesTable rows={cmtDept.employees} type="cmt" />
-            ) : (
-              <div className="text-sm text-gray-600">No CMT data for this date.</div>
-            )}
-          </Card>
-        </div>
-      )}
-    </div>
-  );
-}
-
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
@@ -419,16 +471,25 @@ if (!department) {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Daily Targets</h1>
-            <p className="text-gray-600">{department} department report </p>
+            <p className="text-gray-600">{department} department report</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* Full clickable date field */}
+        <div
+          className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 cursor-pointer flex items-center"
+          onClick={() => dateInputRef.current?.showPicker?.() ?? dateInputRef.current?.focus()}
+          role="button"
+          aria-label="Change date"
+        >
           <input
+            ref={dateInputRef}
             type="date"
             value={date}
             max={toDateInputValue(new Date())}
             onChange={(e) => setDate(e.target.value)}
-            className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700"
+            className="bg-transparent outline-none cursor-pointer"
+            aria-label="Date"
           />
         </div>
       </div>
@@ -501,7 +562,7 @@ if (!department) {
         </>
       )}
 
-      {/* Loading inline (fallback spinner) */}
+      {/* Loading inline */}
       {loading && (
         <div className="min-h-[100px] flex items-center justify-center mb-8">
           <div className="text-center">
@@ -534,7 +595,7 @@ if (!department) {
       )}
 
       {/* Summary + Targets */}
-       {!loading && !error && report && (
+      {!loading && !error && report && (
         <div className="space-y-8">
           {/* Top Summary */}
           <Card className="p-6">
@@ -543,7 +604,7 @@ if (!department) {
                 <h2 className="text-lg font-semibold text-gray-900">
                   {report.department} Report — {report.employeeName} ({report.empId})
                 </h2>
-                <p className="text-sm text-gray-600">Date: {report.date}</p>
+                <p className="text-sm text-gray-600">Date: {formatDDMMYYYY(report.date || date)}</p>
               </div>
 
               {/* Right side: status + updated + Reason button */}
@@ -559,7 +620,8 @@ if (!department) {
                   type="button"
                   onClick={() => {
                     setReasonError(null);
-                    setReasonText(report?.reason ? String(report.reason) : "");
+                    const prefill = report?.reason;
+                    setReasonText(isPlaceholderReason(prefill) ? "" : String(prefill || ""));
                     setIsReasonOpen(true);
                   }}
                   className="inline-flex items-center gap-1.5 text-sm font-medium bg-blue-600 text-white px-3 py-2 rounded-lg shadow hover:bg-blue-700 active:scale-[0.99] transition"
@@ -575,9 +637,9 @@ if (!department) {
                 {report.statusMessage}
               </div>
             )}
-            {report.reason && (
+            {report.reason && !isPlaceholderReason(report.reason) && (
               <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                <strong>Reason:</strong> {report.reason || "Not provided"}
+                <strong>Reason:</strong> {report.reason}
               </div>
             )}
           </Card>
@@ -636,12 +698,12 @@ if (!department) {
       {!loading && !error && !report && (
         <Card className="p-8 text-center">
           <p className="text-gray-600">
-            No data available for <b>{department}</b> on <b>{date}</b>.
+            No data available for <b>{department}</b> on <b>{formatDDMMYYYY(date)}</b>.
           </p>
         </Card>
       )}
 
-       {/* Reason Modal */}
+      {/* Reason Modal */}
       {isReasonOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -654,7 +716,7 @@ if (!department) {
               <div>
                 <h4 className="text-lg font-semibold text-gray-900">Add / Update Reason</h4>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  This will be saved for <b>{empId}</b> on <b>{date}</b>.
+                  This will be saved for <b>{empId}</b> on <b>{formatDDMMYYYY(date)}</b>.
                 </p>
               </div>
               <button
@@ -668,15 +730,16 @@ if (!department) {
 
             <div className="mt-4 space-y-2">
               <label className="text-sm font-medium text-gray-700" htmlFor="reasonText">
-                Reason
+                Reason <span className="text-red-600">*</span>
               </label>
               <textarea
                 id="reasonText"
                 rows={4}
                 value={reasonText}
                 onChange={(e) => setReasonText(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                placeholder="e.g. System was down for 2 hours in the morning, couldn't make calls during that time"
+                className={`w-full rounded-xl border ${reasonError ? "border-red-300" : "border-gray-200"} bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:outline-none focus:ring-2 ${reasonError ? "focus:ring-red-500/30 focus:border-red-400" : "focus:ring-blue-500/30 focus:border-blue-400"}`}
+                placeholder=""   /* no default sample text */
+                aria-invalid={!!reasonError}
                 disabled={reasonLoading}
               />
               {reasonError && <p className="text-xs text-red-600">{reasonError}</p>}

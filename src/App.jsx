@@ -59,6 +59,7 @@ import TruckerReport from "./Components/CMT/TruckerReport.jsx";
 import TaskScheduling from "./Components/TaskScheduling/TaskScheduling.jsx";
 
 
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -79,6 +80,7 @@ function App() {
   return (
     <Routes>
       {/* Public Routes */}
+      
       <Route
         path="/"
         element={<Login setIsAuthenticated={setIsAuthenticated} />}
