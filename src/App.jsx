@@ -56,6 +56,7 @@ import DailyRateRequest from "./Components/CMT-Manager/DailyRateRequest.jsx";
 import OfficeInventory from "./Components/HRDashboard/OfficeInventory.jsx";
 import DinnerStatus from "./Pages/DinnerStatus.jsx";
 import TruckerReport from "./Components/CMT/TruckerReport.jsx";
+import TaskScheduling from "./Components/TaskScheduling/TaskScheduling.jsx";
 
 
 function App() {
@@ -140,6 +141,7 @@ function App() {
         <Route path="/OfficeInventory" element={<OfficeInventory/>}/>
         <Route path="/dinner-status" element={<DinnerStatus/>}/>
         <Route path="/TruckerReport" element={<TruckerReport/>}/>
+        <Route path="/TaskScheduling" element={<TaskScheduling/>}/>
         
       </Route>
 {/* 

@@ -313,6 +313,9 @@ export default function DeliveryOrder() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
   const [orderToDelete, setOrderToDelete] = useState(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [orderToAssign, setOrderToAssign] = useState(null);
+  const [assigningOrder, setAssigningOrder] = useState(false);
   const logoSrc = Logo;
   // top-level states ke saath
   const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
@@ -524,6 +527,7 @@ export default function DeliveryOrder() {
             description: `Load: ${loadNo}`,
             priority: 'normal',
             status: order.status || 'open',
+            assignmentStatus: order.assignmentStatus || 'unassigned',
             createdAt: new Date(order.date).toISOString().split('T')[0],
             createdBy: `Employee ${order.empId || 'N/A'}`,
             docUpload: 'sample-doc.jpg',
@@ -1794,6 +1798,75 @@ export default function DeliveryOrder() {
       remarks: '',
       docs: null
     });
+  };
+
+  const handleAssignOrder = (order) => {
+    if (order.assignmentStatus === 'assigned') {
+      alertify.warning('This order is already assigned to CMT team.');
+      return;
+    }
+    setOrderToAssign(order);
+    setShowAssignModal(true);
+  };
+
+  const handleConfirmAssign = async () => {
+    try {
+      setAssigningOrder(true);
+      console.log('Confirming assignment for order:', orderToAssign);
+      
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      if (!token) {
+        alertify.error('Authentication token not found. Please login again.');
+        return;
+      }
+
+      const originalId = orderToAssign.originalId || orderToAssign.id.replace('DO-', '');
+      
+      const response = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/do/do/auto-assign-to-cmt`,
+        {
+          doId: originalId
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data && response.data.success) {
+        alertify.success(`Order ${orderToAssign.id} assigned to CMT team successfully!`);
+        
+        // Update the order status in the local state
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderToAssign.id 
+              ? { ...order, assignmentStatus: 'assigned' }
+              : order
+          )
+        );
+        
+        setShowAssignModal(false);
+        setOrderToAssign(null);
+      } else {
+        alertify.error('Failed to assign order. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error assigning order:', error);
+      if (error.response?.data?.message) {
+        alertify.error(`Failed to assign order: ${error.response.data.message}`);
+      } else {
+        alertify.error('Failed to assign order. Please try again.');
+      }
+    } finally {
+      setAssigningOrder(false);
+    }
+  };
+
+  const handleCancelAssign = () => {
+    setShowAssignModal(false);
+    setOrderToAssign(null);
   };
 
 
@@ -3136,6 +3209,17 @@ export default function DeliveryOrder() {
                           className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                         >
                           Edit
+                        </button>
+                        <button
+                          onClick={() => handleAssignOrder(order)}
+                          disabled={order.assignmentStatus === 'assigned'}
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                            order.assignmentStatus === 'assigned'
+                              ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                              : 'bg-purple-500 hover:bg-purple-600 text-white'
+                          }`}
+                        >
+                          {order.assignmentStatus === 'assigned' ? 'Assigned' : 'Assign'}
                         </button>
                         <button
                           onClick={() => handleDuplicateOrder(order)}
@@ -5225,6 +5309,87 @@ export default function DeliveryOrder() {
                     </div>
                   ) : (
                     'Delete Order'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Order Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-2xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Assign Order</h2>
+                    <p className="text-purple-100 text-sm">Assign this delivery order to CMT team</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCancelAssign}
+                  className="text-white/80 hover:text-white text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  Are you sure you want to assign this DO to CMT team?
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  Order ID: <span className="font-semibold text-purple-600">{orderToAssign?.id}</span>
+                </p>
+                <p className="text-gray-500 text-xs mt-2">
+                  This action will assign the delivery order to the CMT team for processing.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={handleCancelAssign}
+                  disabled={assigningOrder}
+                  className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAssign}
+                  disabled={assigningOrder}
+                  className={`px-6 py-2 rounded-lg transition-all duration-200 font-semibold ${
+                    assigningOrder
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
+                  }`}
+                >
+                  {assigningOrder ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Assigning...
+                    </div>
+                  ) : (
+                    'Assign'
                   )}
                 </button>
               </div>

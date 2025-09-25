@@ -59,6 +59,9 @@ const RateRequest = () => {
   const [approvalModal, setApprovalModal] = useState({ visible: false, type: null, approval: null });
   const [approvalReason, setApprovalReason] = useState('');
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const [autoAcceptTimer, setAutoAcceptTimer] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(30);
+  const [loadTimers, setLoadTimers] = useState({});
 
   // timers
   const [timerStartMap, setTimerStartMap] = useState(() => readLS(LS_START_KEY));
@@ -283,6 +286,36 @@ const RateRequest = () => {
     fetchTruckers();
   }, []);
 
+  // Start auto-accept timer for new pending requests
+  useEffect(() => {
+    const timers = {};
+    
+    pendingRequests.forEach(request => {
+      if (request.status === 'pending' && !loadTimers[request._id]) {
+        // Initialize timer for this request
+        setLoadTimers(prev => ({ ...prev, [request._id]: 30 }));
+        
+        // Create interval for countdown
+        timers[request._id] = setInterval(() => {
+          setLoadTimers(prev => {
+            const newTime = (prev[request._id] || 30) - 1;
+            if (newTime <= 0) {
+              // Auto-accept the load
+              handleAutoAcceptFromTable(request);
+              return { ...prev, [request._id]: 0 };
+            }
+            return { ...prev, [request._id]: newTime };
+          });
+        }, 1000);
+      }
+    });
+    
+    // Cleanup function
+    return () => {
+      Object.values(timers).forEach(timer => clearInterval(timer));
+    };
+  }, [pendingRequests]);
+
   // 1s ticker
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -323,17 +356,197 @@ const RateRequest = () => {
   const openApprovalModal = (approval, type) => {
     setApprovalModal({ visible: true, type, approval });
     setApprovalReason('');
+    setTimeRemaining(30);
+    
+    // Start auto-accept timer
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          // Auto-accept after 30 seconds
+          handleAutoAccept(approval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    setAutoAcceptTimer(timer);
   };
+  
   const closeApprovalModal = () => {
     setApprovalModal({ visible: false, type: null, approval: null });
     setApprovalReason('');
+    setTimeRemaining(30);
+    
+    // Clear auto-accept timer
+    if (autoAcceptTimer) {
+      clearInterval(autoAcceptTimer);
+      setAutoAcceptTimer(null);
+    }
+  };
+  
+  const handleAutoAccept = async (approval) => {
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
+      
+      if (!token || !empId) {
+        toast.error('Missing token or empId. Please log in again.');
+        return;
+      }
+
+      const payload = {
+        approvalId: approval._id,
+        action: 'accept',
+        reason: 'Auto-accepted after 30 seconds'
+      };
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      );
+
+      if (response.data.success) {
+        toast.success('Load auto-accepted successfully!');
+        
+        // Start the 90-min timer on ACCEPT
+        const acceptedLoadId = approval?.loadId;
+        if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
+
+        // optimistic UI
+        setPendingRequests((prev) =>
+          prev.map((r) =>
+            r._id === approval._id
+              ? { ...r, status: 'approved' }
+              : r
+          )
+        );
+
+        closeApprovalModal();
+        setTimeout(() => {
+          fetchRateRequests();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Auto-accept failed:', error);
+      toast.error('Auto-accept failed. Please try again.');
+    }
+  };
+
+  const handleAutoAcceptFromTable = async (request) => {
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
+      
+      if (!token || !empId) {
+        toast.error('Missing token or empId. Please log in again.');
+        return;
+      }
+
+      const payload = {
+        approvalId: request._id,
+        action: 'accept',
+        reason: 'Auto-accepted after 30 seconds'
+      };
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      );
+
+      if (response.data.success) {
+        toast.success('Load auto-accepted successfully!');
+        
+        // Start the 90-min timer on ACCEPT
+        const acceptedLoadId = request?.loadId;
+        if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
+
+        // optimistic UI
+        setPendingRequests((prev) =>
+          prev.map((r) =>
+            r._id === request._id
+              ? { ...r, status: 'approved' }
+              : r
+          )
+        );
+
+        // Remove timer
+        setLoadTimers(prev => {
+          const newTimers = { ...prev };
+          delete newTimers[request._id];
+          return newTimers;
+        });
+
+        setTimeout(() => {
+          fetchRateRequests();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Auto-accept failed:', error);
+      toast.error('Auto-accept failed. Please try again.');
+    }
+  };
+
+  const handleManualAcceptFromTable = async (request) => {
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
+      
+      if (!token || !empId) {
+        toast.error('Missing token or empId. Please log in again.');
+        return;
+      }
+
+      const payload = {
+        approvalId: request._id,
+        action: 'accept',
+        reason: 'Manually accepted by user'
+      };
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      );
+
+      if (response.data.success) {
+        toast.success('Load accepted successfully!');
+        
+        // Start the 90-min timer on ACCEPT
+        const acceptedLoadId = request?.loadId;
+        if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
+
+        // optimistic UI
+        setPendingRequests((prev) =>
+          prev.map((r) =>
+            r._id === request._id
+              ? { ...r, status: 'approved' }
+              : r
+          )
+        );
+
+        // Remove timer
+        setLoadTimers(prev => {
+          const newTimers = { ...prev };
+          delete newTimers[request._id];
+          return newTimers;
+        });
+
+        setTimeout(() => {
+          fetchRateRequests();
+        }, 1000);
+      } else {
+        toast.error('Failed to accept load. Please try again.');
+      }
+    } catch (error) {
+      console.error('Manual accept failed:', error);
+      toast.error('Failed to accept load. Please try again.');
+    }
   };
 
   const handleApprovalSubmit = async () => {
-    if (!approvalReason.trim() && approvalModal.type === 'reject') {
-      toast.error('Please provide a reason for rejection');
-      return;
-    }
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
     if (!token || !empId) {
@@ -345,7 +558,7 @@ const RateRequest = () => {
       setApprovalSubmitting(true);
       const payload = {
         approvalId: approvalModal.approval._id,
-        action: approvalModal.type,
+        action: 'accept', // Only accept action now
         ...(approvalReason.trim() ? { reason: approvalReason } : {})
       };
 
@@ -356,19 +569,17 @@ const RateRequest = () => {
       );
 
       if (response.data.success) {
-        toast.success(`Load ${approvalModal.type === 'accept' ? 'approved' : 'rejected'} successfully!`);
+        toast.success('Load accepted successfully!');
 
         // Start the 90-min timer on ACCEPT
-        if (approvalModal.type === 'accept') {
-          const acceptedLoadId = approvalModal?.approval?.loadId; // string added in transform
-          if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
-        }
+        const acceptedLoadId = approvalModal?.approval?.loadId; // string added in transform
+        if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
 
         // optimistic UI
         setPendingRequests((prev) =>
           prev.map((r) =>
             r._id === approvalModal.approval._id
-              ? { ...r, status: approvalModal.type === 'accept' ? 'approved' : 'rejected' }
+              ? { ...r, status: 'approved' }
               : r
           )
         );
@@ -626,30 +837,30 @@ const RateRequest = () => {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          {item.status !== 'approved' && item.status !== 'rejected' ? (
-                            <>
-                              <button
-                                onClick={() => openApprovalModal(item, 'accept')}
-                                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl text-xs"
-                              >
-                                Accept
-                              </button>
-                              <button
-                                onClick={() => openApprovalModal(item, 'reject')}
-                                className="bg-gradient-to-r from-red-500 to-red-600 text-white px-3 py-2 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl text-xs"
-                              >
-                                Reject
-                              </button>
-                            </>
+                          {item.status !== 'approved' ? (
+                            <div className="flex items-center gap-2">
+                              {loadTimers[item._id] > 0 ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-orange-600">{loadTimers[item._id]}s</div>
+                                    <div className="text-xs text-orange-500">Auto-accept</div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleManualAcceptFromTable(item)}
+                                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl text-xs"
+                                  >
+                                    Accept Now
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-xs px-3 py-2 rounded-xl font-semibold bg-yellow-100 text-yellow-700">
+                                  ⏳ Processing...
+                                </span>
+                              )}
+                            </div>
                           ) : (
-                            <span
-                              className={`text-xs px-3 py-2 rounded-xl font-semibold ${
-                                item.status === 'approved'
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-red-100 text-red-700'
-                              }`}
-                            >
-                              {item.status === 'approved' ? '✅ Accepted' : '❌ Rejected'}
+                            <span className="text-xs px-3 py-2 rounded-xl font-semibold bg-green-100 text-green-700">
+                              ✅ Accepted
                             </span>
                           )}
                         </div>
@@ -999,17 +1210,21 @@ const RateRequest = () => {
             <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
-                  {approvalModal.type === 'accept' ? 'Accept Load' : 'Reject Load'}
+                  Accept Load
                 </h2>
                 <p className="text-sm text-blue-100 mt-1">
-                  {approvalModal.type === 'accept'
-                    ? 'Approve this load request'
-                    : 'Reject this load request with a reason'}
+                  Accept this load request or it will auto-accept in {timeRemaining} seconds
                 </p>
               </div>
-              <button onClick={closeApprovalModal} type="button" className="text-white text-3xl hover:text-gray-200">
-                ×
-              </button>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="text-2xl font-bold">{timeRemaining}s</div>
+                  <div className="text-xs text-blue-100">Auto-accept</div>
+                </div>
+                <button onClick={closeApprovalModal} type="button" className="text-white text-3xl hover:text-gray-200">
+                  ×
+                </button>
+              </div>
             </div>
 
             {/* Details */}
@@ -1058,19 +1273,14 @@ const RateRequest = () => {
             {/* Reason */}
             <div className="mb-6">
               <label className="block text-gray-700 text-sm font-medium mb-2">
-                {approvalModal.type === 'accept' ? 'Approval Comments (Optional)' : 'Rejection Reason *'}
+                Approval Comments (Optional)
               </label>
               <textarea
                 value={approvalReason}
                 onChange={(e) => setApprovalReason(e.target.value)}
                 rows={4}
-                placeholder={
-                  approvalModal.type === 'accept'
-                    ? 'Add any comments about this approval...'
-                    : 'Please provide a reason for rejecting this load...'
-                }
+                placeholder="Add any comments about this approval..."
                 className="w-full border border-gray-300 px-4 py-3 rounded-xl"
-                required={approvalModal.type === 'reject'}
               />
             </div>
 
@@ -1091,12 +1301,10 @@ const RateRequest = () => {
                 className={`px-6 py-3 rounded-lg font-semibold text-white ${
                   approvalSubmitting
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : approvalModal.type === 'accept'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-red-600 hover:bg-red-700'
+                    : 'bg-green-600 hover:bg-green-700'
                 }`}
               >
-                {approvalSubmitting ? 'Processing...' : approvalModal.type === 'accept' ? 'Accept Load' : 'Reject Load'}
+                {approvalSubmitting ? 'Processing...' : 'Accept Load'}
               </button>
             </div>
           </div>

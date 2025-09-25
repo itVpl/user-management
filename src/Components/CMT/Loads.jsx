@@ -23,6 +23,8 @@ export default function Loads() {
   const [showLoadCreationModal, setShowLoadCreationModal] = useState(false);
   const [loadType, setLoadType] = useState("OTR");
   const [shippers, setShippers] = useState([]);
+  const [autoAcceptTimer, setAutoAcceptTimer] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(30);
   // === Validation helpers & state (ADD) ===
   const ALNUM = /^[A-Za-z0-9]+$/;
   const MONEY2 = /^(?:\d+)(?:\.\d{1,2})?$/; // up to 2 decimals, no negatives
@@ -543,9 +545,43 @@ export default function Loads() {
         setReason('');
         setSelectedLoad(null);
         setViewDoc(false);
+        
+        // Clear auto-accept timer
+        if (autoAcceptTimer) {
+          clearInterval(autoAcceptTimer);
+          setAutoAcceptTimer(null);
+        }
+        setTimeRemaining(30);
       }, 1000);
     } catch (err) {
       console.error('Status update failed:', err);
+    }
+  };
+  
+  const handleAutoAccept = async () => {
+    try {
+      const { id } = selectedLoad;
+      // Simulate API call for auto-accept
+      setTimeout(() => {
+        setLoads(loads.map(load =>
+          load.id === id ? { ...load, status: 'approved' } : load
+        ));
+        setModalType(null);
+        setReason('');
+        setSelectedLoad(null);
+        setViewDoc(false);
+        
+        // Clear timer
+        if (autoAcceptTimer) {
+          clearInterval(autoAcceptTimer);
+          setAutoAcceptTimer(null);
+        }
+        setTimeRemaining(30);
+        alertify.success('Load auto-accepted successfully!');
+      }, 1000);
+    } catch (err) {
+      console.error('Auto-accept failed:', err);
+      alertify.error('Auto-accept failed. Please try again.');
     }
   };
 
@@ -722,10 +758,58 @@ export default function Loads() {
   }
 
   if (modalType) {
+    // Start auto-accept timer when modal opens
+    React.useEffect(() => {
+      if (modalType === 'approval') {
+        setTimeRemaining(30);
+        const timer = setInterval(() => {
+          setTimeRemaining(prev => {
+            if (prev <= 1) {
+              // Auto-accept after 30 seconds
+              handleAutoAccept();
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        
+        setAutoAcceptTimer(timer);
+        
+        return () => {
+          if (timer) {
+            clearInterval(timer);
+            setAutoAcceptTimer(null);
+          }
+        };
+      }
+    }, [modalType]);
+
     return (
       <div className="fixed inset-0 z-50 backdrop-blue-sm bg-black/30 flex items-center justify-center">
         <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center">
-          <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
+          <div className="flex justify-between items-center w-full mb-4">
+            <h3 className="text-lg font-bold text-gray-800">
+              {modalType === 'approval' ? 'Accept Load' : 'Load Action'}
+            </h3>
+            <button className="text-xl hover:text-red-500" onClick={() => {
+              setModalType(null);
+              if (autoAcceptTimer) {
+                clearInterval(autoAcceptTimer);
+                setAutoAcceptTimer(null);
+              }
+              setTimeRemaining(30);
+            }}>×</button>
+          </div>
+          
+          {modalType === 'approval' && (
+            <div className="w-full mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{timeRemaining}s</div>
+                <div className="text-sm text-blue-500">Auto-accept timer</div>
+              </div>
+            </div>
+          )}
+          
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
             rows={5}
@@ -827,19 +911,7 @@ export default function Loads() {
                 onClick={() => setModalType('approval')}
                 className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full shadow hover:from-green-600 hover:to-green-800 transition"
               >
-                <CheckCircle size={18} /> Approve
-              </button>
-              <button
-                onClick={() => setModalType('rejection')}
-                className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full shadow hover:from-red-600 hover:to-red-800 transition"
-              >
-                <XCircle size={18} /> Reject
-              </button>
-              <button
-                onClick={() => setModalType('resubmit')}
-                className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full shadow hover:from-blue-600 hover:to-purple-700 transition"
-              >
-                <Clock size={18} /> Re-submission
+                <CheckCircle size={18} /> Accept
               </button>
             </div>
             <a

@@ -26,6 +26,8 @@ export default function TruckerReport() {
   const [loading, setLoading] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchFilter, setSearchFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -34,6 +36,11 @@ export default function TruckerReport() {
   useEffect(() => {
     fetchTruckerReports();
   }, []);
+
+  // Reset to first page when search term, filter, or status filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, searchFilter, statusFilter]);
 
   const fetchTruckerReports = async () => {
     try {
@@ -187,13 +194,45 @@ export default function TruckerReport() {
     return ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileType?.toUpperCase());
   };
 
-  // Filter truckers based on search term and sort by creation date (latest first)
+  // Filter truckers based on search term, selected filter, and status filter, then sort by creation date (latest first)
   const filteredTruckers = truckers
-    .filter(trucker =>
-      trucker.compName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trucker.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trucker.mc_dot_no?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    .filter(trucker => {
+      // Status filter
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'approved' && trucker.status !== 'approved' && trucker.status !== 'accountant_approved') {
+          return false;
+        }
+        if (statusFilter === 'rejected' && trucker.status !== 'rejected') {
+          return false;
+        }
+        if (statusFilter === 'pending' && trucker.status !== 'pending') {
+          return false;
+        }
+      }
+      
+      // Search filter
+      if (!searchTerm) return true;
+      
+      const searchLower = searchTerm.toLowerCase();
+      
+      switch (searchFilter) {
+        case 'mc_dot':
+          return trucker.mc_dot_no?.toLowerCase().includes(searchLower);
+        case 'state':
+          // For state, check if it starts with the search term or is an exact match
+          const stateLower = trucker.state?.toLowerCase();
+          return stateLower?.startsWith(searchLower) || stateLower === searchLower;
+        case 'city':
+          return trucker.city?.toLowerCase().includes(searchLower);
+        case 'all':
+        default:
+          return trucker.compName?.toLowerCase().includes(searchLower) ||
+                 trucker.email?.toLowerCase().includes(searchLower) ||
+                 trucker.mc_dot_no?.toLowerCase().includes(searchLower) ||
+                 trucker.state?.toLowerCase().includes(searchLower) ||
+                 trucker.city?.toLowerCase().includes(searchLower);
+      }
+    })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   // Format currency
@@ -260,7 +299,12 @@ export default function TruckerReport() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div 
+            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-2xl hover:scale-105 ${
+              statusFilter === 'all' ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+            }`}
+            onClick={() => setStatusFilter('all')}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                 <Truck className="text-blue-600" size={20} />
@@ -271,7 +315,12 @@ export default function TruckerReport() {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div 
+            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-2xl hover:scale-105 ${
+              statusFilter === 'approved' ? 'ring-2 ring-green-500 bg-green-50' : ''
+            }`}
+            onClick={() => setStatusFilter('approved')}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
                 <CheckCircle className="text-green-600" size={20} />
@@ -282,7 +331,12 @@ export default function TruckerReport() {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div 
+            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-2xl hover:scale-105 ${
+              statusFilter === 'rejected' ? 'ring-2 ring-red-500 bg-red-50' : ''
+            }`}
+            onClick={() => setStatusFilter('rejected')}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
                 <XCircle className="text-red-600" size={20} />
@@ -293,7 +347,12 @@ export default function TruckerReport() {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div 
+            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-2xl hover:scale-105 ${
+              statusFilter === 'pending' ? 'ring-2 ring-yellow-500 bg-yellow-50' : ''
+            }`}
+            onClick={() => setStatusFilter('pending')}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
                 <Clock className="text-yellow-600" size={20} />
@@ -307,10 +366,22 @@ export default function TruckerReport() {
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
+            <select
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            >
+              <option value="all">All Fields</option>
+              <option value="mc_dot">MC/DOT No</option>
+              <option value="state">State</option>
+              <option value="city">City</option>
+            </select>
+          </div>
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
-              placeholder="Search truckers..."
+              placeholder={`Search by ${searchFilter === 'all' ? 'all fields' : searchFilter === 'mc_dot' ? 'MC/DOT No' : searchFilter}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
