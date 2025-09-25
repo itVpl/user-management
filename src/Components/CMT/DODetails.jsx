@@ -1,383 +1,412 @@
-// src/pages/DoDetails.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Box,
-  Chip,
-  CircularProgress,
-  Container,
-  IconButton,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TextField,
-  Tooltip,
-  Typography,
-  Button,
-  Grid,
-  Card,
-  CardContent,
-  Link as MuiLink,
-  TableContainer,
-} from "@mui/material";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import LaunchIcon from "@mui/icons-material/Launch";
-import SummarizeIcon from "@mui/icons-material/Summarize";
-import LocalShippingIcon from "@mui/icons-material/LocalShipping";
-import PaidIcon from "@mui/icons-material/Paid";
-import InventoryIcon from "@mui/icons-material/Inventory2";
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { FaTruck, FaBox, FaCalendar, FaClock, FaUser, FaCheckCircle, FaTimesCircle, FaExclamationTriangle, FaSearch, FaEdit, FaEye, FaFileAlt } from 'react-icons/fa';
 import API_CONFIG from '../../config/api.js';
-const API_URL = `${API_CONFIG.BASE_URL}/api/v1/do/do`;
-
-const chipSx = { height: 22, "& .MuiChip-label": { px: 0.75, fontWeight: 700 } };
-
-function currency(n) {
-  if (n === null || n === undefined || Number.isNaN(Number(n))) return "-";
-  return Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
-}
-function fmtDate(d) {
-  if (!d) return "-";
-  try {
-    return new Date(d).toLocaleString("en-IN", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    });
-  } catch {
-    return d;
-  }
-}
+import alertify from 'alertifyjs';
+import 'alertifyjs/build/css/alertify.css';
 
 export default function DODetails() {
-  const [data, setData] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [q, setQ] = useState("");
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
+
+  // Fetch orders from API
+  const fetchOrders = async () => {
+    try {
       setLoading(true);
-      setErr("");
-      try {
-        const token = sessionStorage.getItem("token");
-        const res = await fetch(API_URL, {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
-        if (!res.ok) {
-          const t = await res.text();
-          throw new Error(t || `Request failed: ${res.status}`);
-        }
-        const json = await res.json();
-        const list = json?.data || [];
-        setData(list);
-        setFiltered(list);
-      } catch (e) {
-        setErr(e.message || "Failed to fetch DO list");
-      } finally {
-        setLoading(false);
+      
+      // Get authentication token
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      
+      if (!token) {
+        alertify.error('Authentication required. Please login again.');
+        return;
       }
-    };
-    fetchData();
-  }, [refreshKey]);
+
+      // Fetch data from the assigned-to-cmt API endpoint
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/assigned-to-cmt`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('API Response:', response);
+
+      // Check if response has data property
+      if (response.data && response.data.success) {
+        const apiData = response.data.data || response.data;
+        console.log('API Data:', apiData);
+        
+        // Check if apiData is an array
+        if (Array.isArray(apiData)) {
+          const transformedData = apiData.map((item, index) => ({
+            id: item._id || index,
+            sNo: index + 1,
+            doId: `DO-${String(item._id).slice(-6)}`,
+            loadNo: item.customers?.[0]?.loadNo || 'N/A',
+            billTo: item.customers?.[0]?.billTo || 'N/A',
+            dispatcherName: item.customers?.[0]?.dispatcherName || 'N/A',
+            workOrderNo: item.customers?.[0]?.workOrderNo || 'N/A',
+            lineHaul: item.customers?.[0]?.lineHaul || 0,
+            fsc: item.customers?.[0]?.fsc || 0,
+            other: item.customers?.[0]?.other || 0,
+            totalAmount: item.customers?.[0]?.totalAmount || 0,
+            carrierName: item.carrier?.carrierName || 'N/A',
+            equipmentType: item.carrier?.equipmentType || 'N/A',
+            carrierFees: item.carrier?.totalCarrierFees || 0,
+            shipperName: item.shipper?.name || 'N/A',
+            pickupDate: item.shipper?.pickUpDate || 'N/A',
+            dropDate: item.shipper?.dropDate || 'N/A',
+            createdBy: item.createdBySalesUser?.employeeName || 'N/A',
+            department: item.createdBySalesUser?.department || 'N/A',
+            uploadedFiles: item.uploadedFiles || [],
+            status: item.status || 'open',
+            assignmentStatus: item.assignmentStatus || 'unassigned',
+            assignedToCMT: item.assignedToCMT || null,
+            createdAt: item.createdAt || new Date().toISOString()
+          }));
+
+          console.log('Transformed Data:', transformedData);
+          setOrders(transformedData);
+        } else {
+          console.log('API Data is not an array:', apiData);
+          alertify.error('API returned data is not in expected format');
+        }
+      } else if (response.data && Array.isArray(response.data)) {
+        // If response.data is directly an array
+        const transformedData = response.data.map((item, index) => ({
+          id: item._id || index,
+          sNo: index + 1,
+          doId: `DO-${String(item._id).slice(-6)}`,
+          loadNo: item.customers?.[0]?.loadNo || 'N/A',
+          billTo: item.customers?.[0]?.billTo || 'N/A',
+          dispatcherName: item.customers?.[0]?.dispatcherName || 'N/A',
+          workOrderNo: item.customers?.[0]?.workOrderNo || 'N/A',
+          lineHaul: item.customers?.[0]?.lineHaul || 0,
+          fsc: item.customers?.[0]?.fsc || 0,
+          other: item.customers?.[0]?.other || 0,
+          totalAmount: item.customers?.[0]?.totalAmount || 0,
+          carrierName: item.carrier?.carrierName || 'N/A',
+          equipmentType: item.carrier?.equipmentType || 'N/A',
+          carrierFees: item.carrier?.totalCarrierFees || 0,
+          shipperName: item.shipper?.name || 'N/A',
+          pickupDate: item.shipper?.pickUpDate || 'N/A',
+          dropDate: item.shipper?.dropDate || 'N/A',
+          createdBy: item.createdBySalesUser?.employeeName || 'N/A',
+          department: item.createdBySalesUser?.department || 'N/A',
+          uploadedFiles: item.uploadedFiles || [],
+          status: item.status || 'open',
+          assignmentStatus: item.assignmentStatus || 'unassigned',
+          assignedToCMT: item.assignedToCMT || null,
+          createdAt: item.createdAt || new Date().toISOString()
+        }));
+
+        console.log('Transformed Data (Array):', transformedData);
+        setOrders(transformedData);
+      } else {
+        console.log('Unexpected response format:', response.data);
+        alertify.error('Unexpected response format from server');
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      if (error.response?.status === 401) {
+        alertify.error('Authentication failed. Please login again.');
+      } else if (error.response?.status === 403) {
+        alertify.error('Access denied. You do not have permission to view this data.');
+      } else {
+        alertify.error(`Failed to load orders: ${error.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!q) return setFiltered(data);
-    const term = q.toLowerCase().trim();
-    setFiltered(
-      data.filter((item) =>
-        (item.customers || []).some((c) => (c.loadNo || "").toLowerCase().includes(term))
-      )
-    );
-  }, [q, data]);
+    fetchOrders();
+  }, []);
 
-  const totals = useMemo(() => {
-    let line = 0, fsc = 0, other = 0, custTotal = 0, carrierFees = 0;
-    filtered.forEach((row) => {
-      (row.customers || []).forEach((c) => {
-        line += Number(c.lineHaul || 0);
-        fsc += Number(c.fsc || 0);
-        other += Number(c.other || 0);
-        custTotal += Number(c.totalAmount || 0);
+  // Filter orders based on search term
+  const filteredOrders = orders.filter(order =>
+    order.loadNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.billTo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.dispatcherName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.workOrderNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.carrierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.shipperName.toLowerCase().includes(searchTerm.toLowerCase())
+  ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // LIFO sorting
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+
+  // Reset to first page when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  const handleViewOrder = async (order) => {
+    setSelectedOrder(order);
+    setShowViewModal(true);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString || dateString === 'N/A') return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit'
       });
-      carrierFees += Number(row?.carrier?.totalCarrierFees || 0);
-    });
-    return { line, fsc, other, custTotal, carrierFees };
-  }, [filtered]);
+    } catch {
+      return 'N/A';
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount || amount === 0) return '$0';
+    return `$${Number(amount).toLocaleString()}`;
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'open': return 'bg-green-100 text-green-800';
+      case 'close': return 'bg-red-100 text-red-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 3 }}>
-      {/* Gradient header */}
-      <Box
-        sx={{
-          p: 3,
-          borderRadius: 3,
-          mb: 2,
-          color: "white",
-          background: "linear-gradient(135deg, #5B7CFF 0%, #8A5BFF 50%, #FF5BBE 100%)",
-          boxShadow: "0 12px 24px rgba(90, 60, 200, 0.35)",
-        }}
-      >
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          alignItems={{ xs: "flex-start", sm: "center" }}
-          justifyContent="space-between"
-          spacing={2}
-        >
-          <Typography variant="h5" fontWeight={800}>
-            Delivery Orders
-          </Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <TextField
-              size="small"
-              variant="outlined"
-              placeholder="Search Load No (e.g., L0001)"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              sx={{
-                minWidth: 260,
-                "& .MuiOutlinedInput-root": {
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "#fff",
-                  backdropFilter: "blur(8px)",
-                },
-                "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255,255,255,0.4)" },
-              }}
-              InputLabelProps={{ style: { color: "#fff" } }}
-            />
-            <Tooltip title="Refresh">
-              <IconButton
-                onClick={() => setRefreshKey((k) => k + 1)}
-                sx={{
-                  color: "#fff",
-                  bgcolor: "rgba(255,255,255,0.15)",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.25)" },
-                }}
+    <div className="p-6 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Delivery Orders - CMT Assigned</h1>
+        <div className="relative">
+          <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search orders..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {/* Orders Table */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-500 text-lg">Loading orders...</p>
+            <p className="text-gray-400 text-sm">Please wait while we fetch the data</p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                  <tr>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S.No</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Dispatcher</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Amount</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Assigned To</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Files</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">View</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentOrders.map((order, index) => (
+                    <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.sNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.doId}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.loadNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.billTo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.dispatcherName}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.carrierName}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{formatCurrency(order.totalAmount)}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{formatCurrency(order.carrierFees)}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(order.status)}`}>
+                          {order.status}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.assignedToCMT?.employeeName || 'Unassigned'}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">
+                          {order.uploadedFiles && order.uploadedFiles.length > 0 ? `${order.uploadedFiles.length} files` : 'No files'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <button
+                          onClick={() => handleViewOrder(order)}
+                          disabled={viewLoading}
+                          className={`px-3 py-1 text-blue-600 text-xs rounded-md transition-colors border border-blue-300 hover:bg-blue-50 ${
+                            viewLoading 
+                              ? 'opacity-50 cursor-not-allowed' 
+                              : ''
+                          }`}
+                        >
+                          {viewLoading ? 'Loading...' : 'View'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {filteredOrders.length === 0 && (
+              <div className="text-center py-12">
+                <FaBox className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg">
+                  {searchTerm ? 'No orders found matching your search' : 'No orders found'}
+                </p>
+                <p className="text-gray-400 text-sm">
+                  {searchTerm ? 'Try adjusting your search terms' : 'No orders available'}
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && filteredOrders.length > 0 && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="text-sm text-gray-600">
+            Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
+            {searchTerm && ` (filtered from ${orders.length} total)`}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+            >
+              Previous
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'border-gray-300 hover:bg-gray-50'
+                  }`}
               >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        </Stack>
-      </Box>
-
-      {/* Stat cards (compact) */}
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 3, background: "linear-gradient(135deg,#E3F2FD 0%,#E8F5E9 100%)", boxShadow: "0 10px 20px rgba(33,150,243,.15)" }}>
-            <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Stack><Typography variant="body2" color="text.secondary">Records</Typography>
-                  <Typography variant="h5" fontWeight={800}>{filtered.length}</Typography>
-                </Stack>
-                <SummarizeIcon />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 3, background: "linear-gradient(135deg,#FFF3E0 0%,#FCE4EC 100%)", boxShadow: "0 10px 20px rgba(255,193,7,.18)" }}>
-            <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Stack><Typography variant="body2" color="text.secondary">Customer Total Σ</Typography>
-                  <Typography variant="h5" fontWeight={800}>$ {currency(totals.custTotal)}</Typography>
-                </Stack>
-                <PaidIcon />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 3, background: "linear-gradient(135deg,#E8EAF6 0%,#E3F2FD 100%)", boxShadow: "0 10px 20px rgba(63,81,181,.18)" }}>
-            <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Stack><Typography variant="body2" color="text.secondary">Carrier Fees Σ</Typography>
-                  <Typography variant="h5" fontWeight={800}>$ {currency(totals.carrierFees)}</Typography>
-                </Stack>
-                <LocalShippingIcon />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ borderRadius: 3, background: "linear-gradient(135deg,#E0F7FA 0%,#FFFDE7 100%)", boxShadow: "0 10px 20px rgba(0,188,212,.18)" }}>
-            <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Stack><Typography variant="body2" color="text.secondary">Line/FSC/Other Σ</Typography>
-                  <Typography variant="h6" fontWeight={800}>
-                    $ {currency(totals.line)} • $ {currency(totals.fsc)} • $ {currency(totals.other)}
-                  </Typography>
-                </Stack>
-                <InventoryIcon />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Loading / Error */}
-      {loading && (
-        <Stack alignItems="center" sx={{ py: 8 }}>
-          <CircularProgress />
-          <Typography variant="body2" sx={{ mt: 2 }}>Loading…</Typography>
-        </Stack>
+                {page}
+              </button>
+            ))}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
-      {err && !loading && <Alert severity="error">{err}</Alert>}
 
-      {/* Scrollable Table */}
-      {!loading && !err && (
-        <TableContainer
-          component={Paper}
-          sx={{
-            borderRadius: 3,
-            boxShadow: "0 14px 28px rgba(0,0,0,0.08)",
-            maxHeight: "70vh",          // vertical scroll limit
-            overflow: "auto",           // both scrollbars when needed
-          }}
-        >
-          <Table stickyHeader size="small" sx={{ minWidth: 1600 }}> {/* horizontal scroll */}
-            <TableHead>
-              <TableRow
-                sx={{
-                  "& th": {
-                    fontWeight: 700,
-                    color: "#000",
-                    border: 0,
-                    whiteSpace: "nowrap",   // prevent wrapping
-                  },
-                  background: "linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%)",
-                }}
-              >
-                <TableCell>Load No</TableCell>
-                <TableCell>Bill To</TableCell>
-                <TableCell>Dispatcher</TableCell>
-                <TableCell>Work Order</TableCell>
-                <TableCell align="right">Line Haul</TableCell>
-                <TableCell align="right">FSC</TableCell>
-                <TableCell align="right">Other</TableCell>
-                <TableCell align="right">Total</TableCell>
-                <TableCell>Carrier</TableCell>
-                <TableCell>Equip</TableCell>
-                <TableCell align="right">Carrier Fees</TableCell>
-                <TableCell>Shipper</TableCell>
-                <TableCell>Pickup</TableCell>
-                <TableCell>Drop</TableCell>
-                <TableCell>Created By</TableCell>
-                <TableCell>Files</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={16} align="center">No records found</TableCell>
-                </TableRow>
-              )}
+      {/* View Details Modal */}
+      {showViewModal && selectedOrder && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <FaEye className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Order Details</h2>
+                    <p className="text-blue-100">View order information</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
 
-              {filtered.map((row, idx) => {
-                const c = row.customers?.[0] || {};
-                const cr = row.carrier || {};
-                const sp = row.shipper || {};
-                const created = row.createdBySalesUser || {};
-                const files = row.uploadedFiles || [];
-                const file = files[0];
-
-                return (
-                  <TableRow
-                    key={row._id}
-                    hover
-                    sx={{
-                      "& td": { whiteSpace: "nowrap" },
-                      backgroundColor: idx % 2 ? "rgba(99,102,241,0.03)" : "transparent",
-                    }}
-                  >
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={c.loadNo || "-"}
-                        sx={{ ...chipSx, bgcolor: "rgba(99,102,241,0.12)", color: "#4F46E5" }}
-                      />
-                    </TableCell>
-                    <TableCell>{c.billTo || "-"}</TableCell>
-                    <TableCell>{c.dispatcherName || "-"}</TableCell>
-                    <TableCell>{c.workOrderNo || "-"}</TableCell>
-                    <TableCell align="right">$ {currency(c.lineHaul)}</TableCell>
-                    <TableCell align="right">$ {currency(c.fsc)}</TableCell>
-                    <TableCell align="right">$ {currency(c.other)}</TableCell>
-                    <TableCell align="right" style={{ fontWeight: 700 }}>
-                      $ {currency(c.totalAmount)}
-                    </TableCell>
-                    <TableCell>
-                      {cr.carrierName ? (
-                        <Chip size="small" label={cr.carrierName}
-                          sx={{ ...chipSx, bgcolor: "rgba(16,185,129,0.12)", color: "#059669" }} />
-                      ) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {cr.equipmentType ? (
-                        <Chip size="small" label={cr.equipmentType}
-                          sx={{ ...chipSx, bgcolor: "rgba(14,165,233,0.12)", color: "#0284C7" }} />
-                      ) : "-"}
-                    </TableCell>
-                    <TableCell align="right">$ {currency(cr.totalCarrierFees)}</TableCell>
-                    <TableCell>{sp.name || "-"}</TableCell>
-                    <TableCell>
-                      <Chip size="small" label={fmtDate(sp.pickUpDate)}
-                        sx={{ ...chipSx, bgcolor: "rgba(234,179,8,0.12)", color: "#a16207" }} />
-                    </TableCell>
-                    <TableCell>
-                      <Chip size="small" label={fmtDate(sp.dropDate)}
-                        sx={{ ...chipSx, bgcolor: "rgba(244,114,182,0.12)", color: "#9d174d" }} />
-                    </TableCell>
-                    <TableCell>
-                      {created.employeeName ? (
-                        <Chip size="small" label={`${created.employeeName} • ${created.department || "-"}`}
-                          sx={{ ...chipSx, bgcolor: "rgba(59,130,246,0.12)", color: "#1D4ED8" }} />
-                      ) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {files.length ? (
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Button
-                            size="small"
-                            startIcon={<LaunchIcon />}
-                            component={MuiLink}
-                            href={file.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            sx={{
-                              textTransform: "none",
-                              borderRadius: 999,
-                              px: 1.2,
-                              py: 0.3,
-                              bgcolor: "rgba(99,102,241,0.14)",
-                              "&:hover": { bgcolor: "rgba(99,102,241,0.22)" },
-                            }}
-                          >
-                            Open
-                          </Button>
-                          <Typography variant="caption" color="text.secondary">
-                            {files.length} file{files.length > 1 ? "s" : ""}
-                          </Typography>
-                        </Stack>
-                      ) : (
-                        <Chip size="small" label="No files" sx={{ ...chipSx, bgcolor: "#f3f4f6" }} />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            {/* Content */}
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Order Information</h3>
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                    <p><strong>DO ID:</strong> {selectedOrder.doId}</p>
+                    <p><strong>Load No:</strong> {selectedOrder.loadNo}</p>
+                    <p><strong>Bill To:</strong> {selectedOrder.billTo}</p>
+                    <p><strong>Dispatcher:</strong> {selectedOrder.dispatcherName}</p>
+                    <p><strong>Work Order:</strong> {selectedOrder.workOrderNo}</p>
+                    <p><strong>Status:</strong> 
+                      <span className={`ml-2 text-white text-xs px-2 py-1 rounded-full ${getStatusColor(selectedOrder.status)}`}>
+                        {selectedOrder.status}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Financial & Carrier Details</h3>
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                    <p><strong>Total Amount:</strong> {formatCurrency(selectedOrder.totalAmount)}</p>
+                    <p><strong>Line Haul:</strong> {formatCurrency(selectedOrder.lineHaul)}</p>
+                    <p><strong>FSC:</strong> {formatCurrency(selectedOrder.fsc)}</p>
+                    <p><strong>Other:</strong> {formatCurrency(selectedOrder.other)}</p>
+                    <p><strong>Carrier Name:</strong> {selectedOrder.carrierName}</p>
+                    <p><strong>Carrier Fees:</strong> {formatCurrency(selectedOrder.carrierFees)}</p>
+                    <p><strong>Assigned To:</strong> {selectedOrder.assignedToCMT?.employeeName || 'Unassigned'}</p>
+                    <p><strong>Created By:</strong> {selectedOrder.createdBy}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
-    </Container>
+    </div>
   );
 }

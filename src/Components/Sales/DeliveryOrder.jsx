@@ -4510,7 +4510,68 @@ other: ensureMoney2dp(String(c.other ?? '')),
                   </div>
                 )}
 
+                {/* Assignment Information */}
+                {selectedOrder?.assignedToCMT && (
+                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                        <User className="text-indigo-600" size={16} />
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-800">Assignment Information</h3>
+                    </div>
+                    
+                    <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Assigned To */}
+                        <div className="space-y-3">
+                          <h4 className="font-semibold text-indigo-800 text-sm uppercase tracking-wide">Assigned To</h4>
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 text-sm">Employee ID:</span>
+                              <span className="font-medium text-gray-800">{selectedOrder.assignedToCMT?.empId || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 text-sm">Name:</span>
+                              <span className="font-medium text-gray-800">{selectedOrder.assignedToCMT?.employeeName || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 text-sm">Department:</span>
+                              <span className="font-medium text-gray-800">{selectedOrder.assignedToCMT?.department || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 text-sm">Assigned At:</span>
+                              <span className="font-medium text-gray-800">
+                                {selectedOrder.assignedToCMT?.assignedAt 
+                                  ? new Date(selectedOrder.assignedToCMT.assignedAt).toLocaleString()
+                                  : 'N/A'
+                                }
+                              </span>
+                            </div>
+                          </div>
+                        </div>
 
+                        {/* Assignment Status */}
+                        <div className="space-y-3">
+                          <h4 className="font-semibold text-indigo-800 text-sm uppercase tracking-wide">Assignment Status</h4>
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 text-sm">Status:</span>
+                              <span className="font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full text-xs">
+                                {selectedOrder.assignmentStatus || 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 text-sm">DO Status:</span>
+                              <span className="font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full text-xs">
+                                {selectedOrder.doStatus || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Status */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
