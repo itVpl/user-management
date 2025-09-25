@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { FaTruck, FaBox, FaCalendar, FaClock, FaUser, FaCheckCircle, FaTimesCircle, FaExclamationTriangle, FaSearch, FaEdit, FaEye, FaFileAlt } from 'react-icons/fa';
+import { FaBox, FaSearch } from 'react-icons/fa';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -9,9 +9,6 @@ export default function DODetails() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [viewLoading, setViewLoading] = useState(false);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -32,22 +29,26 @@ export default function DODetails() {
 
       // Fetch data from the assigned-to-cmt API endpoint
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/assigned-to-cmt`, {
-        headers: {
+          headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
-      console.log('API Response:', response);
-
       // Check if response has data property
       if (response.data && response.data.success) {
-        const apiData = response.data.data || response.data;
-        console.log('API Data:', apiData);
+        const apiData = response.data.data;
         
-        // Check if apiData is an array
-        if (Array.isArray(apiData)) {
-          const transformedData = apiData.map((item, index) => ({
+        // Check if apiData has dos property (new structure)
+        let ordersArray = [];
+        if (apiData && apiData.dos && Array.isArray(apiData.dos)) {
+          ordersArray = apiData.dos;
+        } else if (Array.isArray(apiData)) {
+          ordersArray = apiData;
+        }
+        
+        if (Array.isArray(ordersArray) && ordersArray.length > 0) {
+          const transformedData = ordersArray.map((item, index) => ({
             id: item._id || index,
             sNo: index + 1,
             doId: `DO-${String(item._id).slice(-6)}`,
@@ -74,11 +75,9 @@ export default function DODetails() {
             createdAt: item.createdAt || new Date().toISOString()
           }));
 
-          console.log('Transformed Data:', transformedData);
           setOrders(transformedData);
         } else {
-          console.log('API Data is not an array:', apiData);
-          alertify.error('API returned data is not in expected format');
+          setOrders([]);
         }
       } else if (response.data && Array.isArray(response.data)) {
         // If response.data is directly an array
@@ -109,14 +108,11 @@ export default function DODetails() {
           createdAt: item.createdAt || new Date().toISOString()
         }));
 
-        console.log('Transformed Data (Array):', transformedData);
         setOrders(transformedData);
       } else {
-        console.log('Unexpected response format:', response.data);
         alertify.error('Unexpected response format from server');
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
       if (error.response?.status === 401) {
         alertify.error('Authentication failed. Please login again.');
       } else if (error.response?.status === 403) {
@@ -124,10 +120,10 @@ export default function DODetails() {
       } else {
         alertify.error(`Failed to load orders: ${error.message}`);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     fetchOrders();
@@ -158,36 +154,10 @@ export default function DODetails() {
     setCurrentPage(page);
   };
 
-  const handleViewOrder = async (order) => {
-    setSelectedOrder(order);
-    setShowViewModal(true);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString || dateString === 'N/A') return 'N/A';
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: '2-digit'
-      });
-    } catch {
-      return 'N/A';
-    }
-  };
 
   const formatCurrency = (amount) => {
     if (!amount || amount === 0) return '$0';
     return `$${Number(amount).toLocaleString()}`;
-  };
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'open': return 'bg-green-100 text-green-800';
-      case 'close': return 'bg-red-100 text-red-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
 
   return (
@@ -229,10 +199,6 @@ export default function DODetails() {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Amount</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Assigned To</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Files</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">View</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -261,32 +227,6 @@ export default function DODetails() {
                       </td>
                       <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{formatCurrency(order.carrierFees)}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.assignedToCMT?.employeeName || 'Unassigned'}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">
-                          {order.uploadedFiles && order.uploadedFiles.length > 0 ? `${order.uploadedFiles.length} files` : 'No files'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <button
-                          onClick={() => handleViewOrder(order)}
-                          disabled={viewLoading}
-                          className={`px-3 py-1 text-blue-600 text-xs rounded-md transition-colors border border-blue-300 hover:bg-blue-50 ${
-                            viewLoading 
-                              ? 'opacity-50 cursor-not-allowed' 
-                              : ''
-                          }`}
-                        >
-                          {viewLoading ? 'Loading...' : 'View'}
-                        </button>
                       </td>
                     </tr>
                   ))}
@@ -346,67 +286,6 @@ export default function DODetails() {
         </div>
       )}
 
-      {/* View Details Modal */}
-      {showViewModal && selectedOrder && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <FaEye className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Order Details</h2>
-                    <p className="text-blue-100">View order information</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="text-white hover:text-gray-200 text-2xl font-bold"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Order Information</h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <p><strong>DO ID:</strong> {selectedOrder.doId}</p>
-                    <p><strong>Load No:</strong> {selectedOrder.loadNo}</p>
-                    <p><strong>Bill To:</strong> {selectedOrder.billTo}</p>
-                    <p><strong>Dispatcher:</strong> {selectedOrder.dispatcherName}</p>
-                    <p><strong>Work Order:</strong> {selectedOrder.workOrderNo}</p>
-                    <p><strong>Status:</strong> 
-                      <span className={`ml-2 text-white text-xs px-2 py-1 rounded-full ${getStatusColor(selectedOrder.status)}`}>
-                        {selectedOrder.status}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Financial & Carrier Details</h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <p><strong>Total Amount:</strong> {formatCurrency(selectedOrder.totalAmount)}</p>
-                    <p><strong>Line Haul:</strong> {formatCurrency(selectedOrder.lineHaul)}</p>
-                    <p><strong>FSC:</strong> {formatCurrency(selectedOrder.fsc)}</p>
-                    <p><strong>Other:</strong> {formatCurrency(selectedOrder.other)}</p>
-                    <p><strong>Carrier Name:</strong> {selectedOrder.carrierName}</p>
-                    <p><strong>Carrier Fees:</strong> {formatCurrency(selectedOrder.carrierFees)}</p>
-                    <p><strong>Assigned To:</strong> {selectedOrder.assignedToCMT?.employeeName || 'Unassigned'}</p>
-                    <p><strong>Created By:</strong> {selectedOrder.createdBy}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
