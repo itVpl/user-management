@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
+
 const statusColors = {
   Assigned: 'bg-orange-500',
   Posted: 'bg-blue-500',
@@ -19,6 +20,15 @@ const statusColors = {
 const NINETY_MIN_MS = 90 * 60 * 1000;
 const LS_START_KEY = 'rr_timer_start';
 const LS_STOP_KEY = 'rr_timer_stop';
+// YYYY-MM-DDTHH:MM (datetime-local ke liye)
+const nowLocalDateTime = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+// money with max 2 decimals
+const isValidMoney = (val) => /^\d+(\.\d{1,2})?$/.test(val);
 
 const loadShort = (id) => {
   const s = (id ?? '').toString();
@@ -35,10 +45,15 @@ function readLS(key) {
 function writeLS(key, val) {
   try {
     localStorage.setItem(key, JSON.stringify(val));
-  } catch {}
+  } catch { }
 }
 
 const RateRequest = () => {
+  const [errors, setErrors] = useState({});
+
+  const pickupRef = useRef(null);
+  const deliveryRef = useRef(null);
+
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -68,6 +83,40 @@ const RateRequest = () => {
   const [timerStopMap, setTimerStopMap] = useState(() => readLS(LS_STOP_KEY));
   const [tick, setTick] = useState(0); // 1s re-render
   const pollRef = useRef(null);
+  const validateBidForm = () => {
+    const e = {};
+
+    if (!selectedTrucker) e.selectedTrucker = 'Please select the trucker.';
+    if (!driverName?.trim()) e.driverName = 'Please enter the driver name.';
+    if (!vehicleNo?.trim()) e.vehicleNo = 'Please enter the Vehicle Number.';
+
+    if (!pickupDate) e.pickupDate = 'Please choose the pickup date.';
+    else if (new Date(pickupDate) < new Date()) e.pickupDate = 'Pickup cannot be in the past.';
+
+    if (!deliveryDate) e.deliveryDate = 'Please choose the delivery date.';
+    else if (pickupDate && new Date(deliveryDate) <= new Date(pickupDate))
+      e.deliveryDate = 'Delivery date should be greater than pickup date.';
+
+    if (!rate?.trim()) e.rate = 'Please enter the rate.';
+    else if (!isValidMoney(rate)) e.rate = 'Rate must be numeric (max 2 decimals).';
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+  const openPickup = () => {
+    const el = pickupRef.current;
+    if (!el) return;
+    // Chromium supports showPicker(); fallback focus
+    if (typeof el.showPicker === 'function') el.showPicker();
+    else el.focus();
+  };
+
+  const openDelivery = () => {
+    const el = deliveryRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === 'function') el.showPicker();
+    else el.focus();
+  };
 
   const saveStart = (loadId, ts) => {
     if (!loadId) return;
@@ -277,7 +326,7 @@ const RateRequest = () => {
           // ignore per-load errors
         }
       }
-    } catch {}
+    } catch { }
   };
 
   // init
@@ -289,12 +338,12 @@ const RateRequest = () => {
   // Start auto-accept timer for new pending requests
   useEffect(() => {
     const timers = {};
-    
+
     pendingRequests.forEach(request => {
       if (request.status === 'pending' && !loadTimers[request._id]) {
         // Initialize timer for this request
         setLoadTimers(prev => ({ ...prev, [request._id]: 30 }));
-        
+
         // Create interval for countdown
         timers[request._id] = setInterval(() => {
           setLoadTimers(prev => {
@@ -309,7 +358,7 @@ const RateRequest = () => {
         }, 1000);
       }
     });
-    
+
     // Cleanup function
     return () => {
       Object.values(timers).forEach(timer => clearInterval(timer));
@@ -357,7 +406,7 @@ const RateRequest = () => {
     setApprovalModal({ visible: true, type, approval });
     setApprovalReason('');
     setTimeRemaining(30);
-    
+
     // Start auto-accept timer
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
@@ -369,27 +418,27 @@ const RateRequest = () => {
         return prev - 1;
       });
     }, 1000);
-    
+
     setAutoAcceptTimer(timer);
   };
-  
+
   const closeApprovalModal = () => {
     setApprovalModal({ visible: false, type: null, approval: null });
     setApprovalReason('');
     setTimeRemaining(30);
-    
+
     // Clear auto-accept timer
     if (autoAcceptTimer) {
       clearInterval(autoAcceptTimer);
       setAutoAcceptTimer(null);
     }
   };
-  
+
   const handleAutoAccept = async (approval) => {
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-      
+
       if (!token || !empId) {
         toast.error('Missing token or empId. Please log in again.');
         return;
@@ -409,7 +458,7 @@ const RateRequest = () => {
 
       if (response.data.success) {
         toast.success('Load auto-accepted successfully!');
-        
+
         // Start the 90-min timer on ACCEPT
         const acceptedLoadId = approval?.loadId;
         if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
@@ -438,7 +487,7 @@ const RateRequest = () => {
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-      
+
       if (!token || !empId) {
         toast.error('Missing token or empId. Please log in again.');
         return;
@@ -458,7 +507,7 @@ const RateRequest = () => {
 
       if (response.data.success) {
         toast.success('Load auto-accepted successfully!');
-        
+
         // Start the 90-min timer on ACCEPT
         const acceptedLoadId = request?.loadId;
         if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
@@ -493,7 +542,7 @@ const RateRequest = () => {
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-      
+
       if (!token || !empId) {
         toast.error('Missing token or empId. Please log in again.');
         return;
@@ -513,7 +562,7 @@ const RateRequest = () => {
 
       if (response.data.success) {
         toast.success('Load accepted successfully!');
-        
+
         // Start the 90-min timer on ACCEPT
         const acceptedLoadId = request?.loadId;
         if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
@@ -609,16 +658,17 @@ const RateRequest = () => {
       return;
     }
 
-    if (!rate || !message || !pickupDate || !deliveryDate || !selectedTrucker || !driverName || !vehicleNo) {
-      toast.error('Please fill all fields');
+
+    const ok = validateBidForm();   // <- step 8 me jo function banaya tha
+    if (!ok) {
+      toast.error('Please fix the highlighted fields.');
       return;
     }
-
     const payload = {
       loadId: selectedRequest?._id,
       truckerId: selectedTrucker,
       empId,
-      rate: parseInt(rate, 10),
+      rate: parseFloat(rate),
       message,
       estimatedPickupDate: pickupDate,
       estimatedDeliveryDate: deliveryDate,
@@ -686,11 +736,10 @@ const RateRequest = () => {
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'pending'
-              ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'pending'
+            ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
         >
           <div className="flex items-center gap-2">
             <Clock size={18} />
@@ -699,11 +748,10 @@ const RateRequest = () => {
         </button>
         <button
           onClick={() => setActiveTab('rate')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'rate'
-              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'rate'
+            ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
         >
           <div className="flex items-center gap-2">
             <CheckCircle size={18} />
@@ -828,9 +876,8 @@ const RateRequest = () => {
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`text-white text-xs px-3 py-1 rounded-full font-bold ${
-                            statusColors[item.status] || 'bg-gray-500'
-                          }`}
+                          className={`text-white text-xs px-3 py-1 rounded-full font-bold ${statusColors[item.status] || 'bg-gray-500'
+                            }`}
                         >
                           {item.status}
                         </span>
@@ -994,9 +1041,8 @@ const RateRequest = () => {
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`text-white text-xs px-3 py-1 rounded-full font-bold ${
-                            statusColors[item.status] || 'bg-gray-500'
-                          }`}
+                          className={`text-white text-xs px-3 py-1 rounded-full font-bold ${statusColors[item.status] || 'bg-gray-500'
+                            }`}
                         >
                           {item.status || '—'}
                         </span>
@@ -1023,10 +1069,10 @@ const RateRequest = () => {
                           {search
                             ? 'Try adjusting your search terms'
                             : activeTab === 'rate'
-                            ? completedRequests.length > 0
-                              ? 'No completed requests found'
-                              : 'No requests available'
-                            : 'No requests have been completed yet'}
+                              ? completedRequests.length > 0
+                                ? 'No completed requests found'
+                                : 'No requests available'
+                              : 'No requests have been completed yet'}
                         </p>
                       </td>
                     </tr>
@@ -1042,7 +1088,7 @@ const RateRequest = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 p-4 overflow-hidden">
           <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-3xl h-[85vh] flex flex-col border border-blue-100">
-            <form onSubmit={handleSubmit} className="flex flex-col h-full">
+            <form noValidate onSubmit={handleSubmit} className="flex flex-col h-full">
               <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-4 rounded-t-3xl shadow flex justify-between items-center flex-shrink-0">
                 <div>
                   <h2 className="text-2xl font-semibold flex items-center gap-2">Rate Request Form</h2>
@@ -1103,69 +1149,123 @@ const RateRequest = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="md:col-span-2">
-                    <label className="block text-gray-700 text-sm font-medium mb-1">Select Trucker</label>
+                    <label className="block text-gray-700 text-sm font-medium mb-1">
+                      Select Trucker <span className="text-red-600">*</span>
+                    </label>
                     <select
                       value={selectedTrucker}
                       onChange={(e) => setSelectedTrucker(e.target.value)}
                       className="w-full border border-gray-300 rounded-xl px-4 py-2"
                     >
-                      <option value="">Choose Trucker (compName)</option>
+                      <option value="">Select Trucker (CompanyName)</option>
                       {truckers.map((t) => (
-                        <option key={t._id} value={t._id}>
-                          {t.compName}
-                        </option>
+                        <option key={t._id} value={t._id}>{t.compName}</option>
                       ))}
                     </select>
+                    {errors.selectedTrucker && (
+                      <p className="mt-1 text-xs text-red-600">{errors.selectedTrucker}</p>
+                    )}
+
                   </div>
 
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-1">Driver Name</label>
+                    <label className="block text-gray-700 text-sm font-medium mb-1">Driver Name <span className="text-red-600">*</span></label>
                     <input
                       type="text"
                       value={driverName}
                       onChange={(e) => setDriverName(e.target.value)}
                       className="w-full border border-gray-300 px-4 py-2 rounded-xl"
                     />
+                    {errors.driverName && <p className="mt-1 text-xs text-red-600">{errors.driverName}</p>}
                   </div>
 
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-1">Vehicle Number</label>
+                    <label className="block text-gray-700 text-sm font-medium mb-1">Vehicle Number <span className="text-red-600">*</span></label>
                     <input
                       type="text"
                       value={vehicleNo}
-                      onChange={(e) => setVehicleNo(e.target.value)}
+                      onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
                       className="w-full border border-gray-300 px-4 py-2 rounded-xl"
                     />
+                    {errors.vehicleNo && <p className="mt-1 text-xs text-red-600">{errors.vehicleNo}</p>}
                   </div>
 
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-1">Pickup Date</label>
-                    <input
-                      type="datetime-local"
-                      value={pickupDate}
-                      onChange={(e) => setPickupDate(e.target.value)}
-                      className="w-full border border-gray-300 px-4 py-2 rounded-xl"
-                    />
-                  </div>
+                    <label
+                      htmlFor="pickup"
+                      onClick={openPickup}
+                      className="block text-gray-700 text-sm font-medium mb-1 cursor-pointer select-none"
+                    >
+                      Pickup Date <span className="text-red-600">*</span>
+                    </label>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={openPickup}
+                      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openPickup()}
+                      className="w-full rounded-xl"
+                    >
+                      <input
+                        id="pickup"
+                        type="datetime-local"
+                        ref={pickupRef}
+                        value={pickupDate}
+                        onChange={(e) => setPickupDate(e.target.value)}
+                        min={nowLocalDateTime()}
+                        className="w-full border border-gray-300 px-4 py-2 rounded-xl cursor-pointer"
+                      />
+                    </div>
+                    {errors.pickupDate && <p className="mt-1 text-xs text-red-600">{errors.pickupDate}</p>}
 
-                  <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-1">Delivery Date</label>
-                    <input
-                      type="datetime-local"
-                      value={deliveryDate}
-                      onChange={(e) => setDeliveryDate(e.target.value)}
-                      className="w-full border border-gray-300 px-4 py-2 rounded-xl"
-                    />
                   </div>
-
                   <div>
-                    <label className="block text-gray-700 text-sm font-medium mb-1">Rate ($)</label>
+                    <label
+                      htmlFor="delivery"
+                      onClick={openDelivery}
+                      className="block text-gray-700 text-sm font-medium mb-1 cursor-pointer select-none"
+                    >
+                      Delivery Date <span className="text-red-600">*</span>
+                    </label>
+                    <div
+  role="button"
+  tabIndex={0}
+  onClick={openDelivery}
+  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openDelivery()}
+  className="w-full rounded-xl"
+>
+  <input
+    id="delivery"
+    type="datetime-local"
+    ref={deliveryRef}
+    value={deliveryDate}
+    onChange={(e) => setDeliveryDate(e.target.value)}
+    min={pickupDate || nowLocalDateTime()}
+    className="w-full border border-gray-300 px-4 py-2 rounded-xl cursor-pointer"
+  />
+</div>
+{errors.deliveryDate && <p className="mt-1 text-xs text-red-600">{errors.deliveryDate}</p>}
+
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm font-medium mb-1">
+                      Rate ($) <span className="text-red-600">*</span>
+                    </label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="\d+(\.\d{1,2})?"
                       value={rate}
-                      onChange={(e) => setRate(e.target.value)}
+                      onChange={(e) => {
+                        // allow only digits and one dot, max 2 decimals
+                        let v = e.target.value.replace(/[^\d.]/g, '');
+                        const parts = v.split('.');
+                        if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
+                        if (parts[1]?.length > 2) v = parts[0] + '.' + parts[1].slice(0, 2);
+                        setRate(v);
+                      }}
                       className="w-full border border-gray-300 px-4 py-2 rounded-xl"
                     />
+                    {errors.rate && <p className="mt-1 text-xs text-red-600">{errors.rate}</p>}
                   </div>
 
                   <div className="md:col-span-2">
@@ -1182,21 +1282,21 @@ const RateRequest = () => {
 
               <div className="bg-gray-50 px-8 py-4 rounded-b-3xl border-t border-gray-200 flex justify-end gap-4">
                 <button
-                  type="button"
-                  onClick={closeModal}
-                  className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
                   type="submit"
                   disabled={submitting}
-                  className={`px-5 py-2.5 rounded-lg font-semibold text-white ${
-                    submitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
-                  }`}
+                  className={`px-5 py-2.5 rounded-lg font-semibold text-white ${submitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                    }`}
                 >
-                  {submitting ? 'Submitting...' : 'Submit Bid'}
+                  {submitting ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-block h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
+                      Submitting...
+                    </span>
+                  ) : (
+                    'Submit Bid'
+                  )}
                 </button>
+
               </div>
             </form>
           </div>
@@ -1298,11 +1398,10 @@ const RateRequest = () => {
                 type="button"
                 onClick={handleApprovalSubmit}
                 disabled={approvalSubmitting}
-                className={`px-6 py-3 rounded-lg font-semibold text-white ${
-                  approvalSubmitting
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
+                className={`px-6 py-3 rounded-lg font-semibold text-white ${approvalSubmitting
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700'
+                  }`}
               >
                 {approvalSubmitting ? 'Processing...' : 'Accept Load'}
               </button>

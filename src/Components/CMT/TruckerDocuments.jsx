@@ -18,8 +18,8 @@ const formatDDMMYYYY = (d) => {
 const isValidEmail = (val = '') =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(val).trim());
 
-const isValidPhone = (val) =>
-  /^[6-9]\d{9}$/.test(String(val || '').trim());
+// const isValidPhone = (val) =>
+//   /^[6-9]\d{9}$/.test(String(val || '').trim());
 
 // INDIA PIN code: exactly 6 digits, first not 0
 const isValidZip = (val) =>
@@ -280,7 +280,7 @@ export default function TruckerDocuments() {
     if (!editFormData.zipCode?.trim()) errs.zipCode = true;
     else if (!isValidZip(editFormData.zipCode)) errs.zipCode = true;
 
-    if (!isValidPhone(editFormData.phoneNo)) errs.phoneNo = true;
+    // if (!isValidPhone(editFormData.phoneNo)) errs.phoneNo = true;
     if (!editFormData.mc_dot_no?.trim()) errs.mc_dot_no = true;
     if (!editFormData.carrierType?.trim()) errs.carrierType = true;
     if (editFormData.fleetsize === '' || editFormData.fleetsize === null || Number(editFormData.fleetsize) <= 0) {

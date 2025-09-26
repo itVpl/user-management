@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Search } from 'lucide-react';
@@ -15,9 +15,10 @@ export default function CarrierApproval() {
     accountantApprovedTruckers: 0,
     rejectedTruckers: 0
   });
+
   const [viewDoc, setViewDoc] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
-  const [modalType, setModalType] = useState(null);
+  const [modalType, setModalType] = useState(null); // 'approval' | 'rejection' | null
   const [selectedCarrier, setSelectedCarrier] = useState(null);
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(true);
@@ -29,131 +30,46 @@ export default function CarrierApproval() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
-  useEffect(() => {
-    fetchCarriers();
-  }, []);
+  useEffect(() => { fetchCarriers(); }, []);
 
   const fetchCarriers = async () => {
     try {
       setLoading(true);
-      
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/all-truckers`, {
-        headers: { 
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
-      
+
       if (res.data && res.data.success) {
         setCarriers(res.data.truckers || []);
         setStatistics(res.data.statistics || {
-          totalTruckers: 0,
-          pendingTruckers: 0,
-          approvedTruckers: 0,
-          accountantApprovedTruckers: 0,
-          rejectedTruckers: 0
+          totalTruckers: 0, pendingTruckers: 0, approvedTruckers: 0, accountantApprovedTruckers: 0, rejectedTruckers: 0
         });
       } else {
-        console.error('API response format error:', res.data);
         setCarriers([]);
-        setStatistics({
-          totalTruckers: 0,
-          pendingTruckers: 0,
-          approvedTruckers: 0,
-          accountantApprovedTruckers: 0,
-          rejectedTruckers: 0
-        });
+        setStatistics({ totalTruckers: 0, pendingTruckers: 0, approvedTruckers: 0, accountantApprovedTruckers: 0, rejectedTruckers: 0 });
       }
     } catch (err) {
       console.error('Error fetching carriers:', err);
       setCarriers([]);
-      setStatistics({
-        totalTruckers: 0,
-        pendingTruckers: 0,
-        approvedTruckers: 0,
-        accountantApprovedTruckers: 0,
-        rejectedTruckers: 0
-      });
+      setStatistics({ totalTruckers: 0, pendingTruckers: 0, approvedTruckers: 0, accountantApprovedTruckers: 0, rejectedTruckers: 0 });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusUpdate = async (status) => {
-    try {
-      const { userId } = selectedCarrier;
-      
-      if (status === 'approved') {
-        // Use the accountant approval API
-        const response = await axios.patch(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/accountant/${userId}`, {
-          approvalReason: reason || "Documents verified and approved",
-        }, {
-          headers: { 
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.data.success) {
-          alertify.success('✅ Carrier approved successfully!');
-        }
-      } else if (status === 'rejected') {
-        // Use the new rejection API
-        const response = await axios.patch(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/reject/${selectedCarrier.userId}`, {
-          rejectionReason: reason || "Document verification failed - MC/DOT number invalid",
-          step: "accountant_rejection" // Add the correct step enum value for accountant rejection
-        }, {
-          headers: { 
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.data.success) {
-          alertify.error('❌ Carrier rejected successfully!');
-        }
-      }
-      
-      setModalType(null);
-      setReason('');
-      setSelectedCarrier(null);
-      setViewDoc(false);
-      fetchCarriers(); // Refresh
-    } catch (err) {
-      console.error('Status update failed:', err);
-      alertify.error(`❌ Error: ${err.response?.data?.message || err.message}`);
-    }
-  };
+  // --- Helpers ---
+  const norm = (s) => (s || '').toString().toLowerCase().trim();
+  const isApproved = (s) => /approved/i.test(s || '');
+  const isRejected = (s) => /rejected/i.test(s || '');
+  const isPending  = (s) => !s || /pending/i.test(s);
 
-  // Status color helper
   const statusColor = (status) => {
-    if (!status) return 'bg-yellow-100 text-yellow-700';
-    if (status === 'approved') return 'bg-green-100 text-green-700';
-    if (status === 'rejected') return 'bg-red-100 text-red-700';
-    if (status === 'pending') return 'bg-yellow-100 text-yellow-700';
+    if (isApproved(status)) return 'bg-green-100 text-green-700';
+    if (isRejected(status)) return 'bg-red-100 text-red-700';
+    if (isPending(status))  return 'bg-yellow-100 text-yellow-700';
     return 'bg-blue-100 text-blue-700';
   };
 
-  // Pagination calculations
-  const totalPages = Math.ceil(carriers.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentCarriers = carriers.slice(startIndex, endIndex);
-
-  // Handle page change
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  // Handle view carrier details
-  const handleViewCarrier = (carrier) => {
-    setSelectedCarrier(carrier);
-    setShowCarrierModal(true);
-  };
-
-  // Handle document preview
-  const handleDocumentPreview = (documentUrl, documentName) => {
-    setSelectedDocument({ url: documentUrl, name: documentName });
-  };
-
-  // Get document display name
   const getDocumentDisplayName = (docKey) => {
     const displayNames = {
       brokeragePacket: 'Brokerage Packet',
@@ -168,17 +84,101 @@ export default function CarrierApproval() {
     return displayNames[docKey] || docKey;
   };
 
-  // Check if file is image
-  const isImageFile = (fileType) => {
-    return ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileType?.toUpperCase());
+  const isImageFile = (fileType) => ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes((fileType || '').toUpperCase());
+
+  // --- Search / Filter ---
+  const filteredCarriers = useMemo(() => {
+    if (!searchTerm) return carriers;
+    const q = norm(searchTerm);
+    return carriers.filter(c =>
+      norm(c.compName).includes(q) ||
+      norm(c.email).includes(q) ||
+      norm(c.mc_dot_no).includes(q)
+    );
+  }, [carriers, searchTerm]);
+
+  // Reset page on search change
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+
+  // --- Pagination computed from filtered list (fix) ---
+  const totalPages = Math.ceil(filteredCarriers.length / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentCarriers = filteredCarriers.slice(startIndex, endIndex);
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
   };
 
-  // Filter carriers based on search term
-  const filteredCarriers = carriers.filter(carrier =>
-    carrier.compName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    carrier.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    carrier.mc_dot_no?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // --- Computed accurate counters from carriers (not API) ---
+  const todayCount = useMemo(() => {
+    const today = new Date().toDateString();
+    return carriers.filter(c => c?.addedAt && new Date(c.addedAt).toDateString() === today).length;
+  }, [carriers]);
+
+  const approvedCount = useMemo(() => carriers.filter(c => isApproved(c.status)).length, [carriers]);
+  const rejectedCount = useMemo(() => carriers.filter(c => isRejected(c.status)).length, [carriers]);
+  const pendingCount  = useMemo(() => carriers.filter(c => isPending(c.status)).length, [carriers]);
+
+  const handleViewCarrier = (carrier) => {
+    setSelectedCarrier(carrier);
+    setShowCarrierModal(true);
+  };
+
+  const handleDocumentPreview = (documentUrl, documentName) => {
+    setSelectedDocument({ url: documentUrl, name: documentName });
+  };
+
+  const handleStatusUpdate = async (action) => {
+    try {
+      if (!selectedCarrier) return;
+
+      // Guard: don’t allow further action if already finalized
+      if (!isPending(selectedCarrier.status)) {
+        alertify.message('This carrier is already finalized.');
+        return;
+      }
+
+      // Reject reason mandatory
+      if (action === 'rejected' && !reason.trim()) {
+        alertify.error('Please enter the reason.');
+        return;
+      }
+
+      const { userId } = selectedCarrier;
+
+      if (action === 'approved') {
+        const response = await axios.patch(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/accountant/${userId}`,
+          { approvalReason: reason || 'Documents verified and approved' },
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+        if (response.data?.success) alertify.success('✅ Carrier approved successfully!');
+      } else if (action === 'rejected') {
+        const response = await axios.patch(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/reject/${userId}`,
+          {
+            rejectionReason: reason.trim(),
+            step: 'accountant_rejection'
+          },
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+        if (response.data?.success) alertify.error('❌ Carrier rejected successfully!');
+      }
+
+      // Cleanup + Refresh
+      setModalType(null);
+      setReason('');
+      setSelectedCarrier(null);
+      setViewDoc(false);
+      setShowCarrierModal(false);
+      fetchCarriers();
+    } catch (err) {
+      console.error('Status update failed:', err);
+      alertify.error(`❌ Error: ${err.response?.data?.message || err.message}`);
+    }
+  };
 
   if (loading) {
     return (
@@ -209,15 +209,20 @@ export default function CarrierApproval() {
     );
   }
 
+  // Reason modal
   if (modalType) {
+    const label = modalType === 'rejection' ? 'Reason *' : 'Reason (optional)';
     return (
       <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center">
+        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[420px] relative flex flex-col">
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
+          <label className="text-sm font-semibold mb-2">
+            {label}
+          </label>
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
             rows={5}
-            placeholder={`Type reason of ${modalType}`}
+            placeholder={modalType === 'rejection' ? 'Please enter the reason.' : 'Type reason (optional)'}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />
@@ -232,6 +237,9 @@ export default function CarrierApproval() {
     );
   }
 
+  // Card counters (computed for accuracy)
+  const totalCarriers = carriers.length;
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -243,7 +251,7 @@ export default function CarrierApproval() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Carriers</p>
-                <p className="text-xl font-bold text-gray-800">{statistics.totalTruckers}</p>
+                <p className="text-xl font-bold text-gray-800">{totalCarriers}</p>
               </div>
             </div>
           </div>
@@ -254,7 +262,7 @@ export default function CarrierApproval() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-xl font-bold text-blue-600">{statistics.approvedTruckers}</p>
+                <p className="text-xl font-bold text-blue-600">{approvedCount}</p>
               </div>
             </div>
           </div>
@@ -265,7 +273,7 @@ export default function CarrierApproval() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-xl font-bold text-yellow-600">{statistics.pendingTruckers}</p>
+                <p className="text-xl font-bold text-yellow-600">{pendingCount}</p>
               </div>
             </div>
           </div>
@@ -276,11 +284,12 @@ export default function CarrierApproval() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{carriers.filter(carrier => new Date(carrier.addedAt).toDateString() === new Date().toDateString()).length}</p>
+                <p className="text-xl font-bold text-purple-600">{todayCount}</p>
               </div>
             </div>
           </div>
         </div>
+
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -295,37 +304,38 @@ export default function CarrierApproval() {
         </div>
       </div>
 
+      {/* Legacy viewDoc block (kept but actions hidden if finalized) */}
       {viewDoc && selectedCarrier ? (
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
           <div className="flex justify-between items-center mb-8">
             <div className="flex gap-4">
-              <button
-                onClick={() => setModalType('approval')}
-                className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full shadow hover:from-green-600 hover:to-green-800 transition"
-              >
-                <CheckCircle size={18} /> Approve
-              </button>
-              <button
-                onClick={() => setModalType('rejection')}
-                className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full shadow hover:from-red-600 hover:to-red-800 transition"
-              >
-                <XCircle size={18} /> Reject
-              </button>
-              <button
-                onClick={() => setModalType('resubmit')}
-                className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full shadow hover:from-blue-600 hover:to-purple-700 transition"
-              >
-                <Clock size={18} /> Re-submission
-              </button>
+              {isPending(selectedCarrier.status) && (
+                <>
+                  <button
+                    onClick={() => setModalType('approval')}
+                    className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full shadow hover:from-green-600 hover:to-green-800 transition"
+                  >
+                    <CheckCircle size={18} /> Approve
+                  </button>
+                  <button
+                    onClick={() => setModalType('rejection')}
+                    className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full shadow hover:from-red-600 hover:to-red-800 transition"
+                  >
+                    <XCircle size={18} /> Reject
+                  </button>
+                </>
+              )}
             </div>
-            <a
-              href={`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`}
-              target="_blank"
-              rel="noreferrer"
-              className="hover:scale-110 transition-transform"
-            >
-              <FaDownload className="text-blue-500 text-2xl cursor-pointer" />
-            </a>
+            {selectedCarrier.docUpload && (
+              <a
+                href={`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:scale-110 transition-transform"
+              >
+                <FaDownload className="text-blue-500 text-2xl cursor-pointer" />
+              </a>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -341,21 +351,23 @@ export default function CarrierApproval() {
               <div className="flex items-center gap-2 text-gray-700"><Truck size={16} /> <span className="font-medium">Carrier Type:</span> {selectedCarrier.carrierType}</div>
               <div className="flex items-center gap-2 text-gray-700"><Calendar size={16} /> <span className="font-medium">Created:</span> {new Date(selectedCarrier.addedAt).toLocaleDateString()}</div>
               <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold mt-2 ${statusColor(selectedCarrier.status)}`}>
-                {selectedCarrier.status === 'approved' && <CheckCircle size={14} />}
-                {selectedCarrier.status === 'rejected' && <XCircle size={14} />}
-                {selectedCarrier.status === 'pending' && <Clock size={14} />}
+                {isApproved(selectedCarrier.status) && <CheckCircle size={14} />}
+                {isRejected(selectedCarrier.status) && <XCircle size={14} />}
+                {isPending(selectedCarrier.status) && <Clock size={14} />}
                 {selectedCarrier.status || 'Pending'}
               </div>
             </div>
-            <div className="flex flex-col items-center justify-center">
-              <img
-                src={`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`}
-                alt="Uploaded Doc"
-                className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
-                onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`)}
-              />
-              <div className="text-xs text-gray-400 mt-2">Click image to preview</div>
-            </div>
+            {selectedCarrier.docUpload && (
+              <div className="flex flex-col items-center justify-center">
+                <img
+                  src={`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`}
+                  alt="Uploaded Doc"
+                  className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
+                  onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedCarrier.docUpload}`)}
+                />
+                <div className="text-xs text-gray-400 mt-2">Click image to preview</div>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -375,57 +387,58 @@ export default function CarrierApproval() {
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                 </tr>
               </thead>
-                              <tbody>
-                  {filteredCarriers.slice(startIndex, endIndex).map((carrier, index) => (
-                    <tr key={carrier.userId} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{carrier.userId?.slice(-6) || 'N/A'}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div>
-                          <p className="font-medium text-gray-700">{carrier.compName}</p>
-                          <p className="text-sm text-gray-600">{carrier.city}, {carrier.state}</p>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-mono text-sm text-gray-600">{carrier.mc_dot_no}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="text-sm text-gray-700">{carrier.email}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="text-sm text-gray-700">{carrier.phoneNo}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{carrier.carrierType}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(carrier.status)}`}>
-                          {carrier.status === 'approved' && <CheckCircle size={14} />}
-                          {carrier.status === 'rejected' && <XCircle size={14} />}
-                          {carrier.status === 'pending' && <Clock size={14} />}
-                          {carrier.status || 'Pending'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div>
-                          <p className="text-sm text-gray-800">{new Date(carrier.addedAt).toLocaleDateString()}</p>
-                          <p className="text-xs text-gray-500">by {carrier.addedBy?.employeeName || 'System'}</p>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3">
-                        <button
-                          onClick={() => handleViewCarrier(carrier)}
-                          className="bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+              <tbody>
+                {currentCarriers.map((carrier, index) => (
+                  <tr key={carrier.userId} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">{carrier.userId?.slice(-6) || 'N/A'}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <div>
+                        <p className="font-medium text-gray-700">{carrier.compName}</p>
+                        <p className="text-sm text-gray-600">{carrier.city}, {carrier.state}</p>
+                      </div>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-mono text-sm text-gray-600">{carrier.mc_dot_no}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="text-sm text-gray-700">{carrier.email}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="text-sm text-gray-700">{carrier.phoneNo}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">{carrier.carrierType}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(carrier.status)}`}>
+                        {isApproved(carrier.status) && <CheckCircle size={14} />}
+                        {isRejected(carrier.status) && <XCircle size={14} />}
+                        {isPending(carrier.status) && <Clock size={14} />}
+                        {carrier.status || 'Pending'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <div>
+                        <p className="text-sm text-gray-800">{carrier.addedAt ? new Date(carrier.addedAt).toLocaleDateString() : '—'}</p>
+                        <p className="text-xs text-gray-500">by {carrier.addedBy?.employeeName || 'System'}</p>
+                      </div>
+                    </td>
+                    <td className="py-2 px-3">
+                      <button
+                        onClick={() => handleViewCarrier(carrier)}
+                        className="bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
+
           {filteredCarriers.length === 0 && (
             <div className="text-center py-12">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -440,16 +453,15 @@ export default function CarrierApproval() {
         </div>
       )}
 
-      {/* Enhanced Pagination */}
+      {/* Pagination */}
       {totalPages > 1 && filteredCarriers.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredCarriers.length)} of {filteredCarriers.length} carriers
             {searchTerm && ` (filtered from ${carriers.length} total)`}
           </div>
-          
+
           <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
-            {/* Previous Button */}
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
@@ -461,9 +473,7 @@ export default function CarrierApproval() {
               Previous
             </button>
 
-            {/* Page Numbers */}
             <div className="flex items-center gap-1">
-              {/* First Page */}
               {currentPage > 3 && (
                 <>
                   <button
@@ -472,13 +482,10 @@ export default function CarrierApproval() {
                   >
                     1
                   </button>
-                  {currentPage > 4 && (
-                    <span className="px-2 text-gray-400">...</span>
-                  )}
+                  {currentPage > 4 && <span className="px-2 text-gray-400">...</span>}
                 </>
               )}
 
-              {/* Current Page Range */}
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(page => {
                   if (totalPages <= 7) return true;
@@ -500,12 +507,9 @@ export default function CarrierApproval() {
                   </button>
                 ))}
 
-              {/* Last Page */}
               {currentPage < totalPages - 2 && totalPages > 7 && (
                 <>
-                  {currentPage < totalPages - 3 && (
-                    <span className="px-2 text-gray-400">...</span>
-                  )}
+                  {currentPage < totalPages - 3 && <span className="px-2 text-gray-400">...</span>}
                   <button
                     onClick={() => handlePageChange(totalPages)}
                     className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
@@ -516,7 +520,6 @@ export default function CarrierApproval() {
               )}
             </div>
 
-            {/* Next Button */}
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
@@ -531,14 +534,10 @@ export default function CarrierApproval() {
         </div>
       )}
 
-      {/* Carrier Details Modal */}
+      {/* Carrier Details Modal (primary) */}
       {showCarrierModal && selectedCarrier && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}>
-            {/* Header */}
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -550,134 +549,50 @@ export default function CarrierApproval() {
                     <p className="text-blue-100">Carrier Details</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowCarrierModal(false)}
-                  className="text-white hover:text-gray-200 text-2xl font-bold"
-                >
-                  ×
-                </button>
+                <button onClick={() => setShowCarrierModal(false)} className="text-white hover:text-gray-200 text-2xl font-bold">×</button>
               </div>
             </div>
 
-            {/* Content */}
             <div className="p-6 space-y-6">
-              {/* Company & Contact Information */}
+              {/* Company & Contact */}
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Building className="text-blue-600" size={20} />
                   <h3 className="text-lg font-bold text-gray-800">Company Information</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Building className="text-blue-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Company Name</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.compName}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <FileText className="text-green-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">MC/DOT Number</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.mc_dot_no}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <Mail className="text-green-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Email Address</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <Phone className="text-green-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Phone Number</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.phoneNo}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <Truck className="text-orange-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Carrier Type</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.carrierType}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <Truck className="text-orange-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Fleet Size</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.fleetsize} trucks</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                      <Calendar className="text-gray-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Registration Date</p>
-                      <p className="font-semibold text-gray-800">
-                        {new Date(selectedCarrier.addedAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </p>
-                    </div>
-                  </div>
+                  <InfoRow icon={<Building className="text-blue-600" size={16} />} label="Company Name" value={selectedCarrier.compName} />
+                  <InfoRow icon={<FileText className="text-green-600" size={16} />} label="MC/DOT Number" value={selectedCarrier.mc_dot_no} />
+                  <InfoRow icon={<Mail className="text-green-600" size={16} />} label="Email Address" value={selectedCarrier.email} />
+                  <InfoRow icon={<Phone className="text-green-600" size={16} />} label="Phone Number" value={selectedCarrier.phoneNo} />
+                  <InfoRow icon={<Truck className="text-orange-600" size={16} />} label="Carrier Type" value={selectedCarrier.carrierType} />
+                  <InfoRow icon={<Truck className="text-orange-600" size={16} />} label="Fleet Size" value={`${selectedCarrier.fleetsize || 0} trucks`} />
+                  <InfoRow icon={<Calendar className="text-gray-600" size={16} />} label="Registration Date" value={selectedCarrier.addedAt ? new Date(selectedCarrier.addedAt).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : '—'} />
+                </div>
+                <div className="mt-4">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold ${statusColor(selectedCarrier.status)}`}>
+                    {isApproved(selectedCarrier.status) && <CheckCircle size={14} />}
+                    {isRejected(selectedCarrier.status) && <XCircle size={14} />}
+                    {isPending(selectedCarrier.status) && <Clock size={14} />}
+                    {selectedCarrier.status || 'Pending'}
+                  </span>
                 </div>
               </div>
 
-              {/* Address Information */}
+              {/* Address */}
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <MapPin className="text-purple-600" size={20} />
                   <h3 className="text-lg font-bold text-gray-800">Address Information</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <MapPin className="text-purple-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">City</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.city}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <MapPin className="text-purple-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">State</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.state}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <MapPin className="text-purple-600" size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Country</p>
-                      <p className="font-semibold text-gray-800">{selectedCarrier.country}</p>
-                    </div>
-                  </div>
+                  <InfoRow icon={<MapPin className="text-purple-600" size={16} />} label="City" value={selectedCarrier.city} />
+                  <InfoRow icon={<MapPin className="text-purple-600" size={16} />} label="State" value={selectedCarrier.state} />
+                  <InfoRow icon={<MapPin className="text-purple-600" size={16} />} label="Country" value={selectedCarrier.country} />
                 </div>
               </div>
 
-              {/* Documents Section */}
+              {/* Documents */}
               {selectedCarrier.documents && Object.keys(selectedCarrier.documents).length > 0 && (
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
                   <div className="flex items-center gap-2 mb-4">
@@ -687,7 +602,7 @@ export default function CarrierApproval() {
                       {selectedCarrier.documentCount || Object.keys(selectedCarrier.documents).length} documents
                     </span>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {Object.entries(selectedCarrier.documents).map(([docKey, docUrl]) => (
                       <div key={docKey} className="bg-white rounded-xl p-4 shadow-sm border border-green-100 hover:shadow-md transition">
@@ -702,12 +617,12 @@ export default function CarrierApproval() {
                             {docUrl.split('.').pop()?.toUpperCase() || 'FILE'}
                           </span>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <div className="text-xs text-gray-600 truncate">
                             {docUrl.split('/').pop()}
                           </div>
-                          
+
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleDocumentPreview(docUrl, getDocumentDisplayName(docKey))}
@@ -733,52 +648,52 @@ export default function CarrierApproval() {
                 </div>
               )}
 
-              {/* Status Information */}
-              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <CheckCircle className="text-orange-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Status Information</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold ${statusColor(selectedCarrier.status)}`}>
-                      {selectedCarrier.status === 'approved' && <CheckCircle size={14} />}
-                      {selectedCarrier.status === 'rejected' && <XCircle size={14} />}
-                      {selectedCarrier.status === 'pending' && <Clock size={14} />}
-                      {selectedCarrier.status || 'Pending'}
-                    </span>
+              {/* Status reason / timestamps */}
+              {(selectedCarrier.statusReason || selectedCarrier.statusUpdatedAt) && (
+                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <CheckCircle className="text-orange-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Status Information</h3>
                   </div>
-                  {selectedCarrier.statusReason && (
-                    <div className="bg-white p-3 rounded-lg border">
-                      <p className="text-sm text-gray-600 mb-1">Status Reason:</p>
-                      <p className="text-sm text-gray-800">{selectedCarrier.statusReason}</p>
-                    </div>
-                  )}
-                  {selectedCarrier.statusUpdatedAt && (
-                    <div className="text-xs text-gray-500">
-                      Last updated: {new Date(selectedCarrier.statusUpdatedAt).toLocaleString()}
-                    </div>
-                  )}
+                  <div className="space-y-3">
+                    {selectedCarrier.statusReason && (
+                      <div className="bg-white p-3 rounded-lg border">
+                        <p className="text-sm text-gray-600 mb-1">Status Reason:</p>
+                        <p className="text-sm text-gray-800">{selectedCarrier.statusReason}</p>
+                      </div>
+                    )}
+                    {selectedCarrier.statusUpdatedAt && (
+                      <div className="text-xs text-gray-500">
+                        Last updated: {new Date(selectedCarrier.statusUpdatedAt).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Action Buttons */}
-              <div className="flex gap-4 justify-center pt-6">
-                <button
-                  onClick={() => setModalType('approval')}
-                  className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 font-semibold"
-                >
-                  <CheckCircle size={18} />
-                  Approve
-                </button>
-                <button
-                  onClick={() => setModalType('rejection')}
-                  className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg shadow-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 font-semibold"
-                >
-                  <XCircle size={18} />
-                  Reject
-                </button>
-              </div>
+              {/* Action Buttons – show ONLY if pending */}
+              {isPending(selectedCarrier.status) ? (
+                <div className="flex gap-4 justify-center pt-2">
+                  <button
+                    onClick={() => setModalType('approval')}
+                    className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 font-semibold"
+                  >
+                    <CheckCircle size={18} />
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => setModalType('rejection')}
+                    className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg shadow-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 font-semibold"
+                  >
+                    <XCircle size={18} />
+                    Reject
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center text-sm text-gray-600 font-medium">
+                  This carrier is already <span className="capitalize">{selectedCarrier.status}</span>. Approve/Reject options are hidden.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -798,9 +713,9 @@ export default function CarrierApproval() {
             </div>
             <div className="p-4">
               {isImageFile(selectedDocument.url.split('.').pop()) ? (
-                <img 
-                  src={selectedDocument.url} 
-                  alt={selectedDocument.name} 
+                <img
+                  src={selectedDocument.url}
+                  alt={selectedDocument.name}
                   className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
                 />
               ) : (
@@ -808,9 +723,9 @@ export default function CarrierApproval() {
                   <div className="text-center">
                     <FaFileAlt className="text-6xl text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 mb-4">Document preview not available</p>
-                    <a 
-                      href={selectedDocument.url} 
-                      target="_blank" 
+                    <a
+                      href={selectedDocument.url}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition"
                     >
@@ -825,4 +740,19 @@ export default function CarrierApproval() {
       )}
     </div>
   );
-} 
+}
+
+// Small presentational row
+function InfoRow({ icon, label, value }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-8 h-8 bg-white rounded-full border flex items-center justify-center">
+        {icon}
+      </div>
+      <div>
+        <p className="text-sm text-gray-600">{label}</p>
+        <p className="font-semibold text-gray-800">{value || '—'}</p>
+      </div>
+    </div>
+  );
+}

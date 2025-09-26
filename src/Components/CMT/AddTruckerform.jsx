@@ -15,7 +15,8 @@ import {
 // ---------- Validators ----------
 const EMAIL_RE =
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // simple + strict enough & no spaces
-const IN_PHONE_RE = /^[6-9]\d{9}$/; // 10 digits, starts 6-9, no spaces
+// const IN_PHONE_RE = /^[6-9]\d{9}$/; 
+// 10 digits, starts 6-9, no spaces
 // ZIP: US 5 or 5-4 OR India 6-digit
 const ZIP_RE = /^(?:\d{5}(?:-\d{4})?|\d{6})$/;
 
@@ -117,8 +118,8 @@ export default function AddTruckerForm({ onSuccess }) {
       case "phoneNo": {
         if (!value?.trim()) return "Please enter the mobile number.";
         if (/\s/.test(value)) return "Please enter the valid mobile number.";
-        if (!IN_PHONE_RE.test(value))
-          return "Please enter the valid mobile number.";
+        // if (!IN_PHONE_RE.test(value))
+        //   return "Please enter the valid mobile number.";
         break;
       }
       case "mc_dot_no":
