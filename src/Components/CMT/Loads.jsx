@@ -105,25 +105,38 @@ export default function Loads() {
     }
   };
 
-  // ✅ Load form state
-  const [loadForm, setLoadForm] = useState({
-    shipperId: "",
-    fromCity: "",
-    fromState: "",
-    toCity: "",
-    toState: "",
-    vehicleType: "",
-    commodity: "",
-    weight: "",
-    rate: "",
-    rateType: "Flat Rate",   // now editable
-    pickupDate: "",
-    deliveryDate: "",
-    bidDeadline: "",
-    // DRAYAGE extras:
-    returnDate: "",
-    returnLocation: "",      // renamed from drayageLocation (UI); will map to payload.drayageLocation
-  });
+  // 👇 Default/blank values for the Create Load form
+const INITIAL_LOAD_FORM = {
+  shipperId: "",
+  fromCity: "",
+  fromState: "",
+  toCity: "",
+  toState: "",
+  vehicleType: "",
+  commodity: "",
+  weight: "",
+  rate: "",
+  rateType: "Flat Rate",
+  pickupDate: "",
+  deliveryDate: "",
+  bidDeadline: "",
+  // DRAYAGE-only:
+  returnDate: "",
+  returnLocation: "",
+};
+
+// 👇 Replace your current `useState({ ... })` for loadForm with this:
+const [loadForm, setLoadForm] = useState(INITIAL_LOAD_FORM);
+
+// 👇 One-click helper to clear the form & errors and set defaults
+const resetLoadForm = () => {
+  setLoadForm(INITIAL_LOAD_FORM);
+  setFormErrors({});
+  setLoadType("OTR");
+  setCreatingLoad(false);
+  setCreatingDrayage(false);
+};
+
 
   // ✅ Handle Change with sanitization
   const handleChange = (e) => {
@@ -274,24 +287,7 @@ export default function Loads() {
         alertify.success("✅ Load created successfully!");
         setShowLoadCreationModal(false);
 
-        // reset form
-        setLoadForm({
-          shipperId: "",
-          fromCity: "",
-          fromState: "",
-          toCity: "",
-          toState: "",
-          vehicleType: "",
-          commodity: "",
-          weight: "",
-          rate: "",
-          rateType: "Flat Rate",
-          pickupDate: "",
-          deliveryDate: "",
-          bidDeadline: "",
-          returnDate: "",
-          returnLocation: "",
-        });
+        resetLoadForm();  
         setFormErrors({});
         fetchLoads(); // refresh table
       } else {
@@ -890,15 +886,16 @@ export default function Loads() {
           </div>
           {/* // ✅ BUTTON TO OPEN MODAL */}
           <button
-            onClick={() => {
-              setLoadType("OTR");
-              setShowLoadCreationModal(true);
-            }}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-          >
-            <PlusCircle className="w-4 h-4" />
-            Add Loads
-          </button>
+  onClick={() => {
+    resetLoadForm();                 // ✅ clear everything first
+    setShowLoadCreationModal(true);  // then open the modal
+  }}
+  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+>
+  <PlusCircle className="w-4 h-4" />
+  Add Loads
+</button>
+
         </div>
 
       </div>
@@ -1555,13 +1552,17 @@ export default function Loads() {
               {/* Actions */}
 <div className="col-span-2 flex justify-end gap-4 pt-8">
   <button
-    type="button"
-    onClick={() => { setShowLoadCreationModal(false); setFormErrors({}); }}
-    className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
-    disabled={creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)}
-  >
-    Cancel
-  </button>
+  type="button"
+  onClick={() => {
+    setShowLoadCreationModal(false); // close
+    resetLoadForm();                 // ✅ clear
+  }}
+  className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
+  disabled={creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)}
+>
+  Cancel
+</button>
+
 
   {(() => {
     const isSubmitting = creatingLoad || (loadType === "DRAYAGE" && creatingDrayage);

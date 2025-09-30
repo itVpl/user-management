@@ -3,7 +3,7 @@ import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
 
 
-const AddUserModal = ({ onClose, mode = 'create' }) => {
+const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   // === Regex & helpers ===
   const EMPID_ALNUM = /^[A-Za-z0-9]+$/;
   const EMPID_PATTERN = /^VPL\d{3,}$/;                     // e.g., VPL001
@@ -20,7 +20,10 @@ const AddUserModal = ({ onClose, mode = 'create' }) => {
     { key: 'aadharcard', label: 'Aadhaar Card', required: false, icon: '🆔' },
     { key: 'educationalDocs', label: 'Educational Documents', required: false, multiple: true, icon: '📚' },
   ];
-
+  const existingMobilesSet = useMemo(
+    () => new Set(existingMobiles.filter(Boolean).map(m => String(m).replace(/\D/g, ''))),
+    [existingMobiles]
+  );
   const todayStr = () => new Date().toISOString().slice(0, 10);
   const minusYears = (y) => {
     const d = new Date(); d.setFullYear(d.getFullYear() - y);
@@ -148,8 +151,16 @@ const AddUserModal = ({ onClose, mode = 'create' }) => {
         clearErr('designation');
       }
     }
-
+    // 10 digits poore hote hi duplicate check
+    if (name === 'mobileNo' && value.length === 10) {
+      if (existingMobilesSet.has(value)) {
+        setErr('mobileNo', 'Mobile number already registered with us.');
+      } else if (errors.mobileNo === 'Mobile number already registered with us.') {
+        clearErr('mobileNo');
+      }
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
+
   };
 
   const validateFile = (file, maxSizeBytes = MAX_FILE_BYTES) => {
@@ -232,6 +243,7 @@ const AddUserModal = ({ onClose, mode = 'create' }) => {
     const v = formData.mobileNo;
     if (!v) return setErr('mobileNo', 'Please enter the mobile number.'), false;
     if (!MOBILE_PATTERN.test(v)) return setErr('mobileNo', 'Please enter the valid mobile number.'), false;
+    if (existingMobilesSet.has(v)) return setErr('mobileNo', 'Mobile number already registered with us.'), false;
     clearErr('mobileNo'); return true;
   };
   const validateAlternate = () => {
@@ -496,7 +508,7 @@ const AddUserModal = ({ onClose, mode = 'create' }) => {
           setDup('email', 'Employee already registered with this email.');
           handledFieldError = true;
         } else if (field.includes('mobile') || field.includes('mobileno') || field.includes('phone')) {
-          setDup('mobileNo', 'Employee already registered with this mobile number.');
+          setDup('mobileNo', 'Mobile number already registered with us.');
           handledFieldError = true;
         }
       }
@@ -517,11 +529,15 @@ const AddUserModal = ({ onClose, mode = 'create' }) => {
           setInline('email', 'Employee already registered with this email.');
           handledFieldError = true;
         }
-        if (!handledFieldError && (lower.includes('mobile') || lower.includes('phone')) && lower.includes('already')) {
-          setInline('mobileNo', 'Employee already registered with this mobile number.');
+        if (!handledFieldError && (lower.includes('mobile') || lower.includes('phone')) && (lower.includes('already') || lower.includes('exist') || lower.includes('duplicate'))) {
+          setInline('mobileNo', 'Mobile number already registered with us.');
           handledFieldError = true;
         }
-
+        // HTTP 409 (conflict) fallback
+        if (!handledFieldError && res?.status === 409) {
+          setInline('mobileNo', 'Mobile number already registered with us.');
+          handledFieldError = true;
+        }
         // 🔴 ENUM (Department) → inline error (NO POPUP)
         if (
           !handledFieldError &&
