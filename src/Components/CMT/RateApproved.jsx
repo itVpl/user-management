@@ -43,9 +43,13 @@ export default function RateApproved() {
     message: ''
   });
 
+  // Customer search state
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
-  const [salesUserId, setSalesUserId] = useState('1234'); // Default sales user ID
+  const [salesUserId, setSalesUserId] = useState(''); // Will be set from sessionStorage
   const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'completed', or 'accepted'
 
   // Form state for Add Rate Approved
@@ -75,9 +79,10 @@ export default function RateApproved() {
   const fetchCustomers = async () => {
     try {
       setCustomersLoading(true);
-      console.log('Fetching customers from:', `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers/1234`);
+      const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
+      console.log('Fetching customers from:', `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers/${userEmpId}`);
 
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers/1234`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers/${userEmpId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
@@ -107,9 +112,10 @@ export default function RateApproved() {
   const fetchCompletedRates = async () => {
     try {
       setLoading(true);
-      console.log('Fetching completed rates from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/1234`);
+      const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
+      console.log('Fetching completed rates from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/${userEmpId}`);
 
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/1234`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/${userEmpId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
@@ -130,7 +136,7 @@ export default function RateApproved() {
           truckerName: bid.carrier?.compName || 'N/A',
           status: bid.status || 'pending',
           createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
-          createdBy: `Employee ${bid.approvedByinhouseUser?.empId || '1234'}`,
+          createdBy: `Employee ${bid.approvedByinhouseUser?.empId || salesUserId || 'Unknown'}`,
           docUpload: bid.doDocument || 'sample-doc.jpg',
           remarks: bid.message || '',
           // Additional fields from the new API
@@ -141,6 +147,8 @@ export default function RateApproved() {
             state: bid.carrier?.state || 'N/A',
             city: bid.carrier?.city || 'N/A'
           },
+          // Add shipper info for the new column
+          shipperInfo: bid.load?.shipper || null,
           loadInfo: {
             weight: bid.load?.weight || 0,
             commodity: bid.load?.commodity || 'N/A',
@@ -186,9 +194,10 @@ export default function RateApproved() {
   const fetchAcceptedBids = async () => {
     try {
       setLoading(true);
-      console.log('Fetching accepted bids from:', `${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=1234`);
+      const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
+      console.log('Fetching accepted bids from:', `${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=${userEmpId}`);
 
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=1234`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=${userEmpId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
@@ -210,7 +219,7 @@ export default function RateApproved() {
           status: 'accepted',
           createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
           acceptedAt: bid.acceptedAt ? new Date(bid.acceptedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          createdBy: `${bid.acceptedByInhouseUser?.empName || 'Unknown'} (${bid.acceptedByInhouseUser?.empId || '1234'})`,
+          createdBy: `${bid.acceptedByInhouseUser?.empName || 'Unknown'} (${bid.acceptedByInhouseUser?.empId || salesUserId || 'Unknown'})`,
           docUpload: bid.doDocument || 'sample-doc.jpg',
           remarks: bid.message || '',
           // Additional fields from the new API
@@ -267,6 +276,33 @@ export default function RateApproved() {
     }
   };
 
+  // Get empId from sessionStorage on component mount
+  useEffect(() => {
+    const userEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
+    if (userEmpId) {
+      setSalesUserId(userEmpId);
+      console.log('User empId loaded:', userEmpId);
+    } else {
+      console.warn('No empId found in sessionStorage or localStorage');
+    }
+
+    // Log current auth token for Postman testing
+    const authToken = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+    if (authToken) {
+      console.log('🔑 Current Auth Token for Postman:', authToken);
+      console.log('📋 Postman Headers needed:');
+      console.log('Authorization: Bearer ' + authToken);
+      console.log('Content-Type: application/json');
+      console.log('🌐 API Endpoints for Postman:');
+      console.log('GET ' + API_CONFIG.BASE_URL + '/api/v1/bid/pending-by-sales-user/' + userEmpId);
+      console.log('GET ' + API_CONFIG.BASE_URL + '/api/v1/bid/pending-intermediate-approval');
+      console.log('GET ' + API_CONFIG.BASE_URL + '/api/v1/bid/pending/emp/' + userEmpId);
+      console.log('GET ' + API_CONFIG.BASE_URL + '/api/v1/bid/accepted-by-inhouse?empId=' + userEmpId);
+    } else {
+      console.warn('❌ No auth token found in sessionStorage or localStorage');
+    }
+  }, []);
+
   useEffect(() => {
     fetchApprovedRates();
   }, []);
@@ -316,15 +352,31 @@ export default function RateApproved() {
   // Add after fetchApprovedRates function
   const fetchPendingApprovals = async () => {
     try {
-      console.log('Fetching pending approvals from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`);
+      console.log('🔍 Fetching pending approvals from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`);
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
 
+      console.log('📊 Pending Approvals API Response:', response.data);
+      console.log('📈 Number of pending approvals found:', response.data?.bids?.length || 0);
+
       if (response.data && response.data.success) {
-        const transformedRates = response.data.bids.map(bid => ({
+        const currentUserEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
+        
+        // Filter bids to show only current user's data
+        const userSpecificBids = response.data.bids.filter(bid => {
+          // Check if bid belongs to current user
+          const bidEmpId = bid.placedByInhouseUser || bid.load?.createdBySalesUser?.empId;
+          return bidEmpId === currentUserEmpId;
+        });
+
+        console.log('🔍 Total pending approvals:', response.data.bids.length);
+        console.log('👤 User-specific pending approvals:', userSpecificBids.length);
+        console.log('🔑 Current user empId:', currentUserEmpId);
+
+        const transformedRates = userSpecificBids.map(bid => ({
           id: `RA-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
@@ -349,14 +401,18 @@ export default function RateApproved() {
   };
 
   // Add after fetchPendingApprovals function
-  const fetchPendingBidsBySalesUser = async (salesUserId = '1234') => {
+  const fetchPendingBidsBySalesUser = async (userId = null) => {
     try {
-      console.log('Fetching pending bids for sales user:', salesUserId);
+      const userEmpId = userId || salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
+      console.log('🔍 Fetching pending bids for sales user:', userEmpId);
       
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${salesUserId}`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
+
+      console.log('📊 Sales User Bids API Response:', response.data);
+      console.log('📈 Number of sales user bids found:', response.data?.bids?.length || 0);
 
       if (response.data && response.data.success) {
         const transformedBids = response.data.bids.map(bid => ({
@@ -381,6 +437,8 @@ export default function RateApproved() {
             state: bid.carrier?.state || 'N/A',
             city: bid.carrier?.city || 'N/A'
           },
+          // Add shipper info for the new column
+          shipperInfo: bid.load?.shipper || null,
           loadInfo: {
             weight: bid.load?.weight || 0,
             commodity: bid.load?.commodity || 'N/A',
@@ -392,7 +450,9 @@ export default function RateApproved() {
           estimatedPickup: new Date(bid.estimatedPickupDate).toLocaleDateString(),
           estimatedDelivery: new Date(bid.estimatedDeliveryDate).toLocaleDateString(),
           placedByInhouseUser: bid.placedByInhouseUser,
-          salesUserInfo: bid.load?.createdBySalesUser
+          salesUserInfo: bid.load?.createdBySalesUser,
+          // Add placedByCMTUser data for the new column
+          placedByCMTUser: bid.placedByCMTUser || null
         }));
 
         console.log('Transformed pending bids:', transformedBids);
@@ -404,32 +464,20 @@ export default function RateApproved() {
       return [];
     }
   };
-// Define fetchAllData at the component level
+// Define fetchAllData at the component level - ONLY for Pending Bids tab
 const fetchAllData = async () => {
   setLoading(true);
   try {
-    const [approvedData, pendingData, salesUserBids] = await Promise.all([
-      fetchApprovedRates(),
-      fetchPendingApprovals(),
-      fetchPendingBidsBySalesUser(salesUserId) // Use state variable
-    ]);
+    console.log('🎯 Fetching data ONLY from sales user API for Pending Bids tab');
     
-    // Combine all datasets
-    const combinedRates = [
-      ...(approvedData || []), 
-      ...(pendingData || []), 
-      ...(salesUserBids || [])
-    ];
+    // Only fetch from sales user API - remove other APIs
+    const salesUserBids = await fetchPendingBidsBySalesUser();
     
-    // Remove duplicates based on bid ID (rateNum)
-    const uniqueRates = combinedRates.filter((rate, index, self) => 
-      index === self.findIndex(r => r.rateNum === rate.rateNum)
-    );
+    console.log('📋 Data sources breakdown:');
+    console.log('  - Sales User Bids:', salesUserBids?.length || 0);
+    console.log('  - Other APIs: DISABLED (as requested)');
     
-    console.log('Combined rates before deduplication:', combinedRates.length);
-    console.log('Unique rates after deduplication:', uniqueRates.length);
-    
-    setApprovedRates(uniqueRates);
+    setApprovedRates(salesUserBids || []);
   } catch (error) {
     console.error('Error fetching data:', error);
     alertify.error('Error refreshing data');
@@ -504,10 +552,87 @@ const handleAutoApprove = async (bidId) => {
     setCurrentPage(page);
   };
 
+  // Export to CSV function
+  const handleExportToCSV = () => {
+    try {
+      // Get current filtered data
+      const dataToExport = filteredRates;
+      
+      if (dataToExport.length === 0) {
+        console.warn('No data to export');
+        return;
+      }
+
+      // Define CSV headers
+      const headers = [
+        'Bid ID',
+        'Origin',
+        'Destination', 
+        'Original Rate',
+        'Intermediate Rate',
+        'Shipper',
+        'Shipper MC',
+        'Trucker',
+        'Trucker MC',
+        'Status',
+        'Created Date',
+        'Created By'
+      ];
+
+      // Convert data to CSV format
+      const csvContent = [
+        headers.join(','),
+        ...dataToExport.map(rate => [
+          rate.id || '',
+          `"${rate.origin || ''}"`,
+          `"${rate.destination || ''}"`,
+          rate.originalRate || 0,
+          rate.intermediateRate || 0,
+          `"${rate.shipperInfo?.compName || 'N/A'}"`,
+          `"${rate.shipperInfo?.mc_dot_no || 'N/A'}"`,
+          `"${rate.truckerName || 'N/A'}"`,
+          `"${rate.carrierInfo?.mcDotNo || 'N/A'}"`,
+          `"${rate.status || 'N/A'}"`,
+          `"${rate.createdAt || 'N/A'}"`,
+          `"${rate.createdBy || 'N/A'}"`
+        ].join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `approved_rates_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log(`✅ Exported ${dataToExport.length} records to CSV successfully!`);
+    } catch (error) {
+      console.error('Export to CSV error:', error);
+    }
+  };
+
   // Reset to first page when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  // Close customer dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showCustomerDropdown && !event.target.closest('.customer-dropdown-container')) {
+        setShowCustomerDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCustomerDropdown]);
   // Replace the existing useEffect
   useEffect(() => {
     if (activeTab === 'pending') {
@@ -536,17 +661,46 @@ const handleAutoApprove = async (bidId) => {
     }));
   };
 
-  const handleCustomerSelect = (e) => {
-    const selectedCustomerId = e.target.value;
-    const selectedCustomer = customers.find(c => c.value === selectedCustomerId);
+  const handleCustomerSelect = (customerId) => {
+    const selectedCustomer = customers.find(c => c.value === customerId);
     
     if (selectedCustomer) {
       const customer = selectedCustomer.customer;
       setAcceptBidForm(prev => ({
         ...prev,
-        customerName: selectedCustomerId,
+        customerName: customerId,
         fullAddress: `${customer.city}, ${customer.state}, ${customer.country}`
       }));
+      
+      // Update search term to show selected customer name
+      setCustomerSearchTerm(customer.compName);
+      setShowCustomerDropdown(false);
+    }
+  };
+
+  // Filter customers based on search term
+  const filteredCustomers = customers.filter(customer => 
+    customer.customer.compName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    customer.customer.city.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    customer.customer.state.toLowerCase().includes(customerSearchTerm.toLowerCase())
+  );
+
+  // Handle customer search input change
+  const handleCustomerSearchChange = (e) => {
+    const value = e.target.value;
+    setCustomerSearchTerm(value);
+    setShowCustomerDropdown(true);
+    
+    // Clear selection if search term doesn't match selected customer
+    if (acceptBidForm.customerName) {
+      const selectedCustomer = customers.find(c => c.value === acceptBidForm.customerName);
+      if (selectedCustomer && !selectedCustomer.customer.compName.toLowerCase().includes(value.toLowerCase())) {
+        setAcceptBidForm(prev => ({
+          ...prev,
+          customerName: '',
+          fullAddress: ''
+        }));
+      }
     }
   };
 
@@ -642,8 +796,9 @@ const handleAutoApprove = async (bidId) => {
     try {
       setSubmitting(true);
       // Prepare the data for API submission
+      const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
       const submitData = {
-        empId: "1234", // You can make this dynamic based on logged-in user
+        empId: userEmpId, // Dynamic based on logged-in user
         date: new Date().toISOString().split('T')[0], // Current date
         shipmentNumber: formData.shipmentNumber,
         origin: formData.origin,
@@ -738,16 +893,33 @@ const handleAutoApprove = async (bidId) => {
       // Fetch customers when modal opens
       await fetchCustomers();
 
+      // Find matching customer by shipper ID
+      const matchingCustomer = customers.find(c => c.customer._id === rate.shipperInfo?._id);
+      const selectedCustomerId = matchingCustomer ? matchingCustomer.value : '';
+
+      console.log('Rate shipper info:', rate.shipperInfo);
+      console.log('Available customers:', customers);
+      console.log('Matching customer:', matchingCustomer);
+      console.log('Selected customer ID:', selectedCustomerId);
+
       // Pre-fill form with rate data
       setAcceptBidForm({
-        customerName: '',
-        fullAddress: '',
+        customerName: selectedCustomerId, // Auto-select shipper ID if found
+        fullAddress: rate.shipperInfo ? `${rate.shipperInfo.city}, ${rate.shipperInfo.state}` : '',
         status: 'Accepted',
         shipmentNumber: rate.shipmentNumber || '',
         poNumber: '',
         bolNumber: '',
         message: rate.remarks || ''
       });
+
+      // Set search term to show selected customer name
+      if (matchingCustomer) {
+        setCustomerSearchTerm(matchingCustomer.customer.compName);
+      } else {
+        setCustomerSearchTerm('');
+      }
+      setShowCustomerDropdown(false);
 
     } catch (error) {
       console.error('Error opening accept bid modal:', error);
@@ -844,28 +1016,50 @@ const handleAutoApprove = async (bidId) => {
             <div className="bg-blue-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-blue-800 mb-4">Customer Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                <div className="relative customer-dropdown-container">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Customer Name *
                   </label>
-                  <select
-                    name="customerName"
-                    value={acceptBidForm.customerName}
-                    onChange={handleCustomerSelect}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                  >
-                    <option value="">Select a customer</option>
-                    {customersLoading ? (
-                      <option value="" disabled>Loading customers...</option>
-                    ) : (
-                      customers.map(customer => (
-                        <option key={customer.value} value={customer.value}>
-                          {customer.label}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={customerSearchTerm}
+                      onChange={handleCustomerSearchChange}
+                      onFocus={() => setShowCustomerDropdown(true)}
+                      placeholder="Search customer by name, city, or state..."
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    />
+                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  </div>
+                  
+                  {/* Dropdown */}
+                  {showCustomerDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {customersLoading ? (
+                        <div className="px-4 py-3 text-gray-500 text-center">
+                          Loading customers...
+                        </div>
+                      ) : filteredCustomers.length > 0 ? (
+                        filteredCustomers.map((customer) => (
+                          <div
+                            key={customer.value}
+                            onClick={() => handleCustomerSelect(customer.value)}
+                            className="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                          >
+                            <div className="font-medium text-gray-900">{customer.customer.compName}</div>
+                            <div className="text-sm text-gray-500">{customer.customer.city}, {customer.customer.state}</div>
+                            {customer.customer.mc_dot_no && (
+                              <div className="text-xs text-gray-400">MC: {customer.customer.mc_dot_no}</div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-gray-500 text-center">
+                          No customers found
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1202,7 +1396,9 @@ const handleAutoApprove = async (bidId) => {
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Placed By</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                     </tr>
@@ -1230,9 +1426,25 @@ const handleAutoApprove = async (bidId) => {
                         </td>
                         <td className="py-2 px-3">
                           <div>
+                            <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
+                            {rate.shipperInfo?.mc_dot_no && (
+                              <p className="text-xs text-gray-500">MC: {rate.shipperInfo.mc_dot_no}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
                             <p className="font-medium text-gray-700">{rate.truckerName}</p>
                             {rate.carrierInfo && (
                               <p className="text-xs text-gray-500">MC: {rate.carrierInfo.mcDotNo}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <p className="font-medium text-gray-700">{rate.placedByCMTUser?.employeeName || 'N/A'}</p>
+                            {rate.placedByCMTUser?.empId && (
+                              <p className="text-xs text-gray-500">ID: {rate.placedByCMTUser.empId}</p>
                             )}
                           </div>
                         </td>
@@ -1427,6 +1639,13 @@ const handleAutoApprove = async (bidId) => {
                   className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
+              <button
+                onClick={handleExportToCSV}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                <FaDownload size={16} />
+                <span className="text-sm font-semibold">Export to CSV</span>
+              </button>
             </div>
           </div>
 
@@ -1440,6 +1659,7 @@ const handleAutoApprove = async (bidId) => {
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                     </tr>
@@ -1472,6 +1692,14 @@ const handleAutoApprove = async (bidId) => {
                               <p className="text-xs text-gray-500">
                                 Diff: ${rate.approvalStatus.rateDifference} ({rate.approvalStatus.rateDifferencePercentage}%)
                               </p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
+                            {rate.shipperInfo?.mc_dot_no && (
+                              <p className="text-xs text-gray-500">MC: {rate.shipperInfo.mc_dot_no}</p>
                             )}
                           </div>
                         </td>

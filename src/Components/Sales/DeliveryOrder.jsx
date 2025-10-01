@@ -369,6 +369,33 @@ const errBox = (has) =>
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [orderToAssign, setOrderToAssign] = useState(null);
   const [assigningOrder, setAssigningOrder] = useState(false);
+  const [showBolModal, setShowBolModal] = useState(false);
+  const [showItemsModal, setShowItemsModal] = useState(false);
+  const [itemsData, setItemsData] = useState([
+    {
+      id: 1,
+      pieces: '',
+      description: '',
+      lbs: '',
+      type: '',
+      nmfc: '',
+      hm: 'No',
+      class: ''
+    }
+  ]);
+  const [bolData, setBolData] = useState({
+    bol: '',
+    thirdParty: '',
+    carrier: '',
+    freightCharges: '',
+    origin: '',
+    destination: '',
+    emergency: '',
+    cod: '',
+    notes: '',
+    items: '',
+    files: []
+  });
   const logoSrc = Logo;
   // top-level states ke saath
   const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
@@ -464,6 +491,7 @@ const errBox = (has) =>
     carrierName: '',
     equipmentType: '',
     carrierFees: '',
+    bolInformation: '',
 
     // Shipper Information
     shipperName: '',
@@ -3650,6 +3678,27 @@ other: ensureMoney2dp(String(c.other ?? '')),
 
               </div>
 
+              {/* Bol Information Section */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-blue-800 mb-4">Bol Information</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <input
+                      type="text"
+                      name="bolInformation"
+                      value={formData.bolInformation || ''}
+                      onClick={() => {
+                        //console.log('Bol Information clicked!');
+                        //alert('Bol Information clicked!');
+                        setShowBolModal(true);
+                      }}
+                      readOnly
+                      className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer border-gray-300"
+                      placeholder="Add Bol Information (Click to add)"
+                    />
+                  </div>
+                </div>
+              </div>
 
               {/* Shipper Information Section */}
               <div className="bg-purple-50 p-4 rounded-lg">
@@ -4862,6 +4911,427 @@ other: ensureMoney2dp(String(c.other ?? '')),
         </div>
       )}
 
+      {/* Bol Information Modal */}
+      {console.log('showBolModal state:', showBolModal)}
+      {showBolModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-white">Bol Information</h2>
+                </div>
+                <button
+                  onClick={() => setShowBolModal(false)}
+                  className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+              {/* Form Fields */}
+              <div className="grid grid-cols-2 gap-6">
+                {/* BOL */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">BOL *</label>
+                  <input
+                    type="text"
+                    value={bolData.bol}
+                    onChange={(e) => setBolData({...bolData, bol: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter BOL number"
+                  />
+                </div>
+
+                {/* 3rd Party */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">3rd Party</label>
+                  <input
+                    type="text"
+                    value={bolData.thirdParty}
+                    onChange={(e) => setBolData({...bolData, thirdParty: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter 3rd party information"
+                  />
+                </div>
+
+                {/* Carrier */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Carrier</label>
+                  <input
+                    type="text"
+                    value={bolData.carrier}
+                    onChange={(e) => setBolData({...bolData, carrier: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter carrier information"
+                  />
+                </div>
+
+                {/* Freight Charges */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Freight Charges</label>
+                  <input
+                    type="text"
+                    value={bolData.freightCharges}
+                    onChange={(e) => setBolData({...bolData, freightCharges: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter freight charges"
+                  />
+                </div>
+
+                {/* Origin */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Origin</label>
+                  <input
+                    type="text"
+                    value={bolData.origin}
+                    onChange={(e) => setBolData({...bolData, origin: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter origin location"
+                  />
+                </div>
+
+                {/* Destination */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Destination</label>
+                  <input
+                    type="text"
+                    value={bolData.destination}
+                    onChange={(e) => setBolData({...bolData, destination: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter destination location"
+                  />
+                </div>
+
+                {/* Emergency */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Emergency</label>
+                  <input
+                    type="text"
+                    value={bolData.emergency}
+                    onChange={(e) => setBolData({...bolData, emergency: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter emergency contact"
+                  />
+                </div>
+
+                {/* C.O.D. */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">C.O.D.</label>
+                  <input
+                    type="text"
+                    value={bolData.cod}
+                    onChange={(e) => setBolData({...bolData, cod: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter C.O.D. information"
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                <textarea
+                  value={bolData.notes}
+                  onChange={(e) => setBolData({...bolData, notes: e.target.value})}
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter additional notes"
+                />
+              </div>
+
+              {/* Items */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
+                <input
+                  type="text"
+                  value={bolData.items}
+                  onClick={() => {
+                    console.log('Items clicked!');
+                    setShowItemsModal(true);
+                  }}
+                  readOnly
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  placeholder="Add Items (Click to add)"
+                />
+              </div>
+
+              {/* Files */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Files</label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setBolData({...bolData, files: Array.from(e.target.files)})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {bolData.files.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-600">Selected files:</p>
+                    <ul className="text-sm text-gray-500">
+                      {bolData.files.map((file, index) => (
+                        <li key={index}>• {file.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowBolModal(false)}
+                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Apply Bol Information
+                    setFormData({...formData, bolInformation: 'Bol Information Added'});
+                    setShowBolModal(false);
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Apply Bol Information
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Items Modal */}
+      {showItemsModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-blue-600 p-6">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-white">Items Information</h2>
+                </div>
+                <button
+                  onClick={() => setShowItemsModal(false)}
+                  className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+              {/* Items List */}
+              {itemsData.map((item, index) => (
+                <div key={item.id} className="bg-gray-50 p-4 rounded-lg border">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800">Item {index + 1}</h3>
+                    {itemsData.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemsData(itemsData.filter((_, i) => i !== index));
+                        }}
+                        className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-100 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Form Fields */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Pieces */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Pieces *</label>
+                      <input
+                        type="text"
+                        value={item.pieces}
+                        onChange={(e) => {
+                          const newItems = [...itemsData];
+                          newItems[index].pieces = e.target.value;
+                          setItemsData(newItems);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Enter number of pieces"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                      <input
+                        type="text"
+                        value={item.description}
+                        onChange={(e) => {
+                          const newItems = [...itemsData];
+                          newItems[index].description = e.target.value;
+                          setItemsData(newItems);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Enter item description"
+                      />
+                    </div>
+
+                    {/* LBS */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">LBS *</label>
+                      <input
+                        type="text"
+                        value={item.lbs}
+                        onChange={(e) => {
+                          const newItems = [...itemsData];
+                          newItems[index].lbs = e.target.value;
+                          setItemsData(newItems);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Enter weight in LBS"
+                      />
+                    </div>
+
+                    {/* Type */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Type *</label>
+                      <input
+                        type="text"
+                        value={item.type}
+                        onChange={(e) => {
+                          const newItems = [...itemsData];
+                          newItems[index].type = e.target.value;
+                          setItemsData(newItems);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Enter item type"
+                      />
+                    </div>
+
+                    {/* NMFC */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">NMFC *</label>
+                      <input
+                        type="text"
+                        value={item.nmfc}
+                        onChange={(e) => {
+                          const newItems = [...itemsData];
+                          newItems[index].nmfc = e.target.value;
+                          setItemsData(newItems);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Enter NMFC code"
+                      />
+                    </div>
+
+                    {/* HM (Yes or No) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">HM (Yes or No) *</label>
+                      <select
+                        value={item.hm}
+                        onChange={(e) => {
+                          const newItems = [...itemsData];
+                          newItems[index].hm = e.target.value;
+                          setItemsData(newItems);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                      </select>
+                    </div>
+
+                    {/* Class */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Class *</label>
+                      <input
+                        type="text"
+                        value={item.class}
+                        onChange={(e) => {
+                          const newItems = [...itemsData];
+                          newItems[index].class = e.target.value;
+                          setItemsData(newItems);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Enter class"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add New Item Button */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newItem = {
+                      id: Date.now(),
+                      pieces: '',
+                      description: '',
+                      lbs: '',
+                      type: '',
+                      nmfc: '',
+                      hm: 'No',
+                      class: ''
+                    };
+                    setItemsData([...itemsData, newItem]);
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-xl hover:from-green-600 hover:to-blue-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  </svg>
+                  Add New Item
+                </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowItemsModal(false)}
+                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Apply Items Information
+                    const itemsSummary = itemsData.map((item, index) => 
+                      `Item ${index + 1}: ${item.pieces} pieces - ${item.description}`
+                    ).join('; ');
+                    setBolData({...bolData, items: itemsSummary});
+                    setShowItemsModal(false);
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-xl hover:from-green-600 hover:to-blue-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Apply Items Information
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Order Modal */}
       {showEditModal && editingOrder && (
@@ -5131,6 +5601,28 @@ other: ensureMoney2dp(String(c.other ?? '')),
               {errors.carrier?.fees && (
                 <p className="mt-1 text-xs text-red-600">{errors.carrier.fees}</p>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bol Information */}
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold text-blue-800 mb-4">Bol Information</h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <input
+                type="text"
+                name="bolInformation"
+                value={formData.bolInformation || ''}
+                onClick={() => {
+                  console.log('Bol Information clicked!');
+                  alert('Bol Information clicked!');
+                  setShowBolModal(true);
+                }}
+                readOnly
+                className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer border-gray-300"
+                placeholder="Add Bol Information (Click to add)"
+              />
             </div>
           </div>
         </div>

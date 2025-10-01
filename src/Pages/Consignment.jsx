@@ -32,8 +32,8 @@ export default function Consignment() {
         return;
       }
 
-      // Fetch data from the new API endpoint
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/all-loads`, {
+      // Fetch data from the new API endpoint for CMT assigned loads
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/cmt-assigned-loads/VPL003`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -46,57 +46,49 @@ export default function Consignment() {
 
       // Check if response has data property
       if (response.data && response.data.success) {
-        const apiData = response.data.loads || response.data.data || response.data;
-        console.log('API Data:', apiData); // Debug API data
+        const assignedLoads = response.data.data?.assignedLoads || [];
+        console.log('Assigned Loads:', assignedLoads); // Debug assigned loads
         
-                 // Check if apiData is an array
-         if (Array.isArray(apiData)) {
-           const transformedData = apiData.map((item, index) => ({
-             id: item.loadId || item._id || index,
-             sNo: index + 1,
-             shipmentNo: item.shipmentNumber || item.loadId || 'N/A',
-             shipperName: item.shipperName || 'N/A',
-             truckerName: item.truckerName || 'N/A',
-             driverName: item.driverName || 'N/A',
-             vehicleNo: item.vehicleNo || 'N/A',
-             status: item.status || 'N/A',
-             pickupAddress: item.origin || 'N/A',
-             deliveryAddress: item.destination || 'N/A',
-             dropLocationImages: item.dropLocationImages || {},
-             containerImages: item.containerImages || [],
-             eirTickets: item.eirTickets || [],
-             emptyTruckImages: item.emptyTruckImages || [],
-             createdAt: new Date().toISOString().split('T')[0]
-           }));
+        if (Array.isArray(assignedLoads)) {
+          const transformedData = assignedLoads.map((assignedLoad, index) => {
+            const load = assignedLoad.load;
+            const acceptedTrucker = load.truckers?.find(trucker => trucker.status === 'Accepted') || load.truckers?.[0];
+            
+            return {
+              id: assignedLoad._id || index,
+              sNo: index + 1,
+              shipmentNo: load.shipmentNumber || 'N/A',
+              shipperName: load.shipper?.compName || 'N/A',
+              truckerName: acceptedTrucker?.carrier?.compName || load.carrier?.compName || 'N/A',
+              driverName: acceptedTrucker?.driverName || 'N/A',
+              vehicleNo: acceptedTrucker?.vehicleNumber || 'N/A',
+              status: load.status || assignedLoad.overallStatus || 'N/A',
+              pickupAddress: load.origin?.city || 'N/A',
+              deliveryAddress: load.destination?.city || 'N/A',
+              dropLocationImages: {},
+              containerImages: [],
+              eirTickets: [],
+              emptyTruckImages: [],
+              createdAt: assignedLoad.createdAt || new Date().toISOString().split('T')[0],
+              // Additional data for detailed view
+              loadDetails: {
+                weight: load.weight,
+                commodity: load.commodity,
+                vehicleType: load.vehicleType,
+                pickupDate: load.pickupDate,
+                deliveryDate: load.deliveryDate,
+                rate: load.rate,
+                truckers: load.truckers || []
+              }
+            };
+          });
 
           console.log('Transformed Data:', transformedData); // Debug transformed data
           setConsignments(transformedData);
         } else {
-          console.log('API Data is not an array:', apiData);
+          console.log('Assigned Loads is not an array:', assignedLoads);
           alertify.error('API returned data is not in expected format');
         }
-             } else if (response.data && Array.isArray(response.data)) {
-         // If response.data is directly an array
-         const transformedData = response.data.map((item, index) => ({
-           id: item.loadId || item._id || index,
-           sNo: index + 1,
-           shipmentNo: item.shipmentNumber || item.loadId || 'N/A',
-           shipperName: item.shipperName || 'N/A',
-           truckerName: item.truckerName || 'N/A',
-           driverName: item.driverName || 'N/A',
-           vehicleNo: item.vehicleNo || 'N/A',
-           status: item.status || 'N/A',
-           pickupAddress: item.origin || 'N/A',
-           deliveryAddress: item.destination || 'N/A',
-           dropLocationImages: item.dropLocationImages || {},
-           containerImages: item.containerImages || [],
-           eirTickets: item.eirTickets || [],
-           emptyTruckImages: item.emptyTruckImages || [],
-           createdAt: new Date().toISOString().split('T')[0]
-         }));
-
-        console.log('Transformed Data (Array):', transformedData);
-        setConsignments(transformedData);
       } else {
         console.log('Unexpected response structure:', response.data);
         console.log('Response data type:', typeof response.data);
@@ -150,10 +142,11 @@ export default function Consignment() {
   const filteredConsignments = consignments
     .filter(consignment =>
       consignment.shipmentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      consignment.shipperName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       consignment.truckerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       consignment.driverName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      consignment.vehicleNo.toLowerCase().includes(searchTerm.toLowerCase())
+      consignment.vehicleNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      consignment.pickupAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      consignment.deliveryAddress.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
@@ -272,15 +265,14 @@ export default function Consignment() {
                                  <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                    <tr>
                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S.No</th>
-                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment No</th>
-                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper Name</th>
-                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker Name</th>
-                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Driver Name</th>
-                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle No</th>
+                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Number</th>
+                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
+                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Driver</th>
+                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle Number</th>
                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick up</th>
+                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pickup</th>
                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
                    </tr>
                  </thead>
@@ -292,9 +284,6 @@ export default function Consignment() {
                        </td>
                        <td className="py-2 px-3">
                          <span className="font-medium text-gray-700">{consignment.shipmentNo}</span>
-                       </td>
-                       <td className="py-2 px-3">
-                         <span className="font-medium text-gray-700">{consignment.shipperName}</span>
                        </td>
                        <td className="py-2 px-3">
                          <span className="font-medium text-gray-700">{consignment.truckerName}</span>
@@ -445,6 +434,16 @@ export default function Consignment() {
                         {selectedConsignment.status}
                       </span>
                     </p>
+                    {selectedConsignment.loadDetails && (
+                      <>
+                        <p><strong>Weight:</strong> {selectedConsignment.loadDetails.weight} lbs</p>
+                        <p><strong>Commodity:</strong> {selectedConsignment.loadDetails.commodity}</p>
+                        <p><strong>Vehicle Type:</strong> {selectedConsignment.loadDetails.vehicleType}</p>
+                        <p><strong>Rate:</strong> ${selectedConsignment.loadDetails.rate}</p>
+                        <p><strong>Pickup Date:</strong> {new Date(selectedConsignment.loadDetails.pickupDate).toLocaleDateString()}</p>
+                        <p><strong>Delivery Date:</strong> {new Date(selectedConsignment.loadDetails.deliveryDate).toLocaleDateString()}</p>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-4">
