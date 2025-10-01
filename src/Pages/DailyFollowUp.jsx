@@ -10,16 +10,22 @@ const toLocalISO = (d = new Date()) => {
   const tz = d.getTimezoneOffset() * 60000;
   return new Date(Date.now() - tz).toISOString().split('T')[0];
 };
-
+// Tomorrow (strictly future)
+const toLocalTomorrowISO = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tz).toISOString().split('T')[0];
+};
 
 // Next Follow-Up min date: max(today, followUpDate + 1 day)
 const getNextMinDate = (followUpDate) => {
-  const today = toLocalISO();
-  if (!followUpDate) return today;
+  const tomorrow = toLocalTomorrowISO();
+  if (!followUpDate) return tomorrow;
   const d = new Date(followUpDate);
   d.setDate(d.getDate() + 1);            // strictly greater than followUpDate
   const gt = toLocalISO(d);
-  return gt > today ? gt : today;        // also never before today
+  return gt > tomorrow ? gt : tomorrow;  // also never before tomorrow
 };
 
 const onlyLetters = /^[A-Za-z ]+$/;                  // alphabets + space
@@ -57,6 +63,7 @@ export default function DailyFollowUp() {
   const editFollowUpDateRef = useRef(null); // Edit form ke liye
   const nextFollowUpDateRef = useRef(null);        // Add modal ke liye
   const editNextFollowUpDateRef = useRef(null);    // Edit modal ke liye
+  const newNextFollowUpDateRef = useRef(null);     // Add *New* Follow-Up modal
   const [followUps, setFollowUps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,11 +73,11 @@ export default function DailyFollowUp() {
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
   const [viewLoadingId, setViewLoadingId] = useState(null); // id of row being viewed
   const [editLoadingId, setEditLoadingId] = useState(null); // id of row being edited
-
+  const [newErrors, setNewErrors] = useState({}); // ⬅ for "Add New Follow-Up" modal
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddNewFollowUpForm, setShowAddNewFollowUpForm] = useState(false);
   const [newFollowUpData, setNewFollowUpData] = useState({
-    followUpType: 'call',
+    followUpType: '',
     followUpNotes: '',
     nextFollowUpDate: ''
   });
@@ -183,7 +190,7 @@ export default function DailyFollowUp() {
     return 'bg-gray-100 text-gray-700';
   };
 
-  
+
   // Filter follow-ups based on search term
   const filteredFollowUps = followUps.filter(followUp =>
     followUp.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -194,94 +201,112 @@ export default function DailyFollowUp() {
 
   // Handle form input changes
   const handleInputChange = (e) => {
-  const { name } = e.target;
-  let value = e.target.value;
+    const { name } = e.target;
+    let value = e.target.value;
 
-  // Email: never allow spaces
-  if (name === 'customerEmail') {
-    value = value.replace(/\s/g, '');
-  }
+    // Email: never allow spaces
+    if (name === 'customerEmail') {
+      value = value.replace(/\s/g, '');
+    }
 
-  // Phone: digits only, max 10
-  if (name === 'customerPhone') {
-    value = clampDigits(value); // keeps only 0-9 and trims to 10
-  }
+    // Phone: digits only, max 10
+    if (name === 'customerPhone') {
+      value = clampDigits(value); // keeps only 0-9 and trims to 10
+    }
 
-  // Names: allow letters + spaces (including in-between)
-  if (['customerName', 'contactPerson', 'concernedPerson'].includes(name)) {
-    // strip anything that's not A–Z or space
-    value = value.replace(/[^A-Za-z ]/g, '');
-    // collapse multiple spaces to single
-    value = value.replace(/\s{2,}/g, ' ');
-    // NOTE: no trim here — user ko abhi trailing space type karne do
-  }
+    // Names: allow letters + spaces (including in-between)
+    if (['customerName', 'contactPerson', 'concernedPerson'].includes(name)) {
+      // strip anything that's not A–Z or space
+      value = value.replace(/[^A-Za-z ]/g, '');
+      // collapse multiple spaces to single
+      value = value.replace(/\s{2,}/g, ' ');
+      // NOTE: no trim here — user ko abhi trailing space type karne do
+    }
 
-  setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
 
-  // clear field error as user types
-  if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
-};
+    // clear field error as user types
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
+  };
 
 
   const validateForm = () => {
     const e = {};
-    // Name
+    const today = toLocalISO();
+
+    // Customer Name
     if (!formData.customerName.trim()) e.customerName = 'Please enter the customer name.';
     else if (!onlyLetters.test(formData.customerName.trim())) e.customerName = 'Only alphabets are allowed.';
+
+    // Phone
+    if (!formData.customerPhone) e.customerPhone = 'Please enter the mobile number.';
+    else if (!phoneRe.test(formData.customerPhone)) e.customerPhone = 'Please enter the valid mobile number.';
 
     // Email
     if (!formData.customerEmail) e.customerEmail = 'Please enter the email id.';
     else if (/\s/.test(formData.customerEmail)) e.customerEmail = 'Email should not contain spaces.';
     else if (!emailRe.test(formData.customerEmail)) e.customerEmail = 'Please enter the valid email id.';
 
-    // Phone
-    if (!formData.customerPhone) e.customerPhone = 'Please enter the mobile number.';
-    else if (!phoneRe.test(formData.customerPhone)) e.customerPhone = 'Please enter the valid mobile number.';
+    // Address  ⬅️ NEW: mandatory
+    if (!formData.customerAddress?.trim()) e.customerAddress = 'Please enter the customer address.';
 
-    // Follow-Up Date (today or future)
-    const today = toLocalISO();
+    // Follow-Up Date (today/future)
     if (!formData.followUpDate) e.followUpDate = 'Please select the Follow-Up Date.';
     else if (formData.followUpDate < today) e.followUpDate = 'Follow-Up Date cannot be in the past.';
 
-    // Contact Person
-    if (!formData.contactPerson.trim()) {
-      e.contactPerson = 'Please enter the Contact Person name.';
-    } else if (!onlyLetters.test(formData.contactPerson.trim())) {
-      e.contactPerson = 'Only alphabets are allowed.';
-    }
+    // Contact Person  ⬅️ mandatory
+    if (!formData.contactPerson.trim()) e.contactPerson = 'Please enter the Contact Person name.';
+    else if (!onlyLetters.test(formData.contactPerson.trim())) e.contactPerson = 'Only alphabets are allowed.';
 
-    // Concerned Person
-    if (!formData.concernedPerson.trim()) {
-      e.concernedPerson = 'Please enter the Concerned Person name.';
-    } else if (!onlyLetters.test(formData.concernedPerson.trim())) {
-      e.concernedPerson = 'Only alphabets are allowed.';
-    }
+    // Concerned Person  ⬅️ mandatory
+    if (!formData.concernedPerson.trim()) e.concernedPerson = 'Please enter the Concerned Person name.';
+    else if (!onlyLetters.test(formData.concernedPerson.trim())) e.concernedPerson = 'Only alphabets are allowed.';
 
-
-    // Follow-Up Type / Status must be selected
+    // Follow-Up Type / Status  ⬅️ mandatory
     if (!formData.followUpType) e.followUpType = 'Please select the Follow-Up Type.';
     if (!formData.status) e.status = 'Please select the status.';
-    // Follow-Up Date (today or future)
-    if (!formData.followUpDate) {
-      e.followUpDate = 'Please select the Follow-Up Date.';
-    } else if (formData.followUpDate < toLocalISO()) {
-      // safety: manual typing se past na ja sake
-      e.followUpDate = 'Follow-Up Date cannot be in the past.';
-    }
 
-    // Next follow-up date: today/future only AND strictly > followUpDate
-    if (formData.nextFollowUpDate) {
-      const today = toLocalISO();
-      if (formData.nextFollowUpDate < today) {
+    // Credit Check  ⬅️ NEW: mandatory
+    if (!formData.creditCheck?.trim()) e.creditCheck = 'Please enter the credit check details.';
+
+    // Remark  ⬅️ NEW: mandatory
+    if (!formData.remark?.trim()) e.remark = 'Please enter the remark.';
+
+    // Follow-up Notes  ⬅️ NEW: mandatory
+    if (!formData.followupNotes?.trim()) e.followupNotes = 'Please enter the follow-up notes.';
+
+    // Next Follow-Up Date  ⬅️ NEW: mandatory + rules
+    if (!formData.nextFollowUpDate) {
+      e.nextFollowUpDate = 'Please select the Next Follow-Up Date.';
+    } else {
+      if (formData.nextFollowUpDate < today)
         e.nextFollowUpDate = 'Next Follow-Up Date cannot be in the past.';
-      }
-      if (formData.followUpDate && formData.nextFollowUpDate <= formData.followUpDate) {
+      if (formData.followUpDate && formData.nextFollowUpDate <= formData.followUpDate)
         e.nextFollowUpDate = 'Next Follow-Up Date must be greater than the Follow-Up Date.';
-      }
     }
-
 
     setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+  const validateNewFollowUpForm = () => {
+    const e = {};
+    const tomorrow = toLocalTomorrowISO();
+    const baseFUDate = selectedFollowUp?.callingDate
+      ? new Date(selectedFollowUp.callingDate).toISOString().split('T')[0]
+      : null;
+
+    if (!newFollowUpData.followUpType) e.followUpType = 'Please select the Follow-Up Type.';
+    if (!newFollowUpData.followUpNotes?.trim())
+      e.followUpNotes = 'Please enter the follow-up notes.';
+    if (!newFollowUpData.nextFollowUpDate) {
+      e.nextFollowUpDate = 'Please select the Next Follow-Up Date.';
+     } else if (newFollowUpData.nextFollowUpDate < tomorrow) {
+   e.nextFollowUpDate = 'Next Follow-Up Date must be in the future.';
+  } else if (baseFUDate && newFollowUpData.nextFollowUpDate <= baseFUDate) {
+    e.nextFollowUpDate = 'Next Follow-Up Date must be greater than the Follow-Up Date.';
+    }
+
+    setNewErrors(e);
     return Object.keys(e).length === 0;
   };
 
@@ -339,35 +364,35 @@ export default function DailyFollowUp() {
         followupNotes: '', nextFollowUpDate: '', documents: null
       });
     } catch (error) {
-  console.error('Error creating follow-up:', error);
+      console.error('Error creating follow-up:', error);
 
-  const dup = parseDuplicateError(error);
-  if (dup) {
-    setErrors((prev) => ({
-      ...prev,
-      ...(dup.phone ? { customerPhone: dup.phone } : {}),
-      ...(dup.email ? { customerEmail: dup.email } : {}),
-      // Agar generic mila aur specific detect nahi hua:
-      ...(!dup.phone && !dup.email ? {
-        customerPhone: prev.customerPhone || 'Mobile number may already be registered.',
-        customerEmail: prev.customerEmail || 'Email may already be registered.'
-      } : {})
-    }));
+      const dup = parseDuplicateError(error);
+      if (dup) {
+        setErrors((prev) => ({
+          ...prev,
+          ...(dup.phone ? { customerPhone: dup.phone } : {}),
+          ...(dup.email ? { customerEmail: dup.email } : {}),
+          // Agar generic mila aur specific detect nahi hua:
+          ...(!dup.phone && !dup.email ? {
+            customerPhone: prev.customerPhone || 'Mobile number may already be registered.',
+            customerEmail: prev.customerEmail || 'Email may already be registered.'
+          } : {})
+        }));
 
-    setFormMessage('Please fix the highlighted fields.');
-    // Optionally: focus first errored field
-    if (dup.phone && document?.getElementById('customerPhone')) {
-      document.getElementById('customerPhone').focus();
-    } else if (dup.email && document?.getElementById('customerEmail')) {
-      document.getElementById('customerEmail').focus();
+        setFormMessage('Please fix the highlighted fields.');
+        // Optionally: focus first errored field
+        if (dup.phone && document?.getElementById('customerPhone')) {
+          document.getElementById('customerPhone').focus();
+        } else if (dup.email && document?.getElementById('customerEmail')) {
+          document.getElementById('customerEmail').focus();
+        }
+      } else {
+        // generic inline message (no popup)
+        setFormMessage('Something went wrong while creating the follow-up. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
     }
-  } else {
-    // generic inline message (no popup)
-    setFormMessage('Something went wrong while creating the follow-up. Please try again.');
-  }
-} finally {
-  setSubmitting(false);
-}
 
   };
 
@@ -420,26 +445,26 @@ export default function DailyFollowUp() {
         followupNotes: '', nextFollowUpDate: '', documents: null
       });
     } catch (error) {
-  console.error('Error updating follow-up:', error);
+      console.error('Error updating follow-up:', error);
 
-  const dup = parseDuplicateError(error);
-  if (dup) {
-    setErrors((prev) => ({
-      ...prev,
-      ...(dup.phone ? { customerPhone: dup.phone } : {}),
-      ...(dup.email ? { customerEmail: dup.email } : {}),
-      ...(!dup.phone && !dup.email ? {
-        customerPhone: prev.customerPhone || 'Mobile number may already be registered.',
-        customerEmail: prev.customerEmail || 'Email may already be registered.'
-      } : {})
-    }));
-    setFormMessage('Please fix the highlighted fields.');
-  } else {
-    setFormMessage('Something went wrong while updating the follow-up. Please try again.');
-  }
-} finally {
-  setSubmitting(false);
-}
+      const dup = parseDuplicateError(error);
+      if (dup) {
+        setErrors((prev) => ({
+          ...prev,
+          ...(dup.phone ? { customerPhone: dup.phone } : {}),
+          ...(dup.email ? { customerEmail: dup.email } : {}),
+          ...(!dup.phone && !dup.email ? {
+            customerPhone: prev.customerPhone || 'Mobile number may already be registered.',
+            customerEmail: prev.customerEmail || 'Email may already be registered.'
+          } : {})
+        }));
+        setFormMessage('Please fix the highlighted fields.');
+      } else {
+        setFormMessage('Something went wrong while updating the follow-up. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
 
@@ -570,8 +595,8 @@ export default function DailyFollowUp() {
       followUpDate: '',
       contactPerson: '',
       concernedPerson: '',
-      followUpType: 'call',
-      status: 'pending',
+      followUpType: '',
+      status: '',
       creditCheck: '',
       remark: '',
       followupNotes: '',
@@ -579,11 +604,11 @@ export default function DailyFollowUp() {
       documents: null
     });
     setNewFollowUpData({
-      followUpType: 'call',
+      followUpType: '',
       followUpNotes: '',
       nextFollowUpDate: ''
     });
-    
+
 
   };
 
@@ -598,6 +623,8 @@ export default function DailyFollowUp() {
   const handleAddNewFollowUp = async (e) => {
     e.preventDefault();
 
+    setNewErrors({});
+    if (!validateNewFollowUpForm()) return;
     try {
       setSubmitting(true);
 
@@ -611,7 +638,9 @@ export default function DailyFollowUp() {
 
       // Prepare the data for the new follow-up
       const followUpData = {
-        followUpType: newFollowUpData.followUpType.charAt(0).toUpperCase() + newFollowUpData.followUpType.slice(1),
+        followUpType: newFollowUpData.followUpType
+    ? newFollowUpData.followUpType.charAt(0).toUpperCase() + newFollowUpData.followUpType.slice(1)
+    : '',
         followUpNotes: newFollowUpData.followUpNotes,
         nextFollowUpDate: newFollowUpData.nextFollowUpDate
       };
@@ -920,15 +949,20 @@ export default function DailyFollowUp() {
 
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Address *
+                      </label>
                       <textarea
                         name="customerAddress"
                         value={formData.customerAddress}
                         onChange={handleInputChange}
                         rows="3"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        aria-invalid={!!errors.customerAddress}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.customerAddress ? 'border-red-400' : 'border-gray-300'}`}
                         placeholder="Enter customer address"
                       />
+                      {errors.customerAddress && <p className="text-red-600 text-xs mt-1">{errors.customerAddress}</p>}
+
                     </div>
                   </div>
                 </div>
@@ -1067,37 +1101,46 @@ export default function DailyFollowUp() {
 
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check *</label>
                       <input
                         type="text"
                         name="creditCheck"
                         value={formData.creditCheck}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        aria-invalid={!!errors.creditCheck}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.creditCheck ? 'border-red-400' : 'border-gray-300'}`}
                         placeholder="Enter credit check details"
                       />
+                      {errors.creditCheck && <p className="text-red-600 text-xs mt-1">{errors.creditCheck}</p>}
+
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Remark</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Remark *</label>
                       <input
                         type="text"
                         name="remark"
                         value={formData.remark}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        aria-invalid={!!errors.remark}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.remark ? 'border-red-400' : 'border-gray-300'}`}
                         placeholder="Enter any remarks"
                       />
+                      {errors.remark && <p className="text-red-600 text-xs mt-1">{errors.remark}</p>}
+
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes *</label>
                       <textarea
                         name="followupNotes"
                         value={formData.followupNotes}
                         onChange={handleInputChange}
                         rows="3"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        aria-invalid={!!errors.followupNotes}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.followupNotes ? 'border-red-400' : 'border-gray-300'}`}
                         placeholder="Enter detailed follow-up notes"
                       />
+                      {errors.followupNotes && <p className="text-red-600 text-xs mt-1">{errors.followupNotes}</p>}
+
                     </div>
                     {/* Next Follow-Up Date */}
                     <div
@@ -1117,7 +1160,7 @@ export default function DailyFollowUp() {
                       }}
                     >
                       <label htmlFor="nextFollowUpDate" className="block text-sm font-medium text-gray-700 mb-2">
-                        Next Follow-Up Date
+                        Next Follow-Up Date *
                       </label>
                       <input
                         id="nextFollowUpDate"
@@ -1489,15 +1532,20 @@ export default function DailyFollowUp() {
 
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Address *
+                      </label>
                       <textarea
                         name="customerAddress"
                         value={formData.customerAddress}
                         onChange={handleInputChange}
                         rows="3"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        aria-invalid={!!errors.customerAddress}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.customerAddress ? 'border-red-400' : 'border-gray-300'}`}
                         placeholder="Enter customer address"
                       />
+                      {errors.customerAddress && <p className="text-red-600 text-xs mt-1">{errors.customerAddress}</p>}
+
                     </div>
                   </div>
                 </div>
@@ -1635,37 +1683,46 @@ export default function DailyFollowUp() {
 
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check *</label>
                       <input
                         type="text"
                         name="creditCheck"
                         value={formData.creditCheck}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        aria-invalid={!!errors.creditCheck}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.creditCheck ? 'border-red-400' : 'border-gray-300'}`}
                         placeholder="Enter credit check details"
                       />
+                      {errors.creditCheck && <p className="text-red-600 text-xs mt-1">{errors.creditCheck}</p>}
+
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Remark</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Remark *</label>
                       <input
                         type="text"
                         name="remark"
                         value={formData.remark}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        aria-invalid={!!errors.remark}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.remark ? 'border-red-400' : 'border-gray-300'}`}
                         placeholder="Enter any remarks"
                       />
+                      {errors.remark && <p className="text-red-600 text-xs mt-1">{errors.remark}</p>}
+
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes *</label>
                       <textarea
                         name="followupNotes"
                         value={formData.followupNotes}
                         onChange={handleInputChange}
                         rows="3"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        aria-invalid={!!errors.followupNotes}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.followupNotes ? 'border-red-400' : 'border-gray-300'}`}
                         placeholder="Enter detailed follow-up notes"
                       />
+                      {errors.followupNotes && <p className="text-red-600 text-xs mt-1">{errors.followupNotes}</p>}
+
                     </div>
                     {/* Next Follow-Up Date */}
                     <div
@@ -1685,7 +1742,7 @@ export default function DailyFollowUp() {
                       }}
                     >
                       <label htmlFor="editNextFollowUpDate" className="block text-sm font-medium text-gray-700 mb-2">
-                        Next Follow-Up Date
+                        Next Follow-Up Date *
                       </label>
                       <input
                         id="editNextFollowUpDate"
@@ -1792,34 +1849,57 @@ export default function DailyFollowUp() {
                     name="followUpType"
                     value={newFollowUpData.followUpType}
                     onChange={handleNewFollowUpInputChange}
-
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-invalid={!!newErrors.followUpType}
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${newErrors.followUpType ? 'border-red-400' : 'border-gray-300'}`}
                   >
+                    <option value="">Select</option>
                     <option value="call">Call</option>
                     <option value="email">Email</option>
                   </select>
+                  {newErrors.followUpType && <p className="text-red-600 text-xs mt-1">{newErrors.followUpType}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Notes</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Follow-Up Notes *</label>
                   <textarea
                     name="followUpNotes"
                     value={newFollowUpData.followUpNotes}
                     onChange={handleNewFollowUpInputChange}
                     rows="4"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-invalid={!!newErrors.followUpNotes}
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${newErrors.followUpNotes ? 'border-red-400' : 'border-gray-300'}`}
                     placeholder="Enter detailed follow-up notes"
                   />
+                  {newErrors.followUpNotes && <p className="text-red-600 text-xs mt-1">{newErrors.followUpNotes}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Next Follow-Up Date</label>
+                <div
+                  className="cursor-pointer"
+                  onClick={() => {
+                    if (newNextFollowUpDateRef.current?.showPicker) newNextFollowUpDateRef.current.showPicker();
+                    else newNextFollowUpDateRef.current?.focus();
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (newNextFollowUpDateRef.current?.showPicker) newNextFollowUpDateRef.current.showPicker();
+                      else newNextFollowUpDateRef.current?.focus();
+                    }
+                  }}
+                >
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Next Follow-Up Date *</label>
                   <input
+                    ref={newNextFollowUpDateRef}
                     type="date"
                     name="nextFollowUpDate"
                     value={newFollowUpData.nextFollowUpDate}
                     onChange={handleNewFollowUpInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min={getNextMinDate(selectedFollowUp?.callingDate)}
+                    aria-invalid={!!newErrors.nextFollowUpDate}
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${newErrors.nextFollowUpDate ? 'border-red-400' : 'border-gray-300'}`}
                   />
                 </div>
+                {newErrors.nextFollowUpDate && <p className="text-red-600 text-xs mt-1">{newErrors.nextFollowUpDate}</p>}
               </div>
 
               {/* Form Actions */}

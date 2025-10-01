@@ -410,7 +410,12 @@ const ManageUser = () => {
     <div className="p-6">
 
 
-      {showModal && <AddUserModal onClose={() => { setShowModal(false); fetchUsers(); }} />}
+      {showModal && (
+  <AddUserModal
+    existingMobiles={users.map(u => String(u.mobileNo || '').trim())}
+    onClose={() => { setShowModal(false); fetchUsers(); }}
+  />
+)}
       {showEditModal && editingUser && (
         <EditUserModal
           user={editingUser}
@@ -757,9 +762,9 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     const { name, value } = e.target;
     let v = value;
 
-    if (['employeeName', 'department', 'designation'].includes(name)) {
-      v = v.replace(/[^A-Za-z ]/g, '').slice(0, 50); // alphabets + space; max 50
-    }
+     if (['employeeName', 'department', 'designation', 'accountHolderName'].includes(name)) {
+    v = v.replace(/[^A-Za-z ]/g, '').slice(0, 50); // alphabets + space; max 50
+  }
     if (name === 'email') {
       v = v.replace(/\s/g, ''); // no spaces
     }
@@ -1077,7 +1082,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
 
         {/* Body */}
         <div ref={scrollAreaRef} className="flex-1 overflow-y-auto">
-          <form onSubmit={handleSubmit} className="p-8 space-y-8">
+          <form onSubmit={handleSubmit} noValidate  className="p-8 space-y-8">
 
             {/* Employee Details */}
             <div className="bg-gradient-to-br from-green-50 via-blue-50 to-green-100 rounded-2xl p-8 shadow-xl border border-green-200">

@@ -6,6 +6,11 @@ import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import PendingBids from './PendingBids.jsx';
+const alphaOnly = /^[A-Za-z\s]+$/;            // alphabets + space
+const alphaNum = /^[A-Za-z0-9\s-]+$/;        // letters, numbers, space, dash
+// Sanitizers
+const sanitizeAlphaNum = (v) => (v || '').replace(/[^a-zA-Z0-9]/g, ''); // A-Z a-z 0-9 only
+const sanitizeAlpha = (v) => (v || '').replace(/[^a-zA-Z\s]/g, '').replace(/\s{2,}/g, ' '); // alphabets + single spaces
 
 export default function RateApproved() {
   const [approvedRates, setApprovedRates] = useState([]);
@@ -20,17 +25,22 @@ export default function RateApproved() {
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
+  const [approvalError, setApprovalError] = useState('');
   const [approvalModal, setApprovalModal] = useState({
-  visible: false,
-  type: null, // 'manual' or 'auto'
-  rate: null, // the selected rate object
-});
+    visible: false,
+    type: null, // 'manual' or 'auto'
+    rate: null, // the selected rate object
+  });
 
   // Accept Bid Modal State
   const [acceptBidModal, setAcceptBidModal] = useState({
     visible: false,
     rate: null
   });
+  const setFormFieldSanitized = (field, value, mode) => {
+    const cleaned = mode === 'alnum' ? sanitizeAlphaNum(value) : sanitizeAlpha(value);
+    setAcceptBidForm(prev => ({ ...prev, [field]: cleaned }));
+  };
 
   // Accept Bid Form Data
   const [acceptBidForm, setAcceptBidForm] = useState({
@@ -42,10 +52,6 @@ export default function RateApproved() {
     bolNumber: '',
     message: ''
   });
-
-  // Customer search state
-  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -168,7 +174,7 @@ export default function RateApproved() {
         console.log('Transformed completed rates:', transformedRates);
         console.log('Setting approvedRates with length:', transformedRates.length);
         setApprovedRates(transformedRates);
-        
+
         // Force a re-render by updating the search term
         setSearchTerm('');
       } else {
@@ -254,7 +260,7 @@ export default function RateApproved() {
         console.log('Transformed accepted bids:', transformedBids);
         console.log('Setting approvedRates with length:', transformedBids.length);
         setApprovedRates(transformedBids);
-        
+
         // Force a re-render by updating the search term
         setSearchTerm('');
       } else {
@@ -342,7 +348,7 @@ export default function RateApproved() {
       rate.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.truckerName.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     if (searchTerm && matches) {
       console.log('Rate matches search:', rate.id, rate.truckerName);
     }
@@ -403,10 +409,9 @@ export default function RateApproved() {
   // Add after fetchPendingApprovals function
   const fetchPendingBidsBySalesUser = async (userId = null) => {
     try {
-      const userEmpId = userId || salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
-      console.log('🔍 Fetching pending bids for sales user:', userEmpId);
+      console.log('Fetching pending bids for sales user:', salesUserId);
       
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${salesUserId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
@@ -464,20 +469,32 @@ export default function RateApproved() {
       return [];
     }
   };
-// Define fetchAllData at the component level - ONLY for Pending Bids tab
+// Define fetchAllData at the component level
 const fetchAllData = async () => {
   setLoading(true);
   try {
-    console.log('🎯 Fetching data ONLY from sales user API for Pending Bids tab');
+    const [approvedData, pendingData, salesUserBids] = await Promise.all([
+      fetchApprovedRates(),
+      fetchPendingApprovals(),
+      fetchPendingBidsBySalesUser(salesUserId) // Use state variable
+    ]);
     
-    // Only fetch from sales user API - remove other APIs
-    const salesUserBids = await fetchPendingBidsBySalesUser();
+    // Combine all datasets
+    const combinedRates = [
+      ...(approvedData || []), 
+      ...(pendingData || []), 
+      ...(salesUserBids || [])
+    ];
     
-    console.log('📋 Data sources breakdown:');
-    console.log('  - Sales User Bids:', salesUserBids?.length || 0);
-    console.log('  - Other APIs: DISABLED (as requested)');
+    // Remove duplicates based on bid ID (rateNum)
+    const uniqueRates = combinedRates.filter((rate, index, self) => 
+      index === self.findIndex(r => r.rateNum === rate.rateNum)
+    );
     
-    setApprovedRates(salesUserBids || []);
+    console.log('Combined rates before deduplication:', combinedRates.length);
+    console.log('Unique rates after deduplication:', uniqueRates.length);
+    
+    setApprovedRates(uniqueRates);
   } catch (error) {
     console.error('Error fetching data:', error);
     alertify.error('Error refreshing data');
@@ -486,61 +503,61 @@ const fetchAllData = async () => {
   }
 };
 
-// Then update the handleManualApprove and handleAutoApprove functions
-const handleManualApprove = async (bidId, customRate) => {
-  setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
-  try {
-    console.log('Approving bid with custom rate:', { bidId, customRate });
-    
-    const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
-      intermediateRate: parseInt(customRate)
-    }, {
-      headers: API_CONFIG.getAuthHeaders()
-    });
+  // Then update the handleManualApprove and handleAutoApprove functions
+  const handleManualApprove = async (bidId, customRate) => {
+    setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
+    try {
+      console.log('Approving bid with custom rate:', { bidId, customRate });
 
-    console.log('Manual approval response:', response.data);
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
+        intermediateRate: parseInt(customRate)
+      }, {
+        headers: API_CONFIG.getAuthHeaders()
+      });
 
-    if (response.data.success) {
-      alertify.success('✅ Bid approved successfully with custom rate!');
-      await fetchAllData(); // Refresh the data
-    } else {
-      alertify.error(response.data.message || 'Failed to approve bid');
+      console.log('Manual approval response:', response.data);
+
+      if (response.data.success) {
+        alertify.success('✅ Bid approved successfully with custom rate!');
+        await fetchAllData(); // Refresh the data
+      } else {
+        alertify.error(response.data.message || 'Failed to approve bid');
+      }
+    } catch (error) {
+      console.error('Manual approve error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
+      alertify.error(error.response?.data?.message || 'Error approving bid. Please try again.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [bidId]: null }));
     }
-  } catch (error) {
-    console.error('Manual approve error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data
-    });
-    alertify.error(error.response?.data?.message || 'Error approving bid. Please try again.');
-  } finally {
-    setActionLoading(prev => ({ ...prev, [bidId]: null }));
-  }
-};
+  };
 
 
-const handleAutoApprove = async (bidId) => {
-  setActionLoading(prev => ({ ...prev, [bidId]: 'auto' }));
-  try {
-    const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/auto-approve`, {}, {
-      headers: API_CONFIG.getAuthHeaders()
-    });
+  const handleAutoApprove = async (bidId) => {
+    setActionLoading(prev => ({ ...prev, [bidId]: 'auto' }));
+    try {
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/auto-approve`, {}, {
+        headers: API_CONFIG.getAuthHeaders()
+      });
 
-    if (response.data.success) {
-      alertify.success('Bid auto-approved successfully');
-      await fetchAllData(); // Now this will work
-    } else {
-      alertify.error(response.data.message || 'Failed to auto-approve bid');
+      if (response.data.success) {
+        alertify.success('Bid auto-approved successfully');
+        await fetchAllData(); // Now this will work
+      } else {
+        alertify.error(response.data.message || 'Failed to auto-approve bid');
+      }
+    } catch (error) {
+      console.error('Auto approve error:', error);
+      alertify.error(error.response?.data?.message || 'Error in auto approval. Please try again.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [bidId]: null }));
     }
-  } catch (error) {
-    console.error('Auto approve error:', error);
-    alertify.error(error.response?.data?.message || 'Error in auto approval. Please try again.');
-  } finally {
-    setActionLoading(prev => ({ ...prev, [bidId]: null }));
-  }
-};
+  };
   // Pagination calculations
   const totalPages = Math.ceil(filteredRates.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -661,8 +678,9 @@ const handleAutoApprove = async (bidId) => {
     }));
   };
 
-  const handleCustomerSelect = (customerId) => {
-    const selectedCustomer = customers.find(c => c.value === customerId);
+  const handleCustomerSelect = (e) => {
+    const selectedCustomerId = e.target.value;
+    const selectedCustomer = customers.find(c => c.value === selectedCustomerId);
     
     if (selectedCustomer) {
       const customer = selectedCustomer.customer;
@@ -715,79 +733,76 @@ const handleAutoApprove = async (bidId) => {
   // Handle accept bid form submission
   const handleAcceptBidSubmit = async (e) => {
     e.preventDefault();
-    
+
+    // --- front-end validation ---
+    const errs = {};
+    if (!acceptBidForm.customerName) {
+      errs.customerName = 'Please select the customer name.';
+    }
+    if (!acceptBidForm.fullAddress) {
+      errs.fullAddress = 'Please enter the full address.';
+    } else if (!alphaOnly.test(acceptBidForm.fullAddress.trim())) {
+      errs.fullAddress = 'Full address should contain alphabets only.';
+    }
+
+    if (acceptBidForm.status && !alphaNum.test(acceptBidForm.status.trim())) {
+      errs.status = 'Status should be alphanumeric.';
+    }
+    if (acceptBidForm.shipmentNumber && !alphaNum.test(acceptBidForm.shipmentNumber.trim())) {
+      errs.shipmentNumber = 'Shipment Number should be alphanumeric.';
+    }
+    if (acceptBidForm.poNumber && !alphaNum.test(acceptBidForm.poNumber.trim())) {
+      errs.poNumber = 'PO Number should be alphanumeric.';
+    }
+    if (acceptBidForm.bolNumber && !alphaNum.test(acceptBidForm.bolNumber.trim())) {
+      errs.bolNumber = 'BOL Number should be alphanumeric.';
+    }
+
+    setAcceptErrors(errs);
+    if (Object.keys(errs).length) {
+      // also toast first error
+      alertify.error(Object.values(errs)[0]);
+      return;
+    }
+
     try {
-      console.log('Submitting accept bid form:', acceptBidForm);
-      
-      // Get the selected customer details for logging
-      const selectedCustomer = customers.find(c => c.value === acceptBidForm.customerName);
-      console.log('Selected customer ID:', acceptBidForm.customerName);
-      console.log('Selected customer details:', selectedCustomer);
-      
-      // Prepare data for API submission according to the API specification
+      setAcceptSubmitting(true);
+
       const submitData = {
-        status: acceptBidForm.status, // "Accepted" or "Rejected"
-        shipperId: acceptBidForm.customerName, // ID of the shipper (customer ID)
-        shipmentNumber: acceptBidForm.shipmentNumber || undefined, // Optional
-        poNumber: acceptBidForm.poNumber || undefined, // Optional
-        bolNumber: acceptBidForm.bolNumber || undefined, // Optional
-        reason: acceptBidForm.message || undefined // Send message as reason if available
+        status: acceptBidForm.status || undefined,  // user-entered; optional
+        shipperId: acceptBidForm.customerName,
+        shipmentNumber: acceptBidForm.shipmentNumber || undefined,
+        poNumber: acceptBidForm.poNumber || undefined,
+        bolNumber: acceptBidForm.bolNumber || undefined,
+        reason: acceptBidForm.message || undefined
       };
-      
-      // Remove undefined values
-      Object.keys(submitData).forEach(key => {
-        if (submitData[key] === undefined) {
-          delete submitData[key];
-        }
-      });
-      
-      console.log('Data to be sent to API:', submitData);
-      console.log('Bid ID:', acceptBidModal.rate.rateNum);
-      
-      // Call the API endpoint
+      Object.keys(submitData).forEach(k => submitData[k] === undefined && delete submitData[k]);
+
       const response = await axios.put(
-        `${API_CONFIG.BASE_URL}/api/v1/bid/${acceptBidModal.rate.rateNum}/accept-by-inhouse`, 
-        submitData, 
-        {
-          headers: API_CONFIG.getAuthHeaders(),
-          timeout: 10000
-        }
+        `${API_CONFIG.BASE_URL}/api/v1/bid/${acceptBidModal.rate.rateNum}/accept-by-inhouse`,
+        submitData,
+        { headers: API_CONFIG.getAuthHeaders(), timeout: 10000 }
       );
-      
-      console.log('API Response:', response.data);
-      
+
       if (response.data && response.data.success) {
-        alertify.success('✅ Bid accepted successfully!');
-        
-        // Close modal and reset form
+        alertify.success('Bid accpted successfully.');
         setAcceptBidModal({ visible: false, rate: null });
         setAcceptBidForm({
-          customerName: '',
-          fullAddress: '',
-          status: 'Accepted',
-          shipmentNumber: '',
-          poNumber: '',
-          bolNumber: '',
-          message: ''
+          customerName: '', fullAddress: '', status: '',
+          shipmentNumber: '', poNumber: '', bolNumber: '', message: ''
         });
-        
-        // Refresh the data
-        await fetchCompletedRates();
+        await fetchCompletedRates();  // refresh table
       } else {
         alertify.error(response.data?.message || 'Failed to accept bid. Please try again.');
       }
-      
     } catch (error) {
       console.error('Error submitting accept bid:', error);
-      console.error('Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data
-      });
       alertify.error(error.response?.data?.message || 'Error accepting bid. Please try again.');
+    } finally {
+      setAcceptSubmitting(false);
     }
   };
+
 
   // Handle form submission
   const handleSubmit = async (e) => {
@@ -885,47 +900,28 @@ const handleAutoApprove = async (bidId) => {
   };
 
   // Handle accept bid
-    const handleAcceptBid = async (rate) => {
+  const handleAcceptBid = async (rate) => {
     try {
-      console.log('Opening accept bid modal for:', rate);
       setAcceptBidModal({ visible: true, rate });
-
-      // Fetch customers when modal opens
       await fetchCustomers();
-
-      // Find matching customer by shipper ID
-      const matchingCustomer = customers.find(c => c.customer._id === rate.shipperInfo?._id);
-      const selectedCustomerId = matchingCustomer ? matchingCustomer.value : '';
-
-      console.log('Rate shipper info:', rate.shipperInfo);
-      console.log('Available customers:', customers);
-      console.log('Matching customer:', matchingCustomer);
-      console.log('Selected customer ID:', selectedCustomerId);
 
       // Pre-fill form with rate data
       setAcceptBidForm({
-        customerName: selectedCustomerId, // Auto-select shipper ID if found
-        fullAddress: rate.shipperInfo ? `${rate.shipperInfo.city}, ${rate.shipperInfo.state}` : '',
+        customerName: '',
+        fullAddress: '',
         status: 'Accepted',
         shipmentNumber: rate.shipmentNumber || '',
         poNumber: '',
         bolNumber: '',
-        message: rate.remarks || ''
+        message: ''                 // no default text
       });
-
-      // Set search term to show selected customer name
-      if (matchingCustomer) {
-        setCustomerSearchTerm(matchingCustomer.customer.compName);
-      } else {
-        setCustomerSearchTerm('');
-      }
-      setShowCustomerDropdown(false);
 
     } catch (error) {
       console.error('Error opening accept bid modal:', error);
       alertify.error('Error opening accept bid form. Please try again.');
     }
   };
+
 
   // Loading state
   if (loading) {
@@ -1011,7 +1007,7 @@ const handleAutoApprove = async (bidId) => {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleAcceptBidSubmit} className="p-6 space-y-6">
+          <form noValidate onSubmit={handleAcceptBidSubmit} className="p-6 space-y-6">
             {/* Customer Information Section */}
             <div className="bg-blue-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-blue-800 mb-4">Customer Information</h3>
@@ -1020,46 +1016,24 @@ const handleAutoApprove = async (bidId) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Customer Name *
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={customerSearchTerm}
-                      onChange={handleCustomerSearchChange}
-                      onFocus={() => setShowCustomerDropdown(true)}
-                      placeholder="Search customer by name, city, or state..."
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                    />
-                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                  </div>
-                  
-                  {/* Dropdown */}
-                  {showCustomerDropdown && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {customersLoading ? (
-                        <div className="px-4 py-3 text-gray-500 text-center">
-                          Loading customers...
-                        </div>
-                      ) : filteredCustomers.length > 0 ? (
-                        filteredCustomers.map((customer) => (
-                          <div
-                            key={customer.value}
-                            onClick={() => handleCustomerSelect(customer.value)}
-                            className="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                          >
-                            <div className="font-medium text-gray-900">{customer.customer.compName}</div>
-                            <div className="text-sm text-gray-500">{customer.customer.city}, {customer.customer.state}</div>
-                            {customer.customer.mc_dot_no && (
-                              <div className="text-xs text-gray-400">MC: {customer.customer.mc_dot_no}</div>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="px-4 py-3 text-gray-500 text-center">
-                          No customers found
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <select
+                    name="customerName"
+                    value={acceptBidForm.customerName}
+                    onChange={handleCustomerSelect}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  >
+                    <option value="">Select a customer</option>
+                    {customersLoading ? (
+                      <option value="" disabled>Loading customers...</option>
+                    ) : (
+                      customers.map(customer => (
+                        <option key={customer.value} value={customer.value}>
+                          {customer.label}
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1069,11 +1043,28 @@ const handleAutoApprove = async (bidId) => {
                     type="text"
                     name="fullAddress"
                     value={acceptBidForm.fullAddress}
-                    onChange={handleAcceptBidInputChange}
+                    onChange={(e) => {
+                      const cleaned = sanitizeAlpha(e.target.value);
+                      setAcceptBidForm(prev => ({ ...prev, fullAddress: cleaned }));
+                      setAcceptErrors(prev => ({ ...prev, fullAddress: '' }));
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const pasted = e.clipboardData.getData('text') || '';
+                      const cleaned = sanitizeAlpha(pasted);
+                      setAcceptBidForm(prev => ({ ...prev, fullAddress: cleaned }));
+                    }}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter full address"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    pattern="[A-Za-z\s]+"
+                    title="Only alphabets are allowed"
                   />
+                  {acceptErrors.fullAddress && (
+                    <p className="mt-1 text-xs text-red-600">{acceptErrors.fullAddress}</p>
+                  )}
+
+
                 </div>
               </div>
             </div>
@@ -1083,17 +1074,25 @@ const handleAutoApprove = async (bidId) => {
               <h3 className="text-lg font-semibold text-purple-800 mb-4">Order Details</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Status
-                  </label>
-                  <input
-                    type="text"
-                    name="status"
-                    value={acceptBidForm.status}
-                    readOnly
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                    placeholder="Status"
-                  />
+                 <label className="block text-sm font-medium text-gray-700 mb-2">
+  Status *
+</label>
+<select
+  name="status"
+  value={acceptBidForm.status}
+  onChange={(e) => {
+    setAcceptBidForm(prev => ({ ...prev, status: e.target.value }));
+    setAcceptErrors(prev => ({ ...prev, status: '' }));
+  }}
+  required
+  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+>
+  <option value="Accepted">Accepted</option>
+  <option value="Rejected">Rejected</option>
+</select>
+{acceptErrors.status && <p className="mt-1 text-xs text-red-600">{acceptErrors.status}</p>}
+
+
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1103,10 +1102,23 @@ const handleAutoApprove = async (bidId) => {
                     type="text"
                     name="shipmentNumber"
                     value={acceptBidForm.shipmentNumber}
-                    onChange={handleAcceptBidInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Enter shipment number"
+                    onChange={(e) => {
+                      setFormFieldSanitized('shipmentNumber', e.target.value, 'alnum');
+                      setAcceptErrors(prev => ({ ...prev, shipmentNumber: '' }));
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      setFormFieldSanitized('shipmentNumber', (e.clipboardData.getData('text') || ''), 'alnum');
+                    }}
+                    inputMode="text"
+                    placeholder="Enter the Shipment Number"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    pattern="[A-Za-z0-9]+"
+                    title="Only alphanumeric characters are allowed"
                   />
+
+                  {acceptErrors.shipmentNumber && <p className="mt-1 text-xs text-red-600">{acceptErrors.shipmentNumber}</p>}
+
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1116,23 +1128,48 @@ const handleAutoApprove = async (bidId) => {
                     type="text"
                     name="poNumber"
                     value={acceptBidForm.poNumber}
-                    onChange={handleAcceptBidInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormFieldSanitized('poNumber', e.target.value, 'alnum');
+                      setAcceptErrors(prev => ({ ...prev, poNumber: '' }));
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      setFormFieldSanitized('poNumber', (e.clipboardData.getData('text') || ''), 'alnum');
+                    }}
+                    inputMode="text"
                     placeholder="Enter PO number"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    pattern="[A-Za-z0-9]+"
+                    title="Only alphanumeric characters are allowed"
                   />
+
+                  {acceptErrors.poNumber && <p className="mt-1 text-xs text-red-600">{acceptErrors.poNumber}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     BOL Number
                   </label>
+
                   <input
                     type="text"
                     name="bolNumber"
                     value={acceptBidForm.bolNumber}
-                    onChange={handleAcceptBidInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormFieldSanitized('bolNumber', e.target.value, 'alnum');
+                      setAcceptErrors(prev => ({ ...prev, bolNumber: '' }));
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      setFormFieldSanitized('bolNumber', (e.clipboardData.getData('text') || ''), 'alnum');
+                    }}
+                    inputMode="text"
                     placeholder="Enter BOL number"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    pattern="[A-Za-z0-9]+"
+                    title="Only alphanumeric characters are allowed"
                   />
+
+                  {acceptErrors.bolNumber && <p className="mt-1 text-xs text-red-600">{acceptErrors.bolNumber}</p>}
                 </div>
               </div>
             </div>
@@ -1166,10 +1203,19 @@ const handleAutoApprove = async (bidId) => {
               </button>
               <button
                 type="submit"
-                className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold"
+                disabled={acceptSubmitting}
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Accept Bid
+                {acceptSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Processing...
+                  </span>
+                ) : (
+                  'Accept Bid'
+                )}
               </button>
+
             </div>
           </form>
         </div>
@@ -1183,11 +1229,10 @@ const handleAutoApprove = async (bidId) => {
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'pending'
-              ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'pending'
+            ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
         >
           <div className="flex items-center gap-2">
             <Clock size={18} />
@@ -1196,11 +1241,10 @@ const handleAutoApprove = async (bidId) => {
         </button>
         <button
           onClick={() => setActiveTab('completed')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'completed'
-              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'completed'
+            ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
         >
           <div className="flex items-center gap-2">
             <CheckCircle size={18} />
@@ -1209,11 +1253,10 @@ const handleAutoApprove = async (bidId) => {
         </button>
         <button
           onClick={() => setActiveTab('accepted')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'accepted'
-              ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'accepted'
+            ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
         >
           <div className="flex items-center gap-2">
             <CheckCircle size={18} />
@@ -1242,7 +1285,7 @@ const handleAutoApprove = async (bidId) => {
               <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <CheckCircle className="text-blue-600" size={20} />
+                    <CheckCircle className="text-blue-600" size={20} />
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Approved</p>
@@ -1465,11 +1508,10 @@ const handleAutoApprove = async (bidId) => {
                                 setApprovalModal({ visible: true, type: 'manual', rate });
                               }}
                               disabled={actionLoading[rate.rateNum]}
-                              className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${
-                                actionLoading[rate.rateNum] === 'manual'
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                                  : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
-                              }`}
+                              className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum] === 'manual'
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
+                                }`}
                             >
                               {actionLoading[rate.rateNum] === 'manual' ? (
                                 <span className="flex items-center gap-2">
@@ -1513,7 +1555,7 @@ const handleAutoApprove = async (bidId) => {
                 Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} pending bids
                 {searchTerm && ` (filtered from ${approvedRates.length} total)`}
               </div>
-              
+
               <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
                 {/* Previous Button */}
                 <button
@@ -1556,11 +1598,10 @@ const handleAutoApprove = async (bidId) => {
                       <button
                         key={page}
                         onClick={() => handlePageChange(page)}
-                        className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                          currentPage === page
-                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                            : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                        }`}
+                        className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
+                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                          }`}
                       >
                         {page}
                       </button>
@@ -1659,7 +1700,6 @@ const handleAutoApprove = async (bidId) => {
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                     </tr>
@@ -1692,14 +1732,6 @@ const handleAutoApprove = async (bidId) => {
                               <p className="text-xs text-gray-500">
                                 Diff: ${rate.approvalStatus.rateDifference} ({rate.approvalStatus.rateDifferencePercentage}%)
                               </p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
-                            {rate.shipperInfo?.mc_dot_no && (
-                              <p className="text-xs text-gray-500">MC: {rate.shipperInfo.mc_dot_no}</p>
                             )}
                           </div>
                         </td>
@@ -1877,95 +1909,94 @@ const handleAutoApprove = async (bidId) => {
       )}
 
       {/* Enhanced Pagination */}
-       {totalPages > 1 && filteredRates.length > 0 && (
-         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-           <div className="text-sm text-gray-600">
-             Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} bids/rates
-             {searchTerm && ` (filtered from ${approvedRates.length} total)`}
-           </div>
-           
-           <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
-             {/* Previous Button */}
-             <button
-               onClick={() => handlePageChange(currentPage - 1)}
-               disabled={currentPage === 1}
-               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-             >
-               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-               </svg>
-               Previous
-             </button>
+      {totalPages > 1 && filteredRates.length > 0 && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="text-sm text-gray-600">
+            Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} bids/rates
+            {searchTerm && ` (filtered from ${approvedRates.length} total)`}
+          </div>
 
-             {/* Page Numbers */}
-             <div className="flex items-center gap-1">
-               {/* First Page */}
-               {currentPage > 3 && (
-                 <>
-                   <button
-                     onClick={() => handlePageChange(1)}
-                     className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
-                   >
-                     1
-                   </button>
-                   {currentPage > 4 && (
-                     <span className="px-2 text-gray-400">...</span>
-                   )}
-                 </>
-               )}
+          <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+            {/* Previous Button */}
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </button>
 
-               {/* Current Page Range */}
-               {Array.from({ length: totalPages }, (_, i) => i + 1)
-                 .filter(page => {
-                   if (totalPages <= 7) return true;
-                   if (currentPage <= 4) return page <= 5;
-                   if (currentPage >= totalPages - 3) return page >= totalPages - 4;
-                   return page >= currentPage - 2 && page <= currentPage + 2;
-                 })
-                 .map((page) => (
-                   <button
-                     key={page}
-                     onClick={() => handlePageChange(page)}
-                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                       currentPage === page
-                         ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                         : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                     }`}
-                   >
-                     {page}
-                   </button>
-                 ))}
+            {/* Page Numbers */}
+            <div className="flex items-center gap-1">
+              {/* First Page */}
+              {currentPage > 3 && (
+                <>
+                  <button
+                    onClick={() => handlePageChange(1)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                  >
+                    1
+                  </button>
+                  {currentPage > 4 && (
+                    <span className="px-2 text-gray-400">...</span>
+                  )}
+                </>
+              )}
 
-               {/* Last Page */}
-               {currentPage < totalPages - 2 && totalPages > 7 && (
-                 <>
-                   {currentPage < totalPages - 3 && (
-                     <span className="px-2 text-gray-400">...</span>
-                   )}
-                   <button
-                     onClick={() => handlePageChange(totalPages)}
-                     className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
-                   >
-                     {totalPages}
-                   </button>
-                 </>
-               )}
-             </div>
+              {/* Current Page Range */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(page => {
+                  if (totalPages <= 7) return true;
+                  if (currentPage <= 4) return page <= 5;
+                  if (currentPage >= totalPages - 3) return page >= totalPages - 4;
+                  return page >= currentPage - 2 && page <= currentPage + 2;
+                })
+                .map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                      }`}
+                  >
+                    {page}
+                  </button>
+                ))}
 
-             {/* Next Button */}
-             <button
-               onClick={() => handlePageChange(currentPage + 1)}
-               disabled={currentPage === totalPages}
-               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-             >
-               Next
-               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-               </svg>
-             </button>
-           </div>
-         </div>
-       )}
+              {/* Last Page */}
+              {currentPage < totalPages - 2 && totalPages > 7 && (
+                <>
+                  {currentPage < totalPages - 3 && (
+                    <span className="px-2 text-gray-400">...</span>
+                  )}
+                  <button
+                    onClick={() => handlePageChange(totalPages)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                  >
+                    {totalPages}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Next Button */}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              Next
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add Rate Approved Modal */}
       {showAddRateForm && (
@@ -2118,8 +2149,8 @@ const handleAutoApprove = async (bidId) => {
                   onClick={handleCloseModal}
                   disabled={submitting}
                   className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
-                      ? 'opacity-50 cursor-not-allowed text-gray-400'
-                      : 'text-gray-700 hover:bg-gray-50'
+                    ? 'opacity-50 cursor-not-allowed text-gray-400'
+                    : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   Cancel
@@ -2128,8 +2159,8 @@ const handleAutoApprove = async (bidId) => {
                   type="submit"
                   disabled={submitting}
                   className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:from-blue-600 hover:to-blue-700'
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-blue-600 hover:to-blue-700'
                     }`}
                 >
                   {submitting ? (
@@ -2192,7 +2223,7 @@ const handleAutoApprove = async (bidId) => {
                   </div>
                   <p className="text-sm font-medium text-gray-800">{approvalModal.rate.id}</p>
                 </div>
-                
+
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -2200,7 +2231,7 @@ const handleAutoApprove = async (bidId) => {
                   </div>
                   <p className="text-sm font-medium text-gray-800">{approvalModal.rate.truckerName}</p>
                 </div>
-                
+
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
@@ -2208,7 +2239,7 @@ const handleAutoApprove = async (bidId) => {
                   </div>
                   <p className="text-sm font-medium text-gray-800">{approvalModal.rate.origin}</p>
                 </div>
-                
+
                 <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-orange-100">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
@@ -2223,33 +2254,44 @@ const handleAutoApprove = async (bidId) => {
                 <div className="flex items-center gap-2 mb-3">
                   <DollarSign className="text-green-600" size={18} />
                   <label className="text-sm font-semibold text-gray-700">
-                    {approvalModal.type === 'manual' ? 'Custom Rate Amount' : 'Original Rate Amount'}
+                    {approvalModal.type === 'manual'
+                      ? 'Custom Rate Amount *'         // <- star added
+                      : 'Original Rate Amount'}
                   </label>
                 </div>
+
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
                   <input
                     type="number"
-                    className={`w-full pl-8 pr-4 py-3 border-2 rounded-lg text-lg font-semibold transition-all duration-200 ${
-                      approvalModal.type === 'manual' 
-                        ? 'border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-100' 
-                        : 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-gray-50'
-                    }`}
-                    value={approvalModal.rate.rate}
+                    required={approvalModal.type === 'manual'}  // <- required
+                    min={1}                                     // <- client-side guard
+                    step="1"
+                    className={`w-full pl-8 pr-4 py-3 border-2 rounded-lg text-lg font-semibold transition-all duration-200 ${approvalModal.type === 'manual'
+                      ? 'border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-100'
+                      : 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-gray-50'
+                      }`}
+                    value={approvalModal.rate.rate ?? ''}       // safe value
                     readOnly={approvalModal.type === 'auto'}
                     onChange={(e) => {
                       if (approvalModal.type === 'manual') {
+                        const v = e.target.value === '' ? '' : Number(e.target.value);
                         setApprovalModal(prev => ({
                           ...prev,
-                          rate: { ...prev.rate, rate: parseFloat(e.target.value) || 0 }
+                          rate: { ...prev.rate, rate: v }
                         }));
+                        setApprovalError('');                   // clear error on typing
                       }
                     }}
                     placeholder="Enter rate amount"
-                    min="0"
-                    step="0.01"
                   />
                 </div>
+
+                {/* helper error line */}
+                {approvalError && (
+                  <p className="mt-2 text-xs font-medium text-red-600">{approvalError}</p>
+                )}
+
                 {approvalModal.type === 'auto' && (
                   <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                     <Clock size={12} />
@@ -2257,6 +2299,7 @@ const handleAutoApprove = async (bidId) => {
                   </p>
                 )}
               </div>
+
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-4">
@@ -2269,20 +2312,26 @@ const handleAutoApprove = async (bidId) => {
                 <button
                   onClick={async () => {
                     if (approvalModal.type === 'manual') {
-                      await handleManualApprove(approvalModal.rate.rateNum, approvalModal.rate.rate);
+                      const val = Number(approvalModal.rate?.rate);
+                      if (!Number.isFinite(val) || val <= 0) {
+                        setApprovalError('Please enter the Custom Rate Amount more than 0.');
+                        alertify.error('Please enter the Custom Rate Amount more than 0.');
+                        return;                                   // block submit
+                      }
+                      await handleManualApprove(approvalModal.rate.rateNum, val);
                     } else {
                       await handleAutoApprove(approvalModal.rate.rateNum);
                     }
                     setApprovalModal({ visible: false, type: null, rate: null });
                   }}
-                  className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
-                    approvalModal.type === 'manual' 
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl' 
-                      : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
-                  }`}
+                  className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${approvalModal.type === 'manual'
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
+                    : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
+                    }`}
                 >
                   {approvalModal.type === 'manual' ? 'Approve Bid' : 'Auto Approve'}
                 </button>
+
               </div>
             </div>
           </div>
@@ -2440,8 +2489,8 @@ const handleAutoApprove = async (bidId) => {
                   onClick={handleCloseModal}
                   disabled={submitting}
                   className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting
-                      ? 'opacity-50 cursor-not-allowed text-gray-400'
-                      : 'text-gray-700 hover:bg-gray-50'
+                    ? 'opacity-50 cursor-not-allowed text-gray-400'
+                    : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   Cancel
@@ -2450,8 +2499,8 @@ const handleAutoApprove = async (bidId) => {
                   type="submit"
                   disabled={submitting}
                   className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${submitting
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:from-blue-600 hover:to-blue-700'
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:from-blue-600 hover:to-blue-700'
                     }`}
                 >
                   {submitting ? (

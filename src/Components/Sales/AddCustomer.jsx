@@ -29,11 +29,9 @@ const Input = React.memo(function Input({
           onChange={onChange}
           onBlur={onBlur}
           aria-invalid={!!error}
-          className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
-            icon ? 'pl-10' : ''
-          } ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''} ${
-            rightNode ? 'pr-10' : ''
-          }`}
+          className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${icon ? 'pl-10' : ''
+            } ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''} ${rightNode ? 'pr-10' : ''
+            }`}
           {...inputProps}
         />
         {rightNode && (
@@ -119,9 +117,8 @@ const CustomerTable = React.memo(function CustomerTable({ customers }) {
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
-            className={`px-3 py-1 rounded border ${
-              page === 1 ? 'text-gray-400 border-gray-200' : 'border-gray-300 hover:bg-gray-50'
-            }`}
+            className={`px-3 py-1 rounded border ${page === 1 ? 'text-gray-400 border-gray-200' : 'border-gray-300 hover:bg-gray-50'
+              }`}
           >
             Prev
           </button>
@@ -129,9 +126,8 @@ const CustomerTable = React.memo(function CustomerTable({ customers }) {
           <button
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className={`px-3 py-1 rounded border ${
-              page === totalPages ? 'text-gray-400 border-gray-200' : 'border-gray-300 hover:bg-gray-50'
-            }`}
+            className={`px-3 py-1 rounded border ${page === totalPages ? 'text-gray-400 border-gray-200' : 'border-gray-300 hover:bg-gray-50'
+              }`}
           >
             Next
           </button>
@@ -261,8 +257,6 @@ const AddCustomer = () => {
     password: v => {
       if (v.length < 8) return 'Please enter the minimum 8 characters.';
       if (v.length > 14) return 'Please enter the valid password.';
-      if (!passComboRegex.test(v))
-        return 'Please enter all combinations of passwords like uppercase ,lowercase,number or symbol';
       return '';
     },
     confirmPassword: (v, data) =>
@@ -357,8 +351,12 @@ const AddCustomer = () => {
     try {
       setLoading(true);
       const cleanedData = Object.fromEntries(
-        Object.entries(formData).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
-      );
+  Object.entries(formData).map(([k, v]) => {
+    if (typeof v !== 'string') return [k, v];
+    if (k === 'password' || k === 'confirmPassword') return [k, v]; // do NOT trim
+    return [k, v.trim()]; // trim others safely
+  })
+);
 
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-customer`,
@@ -726,7 +724,8 @@ const AddCustomer = () => {
                     <span className="text-sm font-medium text-blue-800">Form Validation</span>
                   </div>
                   <p className="text-xs text-blue-700">
-                    Required fields have (<span className="text-red-500">*</span>). Email without spaces. Mobile 10 digits starting 6–9. Password 8–14 with upper, lower & number/symbol.
+                    Required fields have (<span className="text-red-500">*</span>). Email without spaces. Mobile 10 digits starting 6–9.
+                    Password must be 8–14 characters (any characters allowed).
                   </p>
                 </div>
               </div>
@@ -743,11 +742,10 @@ const AddCustomer = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${
-                    !loading
+                  className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${!loading
                       ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
                       : 'bg-gray-300 cursor-not-allowed'
-                  }`}
+                    }`}
                 >
                   {loading ? (
                     <>
