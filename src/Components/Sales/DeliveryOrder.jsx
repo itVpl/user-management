@@ -255,45 +255,45 @@ export default function DeliveryOrder() {
   const blockMoneyChars = (e) => {
     if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
   };
-  
-// LIVE typing ke liye: ek hi dot allow, trailing dot ko preserve, max 2 dp
-const clamp2dpLive = (s = '') => {
-  let t = String(s).replace(/[^\d.]/g, '');
 
-  // sirf pehla dot rakho
-  const firstDot = t.indexOf('.');
-  if (firstDot !== -1) {
-    const before = t.slice(0, firstDot);
-    const after  = t.slice(firstDot + 1).replace(/\./g, '');
-    t = `${before}.${after}`;
-  }
+  // LIVE typing ke liye: ek hi dot allow, trailing dot ko preserve, max 2 dp
+  const clamp2dpLive = (s = '') => {
+    let t = String(s).replace(/[^\d.]/g, '');
 
-  if (t === '.') return '0.';         // sirf dot -> 0.
-  if (t.endsWith('.')) return t;      // trailing dot rehne do (user abhi digits likhega)
+    // sirf pehla dot rakho
+    const firstDot = t.indexOf('.');
+    if (firstDot !== -1) {
+      const before = t.slice(0, firstDot);
+      const after = t.slice(firstDot + 1).replace(/\./g, '');
+      t = `${before}.${after}`;
+    }
 
-  if (firstDot !== -1) {
+    if (t === '.') return '0.';         // sirf dot -> 0.
+    if (t.endsWith('.')) return t;      // trailing dot rehne do (user abhi digits likhega)
+
+    if (firstDot !== -1) {
+      const [int, dec = ''] = t.split('.');
+      return `${int}.${dec.slice(0, 2)}`;
+    }
+    return t;
+  };
+
+  // Blur pe normalize (optional): "12." -> "12", "12.3" -> "12.3", "12.345" -> "12.34"
+  const ensureMoney2dp = (s = '') => {
+    let t = String(s).replace(/[^\d.]/g, '');
+    if (!t) return '';
+    // multiple dots fix
+    const firstDot = t.indexOf('.');
+    if (firstDot !== -1) {
+      const before = t.slice(0, firstDot);
+      const after = t.slice(firstDot + 1).replace(/\./g, '');
+      t = `${before}.${after}`;
+    }
+    if (t === '.' || t === '0.') return '0';
+    if (t.endsWith('.')) t = t.slice(0, -1);
     const [int, dec = ''] = t.split('.');
-    return `${int}.${dec.slice(0, 2)}`;
-  }
-  return t;
-};
-
-// Blur pe normalize (optional): "12." -> "12", "12.3" -> "12.3", "12.345" -> "12.34"
-const ensureMoney2dp = (s = '') => {
-  let t = String(s).replace(/[^\d.]/g, '');
-  if (!t) return '';
-  // multiple dots fix
-  const firstDot = t.indexOf('.');
-  if (firstDot !== -1) {
-    const before = t.slice(0, firstDot);
-    const after  = t.slice(firstDot + 1).replace(/\./g, '');
-    t = `${before}.${after}`;
-  }
-  if (t === '.' || t === '0.') return '0';
-  if (t.endsWith('.')) t = t.slice(0, -1);
-  const [int, dec = ''] = t.split('.');
-  return dec ? `${int}.${dec.slice(0, 2)}` : int;
-};
+    return dec ? `${int}.${dec.slice(0, 2)}` : int;
+  };
 
 
   // Validators
@@ -316,8 +316,8 @@ const ensureMoney2dp = (s = '') => {
   // sanitize & keyguard for zip
   const sanitizeAlphaNum = (s = '') => s.replace(/[^A-Za-z0-9]/g, '');
 
-// Weight ke liye: sirf digits
-const digitsOnly = (s = '') => s.replace(/\D/g, '');
+  // Weight ke liye: sirf digits
+  const digitsOnly = (s = '') => s.replace(/\D/g, '');
 
   // Block invalid chars in integer-only inputs
   const blockIntChars = (e) => {
@@ -332,16 +332,15 @@ const digitsOnly = (s = '') => s.replace(/\D/g, '');
     drops: [],          // [{name:'', address:'', city:'', state:'', zipCode:'', weight:'', dropDate:''}]
     docs: ''            // error string
   });
-// --- shared error style helpers ---
-const errCls = (has) =>
-  `w-full px-4 py-3 border rounded-lg focus:outline-none ${
-    has ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200 error-field' 
-        : 'border-gray-300 focus:ring-2 focus:ring-blue-500'
-  }`;
+  // --- shared error style helpers ---
+  const errCls = (has) =>
+    `w-full px-4 py-3 border rounded-lg focus:outline-none ${has ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200 error-field'
+      : 'border-gray-300 focus:ring-2 focus:ring-blue-500'
+    }`;
 
-// for dropdown error frame
-const errBox = (has) =>
-  `${has ? 'border-red-500 bg-red-50' : 'border-gray-300'} border rounded-lg`;
+  // for dropdown error frame
+  const errBox = (has) =>
+    `${has ? 'border-red-500 bg-red-50' : 'border-gray-300'} border rounded-lg`;
 
 
 
@@ -369,33 +368,7 @@ const errBox = (has) =>
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [orderToAssign, setOrderToAssign] = useState(null);
   const [assigningOrder, setAssigningOrder] = useState(false);
-  const [showBolModal, setShowBolModal] = useState(false);
-  const [showItemsModal, setShowItemsModal] = useState(false);
-  const [itemsData, setItemsData] = useState([
-    {
-      id: 1,
-      pieces: '',
-      description: '',
-      lbs: '',
-      type: '',
-      nmfc: '',
-      hm: 'No',
-      class: ''
-    }
-  ]);
-  const [bolData, setBolData] = useState({
-    bol: '',
-    thirdParty: '',
-    carrier: '',
-    freightCharges: '',
-    origin: '',
-    destination: '',
-    emergency: '',
-    cod: '',
-    notes: '',
-    items: '',
-    files: []
-  });
+
   const logoSrc = Logo;
   // top-level states ke saath
   const [formMode, setFormMode] = useState('add'); // 'add' | 'edit' | 'duplicate'
@@ -467,8 +440,8 @@ const errBox = (has) =>
   // Charges popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
   const [charges, setCharges] = useState([
-  { name: '', quantity: '', amt: '', total: 0 }
-]);
+    { name: '', quantity: '', amt: '', total: 0 }
+  ]);
 
 
   // Form state for Add Delivery Order
@@ -527,6 +500,7 @@ const errBox = (has) =>
     ],
 
     remarks: '',
+    bols: [{ bolNo: '' }],
     docs: null
   });
 
@@ -760,6 +734,10 @@ const errBox = (has) =>
         })),
 
         remarks: src.remarks || '',
+        bols: (src.bols && src.bols.length
+          ? src.bols.map(b => ({ bolNo: b.bolNo || '' }))
+          : (src.bolInformation ? [{ bolNo: src.bolInformation }] : [{ bolNo: '' }])
+        ),
         docs: null,
       };
 
@@ -797,6 +775,20 @@ const errBox = (has) =>
   };
 
 
+  // Normalize BOL values for display in View modal
+  const extractBols = (order) => {
+    const out = [];
+    if (Array.isArray(order?.bols)) {
+      order.bols.forEach((b) => {
+        const v = typeof b === 'string' ? b : (b?.bolNo || b?.number || '');
+        if (v && String(v).trim()) out.push(String(v).trim());
+      });
+    }
+    // legacy single field
+    if (!out.length && order?.bolInformation) out.push(String(order.bolInformation));
+    // unique
+    return Array.from(new Set(out));
+  };
 
   // Filter orders based on search term
   const filteredOrders = orders.filter(order => {
@@ -848,8 +840,8 @@ const errBox = (has) =>
     }
     // money fields sanitize while typing
     if (['lineHaul', 'fsc', 'other'].includes(field)) {
-  value = clamp2dpLive(value);  // ✅ live typing friendly
-}
+      value = clamp2dpLive(value);  // ✅ live typing friendly
+    }
 
 
     setFormData(prev => {
@@ -874,36 +866,36 @@ const errBox = (has) =>
   };
 
   // Handle pickup location input changes
- const handlePickupLocationChange = (index, field, value) => {
-  setFormData(prev => {
-    const updated = [...prev.pickupLocations];
-    // ZIP => alphanumeric only, WEIGHT => digits only
-    const val =
-      field === 'zipCode' ? sanitizeAlphaNum(value)
-    : field === 'weight'  ? digitsOnly(value)
-    : value;
+  const handlePickupLocationChange = (index, field, value) => {
+    setFormData(prev => {
+      const updated = [...prev.pickupLocations];
+      // ZIP => alphanumeric only, WEIGHT => digits only
+      const val =
+        field === 'zipCode' ? sanitizeAlphaNum(value)
+          : field === 'weight' ? digitsOnly(value)
+            : value;
 
-    updated[index] = { ...updated[index], [field]: val };
-    return { ...prev, pickupLocations: updated };
-  });
-};
+      updated[index] = { ...updated[index], [field]: val };
+      return { ...prev, pickupLocations: updated };
+    });
+  };
 
 
 
   // Handle drop location input changes
   const handleDropLocationChange = (index, field, value) => {
-  setFormData(prev => {
-    const updated = [...prev.dropLocations];
-    // ZIP => alphanumeric only, WEIGHT => digits only
-    const val =
-      field === 'zipCode' ? sanitizeAlphaNum(value)
-    : field === 'weight'  ? digitsOnly(value)
-    : value;
+    setFormData(prev => {
+      const updated = [...prev.dropLocations];
+      // ZIP => alphanumeric only, WEIGHT => digits only
+      const val =
+        field === 'zipCode' ? sanitizeAlphaNum(value)
+          : field === 'weight' ? digitsOnly(value)
+            : value;
 
-    updated[index] = { ...updated[index], [field]: val };
-    return { ...prev, dropLocations: updated };
-  });
-};
+      updated[index] = { ...updated[index], [field]: val };
+      return { ...prev, dropLocations: updated };
+    });
+  };
 
 
 
@@ -1087,77 +1079,77 @@ const errBox = (has) =>
 
   // ✅ Replace your applyCharges with this (popup-inside validation)
   const applyCharges = async () => {
-  // 1) sab rows bilkul khaali?
-  const allEmpty = (charges || []).every(
-    ch => !(ch?.name?.trim()) &&
-          !(String(ch?.quantity ?? '') !== '') &&
-          !(String(ch?.amt ?? '') !== '')
-  );
+    // 1) sab rows bilkul khaali?
+    const allEmpty = (charges || []).every(
+      ch => !(ch?.name?.trim()) &&
+        !(String(ch?.quantity ?? '') !== '') &&
+        !(String(ch?.amt ?? '') !== '')
+    );
 
-  if (allEmpty) {
-    // row 0 pe inline errors dikhane ke liye
-    const errs = (charges || []).map((_, i) =>
-      i === 0
-        ? {
+    if (allEmpty) {
+      // row 0 pe inline errors dikhane ke liye
+      const errs = (charges || []).map((_, i) =>
+        i === 0
+          ? {
             name: 'Please enter the charge name',
             quantity: 'Please enter the Quantity',
             amt: 'Please enter the amount',
           }
-        : { name: '', quantity: '', amt: '' }
-    );
-    setChargeErrors(errs);
-    setChargesPopupError('Please add Carrier Fees .');
-    focusFirstError?.();
-    return;
-  }
-
-  // 2) row-by-row validation (exact messages)
-  const nextErrs = (charges || []).map((ch) => {
-    const row = { name: '', quantity: '', amt: '' };
-    const hasAny = (ch?.name || ch?.quantity || ch?.amt);
-
-    if (hasAny) {
-      const nm = (ch?.name || '').trim();
-      if (!nm) row.name = 'Please enter the charge name';
-      else if (!/^[A-Za-z ]+$/.test(nm)) row.name = 'Name should contain only alphabets';
-
-      const qRaw = String(ch?.quantity ?? '');
-      if (qRaw === '') row.quantity = 'Please enter the Quantity';
-      else if (!/^[1-9]\d*$/.test(qRaw)) row.quantity = 'Quantity must be a positive integer';
-
-      const aRaw = String(ch?.amt ?? '');
-      if (aRaw === '') row.amt = 'Please enter the amount';
-      else if (!/^[1-9]\d*$/.test(aRaw)) row.amt = 'Amount must be a positive integer';
+          : { name: '', quantity: '', amt: '' }
+      );
+      setChargeErrors(errs);
+      setChargesPopupError('Please add Carrier Fees .');
+      focusFirstError?.();
+      return;
     }
-    return row;
-  });
 
-  const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
-  setChargeErrors(nextErrs);
+    // 2) row-by-row validation (exact messages)
+    const nextErrs = (charges || []).map((ch) => {
+      const row = { name: '', quantity: '', amt: '' };
+      const hasAny = (ch?.name || ch?.quantity || ch?.amt);
 
-  if (hasErrors) {
-    setChargesPopupError('Please correct the charge rows (Name*, Quantity*, Amount*).');
-    focusFirstError?.();
-    return;
-  }
+      if (hasAny) {
+        const nm = (ch?.name || '').trim();
+        if (!nm) row.name = 'Please enter the charge name';
+        else if (!/^[A-Za-z ]+$/.test(nm)) row.name = 'Name should contain only alphabets';
 
-  // 3) valid -> totals apply
-  const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
-  setFormData(prev => ({ ...prev, carrierFees: String(totalCharges) }));
+        const qRaw = String(ch?.quantity ?? '');
+        if (qRaw === '') row.quantity = 'Please enter the Quantity';
+        else if (!/^[1-9]\d*$/.test(qRaw)) row.quantity = 'Quantity must be a positive integer';
 
-  if (editingOrder && editingOrder._id) {
-    const carrierFeesData = (charges || []).map(ch => ({
-      name: ch.name.trim(),
-      quantity: parseInt(ch.quantity, 10) || 0,
-      amount: parseInt(ch.amt, 10) || 0,
-      total: (parseInt(ch.quantity,10)||0) * (parseInt(ch.amt,10)||0),
-    }));
-    await updateCarrierFees(editingOrder._id, carrierFeesData);
-  }
+        const aRaw = String(ch?.amt ?? '');
+        if (aRaw === '') row.amt = 'Please enter the amount';
+        else if (!/^[1-9]\d*$/.test(aRaw)) row.amt = 'Amount must be a positive integer';
+      }
+      return row;
+    });
 
-  setChargesPopupError('');
-  setShowChargesPopup(false);
-};
+    const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
+    setChargeErrors(nextErrs);
+
+    if (hasErrors) {
+      setChargesPopupError('Please correct the charge rows (Name*, Quantity*, Amount*).');
+      focusFirstError?.();
+      return;
+    }
+
+    // 3) valid -> totals apply
+    const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
+    setFormData(prev => ({ ...prev, carrierFees: String(totalCharges) }));
+
+    if (editingOrder && editingOrder._id) {
+      const carrierFeesData = (charges || []).map(ch => ({
+        name: ch.name.trim(),
+        quantity: parseInt(ch.quantity, 10) || 0,
+        amount: parseInt(ch.amt, 10) || 0,
+        total: (parseInt(ch.quantity, 10) || 0) * (parseInt(ch.amt, 10) || 0),
+      }));
+      await updateCarrierFees(editingOrder._id, carrierFeesData);
+    }
+
+    setChargesPopupError('');
+    setShowChargesPopup(false);
+  };
 
 
 
@@ -1294,6 +1286,9 @@ const errBox = (has) =>
             remarks: l.remarks || '' // 👈
           }))
         },
+        bols: (formData.bols || [])
+          .filter(b => (b.bolNo || '').trim())
+          .map(b => ({ bolNo: b.bolNo.trim() })),
         remarks: formData.remarks
       };
 
@@ -1347,6 +1342,10 @@ const errBox = (has) =>
         fd.append('customers', JSON.stringify(customersWithTotals));
         fd.append('carrier', JSON.stringify(carrierJSON));
         fd.append('shipper', JSON.stringify(shipperJSON));
+        (formData.bols || []).forEach((b, i) => {
+          const val = (b?.bolNo || '').trim();
+          if (val) fd.append(`bols[${i}][bolNo]`, val);   // 👈 nested fields, no JSON string
+        });
         fd.append('remarks', formData.remarks || '');
         fd.append('document', formData.docs);
 
@@ -1659,6 +1658,7 @@ const errBox = (has) =>
 
       // General
       remarks: '',
+      bols: [{ bolNo: '' }],
       docs: null
     });
 
@@ -1736,8 +1736,8 @@ const errBox = (has) =>
             dispatcherName: c.dispatcherName || '',
             workOrderNo: c.workOrderNo || '',
             lineHaul: ensureMoney2dp(String(c.lineHaul ?? '')),
-fsc: ensureMoney2dp(String(c.fsc ?? '')),
-other: ensureMoney2dp(String(c.other ?? '')),
+            fsc: ensureMoney2dp(String(c.fsc ?? '')),
+            other: ensureMoney2dp(String(c.other ?? '')),
 
             totalAmount: (Number(c.lineHaul) || 0) + (Number(c.fsc) || 0) + (Number(c.other) || 0)
           })),
@@ -1760,6 +1760,10 @@ other: ensureMoney2dp(String(c.other ?? '')),
             remarks: l?.remarks ?? '' // 👈
           })),
           remarks: fullOrderData.remarks || '',
+          bols: (Array.isArray(fullOrderData.bols) && fullOrderData.bols.length
+            ? fullOrderData.bols.map(b => ({ bolNo: b.bolNo || '' }))
+            : (fullOrderData.bolInformation ? [{ bolNo: fullOrderData.bolInformation }] : [{ bolNo: '' }])
+          ),
           docs: null
         };
 
@@ -1832,6 +1836,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
           remarks: '' // 👈
         }],
         remarks: order.remarks || '',
+        bols: [{ bolNo: order.bolInformation || '' }],
         docs: null
       };
 
@@ -1902,6 +1907,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
       ],
 
       remarks: '',
+      bols: [{ bolNo: '' }],
       docs: null
     });
   };
@@ -1919,7 +1925,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
     try {
       setAssigningOrder(true);
       console.log('Confirming assignment for order:', orderToAssign);
-      
+
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       if (!token) {
         alertify.error('Authentication token not found. Please login again.');
@@ -1927,7 +1933,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
       }
 
       const originalId = orderToAssign.originalId || orderToAssign.id.replace('DO-', '');
-      
+
       const response = await axios.put(
         `${API_CONFIG.BASE_URL}/api/v1/do/do/auto-assign-to-cmt`,
         {
@@ -1943,16 +1949,16 @@ other: ensureMoney2dp(String(c.other ?? '')),
 
       if (response.data && response.data.success) {
         alertify.success(`Order ${orderToAssign.id} assigned to CMT team successfully!`);
-        
+
         // Update the order status in the local state
-        setOrders(prevOrders => 
-          prevOrders.map(order => 
-            order.id === orderToAssign.id 
+        setOrders(prevOrders =>
+          prevOrders.map(order =>
+            order.id === orderToAssign.id
               ? { ...order, assignmentStatus: 'assigned' }
               : order
           )
         );
-        
+
         setShowAssignModal(false);
         setOrderToAssign(null);
       } else {
@@ -2151,6 +2157,10 @@ other: ensureMoney2dp(String(c.other ?? '')),
         carrier,
         shipper,
         remarks: formData.remarks || '',
+        bols: (formData.bols || []).map((b, i) => ({
+          _id: editingOrder?.fullData?.bols?.[i]?._id, // preserve if exists
+          bolNo: (b.bolNo || '').trim()
+        })).filter(b => b.bolNo),
       };
 
       // 1) JSON update
@@ -2362,95 +2372,102 @@ other: ensureMoney2dp(String(c.other ?? '')),
   // Generate Rate and Load Confirmation PDF function
 
   const generateRateLoadConfirmationPDF = async (order) => {
+  try {
+    // 1) Dispatcher info
+    let dispatcherPhone = 'N/A';
+    let dispatcherEmail = 'N/A';
     try {
-      // 1) Dispatcher info
-      let dispatcherPhone = 'N/A';
-      let dispatcherEmail = 'N/A';
-      try {
-        const cmtUsers = await apiService.getCMTUsers();
-        const dispatcher = cmtUsers.find(
-          (user) => user.aliasName === ((order.customers && order.customers[0] && order.customers[0].dispatcherName) || '')
-        );
-        if (dispatcher) {
-          dispatcherPhone = dispatcher.mobileNo || 'N/A';
-          dispatcherEmail = dispatcher.email || 'N/A';
-        }
-      } catch (err) {
-        console.error('Error fetching dispatcher info:', err);
+      const cmtUsers = await apiService.getCMTUsers();
+      const dispatcher = cmtUsers.find(
+        (user) => user.aliasName === ((order.customers && order.customers[0] && order.customers[0].dispatcherName) || '')
+      );
+      if (dispatcher) {
+        dispatcherPhone = dispatcher.mobileNo || 'N/A';
+        dispatcherEmail = dispatcher.email || 'N/A';
       }
+    } catch (err) {
+      console.error('Error fetching dispatcher info:', err);
+    }
 
-      // 2) Helpers (NO nullish + logical mixing)
-      const toNum = (v) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : 0;
-      };
-      const currency = (n) =>
-        Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // 2) Helpers (NO nullish + logical mixing)
+    const toNum = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const currency = (n) =>
+      Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-      const formatDateStr = (d) => {
-        if (!d) return 'N/A';
-        try { return new Date(d).toLocaleDateString(); } catch { return 'N/A'; }
-      };
-      const formatDateStrUS = (d) => {
-        if (!d) return 'N/A';
-        try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return 'N/A'; }
-      };
-      const formatAddr = (l) => {
-        if (!l) return 'N/A';
-        const parts = [l.address, l.city, l.state, l.zipCode].filter(Boolean);
-        return parts.length ? parts.join(', ') : 'N/A';
-      };
+    const formatDateStr = (d) => {
+      if (!d) return 'N/A';
+      try { return new Date(d).toLocaleDateString(); } catch { return 'N/A'; }
+    };
+    const formatDateStrUS = (d) => {
+      if (!d) return 'N/A';
+      try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return 'N/A'; }
+    };
+    const formatAddr = (l) => {
+      if (!l) return 'N/A';
+      const parts = [l.address, l.city, l.state, l.zipCode].filter(Boolean);
+      return parts.length ? parts.join(', ') : 'N/A';
+    };
+    // NEW: name + address line
+    const formatLocLine = (l) => {
+      if (!l) return 'N/A';
+      const name = (l.name || '').trim();
+      const addr = formatAddr(l);
+      return name ? `${name} — ${addr}` : addr;
+    };
 
-      // 3) Carrier fees (names + qty + rate + total)
-      const rawFees = (order.carrier && Array.isArray(order.carrier.carrierFees)) ? order.carrier.carrierFees : [];
-      const feeEntries = rawFees.map((ch, idx) => {
-        let qtyRaw;
-        if (ch && ch.qty !== undefined && ch.qty !== null) qtyRaw = ch.qty;
-        else if (ch && ch.quantity !== undefined && ch.quantity !== null) qtyRaw = ch.quantity;
-        else qtyRaw = 1;
-        const qty = toNum(qtyRaw) || 1;
+    // 3) Carrier fees (names + qty + rate + total)
+    const rawFees = (order.carrier && Array.isArray(order.carrier.carrierFees)) ? order.carrier.carrierFees : [];
+    const feeEntries = rawFees.map((ch, idx) => {
+      let qtyRaw;
+      if (ch && ch.qty !== undefined && ch.qty !== null) qtyRaw = ch.qty;
+      else if (ch && ch.quantity !== undefined && ch.quantity !== null) qtyRaw = ch.quantity;
+      else qtyRaw = 1;
+      const qty = toNum(qtyRaw) || 1;
 
-        let rateRaw = (ch && ch.rate !== undefined && ch.rate !== null) ? ch.rate : 0;
-        const rate = toNum(rateRaw);
+      let rateRaw = (ch && ch.rate !== undefined && ch.rate !== null) ? ch.rate : 0;
+      const rate = toNum(rateRaw);
 
-        let totalRaw = null;
-        if (ch && ch.total !== undefined && ch.total !== null) totalRaw = ch.total;
-        else if (ch && ch.amount !== undefined && ch.amount !== null) totalRaw = ch.amount;
-        const total = totalRaw !== null ? toNum(totalRaw) : (rate * qty);
+      let totalRaw = null;
+      if (ch && ch.total !== undefined && ch.total !== null) totalRaw = ch.total;
+      else if (ch && ch.amount !== undefined && ch.amount !== null) totalRaw = ch.amount;
+      const total = totalRaw !== null ? toNum(totalRaw) : (rate * qty);
 
-        let desc = 'Charge ' + (idx + 1);
-        if (ch && ch.description) desc = ch.description;
-        else if (ch && ch.name) desc = ch.name;
-        else if (ch && ch.type) desc = ch.type;
+      let desc = 'Charge ' + (idx + 1);
+      if (ch && ch.description) desc = ch.description;
+      else if (ch && ch.name) desc = ch.name;
+      else if (ch && ch.type) desc = ch.type;
 
-        return { desc, qty, rate, total };
-      });
-      const totalCarrierFees = feeEntries.reduce((s, it) => s + toNum(it.total), 0);
+      return { desc, qty, rate, total };
+    });
+    const totalCarrierFees = feeEntries.reduce((s, it) => s + toNum(it.total), 0);
 
-      // Carrier Charges list (under Carrier Info)
-      const chargesListItemsHTML = feeEntries.length
-        ? feeEntries.map((it) =>
-          '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #ececec;border-radius:8px;padding:8px 10px;margin:6px 0;">' +
-          `<div><div style="font-weight:700;">${it.desc}</div><div style="font-size:11px;color:#555;">Quantity: ${it.qty} × Amount: $${currency(it.rate)}</div></div>` +
-          `<div style="font-weight:700;">$ ${currency(it.total)}</div>` +
-          '</div>'
-        ).join('')
-        : '<div style="color:#777;border:1px dashed #ccc;border-radius:8px;padding:8px 10px;">No carrier charges</div>';
+    // Carrier Charges list (under Carrier Info)
+    const chargesListItemsHTML = feeEntries.length
+      ? feeEntries.map((it) =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #ececec;border-radius:8px;padding:8px 10px;margin:6px 0;">' +
+        `<div><div style="font-weight:700;">${it.desc}</div><div style="font-size:11px;color:#555;">Quantity: ${it.qty} × Amount: $${currency(it.rate)}</div></div>` +
+        `<div style="font-weight:700;">$ ${currency(it.total)}</div>` +
+        '</div>'
+      ).join('')
+      : '<div style="color:#777;border:1px dashed #ccc;border-radius:8px;padding:8px 10px;">No carrier charges</div>';
 
-      const chargesListHTML =
-        '<div style="margin:-6px 0 10px 0;padding:10px;border:1px solid #f0e8ff;background:#fbf7ff;border-radius:10px;">' +
-        '<h4 style="font-size:12px;margin:0 0 8px 0;color:#2c3e50;">Carrier Charges</h4>' +
-        chargesListItemsHTML +
-        '</div>';
+    const chargesListHTML =
+      '<div style="margin:-6px 0 10px 0;padding:10px;border:1px solid #f0e8ff;background:#fbf7ff;border-radius:10px;">' +
+      '<h4 style="font-size:12px;margin:0 0 8px 0;color:#2c3e50;">Carrier Charges</h4>' +
+      chargesListItemsHTML +
+      '</div>';
 
-      // 4) Pickup/Drop sections (EACH location separately)
-      const ship = order.shipper || {};
-      const pickUps = Array.isArray(ship.pickUpLocations) ? ship.pickUpLocations : [];
-      const drops = Array.isArray(ship.dropLocations) ? ship.dropLocations : [];
+    // 4) Pickup/Drop sections (EACH location separately)
+    const ship = order.shipper || {};
+    const pickUps = Array.isArray(ship.pickUpLocations) ? ship.pickUpLocations : [];
+    const drops  = Array.isArray(ship.dropLocations) ? ship.dropLocations : [];
 
-      const pickupSectionsHTML = pickUps.length
-        ? pickUps.map((l, i) => {
-          const addr = formatAddr(l);
+    const pickupSectionsHTML = pickUps.length
+      ? pickUps.map((l, i) => {
+          const addrLine = formatLocLine(l); // << name + address
           const dateStr = formatDateStr(l && l.pickUpDate);
           const hoursLabel = 'Shipping Hours';
           return (
@@ -2458,7 +2475,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
             '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location ' + (i + 1) + '</th></tr></thead>' +
             '<tbody>' +
             '<tr>' +
-            '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addr + '</td>' +
+            '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addrLine + '</td>' +
             '</tr>' +
             '<tr>' +
             '<td style="width:50%;padding:8px;">' +
@@ -2479,16 +2496,16 @@ other: ensureMoney2dp(String(c.other ?? '')),
             '</table>'
           );
         }).join('')
-        : (
-          '<table class="rates-table">' +
-          '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location</th></tr></thead>' +
-          '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
-          '</table>'
-        );
+      : (
+        '<table class="rates-table">' +
+        '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location</th></tr></thead>' +
+        '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
+        '</table>'
+      );
 
-      const dropSectionsHTML = drops.length
-        ? drops.map((l, i) => {
-          const addr = formatAddr(l);
+    const dropSectionsHTML = drops.length
+      ? drops.map((l, i) => {
+          const addrLine = formatLocLine(l); // << name + address
           const dateStr = formatDateStr(l && l.dropDate);
           const hoursLabel = 'Receiving Hours';
           return (
@@ -2496,7 +2513,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
             '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location ' + (i + 1) + '</th></tr></thead>' +
             '<tbody>' +
             '<tr>' +
-            '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addr + '</td>' +
+            '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addrLine + '</td>' +
             '</tr>' +
             '<tr>' +
             '<td style="width:50%;padding:8px;">' +
@@ -2517,40 +2534,40 @@ other: ensureMoney2dp(String(c.other ?? '')),
             '</table>'
           );
         }).join('')
-        : (
-          '<table class="rates-table">' +
-          '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location</th></tr></thead>' +
-          '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
-          '</table>'
-        );
+      : (
+        '<table class="rates-table">' +
+        '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location</th></tr></thead>' +
+        '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
+        '</table>'
+      );
 
-      // 5) Bottom: total with signature
-      const amountBottomBlockHTML =
-        '<div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">' +
-        '<h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #2c3e50;">Total Carrier Fees</h3>' +
-        '<p style="text-align:center; font-size: 16px; font-weight: 700; margin: 0 0 14px 0;">$ ' + currency(totalCarrierFees) + '</p>' +
-        '<div style="margin-top: 10px; font-size: 12px; line-height: 1.6;">' +
-        '<p style="margin-bottom: 10px; text-align: center;">' +
-        'Accepted By _________________________ Date ________________ Signature ____________________' +
-        '</p>' +
-        '<p style="text-align: center;">' +
-        'Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________' +
-        '</p>' +
-        '</div>' +
-        '</div>';
+    // 5) Bottom: total with signature
+    const amountBottomBlockHTML =
+      '<div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">' +
+      '<h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #2c3e50;">Total Carrier Fees</h3>' +
+      '<p style="text-align:center; font-size: 16px; font-weight: 700; margin: 0 0 14px 0;">$ ' + currency(totalCarrierFees) + '</p>' +
+      '<div style="margin-top: 10px; font-size: 12px; line-height: 1.6;">' +
+      '<p style="margin-bottom: 10px; text-align: center;">' +
+      'Accepted By _________________________ Date ________________ Signature ____________________' +
+      '</p>' +
+      '<p style="text-align: center;">' +
+      'Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________' +
+      '</p>' +
+      '</div>' +
+      '</div>';
 
-      // 6) Dates for header
-      const todayUS = formatDateStrUS(new Date());
-      const shipDateUS = formatDateStrUS(order.shipper && order.shipper.pickUpDate);
+    // 6) Dates for header
+    const todayUS = formatDateStrUS(new Date());
+    const shipDateUS = formatDateStrUS(order.shipper && order.shipper.pickUpDate);
 
-      // 7) Build HTML
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alertify.error('Popup blocked. Please allow popups and try again.');
-        return;
-      }
+    // 7) Build HTML
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alertify.error('Popup blocked. Please allow popups and try again.');
+      return;
+    }
 
-      const confirmationHTML = `
+    const confirmationHTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2708,18 +2725,19 @@ other: ensureMoney2dp(String(c.other ?? '')),
 </html>
     `;
 
-      printWindow.document.write(confirmationHTML);
-      printWindow.document.close();
-      printWindow.onload = function () {
-        printWindow.print();
-        printWindow.close();
-      };
-      alertify.success('Rate and Load Confirmation PDF generated successfully!');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alertify.error('Failed to generate PDF. Please try again.');
-    }
-  };
+    printWindow.document.write(confirmationHTML);
+    printWindow.document.close();
+    printWindow.onload = function () {
+      printWindow.print();
+      printWindow.close();
+    };
+    alertify.success('Rate and Load Confirmation PDF generated successfully!');
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    alertify.error('Failed to generate PDF. Please try again.');
+  }
+};
+
 
 
 
@@ -2928,6 +2946,293 @@ other: ensureMoney2dp(String(c.other ?? '')),
     } catch (err) {
       console.error('Error generating PDF:', err);
       alertify.error('Failed to generate PDF. Please try again.');
+    }
+  };
+
+
+  // Generate BOL PDF function
+  const generateBolPDF = (orderInput) => {
+    // ---------- SAFE DEFAULTS ----------
+    const order = orderInput || {};
+    const shipper = order.shipper || {};
+    const pickupLocs = Array.isArray(shipper.pickUpLocations) ? shipper.pickUpLocations : [];
+    const dropLocs = Array.isArray(shipper.dropLocations) ? shipper.dropLocations : [];
+
+    // Multi-key Load Number (first available)
+    // Multi-key Load Number (first available)
+    const getLoadNumber = () => {
+      // 1) customers[].loadNo (pehle non-empty lo)
+      const fromCustomers = Array.isArray(order?.customers)
+        ? (order.customers.map(c => (c?.loadNo || '').trim()).find(v => v))
+        : null;
+
+      // 2) table/list me aksar doNum me loadNo aa jata hai
+      const fromDoNum = (order?.doNum || '').trim();
+
+      // 3) legacy/other fields
+      const fromOrder =
+        (order?.loadNo || order?.loadNumber || order?.loadId || order?.referenceNo || '').trim();
+      const fromShipper =
+        (shipper?.loadNo || shipper?.loadNumber || '').trim();
+
+      // 4) (optional) last fallback: workOrderNo (agar chaho)
+      const fromWON =
+        Array.isArray(order?.customers)
+          ? (order.customers.map(c => (c?.workOrderNo || '').trim()).find(v => v) || '')
+          : '';
+
+      // priority: customers.loadNo → doNum → order.* → shipper.* → workOrderNo → 'N/A'
+      return fromCustomers || fromDoNum || fromOrder || fromShipper || fromWON || 'N/A';
+    };
+
+
+    // NEW: Collect BOL(s)
+    const bolLine = (() => {
+      const arr = [];
+      if (Array.isArray(order?.bols)) {
+        order.bols.forEach(b => {
+          const v = typeof b === 'string' ? b : (b?.bolNo || b?.number || '');
+          if (v && String(v).trim()) arr.push(String(v).trim());
+        });
+      }
+      if (!arr.length && order?.bolInformation) arr.push(String(order.bolInformation));
+      return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
+    })();
+
+    // Logo fallback (1x1 transparent if not provided)
+    const safeLogo = order.logoSrc || (typeof logoSrc !== 'undefined' ? logoSrc :
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGP4BwQACgAB/WHvJ2sAAAAASUVORK5CYII=');
+
+    // ---------- HELPERS ----------
+    const fmtDate = (d) => {
+      if (!d) return 'N/A';
+      const dt = new Date(d);
+      return isNaN(dt)
+        ? 'N/A'
+        : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    };
+
+    const fmtTime = (d) => {
+      if (!d) return '';
+      const dt = new Date(d);
+      return isNaN(dt)
+        ? ''
+        : dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const fmtAddr = (loc) => {
+      if (!loc || typeof loc !== 'object') return 'N/A';
+      const parts = [loc.name, loc.address, loc.city, loc.state, loc.zipCode].filter(Boolean);
+      return parts.length ? parts.join(', ') : 'N/A';
+    };
+
+    const rowsLen = Math.max(pickupLocs.length, dropLocs.length);
+
+    // Truck In/Out (blank lines if not present)
+    const truckIn = fmtTime(order.truckInTime);
+    const truckOut = fmtTime(order.truckOutTime);
+
+    // ---------- HTML ----------
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bill of Lading</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, sans-serif; line-height:1.4; color:#333; background:#fff; font-size:12px; }
+  .container { max-width:800px; margin:0 auto; padding:20px; }
+  .header { display:flex; justify-content:space-between; align-items:start; margin-bottom:20px; }
+  .logo { width:140px; height:90px; object-fit:contain; }
+  .section { margin-bottom:20px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .box { border:1px solid #ccc; padding:15px; border-radius:8px; }
+  .box-title { font-weight:bold; margin-bottom:10px; color:#2c3e50; }
+  .field { margin-bottom:8px; }
+  .label { font-weight:bold; color:#666; }
+  .value { margin-left:5px; }
+  table { width:100%; border-collapse:collapse; margin:15px 0; }
+  th, td { border:1px solid #ddd; padding:8px; text-align:left; }
+  th { background:#f5f5f5; }
+  .footer { margin-top:30px; padding-top:20px; border-top:1px solid #ddd; }
+  .signatures { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px; }
+  .signature-box { border-top:1px solid #999; padding-top:5px; margin-top:50px; }
+  .time-row { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:10px; }
+  .line { display:inline-block; min-width:140px; border-bottom:1px solid #999; padding:0 6px; }
+  @media print { @page { margin: 0.5cm; } }
+</style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <img src="${safeLogo}" alt="Company Logo" class="logo"/>
+      <div style="text-align:right;">
+        <h2 style="color:#2c3e50; margin-bottom:5px;">BILL OF LADING</h2>
+        <p>Date: ${fmtDate(new Date())}</p>
+        <p>BOL Number(s): ${bolLine}</p>           <!-- UPDATED: BOLs -->
+        <p>Load Number: ${getLoadNumber()}</p>     <!-- NEW: Load No -->
+      </div>
+    </div>
+
+    <!-- Shipper Info -->
+    <div class="grid">
+      <div class="box">
+        <div class="box-title">Shipper Information</div>
+        <div class="field"><span class="label">Name:</span><span class="value">${shipper.name || 'N/A'}</span></div>
+        <div class="field"><span class="label">Container No:</span><span class="value">${shipper.containerNo || 'N/A'}</span></div>
+        <div className="field"><span class="label">Container Type:</span><span class="value">${shipper.containerType || 'N/A'}</span></div>
+      </div>
+    </div>
+
+    <!-- Pickup & Delivery -->
+    <div class="section">
+      <table>
+        <thead>
+          <tr><th colspan="2">Pickup Location(s)</th><th colspan="2">Delivery Location(s)</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="width:25%"><strong>Address</strong></td>
+            <td style="width:25%"><strong>Date </strong></td>
+            <td style="width:25%"><strong>Address</strong></td>
+            <td style="width:25%"><strong>Date </strong></td>
+          </tr>
+          ${rowsLen > 0
+        ? Array.from({ length: rowsLen }).map((_, i) => {
+          const pu = pickupLocs[i];
+          const dr = dropLocs[i];
+          const puDate = pu?.pickUpDate ? fmtDate(pu.pickUpDate) : 'N/A';
+          const drDate = dr?.dropDate ? fmtDate(dr.dropDate) : 'N/A';
+          return `
+                  <tr>
+                    <td>${pu ? fmtAddr(pu) : 'N/A'}</td>
+                    <td>${puDate}</td>
+                    <td>${dr ? fmtAddr(dr) : 'N/A'}</td>
+                    <td>${drDate}</td>
+                  </tr>`;
+        }).join('')
+        : '<tr><td colspan="4" style="text-align:center;">No locations specified</td></tr>'
+      }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Freight Information (Load # included) -->
+    <div class="section">
+      <table>
+        <thead>
+          <tr>
+            <th>Handling Units</th>
+            <th>Load #</th>
+            <th>Weight</th>
+            <th>Description</th>
+            <th>Special Instructions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(pickupLocs.length ? pickupLocs : [{}]).map((loc) => `
+              <tr>
+                <td>1</td>
+                <td>${getLoadNumber()}</td>
+                <td>${loc?.weight ? loc.weight + ' lbs' : 'N/A'}</td>
+                <td>${shipper.containerType || 'N/A'}</td>
+                <td>${loc?.remarks || 'N/A'}</td>
+              </tr>
+            `).join('')
+      }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer & Signatures -->
+    <div class="footer">
+      <!-- Arrival / Departure just ABOVE Shipper Signature -->
+      <div class="box" style="margin-top:10px;">
+        <div class="box-title">Arrival / Departure</div>
+        <div class="time-row">
+          <div class="field">
+            <span class="label">Truck In Time:</span>
+            <span class="value">${truckIn || '<span class="line">&nbsp;</span>'}</span>
+          </div>
+          <div class="field">
+            <span class="label">Truck Out Time:</span>
+            <span class="value">${truckOut || '<span class="line">&nbsp;</span>'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="signatures">
+        <div>
+          <p><strong>Shipper Signature / Date</strong></p>
+          <div class="signature-box">
+            _____________________________________________<br>
+            <span style="font-size:10px;">
+              This is to certify that the above named materials are properly classified, packaged, marked, and labeled,
+              and are in proper condition for transportation according to the applicable regulations of the DOT.
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <p><strong>Carrier Signature / Date</strong></p>
+          <div class="signature-box">
+            _____________________________________________<br>
+            <span style="font-size:10px;">
+              Carrier acknowledges receipt of packages and required placards. Carrier certifies emergency response information
+              was made available and/or carrier has the DOT emergency response guidebook or equivalent documentation in the vehicle.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px; font-size:10px;">
+        <p>Note: Liability Limitation for loss or damage in this shipment may be applicable. See 49 U.S.C. § 14706(c)(1)(A) and (B).</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+    // ---------- PRINT: popup first, then iframe fallback ----------
+    const openAndPrint = (docTarget) => {
+      docTarget.document.open();
+      docTarget.document.write(html);
+      docTarget.document.close();
+      docTarget.onload = function () {
+        docTarget.focus();
+        docTarget.print();
+        if (docTarget !== window && docTarget.close) docTarget.close();
+        if (typeof alertify !== 'undefined' && alertify?.success) {
+          alertify.success('BOL PDF generated successfully!');
+        }
+      };
+    };
+
+    try {
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      if (printWindow && !printWindow.closed) {
+        openAndPrint(printWindow);
+      } else {
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+        openAndPrint(iframe.contentWindow);
+        setTimeout(() => iframe.remove(), 5000);
+      }
+    } catch (err) {
+      console.error('Error generating BOL PDF:', err);
+      if (typeof alertify !== 'undefined' && alertify?.error) {
+        alertify.error('Failed to generate BOL PDF. Please try again.');
+      }
     }
   };
 
@@ -3319,11 +3624,10 @@ other: ensureMoney2dp(String(c.other ?? '')),
                         <button
                           onClick={() => handleAssignOrder(order)}
                           disabled={order.assignmentStatus === 'assigned'}
-                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                            order.assignmentStatus === 'assigned'
-                              ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                              : 'bg-purple-500 hover:bg-purple-600 text-white'
-                          }`}
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${order.assignmentStatus === 'assigned'
+                            ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                            : 'bg-purple-500 hover:bg-purple-600 text-white'
+                            }`}
                         >
                           {order.assignmentStatus === 'assigned' ? 'Assigned' : 'Assign'}
                         </button>
@@ -3680,25 +3984,26 @@ other: ensureMoney2dp(String(c.other ?? '')),
 
               {/* Bol Information Section */}
               <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-blue-800 mb-4">Bol Information</h3>
+                <h3 className="text-lg font-semibold text-blue-800 mb-4">BOL Information</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <input
                       type="text"
-                      name="bolInformation"
-                      value={formData.bolInformation || ''}
-                      onClick={() => {
-                        //console.log('Bol Information clicked!');
-                        //alert('Bol Information clicked!');
-                        setShowBolModal(true);
-                      }}
-                      readOnly
-                      className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer border-gray-300"
-                      placeholder="Add Bol Information (Click to add)"
+                      value={formData.bols?.[0]?.bolNo || ''}
+                      onChange={(e) =>
+                        setFormData(prev => {
+                          const arr = prev.bols && prev.bols.length ? [...prev.bols] : [{ bolNo: '' }];
+                          arr[0] = { bolNo: e.target.value };
+                          return { ...prev, bols: arr };
+                        })
+                      }
+                      className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
+                      placeholder="Enter BOL number"
                     />
                   </div>
                 </div>
               </div>
+
 
               {/* Shipper Information Section */}
               <div className="bg-purple-50 p-4 rounded-lg">
@@ -4290,6 +4595,25 @@ other: ensureMoney2dp(String(c.other ?? '')),
                     )}
                   </div>
                 )}
+                {/* BOL Information (below Carrier Information) */}
+                {(() => {
+                  const bols = extractBols(selectedOrder || {});
+                  return (
+                    <div className="bg-blue-50 p-4 rounded-lg mt-4">
+                      <h3 className="text-lg font-semibold text-blue-800 mb-2">BOL Information</h3>
+
+                      {bols.length ? (
+                        <ul className="list-disc pl-5 text-gray-800">
+                          {bols.map((b, i) => (
+                            <li key={i} className="break-all">{b}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-gray-500">No BOL on file</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Shipper Information (NO weight here) */}
                 {selectedOrder?.shipper && (
@@ -4568,7 +4892,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
                       </div>
                       <h3 className="text-lg font-bold text-gray-800">Assignment Information</h3>
                     </div>
-                    
+
                     <div className="bg-white rounded-xl p-4 border border-indigo-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Assigned To */}
@@ -4590,7 +4914,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
                             <div className="flex justify-between">
                               <span className="text-gray-600 text-sm">Assigned At:</span>
                               <span className="font-medium text-gray-800">
-                                {selectedOrder.assignedToCMT?.assignedAt 
+                                {selectedOrder.assignedToCMT?.assignedAt
                                   ? new Date(selectedOrder.assignedToCMT.assignedAt).toLocaleString()
                                   : 'N/A'
                                 }
@@ -4668,6 +4992,13 @@ other: ensureMoney2dp(String(c.other ?? '')),
                       <FaDownload className="text-white" size={12} />
                       <span>Rate Confirmation PDF</span>
                     </button>
+                    <button
+                      onClick={() => generateBolPDF(selectedOrder)}
+                      className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-3 py-1.5 rounded-md font-medium shadow hover:shadow-md transition-all duration-200 flex items-center justify-center gap-1.5 text-xs"
+                    >
+                      <FaDownload className="text-white" size={12} />
+                      <span>BOL PDF</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -4704,7 +5035,7 @@ other: ensureMoney2dp(String(c.other ?? '')),
 
             <div className="space-y-6">
 
-              
+
 
               {/* Table header */}
               <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
@@ -4733,34 +5064,33 @@ other: ensureMoney2dp(String(c.other ?? '')),
                   {/* Name */}
                   <div>
                     <input
-  type="text"
-  value={charge.name}
-  onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
-  onKeyDown={(e) => {
-    const ctrl = e.ctrlKey || e.metaKey;
-    const allow = ['Backspace','Delete','Tab','Enter','Escape','ArrowLeft','ArrowRight','Home','End'];
-    if (allow.includes(e.key) || (ctrl && ['a','c','v','x'].includes(e.key.toLowerCase()))) return;
-    if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
-  }}
-  onBlur={() => {
-    setChargeErrors((prev) => {
-      const next = [...prev];
-      const v = (charge.name || '').trim();
-      next[index] = { ...(next[index] || {}) };
-      if (!v) next[index].name = 'Please enter the charge name';
-      else if (!/^[A-Za-z ]+$/.test(v)) next[index].name = 'Name should contain only alphabets';
-      else next[index].name = '';
-      return next;
-    });
-  }}
-  aria-invalid={Boolean(chargeErrors[index]?.name)}
-  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
-    chargeErrors[index]?.name
-      ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
-      : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-  }`}
-  placeholder="Enter charge name"
-/>
+                      type="text"
+                      value={charge.name}
+                      onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
+                      onKeyDown={(e) => {
+                        const ctrl = e.ctrlKey || e.metaKey;
+                        const allow = ['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+                        if (allow.includes(e.key) || (ctrl && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) return;
+                        if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
+                      }}
+                      onBlur={() => {
+                        setChargeErrors((prev) => {
+                          const next = [...prev];
+                          const v = (charge.name || '').trim();
+                          next[index] = { ...(next[index] || {}) };
+                          if (!v) next[index].name = 'Please enter the charge name';
+                          else if (!/^[A-Za-z ]+$/.test(v)) next[index].name = 'Name should contain only alphabets';
+                          else next[index].name = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(chargeErrors[index]?.name)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.name
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="Enter charge name"
+                    />
 
                     {chargeErrors[index]?.name && (
                       <p className="mt-1 text-xs text-red-600">{chargeErrors[index].name}</p>
@@ -4770,32 +5100,31 @@ other: ensureMoney2dp(String(c.other ?? '')),
                   {/* Quantity */}
                   <div>
                     <input
-  type="number"
-  min={1}
-  step={1}
-  inputMode="numeric"
-  onKeyDown={blockIntNoSign}
-  value={charge.quantity}
-  onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
-  onBlur={() => {
-    setChargeErrors((prev) => {
-      const next = [...prev];
-      const raw = String(charge.quantity ?? '');
-      next[index] = { ...(next[index] || {}) };
-      if (raw === '') next[index].quantity = 'Please enter the Quantity';
-      else if (!/^[1-9]\d*$/.test(raw)) next[index].quantity = 'Quantity must be a positive integer';
-      else next[index].quantity = '';
-      return next;
-    });
-  }}
-  aria-invalid={Boolean(chargeErrors[index]?.quantity)}
-  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
-    chargeErrors[index]?.quantity
-      ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
-      : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-  }`}
-  placeholder="0"
-/>
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      onKeyDown={blockIntNoSign}
+                      value={charge.quantity}
+                      onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
+                      onBlur={() => {
+                        setChargeErrors((prev) => {
+                          const next = [...prev];
+                          const raw = String(charge.quantity ?? '');
+                          next[index] = { ...(next[index] || {}) };
+                          if (raw === '') next[index].quantity = 'Please enter the Quantity';
+                          else if (!/^[1-9]\d*$/.test(raw)) next[index].quantity = 'Quantity must be a positive integer';
+                          else next[index].quantity = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(chargeErrors[index]?.quantity)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.quantity
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="0"
+                    />
 
                     {chargeErrors[index]?.quantity && (
                       <p className="mt-1 text-xs text-red-600">{chargeErrors[index].quantity}</p>
@@ -4805,32 +5134,31 @@ other: ensureMoney2dp(String(c.other ?? '')),
                   {/* Amount */}
                   <div>
                     <input
-  type="number"
-  min={1}
-  step={1}
-  inputMode="numeric"
-  onKeyDown={blockIntNoSign}
-  value={charge.amt}
-  onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
-  onBlur={() => {
-    setChargeErrors((prev) => {
-      const next = [...prev];
-      const raw = String(charge.amt ?? '');
-      next[index] = { ...(next[index] || {}) };
-      if (raw === '') next[index].amt = 'Please enter the amount';
-      else if (!/^[1-9]\d*$/.test(raw)) next[index].amt = 'Amount must be a positive integer';
-      else next[index].amt = '';
-      return next;
-    });
-  }}
-  aria-invalid={Boolean(chargeErrors[index]?.amt)}
-  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
-    chargeErrors[index]?.amt
-      ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
-      : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-  }`}
-  placeholder="0"
-/>
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      onKeyDown={blockIntNoSign}
+                      value={charge.amt}
+                      onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
+                      onBlur={() => {
+                        setChargeErrors((prev) => {
+                          const next = [...prev];
+                          const raw = String(charge.amt ?? '');
+                          next[index] = { ...(next[index] || {}) };
+                          if (raw === '') next[index].amt = 'Please enter the amount';
+                          else if (!/^[1-9]\d*$/.test(raw)) next[index].amt = 'Amount must be a positive integer';
+                          else next[index].amt = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(chargeErrors[index]?.amt)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.amt
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="0"
+                    />
 
                     {chargeErrors[index]?.amt && (
                       <p className="mt-1 text-xs text-red-600">{chargeErrors[index].amt}</p>
@@ -4911,1146 +5239,727 @@ other: ensureMoney2dp(String(c.other ?? '')),
         </div>
       )}
 
-      {/* Bol Information Modal */}
-      {console.log('showBolModal state:', showBolModal)}
-      {showBolModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white bg-opacity-20 p-2 rounded-lg">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold text-white">Bol Information</h2>
-                </div>
-                <button
-                  onClick={() => setShowBolModal(false)}
-                  className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
 
-            <div className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
-              {/* Form Fields */}
-              <div className="grid grid-cols-2 gap-6">
-                {/* BOL */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">BOL *</label>
-                  <input
-                    type="text"
-                    value={bolData.bol}
-                    onChange={(e) => setBolData({...bolData, bol: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter BOL number"
-                  />
-                </div>
-
-                {/* 3rd Party */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">3rd Party</label>
-                  <input
-                    type="text"
-                    value={bolData.thirdParty}
-                    onChange={(e) => setBolData({...bolData, thirdParty: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter 3rd party information"
-                  />
-                </div>
-
-                {/* Carrier */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Carrier</label>
-                  <input
-                    type="text"
-                    value={bolData.carrier}
-                    onChange={(e) => setBolData({...bolData, carrier: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter carrier information"
-                  />
-                </div>
-
-                {/* Freight Charges */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Freight Charges</label>
-                  <input
-                    type="text"
-                    value={bolData.freightCharges}
-                    onChange={(e) => setBolData({...bolData, freightCharges: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter freight charges"
-                  />
-                </div>
-
-                {/* Origin */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Origin</label>
-                  <input
-                    type="text"
-                    value={bolData.origin}
-                    onChange={(e) => setBolData({...bolData, origin: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter origin location"
-                  />
-                </div>
-
-                {/* Destination */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Destination</label>
-                  <input
-                    type="text"
-                    value={bolData.destination}
-                    onChange={(e) => setBolData({...bolData, destination: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter destination location"
-                  />
-                </div>
-
-                {/* Emergency */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Emergency</label>
-                  <input
-                    type="text"
-                    value={bolData.emergency}
-                    onChange={(e) => setBolData({...bolData, emergency: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter emergency contact"
-                  />
-                </div>
-
-                {/* C.O.D. */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">C.O.D.</label>
-                  <input
-                    type="text"
-                    value={bolData.cod}
-                    onChange={(e) => setBolData({...bolData, cod: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter C.O.D. information"
-                  />
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                <textarea
-                  value={bolData.notes}
-                  onChange={(e) => setBolData({...bolData, notes: e.target.value})}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter additional notes"
-                />
-              </div>
-
-              {/* Items */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
-                <input
-                  type="text"
-                  value={bolData.items}
-                  onClick={() => {
-                    console.log('Items clicked!');
-                    setShowItemsModal(true);
-                  }}
-                  readOnly
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  placeholder="Add Items (Click to add)"
-                />
-              </div>
-
-              {/* Files */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Files</label>
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) => setBolData({...bolData, files: Array.from(e.target.files)})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {bolData.files.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-600">Selected files:</p>
-                    <ul className="text-sm text-gray-500">
-                      {bolData.files.map((file, index) => (
-                        <li key={index}>• {file.name}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowBolModal(false)}
-                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Apply Bol Information
-                    setFormData({...formData, bolInformation: 'Bol Information Added'});
-                    setShowBolModal(false);
-                  }}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
-                >
-                  Apply Bol Information
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Items Modal */}
-      {showItemsModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-green-500 to-blue-600 p-6">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white bg-opacity-20 p-2 rounded-lg">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold text-white">Items Information</h2>
-                </div>
-                <button
-                  onClick={() => setShowItemsModal(false)}
-                  className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
-              {/* Items List */}
-              {itemsData.map((item, index) => (
-                <div key={item.id} className="bg-gray-50 p-4 rounded-lg border">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-gray-800">Item {index + 1}</h3>
-                    {itemsData.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setItemsData(itemsData.filter((_, i) => i !== index));
-                        }}
-                        className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-100 transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Form Fields */}
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Pieces */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Pieces *</label>
-                      <input
-                        type="text"
-                        value={item.pieces}
-                        onChange={(e) => {
-                          const newItems = [...itemsData];
-                          newItems[index].pieces = e.target.value;
-                          setItemsData(newItems);
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="Enter number of pieces"
-                      />
-                    </div>
-
-                    {/* Description */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
-                      <input
-                        type="text"
-                        value={item.description}
-                        onChange={(e) => {
-                          const newItems = [...itemsData];
-                          newItems[index].description = e.target.value;
-                          setItemsData(newItems);
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="Enter item description"
-                      />
-                    </div>
-
-                    {/* LBS */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">LBS *</label>
-                      <input
-                        type="text"
-                        value={item.lbs}
-                        onChange={(e) => {
-                          const newItems = [...itemsData];
-                          newItems[index].lbs = e.target.value;
-                          setItemsData(newItems);
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="Enter weight in LBS"
-                      />
-                    </div>
-
-                    {/* Type */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Type *</label>
-                      <input
-                        type="text"
-                        value={item.type}
-                        onChange={(e) => {
-                          const newItems = [...itemsData];
-                          newItems[index].type = e.target.value;
-                          setItemsData(newItems);
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="Enter item type"
-                      />
-                    </div>
-
-                    {/* NMFC */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">NMFC *</label>
-                      <input
-                        type="text"
-                        value={item.nmfc}
-                        onChange={(e) => {
-                          const newItems = [...itemsData];
-                          newItems[index].nmfc = e.target.value;
-                          setItemsData(newItems);
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="Enter NMFC code"
-                      />
-                    </div>
-
-                    {/* HM (Yes or No) */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">HM (Yes or No) *</label>
-                      <select
-                        value={item.hm}
-                        onChange={(e) => {
-                          const newItems = [...itemsData];
-                          newItems[index].hm = e.target.value;
-                          setItemsData(newItems);
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                      </select>
-                    </div>
-
-                    {/* Class */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Class *</label>
-                      <input
-                        type="text"
-                        value={item.class}
-                        onChange={(e) => {
-                          const newItems = [...itemsData];
-                          newItems[index].class = e.target.value;
-                          setItemsData(newItems);
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="Enter class"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {/* Add New Item Button */}
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newItem = {
-                      id: Date.now(),
-                      pieces: '',
-                      description: '',
-                      lbs: '',
-                      type: '',
-                      nmfc: '',
-                      hm: 'No',
-                      class: ''
-                    };
-                    setItemsData([...itemsData, newItem]);
-                  }}
-                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-xl hover:from-green-600 hover:to-blue-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                  </svg>
-                  Add New Item
-                </button>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowItemsModal(false)}
-                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Apply Items Information
-                    const itemsSummary = itemsData.map((item, index) => 
-                      `Item ${index + 1}: ${item.pieces} pieces - ${item.description}`
-                    ).join('; ');
-                    setBolData({...bolData, items: itemsSummary});
-                    setShowItemsModal(false);
-                  }}
-                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-xl hover:from-green-600 hover:to-blue-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
-                >
-                  Apply Items Information
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Edit Order Modal */}
       {showEditModal && editingOrder && (
-  <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-    {/* Hide scrollbar for modal content */}
-    <style>{`
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          {/* Hide scrollbar for modal content */}
+          <style>{`
       .hide-scrollbar::-webkit-scrollbar { display: none; }
       .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
     `}</style>
 
-    <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-              </svg>
+          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Edit Delivery Order</h2>
+                    <p className="text-green-100">Update delivery order details</p>
+                  </div>
+                </div>
+                <button onClick={handleCloseEditModal} className="text-white hover:text-gray-200 text-2xl font-bold">×</button>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-bold">Edit Delivery Order</h2>
-              <p className="text-green-100">Update delivery order details</p>
-            </div>
-          </div>
-          <button onClick={handleCloseEditModal} className="text-white hover:text-gray-200 text-2xl font-bold">×</button>
-        </div>
-      </div>
 
-      {/* Form */}
-      <form onSubmit={handleUpdateOrder} className="p-6 space-y-6">
-        {/* Customer Information */}
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
-            <button
-              type="button"
-              onClick={addCustomer}
-              className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
-            >
-              + Add Customer
-            </button>
-          </div>
-
-          {formData.customers.map((customer, customerIndex) => (
-            <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
-                {formData.customers.length > 1 && (
+            {/* Form */}
+            <form onSubmit={handleUpdateOrder} className="p-6 space-y-6">
+              {/* Customer Information */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
                   <button
                     type="button"
-                    onClick={() => removeCustomer(customerIndex)}
-                    className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                    onClick={addCustomer}
+                    className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
                   >
-                    Remove
+                    + Add Customer
                   </button>
-                )}
+                </div>
+
+                {formData.customers.map((customer, customerIndex) => (
+                  <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
+                      {formData.customers.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeCustomer(customerIndex)}
+                          className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-4">
+                      {/* Bill To (Company) */}
+                      <div>
+                        {shippers.length > 0 ? (
+                          <div className={errBox(!!errors.customers?.[customerIndex]?.billTo)}>
+                            <SearchableDropdown
+                              value={customer.billTo || ''}
+                              onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
+                              options={[
+                                ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
+                                  ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
+                                  : []
+                                ),
+                                ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
+                              ]}
+                              placeholder="Select Company *"
+                              disabled={loadingShippers}
+                              loading={loadingShippers}
+                              searchPlaceholder="Search companies..."
+                              className="w-full"
+                            />
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={customer.billTo}
+                            onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                            className={errCls(!!errors.customers?.[customerIndex]?.billTo)}
+                            placeholder={loadingShippers ? "Loading companies..." : "Bill To *"}
+                          />
+                        )}
+                        {errors.customers?.[customerIndex]?.billTo && (
+                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].billTo}</p>
+                        )}
+                      </div>
+
+                      {/* Dispatcher */}
+                      <div>
+                        {dispatchers.length > 0 ? (
+                          <div className={errBox(!!errors.customers?.[customerIndex]?.dispatcherName)}>
+                            <SearchableDropdown
+                              value={customer.dispatcherName || ''}
+                              onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
+                              options={[
+                                ...(customer.dispatcherName &&
+                                  !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
+                                  ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
+                                  : []
+                                ),
+                                ...dispatchers
+                                  .filter(d => (d.status || '').toLowerCase() === 'active')
+                                  .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
+                                  .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
+                              ]}
+                              placeholder="Select Dispatcher *"
+                              disabled={loadingDispatchers}
+                              loading={loadingDispatchers}
+                              searchPlaceholder="Search dispatchers..."
+                              className="w-full"
+                            />
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={customer.dispatcherName}
+                            onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
+                            className={errCls(!!errors.customers?.[customerIndex]?.dispatcherName)}
+                            placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Dispatcher Name *'}
+                          />
+                        )}
+                        {errors.customers?.[customerIndex]?.dispatcherName && (
+                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].dispatcherName}</p>
+                        )}
+                      </div>
+
+                      {/* Work Order No (alphanumeric only) */}
+                      <div>
+                        <input
+                          type="text"
+                          value={customer.workOrderNo}
+                          onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
+                          className={errCls(!!errors.customers?.[customerIndex]?.workOrderNo)}
+                          placeholder="Work Order No *"
+                        />
+                        {errors.customers?.[customerIndex]?.workOrderNo && (
+                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].workOrderNo}</p>
+                        )}
+                      </div>
+
+                      {/* Line Haul */}
+                      <div>
+                        <input
+                          type="text"
+                          value={String(customer.lineHaul ?? '')}
+                          onKeyDown={blockMoneyChars}
+                          onChange={(e) =>
+                            handleCustomerChange(customerIndex, 'lineHaul', e.target.value)
+                          }
+                          onBlur={(e) =>
+                            handleCustomerChange(customerIndex, 'lineHaul', ensureMoney2dp(e.target.value))
+                          }
+                          className={errCls(!!errors.customers?.[customerIndex]?.lineHaul)}
+                          placeholder="Line Haul *"
+                          inputMode="decimal"
+                        />
+                        {errors.customers?.[customerIndex]?.lineHaul && (
+                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].lineHaul}</p>
+                        )}
+                      </div>
+
+                      {/* FSC */}
+                      <div>
+                        <input
+                          type="text"
+                          value={String(customer.fsc ?? '')}
+                          onKeyDown={blockMoneyChars}
+                          onChange={(e) =>
+                            handleCustomerChange(customerIndex, 'fsc', e.target.value)
+                          }
+                          onBlur={(e) =>
+                            handleCustomerChange(customerIndex, 'fsc', ensureMoney2dp(e.target.value))
+                          }
+                          className={errCls(!!errors.customers?.[customerIndex]?.fsc)}
+                          placeholder="FSC *"
+                          inputMode="decimal"
+                        />
+                        {errors.customers?.[customerIndex]?.fsc && (
+                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].fsc}</p>
+                        )}
+                      </div>
+
+                      {/* Other */}
+                      <div>
+                        <input
+                          type="text"
+                          value={String(customer.other ?? '')}
+                          onKeyDown={blockMoneyChars}
+                          onChange={(e) =>
+                            handleCustomerChange(customerIndex, 'other', e.target.value)
+                          }
+                          onBlur={(e) =>
+                            handleCustomerChange(customerIndex, 'other', ensureMoney2dp(e.target.value))
+                          }
+                          className={errCls(!!errors.customers?.[customerIndex]?.other)}
+                          placeholder="Other *"
+                          inputMode="decimal"
+                        />
+                        {errors.customers?.[customerIndex]?.other && (
+                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].other}</p>
+                        )}
+                      </div>
+
+                      {/* Total */}
+                      <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
+                        <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              <div className="grid grid-cols-4 gap-4">
-                {/* Bill To (Company) */}
-                <div>
-                  {shippers.length > 0 ? (
-                    <div className={errBox(!!errors.customers?.[customerIndex]?.billTo)}>
-                      <SearchableDropdown
-                        value={customer.billTo || ''}
-                        onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
-                        options={[
-                          ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
-                            ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
-                            : []
-                          ),
-                          ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
-                        ]}
-                        placeholder="Select Company *"
-                        disabled={loadingShippers}
-                        loading={loadingShippers}
-                        searchPlaceholder="Search companies..."
-                        className="w-full"
-                      />
-                    </div>
-                  ) : (
+              {/* Carrier (Trucker) Information */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  {/* Carrier Name */}
+                  <div>
                     <input
                       type="text"
-                      value={customer.billTo}
-                      onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                      className={errCls(!!errors.customers?.[customerIndex]?.billTo)}
-                      placeholder={loadingShippers ? "Loading companies..." : "Bill To *"}
+                      name="carrierName"
+                      value={formData.carrierName}
+                      onChange={handleInputChange}
+                      className={errCls(!!errors.carrier?.carrierName)}
+                      placeholder="Carrier Name *"
                     />
-                  )}
-                  {errors.customers?.[customerIndex]?.billTo && (
-                    <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].billTo}</p>
-                  )}
-                </div>
+                    {errors.carrier?.carrierName && (
+                      <p className="mt-1 text-xs text-red-600">{errors.carrier.carrierName}</p>
+                    )}
+                  </div>
 
-                {/* Dispatcher */}
-                <div>
-                  {dispatchers.length > 0 ? (
-                    <div className={errBox(!!errors.customers?.[customerIndex]?.dispatcherName)}>
-                      <SearchableDropdown
-                        value={customer.dispatcherName || ''}
-                        onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
-                        options={[
-                          ...(customer.dispatcherName &&
-                            !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
-                              ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
-                              : []
-                          ),
-                          ...dispatchers
-                            .filter(d => (d.status || '').toLowerCase() === 'active')
-                            .sort((a,b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
-                            .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
-                        ]}
-                        placeholder="Select Dispatcher *"
-                        disabled={loadingDispatchers}
-                        loading={loadingDispatchers}
-                        searchPlaceholder="Search dispatchers..."
-                        className="w-full"
-                      />
-                    </div>
-                  ) : (
+                  {/* Equipment Type */}
+                  <div>
                     <input
                       type="text"
-                      value={customer.dispatcherName}
-                      onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                      className={errCls(!!errors.customers?.[customerIndex]?.dispatcherName)}
-                      placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Dispatcher Name *'}
+                      name="equipmentType"
+                      value={formData.equipmentType}
+                      onChange={handleInputChange}
+                      className={errCls(!!errors.carrier?.equipmentType)}
+                      placeholder="Equipment Type *"
                     />
-                  )}
-                  {errors.customers?.[customerIndex]?.dispatcherName && (
-                    <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].dispatcherName}</p>
-                  )}
-                </div>
+                    {errors.carrier?.equipmentType && (
+                      <p className="mt-1 text-xs text-red-600">{errors.carrier.equipmentType}</p>
+                    )}
+                  </div>
 
-                {/* Work Order No (alphanumeric only) */}
-                <div>
-                  <input
-                    type="text"
-                    value={customer.workOrderNo}
-                    onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
-                    className={errCls(!!errors.customers?.[customerIndex]?.workOrderNo)}
-                    placeholder="Work Order No *"
-                  />
-                  {errors.customers?.[customerIndex]?.workOrderNo && (
-                    <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].workOrderNo}</p>
-                  )}
-                </div>
-
-                {/* Line Haul */}
-                <div>
-                  <input
-  type="text"
-  value={String(customer.lineHaul ?? '')}
-  onKeyDown={blockMoneyChars}
-  onChange={(e) =>
-    handleCustomerChange(customerIndex, 'lineHaul', e.target.value)
-  }
-  onBlur={(e) =>
-    handleCustomerChange(customerIndex, 'lineHaul', ensureMoney2dp(e.target.value))
-  }
-  className={errCls(!!errors.customers?.[customerIndex]?.lineHaul)}
-  placeholder="Line Haul *"
-  inputMode="decimal"
-/>
-                  {errors.customers?.[customerIndex]?.lineHaul && (
-                    <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].lineHaul}</p>
-                  )}
-                </div>
-
-                {/* FSC */}
-                <div>
-                  <input
-  type="text"
-  value={String(customer.fsc ?? '')}
-  onKeyDown={blockMoneyChars}
-  onChange={(e) =>
-    handleCustomerChange(customerIndex, 'fsc', e.target.value)
-  }
-  onBlur={(e) =>
-    handleCustomerChange(customerIndex, 'fsc', ensureMoney2dp(e.target.value))
-  }
-  className={errCls(!!errors.customers?.[customerIndex]?.fsc)}
-  placeholder="FSC *"
-  inputMode="decimal"
-/>
-                  {errors.customers?.[customerIndex]?.fsc && (
-                    <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].fsc}</p>
-                  )}
-                </div>
-
-                {/* Other */}
-                <div>
-                  <input
-  type="text"
-  value={String(customer.other ?? '')}
-  onKeyDown={blockMoneyChars}
-  onChange={(e) =>
-    handleCustomerChange(customerIndex, 'other', e.target.value)
-  }
-  onBlur={(e) =>
-    handleCustomerChange(customerIndex, 'other', ensureMoney2dp(e.target.value))
-  }
-  className={errCls(!!errors.customers?.[customerIndex]?.other)}
-  placeholder="Other *"
-  inputMode="decimal"
-/>
-                  {errors.customers?.[customerIndex]?.other && (
-                    <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].other}</p>
-                  )}
-                </div>
-
-                {/* Total */}
-                <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
-                  <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
+                  {/* Carrier Fees (opens popup) */}
+                  <div>
+                    <input
+                      type="text"
+                      name="carrierFees"
+                      value={formData.carrierFees}
+                      onClick={handleChargesClick}
+                      readOnly
+                      className={`${errCls(!!errors.carrier?.fees)} cursor-pointer`}
+                      placeholder="Carrier Fees * (Click to add charges)"
+                      aria-invalid={!!errors.carrier?.fees}
+                    />
+                    {errors.carrier?.fees && (
+                      <p className="mt-1 text-xs text-red-600">{errors.carrier.fees}</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
 
-        {/* Carrier (Trucker) Information */}
-        <div className="bg-green-50 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
-          <div className="grid grid-cols-3 gap-4">
-            {/* Carrier Name */}
-            <div>
-              <input
-                type="text"
-                name="carrierName"
-                value={formData.carrierName}
-                onChange={handleInputChange}
-                className={errCls(!!errors.carrier?.carrierName)}
-                placeholder="Carrier Name *"
-              />
-              {errors.carrier?.carrierName && (
-                <p className="mt-1 text-xs text-red-600">{errors.carrier.carrierName}</p>
-              )}
-            </div>
+              {/* Bol Information */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-blue-800 mb-4">BOL Information</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <input
+                      type="text"
+                      value={formData.bols?.[0]?.bolNo || ''}
+                      onChange={(e) =>
+                        setFormData(prev => {
+                          const arr = prev.bols && prev.bols.length ? [...prev.bols] : [{ bolNo: '' }];
+                          arr[0] = { bolNo: e.target.value };
+                          return { ...prev, bols: arr };
+                        })
+                      }
+                      className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
+                      placeholder="Enter BOL number"
+                    />
+                  </div>
+                </div>
+              </div>
 
-            {/* Equipment Type */}
-            <div>
-              <input
-                type="text"
-                name="equipmentType"
-                value={formData.equipmentType}
-                onChange={handleInputChange}
-                className={errCls(!!errors.carrier?.equipmentType)}
-                placeholder="Equipment Type *"
-              />
-              {errors.carrier?.equipmentType && (
-                <p className="mt-1 text-xs text-red-600">{errors.carrier.equipmentType}</p>
-              )}
-            </div>
 
-            {/* Carrier Fees (opens popup) */}
-            <div>
-              <input
-                type="text"
-                name="carrierFees"
-                value={formData.carrierFees}
-                onClick={handleChargesClick}
-                readOnly
-                className={`${errCls(!!errors.carrier?.fees)} cursor-pointer`}
-                placeholder="Carrier Fees * (Click to add charges)"
-                aria-invalid={!!errors.carrier?.fees}
-              />
-              {errors.carrier?.fees && (
-                <p className="mt-1 text-xs text-red-600">{errors.carrier.fees}</p>
-              )}
-            </div>
-          </div>
-        </div>
+              {/* Shipper Information */}
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
 
-        {/* Bol Information */}
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-blue-800 mb-4">Bol Information</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <input
-                type="text"
-                name="bolInformation"
-                value={formData.bolInformation || ''}
-                onClick={() => {
-                  console.log('Bol Information clicked!');
-                  alert('Bol Information clicked!');
-                  setShowBolModal(true);
-                }}
-                readOnly
-                className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer border-gray-300"
-                placeholder="Add Bol Information (Click to add)"
-              />
-            </div>
-          </div>
-        </div>
+                {/* Shipper Basic */}
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  {/* Shipper Name (alpha only) */}
+                  <div>
+                    <input
+                      type="text"
+                      name="shipperName"
+                      value={formData.shipperName}
+                      onChange={handleShipperNameChange}
+                      onKeyDown={blockNonAlphaKeys}
+                      className={errCls(!!errors.shipper?.shipperName)}
+                      placeholder="Shipper Name *"
+                    />
+                    {errors.shipper?.shipperName && (
+                      <p className="mt-1 text-xs text-red-600">{errors.shipper.shipperName}</p>
+                    )}
+                  </div>
 
-        {/* Shipper Information */}
-        <div className="bg-purple-50 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
+                  <div>
+                    <input
+                      type="text"
+                      name="containerNo"
+                      value={formData.containerNo}
+                      onChange={handleInputChange}
+                      className={errCls(!!errors.shipper?.containerNo)}
+                      placeholder="Container No *"
+                    />
+                    {errors.shipper?.containerNo && (
+                      <p className="mt-1 text-xs text-red-600">{errors.shipper.containerNo}</p>
+                    )}
+                  </div>
 
-          {/* Shipper Basic */}
-          <div className="grid grid-cols-4 gap-4 mb-4">
-            {/* Shipper Name (alpha only) */}
-            <div>
-              <input
-                type="text"
-                name="shipperName"
-                value={formData.shipperName}
-                onChange={handleShipperNameChange}
-                onKeyDown={blockNonAlphaKeys}
-                className={errCls(!!errors.shipper?.shipperName)}
-                placeholder="Shipper Name *"
-              />
-              {errors.shipper?.shipperName && (
-                <p className="mt-1 text-xs text-red-600">{errors.shipper.shipperName}</p>
-              )}
-            </div>
+                  <div>
+                    <input
+                      type="text"
+                      name="containerType"
+                      value={formData.containerType}
+                      onChange={handleInputChange}
+                      className={errCls(!!errors.shipper?.containerType)}
+                      placeholder="Container Type *"
+                    />
+                    {errors.shipper?.containerType && (
+                      <p className="mt-1 text-xs text-red-600">{errors.shipper.containerType}</p>
+                    )}
+                  </div>
+                </div>
 
-            <div>
-              <input
-                type="text"
-                name="containerNo"
-                value={formData.containerNo}
-                onChange={handleInputChange}
-                className={errCls(!!errors.shipper?.containerNo)}
-                placeholder="Container No *"
-              />
-              {errors.shipper?.containerNo && (
-                <p className="mt-1 text-xs text-red-600">{errors.shipper.containerNo}</p>
-              )}
-            </div>
-
-            <div>
-              <input
-                type="text"
-                name="containerType"
-                value={formData.containerType}
-                onChange={handleInputChange}
-                className={errCls(!!errors.shipper?.containerType)}
-                placeholder="Container Type *"
-              />
-              {errors.shipper?.containerType && (
-                <p className="mt-1 text-xs text-red-600">{errors.shipper.containerType}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Pickup Locations */}
-          <div className="bg-white p-4 rounded-lg mb-4">
-            <div className="flex justify-between items-center mb-3">
-              <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
-              <button
-                type="button"
-                onClick={addPickupLocation}
-                className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-              >
-                + Add Location
-              </button>
-            </div>
-
-            {formData.pickupLocations.map((location, locationIndex) => (
-              <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-                <div className="flex justify-between items-center mb-3">
-                  <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
-                  {formData.pickupLocations.length > 1 && (
+                {/* Pickup Locations */}
+                <div className="bg-white p-4 rounded-lg mb-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
                     <button
                       type="button"
-                      onClick={() => removePickupLocation(locationIndex)}
-                      className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                      onClick={addPickupLocation}
+                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
                     >
-                      Remove
+                      + Add Location
                     </button>
-                  )}
+                  </div>
+
+                  {formData.pickupLocations.map((location, locationIndex) => (
+                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                      <div className="flex justify-between items-center mb-3">
+                        <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
+                        {formData.pickupLocations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePickupLocation(locationIndex)}
+                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        {/* Name */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.name}
+                            onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
+                            className={errCls(!!errors.pickups?.[locationIndex]?.name)}
+                            placeholder="Location Name *"
+                          />
+                          {errors.pickups?.[locationIndex]?.name && (
+                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].name}</p>
+                          )}
+                        </div>
+
+                        {/* Address */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.address}
+                            onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
+                            className={errCls(!!errors.pickups?.[locationIndex]?.address)}
+                            placeholder="Address *"
+                          />
+                          {errors.pickups?.[locationIndex]?.address && (
+                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].address}</p>
+                          )}
+                        </div>
+
+                        {/* City */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.city}
+                            onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
+                            className={errCls(!!errors.pickups?.[locationIndex]?.city)}
+                            placeholder="City *"
+                          />
+                          {errors.pickups?.[locationIndex]?.city && (
+                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].city}</p>
+                          )}
+                        </div>
+
+                        {/* State */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.state}
+                            onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
+                            className={errCls(!!errors.pickups?.[locationIndex]?.state)}
+                            placeholder="State *"
+                          />
+                          {errors.pickups?.[locationIndex]?.state && (
+                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].state}</p>
+                          )}
+                        </div>
+
+                        {/* Zip */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.zipCode}
+                            onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
+                            className={errCls(!!errors.pickups?.[locationIndex]?.zipCode)}
+                            placeholder="Zip Code *"
+                          />
+                          {errors.pickups?.[locationIndex]?.zipCode && (
+                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].zipCode}</p>
+                          )}
+                        </div>
+
+                        {/* Weight */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.weight}
+                            onKeyDown={blockIntChars}   // -, +, e, E, . ko block karta hai
+                            onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
+                            className={errCls(!!errors.pickups?.[locationIndex]?.weight)}
+                            placeholder="Weight (lbs) *"
+                            inputMode="numeric"
+                          />
+                          {errors.pickups?.[locationIndex]?.weight && (
+                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].weight}</p>
+                          )}
+                        </div>
+
+                        {/* Date - fully clickable */}
+                        <div className="col-span-3">
+                          <ClickableDateInput
+                            value={location.pickUpDate}
+                            onChange={(v) => handlePickupLocationChange(locationIndex, 'pickUpDate', v)}
+                            error={errors.pickups?.[locationIndex]?.pickUpDate}
+                            mode="datetime"
+                            className={errors.pickups?.[locationIndex]?.pickUpDate ? 'error-field' : ''}
+                            placeholder="Pickup Date & Time *"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Remarks */}
+                      <textarea
+                        value={location.remarks || ''}
+                        onChange={(e) => handlePickupLocationChange(locationIndex, 'remarks', e.target.value)}
+                        className="col-span-3 w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Pickup remarks (optional)"
+                      />
+                    </div>
+                  ))}
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  {/* Name */}
-                  <div>
-                    <input
-                      type="text"
-                      value={location.name}
-                      onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
-                      className={errCls(!!errors.pickups?.[locationIndex]?.name)}
-                      placeholder="Location Name *"
-                    />
-                    {errors.pickups?.[locationIndex]?.name && (
-                      <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].name}</p>
-                    )}
-                  </div>
-
-                  {/* Address */}
-                  <div>
-                    <input
-                      type="text"
-                      value={location.address}
-                      onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
-                      className={errCls(!!errors.pickups?.[locationIndex]?.address)}
-                      placeholder="Address *"
-                    />
-                    {errors.pickups?.[locationIndex]?.address && (
-                      <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].address}</p>
-                    )}
-                  </div>
-
-                  {/* City */}
-                  <div>
-                    <input
-                      type="text"
-                      value={location.city}
-                      onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
-                      className={errCls(!!errors.pickups?.[locationIndex]?.city)}
-                      placeholder="City *"
-                    />
-                    {errors.pickups?.[locationIndex]?.city && (
-                      <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].city}</p>
-                    )}
-                  </div>
-
-                  {/* State */}
-                  <div>
-                    <input
-                      type="text"
-                      value={location.state}
-                      onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
-                      className={errCls(!!errors.pickups?.[locationIndex]?.state)}
-                      placeholder="State *"
-                    />
-                    {errors.pickups?.[locationIndex]?.state && (
-                      <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].state}</p>
-                    )}
-                  </div>
-
-                  {/* Zip */}
-                  <div>
-                    <input
-  type="text"
-  value={location.zipCode}
-  onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
-  className={errCls(!!errors.pickups?.[locationIndex]?.zipCode)}
-  placeholder="Zip Code *"
-/>
-                    {errors.pickups?.[locationIndex]?.zipCode && (
-                      <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].zipCode}</p>
-                    )}
-                  </div>
-
-                  {/* Weight */}
-                  <div>
-                    <input
-  type="text"
-  value={location.weight}
-  onKeyDown={blockIntChars}   // -, +, e, E, . ko block karta hai
-  onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
-  className={errCls(!!errors.pickups?.[locationIndex]?.weight)}
-  placeholder="Weight (lbs) *"
-  inputMode="numeric"
-/>
-                    {errors.pickups?.[locationIndex]?.weight && (
-                      <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].weight}</p>
-                    )}
-                  </div>
-
-                  {/* Date - fully clickable */}
-                  <div className="col-span-3">
-                    <ClickableDateInput
-                      value={location.pickUpDate}
-                      onChange={(v) => handlePickupLocationChange(locationIndex, 'pickUpDate', v)}
-                      error={errors.pickups?.[locationIndex]?.pickUpDate}
-                      mode="datetime"
-                      className={errors.pickups?.[locationIndex]?.pickUpDate ? 'error-field' : ''}
-                      placeholder="Pickup Date & Time *"
-                    />
-                  </div>
-                </div>
-
-                {/* Remarks */}
-                <textarea
-                  value={location.remarks || ''}
-                  onChange={(e) => handlePickupLocationChange(locationIndex, 'remarks', e.target.value)}
-                  className="col-span-3 w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Pickup remarks (optional)"
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Drop Locations */}
-          <div className="bg-white p-4 rounded-lg">
-            <div className="flex justify-between items-center mb-3">
-              <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
-              <button
-                type="button"
-                onClick={addDropLocation}
-                className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-              >
-                + Add Location
-              </button>
-            </div>
-
-            {formData.dropLocations.map((location, locationIndex) => (
-              <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-                <div className="flex justify-between items-center mb-3">
-                  <h5 className="text-sm font-semibold text-gray-700">Drop Location {locationIndex + 1}</h5>
-                  {formData.dropLocations.length > 1 && (
+                {/* Drop Locations */}
+                <div className="bg-white p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
                     <button
                       type="button"
-                      onClick={() => removeDropLocation(locationIndex)}
-                      className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                      onClick={addDropLocation}
+                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
                     >
-                      Remove
+                      + Add Location
                     </button>
+                  </div>
+
+                  {formData.dropLocations.map((location, locationIndex) => (
+                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
+                      <div className="flex justify-between items-center mb-3">
+                        <h5 className="text-sm font-semibold text-gray-700">Drop Location {locationIndex + 1}</h5>
+                        {formData.dropLocations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeDropLocation(locationIndex)}
+                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        {/* Name */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.name}
+                            onChange={(e) => handleDropLocationChange(locationIndex, 'name', e.target.value)}
+                            className={errCls(!!errors.drops?.[locationIndex]?.name)}
+                            placeholder="Location Name *"
+                          />
+                          {errors.drops?.[locationIndex]?.name && (
+                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].name}</p>
+                          )}
+                        </div>
+
+                        {/* Address */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.address}
+                            onChange={(e) => handleDropLocationChange(locationIndex, 'address', e.target.value)}
+                            className={errCls(!!errors.drops?.[locationIndex]?.address)}
+                            placeholder="Address *"
+                          />
+                          {errors.drops?.[locationIndex]?.address && (
+                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].address}</p>
+                          )}
+                        </div>
+
+                        {/* City */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.city}
+                            onChange={(e) => handleDropLocationChange(locationIndex, 'city', e.target.value)}
+                            className={errCls(!!errors.drops?.[locationIndex]?.city)}
+                            placeholder="City *"
+                          />
+                          {errors.drops?.[locationIndex]?.city && (
+                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].city}</p>
+                          )}
+                        </div>
+
+                        {/* State */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.state}
+                            onChange={(e) => handleDropLocationChange(locationIndex, 'state', e.target.value)}
+                            className={errCls(!!errors.drops?.[locationIndex]?.state)}
+                            placeholder="State *"
+                          />
+                          {errors.drops?.[locationIndex]?.state && (
+                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].state}</p>
+                          )}
+                        </div>
+
+                        {/* Zip */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.zipCode}
+                            onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
+                            className={errCls(!!errors.drops?.[locationIndex]?.zipCode)}
+                            placeholder="Zip Code *"
+                          />
+                          {errors.drops?.[locationIndex]?.zipCode && (
+                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].zipCode}</p>
+                          )}
+                        </div>
+
+                        {/* Weight */}
+                        <div>
+                          <input
+                            type="text"
+                            value={location.weight}
+                            onKeyDown={blockIntChars}
+                            onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
+                            className={errCls(!!errors.drops?.[locationIndex]?.weight)}
+                            placeholder="Weight (lbs) *"
+                            inputMode="numeric"
+                          />
+                          {errors.drops?.[locationIndex]?.weight && (
+                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].weight}</p>
+                          )}
+                        </div>
+
+                        {/* Date - fully clickable */}
+                        <div className="col-span-3">
+                          <ClickableDateInput
+                            value={location.dropDate}
+                            onChange={(v) => handleDropLocationChange(locationIndex, 'dropDate', v)}
+                            error={errors.drops?.[locationIndex]?.dropDate}
+                            mode="datetime"
+                            className={errors.drops?.[locationIndex]?.dropDate ? 'error-field' : ''}
+                            placeholder="Drop Date & Time *"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Remarks */}
+                      <textarea
+                        value={location.remarks || ''}
+                        onChange={(e) => handleDropLocationChange(locationIndex, 'remarks', e.target.value)}
+                        className="col-span-3 w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Drop remarks (optional)"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Document Upload (optional in Edit) */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  Document Upload <span className="text-gray-500 text-sm font-normal">(optional in Edit)</span>
+                </h3>
+                <p className="text-xs text-gray-500 -mt-3 mb-3">Allowed: PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center w-full">
+                    <label
+                      htmlFor="file-upload-edit"
+                      className={`flex flex-col items-center justify-center w-full h-32 border-2 ${errors.docs ? 'border-red-500 bg-red-50' : 'border-gray-300'} border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors`}
+                    >
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                          <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
+                        </svg>
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
+                      </div>
+                      <input
+                        id="file-upload-edit"
+                        type="file"
+                        className="hidden"
+                        onChange={handleFileChange}
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      />
+                    </label>
+                  </div>
+
+                  {errors.docs && (
+                    <p className="text-xs text-red-600">{errors.docs}</p>
+                  )}
+
+                  {formData.docs && (
+                    <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
+                          <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                      </button>
+                    </div>
                   )}
                 </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  {/* Name */}
-                  <div>
-                    <input
-                      type="text"
-                      value={location.name}
-                      onChange={(e) => handleDropLocationChange(locationIndex, 'name', e.target.value)}
-                      className={errCls(!!errors.drops?.[locationIndex]?.name)}
-                      placeholder="Location Name *"
-                    />
-                    {errors.drops?.[locationIndex]?.name && (
-                      <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].name}</p>
-                    )}
-                  </div>
-
-                  {/* Address */}
-                  <div>
-                    <input
-                      type="text"
-                      value={location.address}
-                      onChange={(e) => handleDropLocationChange(locationIndex, 'address', e.target.value)}
-                      className={errCls(!!errors.drops?.[locationIndex]?.address)}
-                      placeholder="Address *"
-                    />
-                    {errors.drops?.[locationIndex]?.address && (
-                      <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].address}</p>
-                    )}
-                  </div>
-
-                  {/* City */}
-                  <div>
-                    <input
-                      type="text"
-                      value={location.city}
-                      onChange={(e) => handleDropLocationChange(locationIndex, 'city', e.target.value)}
-                      className={errCls(!!errors.drops?.[locationIndex]?.city)}
-                      placeholder="City *"
-                    />
-                    {errors.drops?.[locationIndex]?.city && (
-                      <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].city}</p>
-                    )}
-                  </div>
-
-                  {/* State */}
-                  <div>
-                    <input
-                      type="text"
-                      value={location.state}
-                      onChange={(e) => handleDropLocationChange(locationIndex, 'state', e.target.value)}
-                      className={errCls(!!errors.drops?.[locationIndex]?.state)}
-                      placeholder="State *"
-                    />
-                    {errors.drops?.[locationIndex]?.state && (
-                      <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].state}</p>
-                    )}
-                  </div>
-
-                  {/* Zip */}
-                  <div>
-                    <input
-  type="text"
-  value={location.zipCode}
-  onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
-  className={errCls(!!errors.drops?.[locationIndex]?.zipCode)}
-  placeholder="Zip Code *"
-/>
-                    {errors.drops?.[locationIndex]?.zipCode && (
-                      <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].zipCode}</p>
-                    )}
-                  </div>
-
-                  {/* Weight */}
-                  <div>
-                    <input
-  type="text"
-  value={location.weight}
-  onKeyDown={blockIntChars}
-  onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
-  className={errCls(!!errors.drops?.[locationIndex]?.weight)}
-  placeholder="Weight (lbs) *"
-  inputMode="numeric"
-/>
-                    {errors.drops?.[locationIndex]?.weight && (
-                      <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].weight}</p>
-                    )}
-                  </div>
-
-                  {/* Date - fully clickable */}
-                  <div className="col-span-3">
-                    <ClickableDateInput
-                      value={location.dropDate}
-                      onChange={(v) => handleDropLocationChange(locationIndex, 'dropDate', v)}
-                      error={errors.drops?.[locationIndex]?.dropDate}
-                      mode="datetime"
-                      className={errors.drops?.[locationIndex]?.dropDate ? 'error-field' : ''}
-                      placeholder="Drop Date & Time *"
-                    />
-                  </div>
-                </div>
-
-                {/* Remarks */}
-                <textarea
-                  value={location.remarks || ''}
-                  onChange={(e) => handleDropLocationChange(locationIndex, 'remarks', e.target.value)}
-                  className="col-span-3 w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Drop remarks (optional)"
-                />
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* Document Upload (optional in Edit) */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Document Upload <span className="text-gray-500 text-sm font-normal">(optional in Edit)</span>
-          </h3>
-          <p className="text-xs text-gray-500 -mt-3 mb-3">Allowed: PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-center w-full">
-              <label
-                htmlFor="file-upload-edit"
-                className={`flex flex-col items-center justify-center w-full h-32 border-2 ${errors.docs ? 'border-red-500 bg-red-50' : 'border-gray-300'} border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors`}
-              >
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
-                  </svg>
-                  <p className="mb-2 text-sm text-gray-500">
-                    <span className="font-semibold">Click to upload</span> or drag and drop
-                  </p>
-                  <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
-                </div>
-                <input
-                  id="file-upload-edit"
-                  type="file"
-                  className="hidden"
-                  onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                />
-              </label>
-            </div>
-
-            {errors.docs && (
-              <p className="text-xs text-red-600">{errors.docs}</p>
-            )}
-
-            {formData.docs && (
-              <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
-                    <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
-                  </div>
-                </div>
+              {/* Form Actions */}
+              <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
-                  className="text-red-500 hover:text-red-700 transition-colors"
+                  onClick={handleCloseEditModal}
+                  disabled={submitting}
+                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting ? 'opacity-50 cursor-not-allowed text-gray-400' : 'text-gray-700 hover:bg-gray-50'}`}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${submitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-green-600 hover:to-green-700'}`}
+                  onClick={(e) => {
+                    // ensure validation blocks submit if invalid
+                    if (!validateForm('edit')) { e.preventDefault(); focusFirstError(); }
+                  }}
+                >
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                      Updating...
+                    </span>
+                  ) : (
+                    'Update Delivery Order'
+                  )}
                 </button>
               </div>
-            )}
+            </form>
           </div>
         </div>
-
-        {/* Form Actions */}
-        <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={handleCloseEditModal}
-            disabled={submitting}
-            className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting ? 'opacity-50 cursor-not-allowed text-gray-400' : 'text-gray-700 hover:bg-gray-50'}`}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${submitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-green-600 hover:to-green-700'}`}
-            onClick={(e) => {
-              // ensure validation blocks submit if invalid
-              if (!validateForm('edit')) { e.preventDefault(); focusFirstError(); }
-            }}
-          >
-            {submitting ? (
-              <span className="flex items-center gap-2">
-                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                Updating...
-              </span>
-            ) : (
-              'Update Delivery Order'
-            )}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
+      )}
 
       {/* Delete Order Modal */}
       {showDeleteModal && (
@@ -6211,11 +6120,10 @@ other: ensureMoney2dp(String(c.other ?? '')),
                   type="button"
                   onClick={handleConfirmAssign}
                   disabled={assigningOrder}
-                  className={`px-6 py-2 rounded-lg transition-all duration-200 font-semibold ${
-                    assigningOrder
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
-                  }`}
+                  className={`px-6 py-2 rounded-lg transition-all duration-200 font-semibold ${assigningOrder
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
+                    }`}
                 >
                   {assigningOrder ? (
                     <div className="flex items-center gap-2">

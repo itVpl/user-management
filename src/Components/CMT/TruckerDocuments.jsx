@@ -34,6 +34,13 @@ const IMG_EXTS = ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'];
 const isImageUrl = (url = '') => IMG_EXTS.includes(getExt(url));
 const absUrl = (u) => (u?.startsWith('http') ? u : `${API_CONFIG.BASE_URL}/${u}`);
 
+// NEW: common attachment validator (images/pdf/doc upto 10MB)
+const ALLOWED_ACTION_EXT = ['PNG', 'JPG', 'JPEG', 'WEBP', 'PDF', 'DOC', 'DOCX'];
+const actionFileIsAllowed = (file) => {
+  if (!file) return true;
+  const ext = (file.name.split('.').pop() || '').toUpperCase();
+  return ALLOWED_ACTION_EXT.includes(ext) && file.size <= MAX_FILE_BYTES;
+};
 
 
 export default function TruckerDocuments() {
@@ -62,6 +69,16 @@ export default function TruckerDocuments() {
     insurance: false,
   });
   const [error, setError] = useState(null);
+  // NEW: Blacklist/OK action states
+  const [actionType, setActionType] = useState(''); // '', 'ok', 'blacklist'
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionErrors, setActionErrors] = useState({});
+  const [actionForm, setActionForm] = useState({
+    reason: '',
+    remarks: '',
+    attachment: null, // File
+  });
+
 
   // Document fields configuration
   const documentFields = [
@@ -211,7 +228,7 @@ export default function TruckerDocuments() {
 
       // ... (baaki document URLs same rakhna)
       // (yahan tumhare pehle wale absolute URL mapping hi rehne do)
-      
+
       brokeragePacketUrl: (trucker.brokeragePacketUrl || trucker.brokeragePacket || trucker.documents?.brokeragePacket) ? absUrl(trucker.brokeragePacketUrl || trucker.brokeragePacket || trucker.documents?.brokeragePacket) : null,
       brokeragePacketFileName: trucker.brokeragePacketFileName || trucker.brokeragePacketName || null,
       carrierPartnerAgreementUrl: (trucker.carrierPartnerAgreementUrl || trucker.carrierPartnerAgreement || trucker.documents?.carrierPartnerAgreement) ? absUrl(trucker.carrierPartnerAgreementUrl || trucker.carrierPartnerAgreement || trucker.documents?.carrierPartnerAgreement) : null,
@@ -444,6 +461,81 @@ export default function TruckerDocuments() {
     }
   };
 
+  // NEW: handle changes
+  const handleActionInput = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'attachment') {
+      const f = files?.[0] || null;
+      if (f && !actionFileIsAllowed(f)) {
+        setActionErrors(prev => ({ ...prev, attachment: 'Only images/pdf/doc (≤10 MB) allowed.' }));
+        setActionForm(prev => ({ ...prev, attachment: null }));
+      } else {
+        setActionErrors(prev => { const c = { ...prev }; delete c.attachment; return c; });
+        setActionForm(prev => ({ ...prev, attachment: f }));
+      }
+      return;
+    }
+    setActionForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  // NEW: submit to API
+  const handleAccountAction = async (e) => {
+    e.preventDefault();
+    if (!actionType) return;
+
+    // basic validation
+    const errs = {};
+    if (!actionForm.reason?.trim()) errs.reason = true;
+    if (!actionFileIsAllowed(actionForm.attachment)) errs.attachment = 'Invalid file.';
+    setActionErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    try {
+      setActionLoading(true);
+
+      // token + axios
+      const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const axiosInstance = axios.create({
+        baseURL: `${API_CONFIG.BASE_URL}`,
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      // userId resolve (we saved _id as _id || userId earlier)
+      const userId = editFormData._id || selectedTrucker?.userId || selectedTrucker?._id;
+
+      const fd = new FormData();
+      // NOTE: backend aapke screenshots ke mutabik form-data expect karta hai
+      if (actionType === 'blacklist') {
+        fd.append('blacklistReason', actionForm.reason);
+        if (actionForm.remarks) fd.append('blacklistRemarks', actionForm.remarks);
+        if (actionForm.attachment) fd.append('attachments', actionForm.attachment);
+        // optional: kabhi-kabhi API userid key bhi leti hai, harmless to add:
+        fd.append('userid', userId);
+
+        await axiosInstance.put(`/api/v1/shipper_driver/blacklist/${userId}`, fd);
+        alert('User blacklisted successfully.');
+      } else {
+        // OK → remove from blacklist
+        fd.append('removalReason', actionForm.reason);
+        if (actionForm.remarks) fd.append('removalRemarks', actionForm.remarks);
+        if (actionForm.attachment) fd.append('attachments', actionForm.attachment);
+
+        await axiosInstance.put(`/api/v1/shipper_driver/blacklist/${userId}/remove`, fd);
+        alert('User removed from blacklist successfully.');
+      }
+
+      // reset + refresh
+      setActionType('');
+      setActionForm({ reason: '', remarks: '', attachment: null });
+      await fetchTruckers();
+      setShowEditModal(false); // optional: close modal after action
+    } catch (err) {
+      console.error('Account action failed:', err);
+      alert('Failed to complete account action. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // Get upload icon for edit form
   const getEditUploadIcon = (fieldName) => {
@@ -548,7 +640,7 @@ export default function TruckerDocuments() {
     return displayNames[docKey] || docKey;
   };
 
-  
+
 
   if (previewImg) {
     return (
@@ -933,6 +1025,96 @@ export default function TruckerDocuments() {
                   ))}
                 </div>
               </div>
+              {/* NEW: Account Action Block (OK / Blacklist) */}
+              {/* Account Action (OK / Blacklist) */}
+              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
+                <h4 className="text-2xl font-bold mb-4 text-center">Account Action</h4>
+
+                {/* Dropdown */}
+                <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Select Action</label>
+                    <select
+                      value={actionType}
+                      onChange={(e) => {
+                        setActionType(e.target.value);
+                        setActionForm({ reason: '', remarks: '', attachment: null });
+                        setActionErrors({});
+                      }}
+                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                    >
+                      <option value="">— Select —</option>
+                      <option value="ok">OK (Remove from Blacklist)</option>
+                      <option value="blacklist">Blacklist</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* NOTE: yahan koi <form> NAHI hoga */}
+                {actionType && (
+                  <div
+                    className="w-full mt-4 space-y-4"
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} // Enter dabne se outer form submit na ho
+                  >
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        {actionType === 'blacklist' ? 'Blacklist Reason' : 'Removal Reason'} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="reason"
+                        value={actionForm.reason}
+                        onChange={handleActionInput}
+                        placeholder={actionType === 'blacklist' ? 'Payment Issues' : 'Payment Issues Resolved'}
+                        className={`w-full border px-4 py-2 rounded-lg ${actionErrors.reason ? 'border-red-500' : 'border-gray-400'}`}
+                      />
+                      {actionErrors.reason && <p className="text-xs text-red-600 mt-1">Please enter the reason.</p>}
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Remarks</label>
+                      <textarea
+                        name="remarks"
+                        rows={3}
+                        value={actionForm.remarks}
+                        onChange={handleActionInput}
+                        className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Attachment (optional)</label>
+                      <input
+                        type="file"
+                        name="attachment"
+                        onChange={handleActionInput}
+                        accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx"
+                        className={`w-full border px-4 py-2 rounded-lg ${actionErrors.attachment ? 'border-red-500' : 'border-gray-400'}`}
+                      />
+                      {actionErrors.attachment && <p className="text-xs text-red-600 mt-1">{actionErrors.attachment}</p>}
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"               // IMPORTANT
+                        onClick={handleAccountAction}
+                        disabled={actionLoading}
+                        className="flex-1 py-3 rounded-full text-lg font-bold bg-black text-white hover:opacity-90 transition disabled:opacity-60"
+                      >
+                        {actionLoading ? 'Submitting…' : (actionType === 'blacklist' ? 'Blacklist User' : 'Remove From Blacklist')}
+                      </button>
+                      <button
+                        type="button"               // IMPORTANT
+                        onClick={() => { setActionType(''); setActionForm({ reason: '', remarks: '', attachment: null }); setActionErrors({}); }}
+                        className="flex-1 py-3 rounded-full text-lg font-bold border-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
 
               {/* Action Buttons Card */}
               <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
