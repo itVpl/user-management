@@ -50,7 +50,7 @@ const Input = React.memo(function Input({
   );
 });
 
-const CustomerTable = React.memo(function CustomerTable({ customers }) {
+const CustomerTable = React.memo(function CustomerTable({ customers, onAction }) {
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
@@ -79,6 +79,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers }) {
             <th className="px-4 py-3 text-left">Email</th>
             <th className="px-4 py-3 text-left">Status</th>
             <th className="px-4 py-3 text-left">Added On</th>
+            <th className="px-4 py-3 text-left">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -95,11 +96,22 @@ const CustomerTable = React.memo(function CustomerTable({ customers }) {
               <td className="px-4 py-3 border-b border-gray-100">
                 {cust.addedAt ? new Date(cust.addedAt).toLocaleDateString() : 'N/A'}
               </td>
+              <td className="px-4 py-3 border-b border-gray-100">
+                <button
+                  onClick={() => onAction?.(cust)}
+                  className={`px-3 py-1 rounded text-sm font-medium
+                    ${/blacklist/i.test(cust?.status)
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                >
+                  {/blacklist/i.test(cust?.status) ? 'Remove From Blacklist' : 'Blacklist'}
+                </button>
+              </td>
             </tr>
           ))}
           {pageData.length === 0 && (
             <tr>
-              <td className="px-4 py-4 text-center text-gray-500" colSpan="9">
+              <td className="px-4 py-4 text-center text-gray-500" colSpan="10">
                 No customer data available
               </td>
             </tr>
@@ -163,7 +175,7 @@ const getToken = () =>
 const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const phoneRegex = /^[0-9]{10}$/;
 const zipRegex = /^[A-Za-z0-9]{5,8}$/; // 5–8 alphanumeric
-const passComboRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*(\d|\W)).{8,14}$/;
+const passComboRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*(\d|\W)).{8,14}$/; // (kept for future use)
 
 const AddCustomer = () => {
   const [customers, setCustomers] = useState([]);
@@ -325,12 +337,10 @@ const AddCustomer = () => {
     e?.preventDefault?.();
     const token = getToken();
     if (!token) {
-      // keep toast for non-field issue
       toast.error('Token not found. Please login again.');
       return;
     }
 
-    // validate all — NO error toast, only inline + focus first field
     const newErrors = validateAll(formData);
     const keys = Object.keys(newErrors);
     if (keys.length > 0) {
@@ -338,7 +348,6 @@ const AddCustomer = () => {
       return;
     }
 
-    // safety duplicate check
     const exists = customers.some(
       c => (c?.email || '').trim().toLowerCase() === formData.email.trim().toLowerCase()
     );
@@ -351,12 +360,12 @@ const AddCustomer = () => {
     try {
       setLoading(true);
       const cleanedData = Object.fromEntries(
-  Object.entries(formData).map(([k, v]) => {
-    if (typeof v !== 'string') return [k, v];
-    if (k === 'password' || k === 'confirmPassword') return [k, v]; // do NOT trim
-    return [k, v.trim()]; // trim others safely
-  })
-);
+        Object.entries(formData).map(([k, v]) => {
+          if (typeof v !== 'string') return [k, v];
+          if (k === 'password' || k === 'confirmPassword') return [k, v]; // do NOT trim
+          return [k, v.trim()];
+        })
+      );
 
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-customer`,
@@ -365,12 +374,11 @@ const AddCustomer = () => {
       );
 
       if (res?.data?.success) {
-        toast.success('Customer Created successfully!.'); // success popup ok
+        toast.success('Customer Created successfully!.');
         handleClose();
         await fetchAllCustomers();
         await fetchTodayStats();
       } else {
-        // server message — optional toast (not field-level)
         toast.error('❌ Failed: ' + (res?.data?.message || 'Unknown error'));
       }
     } catch (error) {
@@ -388,7 +396,7 @@ const AddCustomer = () => {
         setErrors(prev => ({ ...prev, email: 'Already registered the customer with this email id.' }));
         focusField('email');
       } else {
-        toast.error('❌ Failed: ' + msg); // non-field error toast is fine
+        toast.error('❌ Failed: ' + msg);
       }
     } finally {
       setLoading(false);
@@ -400,6 +408,89 @@ const AddCustomer = () => {
     if (!q) return customers;
     return customers.filter(c => (c?.compName || '').toLowerCase().includes(q));
   }, [customers, debouncedSearch]);
+
+  /* ---------- BLACKLIST / REMOVE ACTION (Modal + API) ---------- */
+  const [actionOpen, setActionOpen] = useState(false);
+  const [actionType, setActionType] = useState(''); // 'blacklist' | 'ok'
+  const [actionTarget, setActionTarget] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionForm, setActionForm] = useState({ reason: '', remarks: '', attachment: null });
+  const [actionErr, setActionErr] = useState({});
+
+  const ALLOWED_ACTION_EXT = ['PNG','JPG','JPEG','WEBP','PDF','DOC','DOCX'];
+  const fileOk = (f) => !f || (ALLOWED_ACTION_EXT.includes((f?.name?.split('.').pop()||'').toUpperCase()) && f.size <= 10*1024*1024);
+
+  const openAction = (cust) => {
+    const blacklisted = /blacklist/i.test(cust?.status);
+    setActionTarget(cust);
+    setActionType(blacklisted ? 'ok' : 'blacklist'); // ok = remove
+    setActionForm({ reason: '', remarks: '', attachment: null });
+    setActionErr({});
+    setActionOpen(true);
+  };
+
+  const closeAction = () => {
+    setActionOpen(false);
+    setActionTarget(null);
+  };
+
+  const onActionInput = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'attachment') {
+      const f = files?.[0] || null;
+      if (!fileOk(f)) setActionErr(p => ({ ...p, attachment: 'Only image/PDF/DOC/DOCX up to 10MB' }));
+      else {
+        setActionErr(p => { const c={...p}; delete c.attachment; return c; });
+        setActionForm(p => ({ ...p, attachment: f }));
+      }
+      return;
+    }
+    setActionForm(p => ({ ...p, [name]: value }));
+  };
+
+  const submitAction = async () => {
+    const errs = {};
+    if (!actionForm.reason.trim()) errs.reason = 'Required';
+    if (!fileOk(actionForm.attachment)) errs.attachment = 'Invalid file';
+    setActionErr(errs);
+    if (Object.keys(errs).length) return;
+
+    try {
+      setActionLoading(true);
+      const token = getToken();
+      const axiosInstance = axios.create({
+        baseURL: `${API_CONFIG.BASE_URL}`,
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const userId = actionTarget?._id || actionTarget?.userId || actionTarget?.id;
+      const fd = new FormData();
+
+      if (actionType === 'blacklist') {
+        fd.append('blacklistReason', actionForm.reason);
+        if (actionForm.remarks) fd.append('blacklistRemarks', actionForm.remarks);
+        if (actionForm.attachment) fd.append('attachments', actionForm.attachment);
+        fd.append('userid', userId); // optional
+        await axiosInstance.put(`/api/v1/shipper_driver/blacklist/${userId}`, fd);
+        toast.success('User blacklisted successfully.');
+      } else {
+        fd.append('removalReason', actionForm.reason);
+        if (actionForm.remarks) fd.append('removalRemarks', actionForm.remarks);
+        if (actionForm.attachment) fd.append('attachments', actionForm.attachment);
+        await axiosInstance.put(`/api/v1/shipper_driver/blacklist/${userId}/remove`, fd);
+        toast.success('Removed from blacklist successfully.');
+      }
+
+      await fetchAllCustomers();
+      closeAction();
+    } catch (err) {
+      console.error('action failed', err);
+      toast.error('Action failed. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+  /* -------------------------------------------------------------- */
 
   return (
     <div className="p-6">
@@ -449,9 +540,9 @@ const AddCustomer = () => {
       </div>
 
       {/* Table hidden while modal open */}
-      {!open && <CustomerTable customers={filteredCustomers} />}
+      {!open && <CustomerTable customers={filteredCustomers} onAction={openAction} />}
 
-      {/* Modal */}
+      {/* Add Modal */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/10 p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
@@ -765,7 +856,81 @@ const AddCustomer = () => {
         </div>
       )}
 
-      {/* Toasts (only success + non-field/server errors) */}
+      {/* Blacklist / Remove Modal */}
+      {actionOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-black/20 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl">
+            <div className="bg-gradient-to-r from-red-500 to-purple-600 text-white p-4 rounded-t-2xl flex justify-between items-center">
+              <h3 className="text-lg font-semibold">
+                {actionType === 'blacklist' ? 'Blacklist Customer' : 'Remove From Blacklist'}
+              </h3>
+              <button onClick={closeAction} className="text-2xl leading-none">×</button>
+            </div>
+
+            <div className="p-5 space-y-4" onKeyDown={(e)=>{ if(e.key==='Enter') e.preventDefault(); }}>
+              <div className="text-sm text-gray-600">
+                <span className="font-semibold">{actionTarget?.compName}</span> — {actionTarget?.email}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  {actionType === 'blacklist' ? 'Blacklist Reason' : 'Removal Reason'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="reason"
+                  value={actionForm.reason}
+                  onChange={onActionInput}
+                  placeholder={actionType === 'blacklist' ? 'Payment Issues' : 'Payment Issues Resolved'}
+                  className={`w-full mt-1 px-3 py-2 border rounded-lg ${actionErr.reason ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {actionErr.reason && <p className="text-xs text-red-600 mt-1">Please enter the reason.</p>}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">Remarks</label>
+                <textarea
+                  name="remarks"
+                  rows={3}
+                  value={actionForm.remarks}
+                  onChange={onActionInput}
+                  placeholder={actionType === 'blacklist'
+                    ? 'Customer has not paid for 3 consecutive loads'
+                    : 'Customer has cleared all outstanding payments and provided bank statements'}
+                  className="w-full mt-1 px-3 py-2 border rounded-lg border-gray-300"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">Attachment (optional)</label>
+                <input
+                  type="file"
+                  name="attachment"
+                  onChange={onActionInput}
+                  accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx"
+                  className={`w-full mt-1 px-3 py-2 border rounded-lg ${actionErr.attachment ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {actionErr.attachment && <p className="text-xs text-red-600 mt-1">{actionErr.attachment}</p>}
+                <p className="text-xs text-gray-500 mt-1">Images/PDF/DOC/DOCX up to 10MB</p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={closeAction} className="px-4 py-2 rounded-lg border">Cancel</button>
+                <button
+                  type="button"
+                  onClick={submitAction}
+                  disabled={actionLoading}
+                  className={`px-4 py-2 rounded-lg text-white ${actionLoading ? 'bg-gray-400' :
+                    (actionType === 'blacklist' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700')}`}
+                >
+                  {actionLoading ? 'Submitting…' : (actionType === 'blacklist' ? 'Blacklist' : 'Remove')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toasts */}
       <ToastContainer
         position="top-right"
         autoClose={3000}
