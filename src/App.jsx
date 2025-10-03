@@ -57,6 +57,9 @@ import OfficeInventory from "./Components/HRDashboard/OfficeInventory.jsx";
 import DinnerStatus from "./Pages/DinnerStatus.jsx";
 import TruckerReport from "./Components/CMT/TruckerReport.jsx";
 import TaskScheduling from "./Components/TaskScheduling/TaskScheduling.jsx";
+import CmtDeptReport from "./Components/CMT/cmtDeptReport.jsx";
+import SalesDeptReport from "./Components/Sales/salesDeptReport.jsx";
+
 
 
 
@@ -144,6 +147,9 @@ function App() {
         <Route path="/dinner-status" element={<DinnerStatus/>}/>
         <Route path="/TruckerReport" element={<TruckerReport/>}/>
         <Route path="/TaskScheduling" element={<TaskScheduling/>}/>
+        <Route path="/CmtDeptReport" element={<CmtDeptReport/>}/>
+        <Route path="/SalesDeptReport" element={<SalesDeptReport/>}/>
+        
         
       </Route>
 {/* 
