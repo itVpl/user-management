@@ -25,6 +25,14 @@ export default function Loads() {
   const [shippers, setShippers] = useState([]);
   const [autoAcceptTimer, setAutoAcceptTimer] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(30);
+  // ZIP → options + UI state (NEW)
+  const [fromZipOptions, setFromZipOptions] = useState([]);
+  const [toZipOptions, setToZipOptions] = useState([]);
+  const [fromZipQuery, setFromZipQuery] = useState("");
+  const [toZipQuery, setToZipQuery] = useState("");
+  const [showFromZipDD, setShowFromZipDD] = useState(false);
+  const [showToZipDD, setShowToZipDD] = useState(false);
+
   // === Validation helpers & state (ADD) ===
   const ALNUM = /^[A-Za-z0-9]+$/;
   const MONEY2 = /^(?:\d+)(?:\.\d{1,2})?$/; // up to 2 decimals, no negatives
@@ -106,42 +114,167 @@ export default function Loads() {
   };
 
   // 👇 Default/blank values for the Create Load form
-const INITIAL_LOAD_FORM = {
-  shipperId: "",
-  fromCity: "",
-  fromState: "",
-  toCity: "",
-  toState: "",
-  vehicleType: "",
-  commodity: "",
-  weight: "",
-  rate: "",
-  rateType: "Flat Rate",
-  pickupDate: "",
-  deliveryDate: "",
-  bidDeadline: "",
-  // DRAYAGE-only:
-  returnDate: "",
-  returnLocation: "",
+  // 👇 Default/blank values for the Create Load form
+  const INITIAL_LOAD_FORM = {
+    shipperId: "",
+    fromZip: "",       // NEW
+    fromCity: "",
+    fromState: "",
+    toZip: "",         // NEW
+    toCity: "",
+    toState: "",
+    vehicleType: "",
+    commodity: "",
+    weight: "",
+    rate: "",
+    rateType: "Flat Rate",
+    pickupDate: "",
+    deliveryDate: "",
+    bidDeadline: "",
+    // DRAYAGE-only:
+    returnDate: "",
+    returnLocation: "",
+  };
+  // === ZIP helpers (NEW) ===
+  const ZIP5 = /^\d{5}$/;
+
+  // simple debounce util (NEW)
+  let zipTimers = {};
+  const debounceZip = (key, fn, delay = 400) => {
+    clearTimeout(zipTimers[key]);
+    zipTimers[key] = setTimeout(fn, delay);
+  };
+
+  // SELECT handler (NEW)
+  const applyZipSelection = (which, item) => {
+    setLoadForm(prev => ({
+      ...prev,
+      [`${which}City`]: item.city || prev[`${which}City`] || "",
+      [`${which}State`]: (item.stateCode || item.state || ""),
+    }));
+    setFormErrors(p => {
+      const n = { ...p };
+      delete n[`${which}City`]; delete n[`${which}State`]; delete n[`${which}Zip`];
+      return n;
+    });
+    if (which === 'from') { setShowFromZipDD(false); }
+    else { setShowToZipDD(false); }
+  };
+
+  // API call (UPDATED to set options)
+  const fetchCityStateByZip = async (zip, which /* 'from' | 'to' */) => {
+    try {
+      if (!ZIP5.test(zip)) return;
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/load/zipcode/${zip}/samples`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+
+      const samples = Array.isArray(res?.data?.data?.sampleAddresses)
+        ? res.data.data.sampleAddresses : [];
+
+      // show dropdown & store options
+      if (which === 'from') {
+        setFromZipOptions(samples);
+        setShowFromZipDD(true);
+      } else {
+        setToZipOptions(samples);
+        setShowToZipDD(true);
+      }
+
+      // also pre-fill with first match (optional)
+      if (samples[0]) applyZipSelection(which, samples[0]);
+
+    } catch (e) {
+      console.warn("ZIP lookup failed:", e?.response?.data || e.message);
+      if (which === 'from') setShowFromZipDD(false); else setShowToZipDD(false);
+    }
+  };
+// SearchableZipDropdown (NEW)
+const SearchableZipDropdown = ({
+  which,           // 'from' | 'to'
+  open,
+  setOpen,
+  options,
+  query, setQuery,
+  onSelect
+}) => {
+  const filtered = (options || []).filter(o => {
+    const text = [
+      o.formattedAddress,
+      o.addressLine1, o.addressLine2,
+      o.city, o.state, o.stateCode, o.placeType
+    ].filter(Boolean).join(" ").toLowerCase();
+    return text.includes(query.toLowerCase());
+  });
+
+  return open ? (
+    <div
+      className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl"
+      onMouseDown={(e) => e.preventDefault()} // keep focus inside
+    >
+      <div className="p-2 border-b">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search address, place, city..."
+          className="w-full px-3 py-2 text-sm border rounded-md focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <ul className="max-h-56 overflow-auto divide-y">
+        {filtered.length === 0 && (
+          <li className="p-3 text-sm text-gray-500">No results</li>
+        )}
+        {filtered.map((item, idx) => (
+          <li
+            key={idx}
+            className="p-3 text-sm hover:bg-blue-50 cursor-pointer"
+            onClick={() => onSelect(which, item)}
+          >
+            <div className="font-medium text-gray-800">
+              {item.formattedAddress || `${item.addressLine1 || ''}${item.city ? ', ' + item.city : ''}${item.stateCode ? ', ' + item.stateCode : ''}`}
+            </div>
+            <div className="text-xs text-gray-500">
+              {(item.placeType || 'place')}{item.city ? ` • ${item.city}` : ''}{item.stateCode ? `, ${item.stateCode}` : ''}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : null;
 };
 
-// 👇 Replace your current `useState({ ... })` for loadForm with this:
-const [loadForm, setLoadForm] = useState(INITIAL_LOAD_FORM);
 
-// 👇 One-click helper to clear the form & errors and set defaults
-const resetLoadForm = () => {
-  setLoadForm(INITIAL_LOAD_FORM);
-  setFormErrors({});
-  setLoadType("OTR");
-  setCreatingLoad(false);
-  setCreatingDrayage(false);
-};
+
+  // 👇 Replace your current `useState({ ... })` for loadForm with this:
+  const [loadForm, setLoadForm] = useState(INITIAL_LOAD_FORM);
+
+  // 👇 One-click helper to clear the form & errors and set defaults
+  const resetLoadForm = () => {
+    setLoadForm(INITIAL_LOAD_FORM);
+    setFormErrors({});
+    setLoadType("OTR");
+    setCreatingLoad(false);
+    setCreatingDrayage(false);
+  };
 
 
   // ✅ Handle Change with sanitization
   const handleChange = (e) => {
     const { name } = e.target;
     let { value } = e.target;
+
+    // ZIP fields: only digits, max 5; then debounce fetch (NEW)
+    if (name === 'fromZip' || name === 'toZip') {
+      value = value.replace(/\D/g, '').slice(0, 5);
+      const which = name === 'fromZip' ? 'from' : 'to';
+      if (which === 'from') setFromZipQuery(""); else setToZipQuery("");
+      debounceZip(name, () => fetchCityStateByZip(value, which), 450);
+    }
+
 
     // Numeric fields with up to 2 decimals (no negatives)
     if (name === 'weight' || name === 'rate') {
@@ -162,13 +295,17 @@ const resetLoadForm = () => {
     if (formErrors[name]) setFormErrors((p) => { const n = { ...p }; delete n[name]; return n; });
   };
 
+
   // ✅ Per-field validators with EXACT messages
   const validators = {
     shipperId: (v) => v ? '' : 'Please select the shipper',
+    fromZip: (v) => ZIP5.test(v) ? '' : 'Please enter a valid 5-digit ZIP.',
     fromCity: (v) => v ? '' : 'Please enter  the From City name.',
     fromState: (v) => v ? '' : 'Please enter  the From State name.',
+    toZip: (v) => ZIP5.test(v) ? '' : 'Please enter a valid 5-digit ZIP.',
     toCity: (v) => v ? '' : 'Please enter  the To City name.',
     toState: (v) => v ? '' : 'Please enter  the To State name.',
+
     vehicleType: (v) => v ? '' : 'Please enter the Vehicle Type.',
     commodity: (v) => v ? '' : 'Please enter the Commodity.',
     weight: (v) => {
@@ -205,11 +342,19 @@ const resetLoadForm = () => {
   };
 
   // field order for scroll-to-first-invalid
+  // field order for scroll-to-first-invalid
   const fieldOrder = [
-    'shipperId', 'fromCity', 'fromState', 'toCity', 'toState', 'vehicleType',
-    'commodity', 'weight', 'rate', 'rateType', 'pickupDate', 'deliveryDate', 'bidDeadline',
-    'containerNo', 'poNumber', 'bolNumber', 'returnDate', 'returnLocation'
+    'shipperId',
+    'fromZip', 'fromCity', 'fromState',
+    'toZip', 'toCity', 'toState',
+    'vehicleType', 'commodity', 'weight', 'rate', 'rateType',
+    'pickupDate', 'deliveryDate', 'bidDeadline',
+    'containerNo', 'poNumber', 'bolNumber',
+    'returnDate', 'returnLocation'
   ];
+
+
+
 
   // ✅ Validate all
   const validateAll = () => {
@@ -247,10 +392,15 @@ const resetLoadForm = () => {
     const payload = {
       loadType,
       shipperId: (loadForm.shipperId || "").trim(),
+      // include ZIPs (NEW)
+      fromZip: loadForm.fromZip,
+      toZip: loadForm.toZip,
+
       fromCity: (loadForm.fromCity || "").trim(),
       fromState: (loadForm.fromState || "").trim(),
       toCity: (loadForm.toCity || "").trim(),
       toState: (loadForm.toState || "").trim(),
+
       vehicleType: (loadForm.vehicleType || "").trim(),
       commodity: (loadForm.commodity || "").trim(),
       // trailing dot safe parse: "12." -> "12"
@@ -287,7 +437,7 @@ const resetLoadForm = () => {
         alertify.success("✅ Load created successfully!");
         setShowLoadCreationModal(false);
 
-        resetLoadForm();  
+        resetLoadForm();
         setFormErrors({});
         fetchLoads(); // refresh table
       } else {
@@ -541,7 +691,7 @@ const resetLoadForm = () => {
         setReason('');
         setSelectedLoad(null);
         setViewDoc(false);
-        
+
         // Clear auto-accept timer
         if (autoAcceptTimer) {
           clearInterval(autoAcceptTimer);
@@ -553,7 +703,7 @@ const resetLoadForm = () => {
       console.error('Status update failed:', err);
     }
   };
-  
+
   const handleAutoAccept = async () => {
     try {
       const { id } = selectedLoad;
@@ -566,7 +716,7 @@ const resetLoadForm = () => {
         setReason('');
         setSelectedLoad(null);
         setViewDoc(false);
-        
+
         // Clear timer
         if (autoAcceptTimer) {
           clearInterval(autoAcceptTimer);
@@ -768,9 +918,9 @@ const resetLoadForm = () => {
             return prev - 1;
           });
         }, 1000);
-        
+
         setAutoAcceptTimer(timer);
-        
+
         return () => {
           if (timer) {
             clearInterval(timer);
@@ -796,7 +946,7 @@ const resetLoadForm = () => {
               setTimeRemaining(30);
             }}>×</button>
           </div>
-          
+
           {modalType === 'approval' && (
             <div className="w-full mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="text-center">
@@ -805,7 +955,7 @@ const resetLoadForm = () => {
               </div>
             </div>
           )}
-          
+
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
             rows={5}
@@ -886,15 +1036,15 @@ const resetLoadForm = () => {
           </div>
           {/* // ✅ BUTTON TO OPEN MODAL */}
           <button
-  onClick={() => {
-    resetLoadForm();                 // ✅ clear everything first
-    setShowLoadCreationModal(true);  // then open the modal
-  }}
-  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
->
-  <PlusCircle className="w-4 h-4" />
-  Add Loads
-</button>
+            onClick={() => {
+              resetLoadForm();                 // ✅ clear everything first
+              setShowLoadCreationModal(true);  // then open the modal
+            }}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Add Loads
+          </button>
 
         </div>
 
@@ -1266,7 +1416,7 @@ const resetLoadForm = () => {
       {showLoadCreationModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex justify-center items-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-8 border border-blue-300">
-            
+
 
             {/* Header */}
             <div className="flex justify-between items-center mb-8">
@@ -1311,54 +1461,126 @@ const resetLoadForm = () => {
               </div>
 
               {/* From/To */}
+              {/* From (ZIP -> City/State auto) */}
+              <div className="relative">
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    From ZIP <span className="text-red-600">*</span>
+  </label>
+  <input
+    ref={(el) => (fieldRefs.current['fromZip'] = el)}
+    name="fromZip"
+    inputMode="numeric"
+    placeholder="e.g., 07086"
+    value={loadForm.fromZip}
+    onChange={handleChange}
+    onFocus={() => fromZipOptions.length && setShowFromZipDD(true)}
+    onBlur={() => setTimeout(() => setShowFromZipDD(false), 150)} // small delay for click
+    className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.fromZip ? 'border-red-400' : 'border-gray-300'}`}
+  />
+  {formErrors.fromZip && <p className="text-xs text-red-600 mt-1">{formErrors.fromZip}</p>}
+
+  <SearchableZipDropdown
+    which="from"
+    open={showFromZipDD}
+    setOpen={setShowFromZipDD}
+    options={fromZipOptions}
+    query={fromZipQuery}
+    setQuery={setFromZipQuery}
+    onSelect={applyZipSelection}
+  />
+</div>
+
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">From City <span className="text-red-600">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  From City <span className="text-red-600">*</span>
+                </label>
                 <input
                   ref={(el) => (fieldRefs.current['fromCity'] = el)}
                   name="fromCity"
                   value={loadForm.fromCity}
                   onChange={handleChange}
+                  placeholder="Auto-filled from ZIP (editable)"
                   className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.fromCity ? 'border-red-400' : 'border-gray-300'}`}
-                  placeholder="e.g., Dallas"
                 />
                 {formErrors.fromCity && <p className="text-xs text-red-600 mt-1">{formErrors.fromCity}</p>}
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">From State <span className="text-red-600">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  From State <span className="text-red-600">*</span>
+                </label>
                 <input
                   ref={(el) => (fieldRefs.current['fromState'] = el)}
                   name="fromState"
                   value={loadForm.fromState}
                   onChange={handleChange}
+                  placeholder="Auto-filled from ZIP (editable, e.g., NJ)"
                   className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.fromState ? 'border-red-400' : 'border-gray-300'}`}
-                  placeholder="e.g., TX"
                 />
                 {formErrors.fromState && <p className="text-xs text-red-600 mt-1">{formErrors.fromState}</p>}
               </div>
+
+              {/* To (ZIP -> City/State auto) */}
+              <div className="relative">
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    To ZIP <span className="text-red-600">*</span>
+  </label>
+  <input
+    ref={(el) => (fieldRefs.current['toZip'] = el)}
+    name="toZip"
+    inputMode="numeric"
+    placeholder="e.g., 85254"
+    value={loadForm.toZip}
+    onChange={handleChange}
+    onFocus={() => toZipOptions.length && setShowToZipDD(true)}
+    onBlur={() => setTimeout(() => setShowToZipDD(false), 150)}
+    className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.toZip ? 'border-red-400' : 'border-gray-300'}`}
+  />
+  {formErrors.toZip && <p className="text-xs text-red-600 mt-1">{formErrors.toZip}</p>}
+
+  <SearchableZipDropdown
+    which="to"
+    open={showToZipDD}
+    setOpen={setShowToZipDD}
+    options={toZipOptions}
+    query={toZipQuery}
+    setQuery={setToZipQuery}
+    onSelect={applyZipSelection}
+  />
+</div>
+
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">To City <span className="text-red-600">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To City <span className="text-red-600">*</span>
+                </label>
                 <input
                   ref={(el) => (fieldRefs.current['toCity'] = el)}
                   name="toCity"
                   value={loadForm.toCity}
                   onChange={handleChange}
+                  placeholder="Auto-filled from ZIP (editable)"
                   className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.toCity ? 'border-red-400' : 'border-gray-300'}`}
-                  placeholder="e.g., Phoenix"
                 />
                 {formErrors.toCity && <p className="text-xs text-red-600 mt-1">{formErrors.toCity}</p>}
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">To State <span className="text-red-600">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To State <span className="text-red-600">*</span>
+                </label>
                 <input
                   ref={(el) => (fieldRefs.current['toState'] = el)}
                   name="toState"
                   value={loadForm.toState}
                   onChange={handleChange}
+                  placeholder="Auto-filled from ZIP (editable, e.g., AZ)"
                   className={`w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 ${formErrors.toState ? 'border-red-400' : 'border-gray-300'}`}
-                  placeholder="e.g., AZ"
                 />
                 {formErrors.toState && <p className="text-xs text-red-600 mt-1">{formErrors.toState}</p>}
               </div>
+
 
               {/* Vehicle / Commodity */}
               <div>
@@ -1548,50 +1770,50 @@ const resetLoadForm = () => {
                 </>
               )}
 
-              
+
               {/* Actions */}
-<div className="col-span-2 flex justify-end gap-4 pt-8">
-  <button
-  type="button"
-  onClick={() => {
-    setShowLoadCreationModal(false); // close
-    resetLoadForm();                 // ✅ clear
-  }}
-  className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
-  disabled={creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)}
->
-  Cancel
-</button>
+              <div className="col-span-2 flex justify-end gap-4 pt-8">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLoadCreationModal(false); // close
+                    resetLoadForm();                 // ✅ clear
+                  }}
+                  className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
+                  disabled={creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)}
+                >
+                  Cancel
+                </button>
 
 
-  {(() => {
-    const isSubmitting = creatingLoad || (loadType === "DRAYAGE" && creatingDrayage);
-    return (
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        aria-busy={isSubmitting}
-        className={[
-          "relative inline-flex items-center justify-center gap-2",
-          "px-6 py-2 rounded-lg text-white font-semibold shadow",
-          isSubmitting ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700",
-          "min-w-[150px]" // width stable rahe
-        ].join(" ")}
-        title={loadType === "DRAYAGE" ? "Make sure at one time only one DRAYAGE is created" : undefined}
-      >
-        {isSubmitting && (
-          <span
-            className="inline-block h-4 w-4 border-2 border-white/90 border-t-transparent rounded-full animate-spin"
-            aria-hidden="true"
-          />
-        )}
-        <span>
-          {isSubmitting ? (loadType === "DRAYAGE" ? "Creating Drayage…" : "Submitting…") : "Submit"}
-        </span>
-      </button>
-    );
-  })()}
-</div>
+                {(() => {
+                  const isSubmitting = creatingLoad || (loadType === "DRAYAGE" && creatingDrayage);
+                  return (
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      aria-busy={isSubmitting}
+                      className={[
+                        "relative inline-flex items-center justify-center gap-2",
+                        "px-6 py-2 rounded-lg text-white font-semibold shadow",
+                        isSubmitting ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700",
+                        "min-w-[150px]" // width stable rahe
+                      ].join(" ")}
+                      title={loadType === "DRAYAGE" ? "Make sure at one time only one DRAYAGE is created" : undefined}
+                    >
+                      {isSubmitting && (
+                        <span
+                          className="inline-block h-4 w-4 border-2 border-white/90 border-t-transparent rounded-full animate-spin"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span>
+                        {isSubmitting ? (loadType === "DRAYAGE" ? "Creating Drayage…" : "Submitting…") : "Submit"}
+                      </span>
+                    </button>
+                  );
+                })()}
+              </div>
 
             </form>
           </div>

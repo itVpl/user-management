@@ -11,6 +11,141 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+// ========= Searchable dropdown (no lib) =========
+function SearchableSelect({
+  label, required=false, name, value, onChange,
+  options = [], placeholder = "Search…",
+  disabled = false, allowCustom = false,
+  error = "", loading = false, onOpen = null,
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const boxRef = React.useRef(null);
+
+  const shown = React.useMemo(() => {
+    const n = q.trim().toLowerCase();
+    return options.filter(o =>
+      (o.label || "").toLowerCase().includes(n) ||
+      (o.value || "").toLowerCase().includes(n)
+    );
+  }, [q, options]);
+
+  React.useEffect(() => {
+    const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const selectedLabel =
+    options.find(o => o.value === value)?.label || (value && allowCustom ? value : "");
+
+  return (
+    <div className="w-full" ref={boxRef}>
+      {label && (
+        <label className="text-sm font-medium text-gray-700 mb-1 block">
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+      )}
+
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          setOpen(v => {
+            const nx = !v;
+            if (nx && typeof onOpen === "function") onOpen();
+            return nx;
+          });
+        }}
+        className={`w-full text-left border px-4 py-2 rounded-lg bg-white ${error ? "border-red-500" : "border-gray-400"} ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+        aria-expanded={open}
+      >
+        {loading ? <span className="text-gray-400">Loading…</span> :
+          (selectedLabel || <span className="text-gray-400">Select…</span>)}
+      </button>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+
+      {open && !disabled && (
+        <div className="relative">
+          <div className="absolute z-50 mt-2 w-full bg-white rounded-xl shadow-2xl border border-gray-200">
+            <div className="p-2 border-b">
+              <input
+                autoFocus
+                disabled={loading}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={placeholder}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <ul className="max-h-56 overflow-auto py-1">
+              {shown.map(o => (
+                <li
+                  key={o.value}
+                  onClick={() => { onChange(o.value); setOpen(false); setQ(""); }}
+                  className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer"
+                >
+                  {o.label}
+                </li>
+              ))}
+              {shown.length === 0 && !allowCustom && (
+                <li className="px-3 py-2 text-sm text-gray-500">No results</li>
+              )}
+              {allowCustom && q.trim() && shown.length === 0 && (
+                <li
+                  onClick={() => { onChange(q.trim()); setOpen(false); setQ(""); }}
+                  className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer"
+                >
+                  Use “{q.trim()}”
+                </li>
+              )}
+            </ul>
+
+            <div className="p-2 border-t text-right">
+              <button
+                type="button"
+                onClick={() => { onChange(""); setQ(""); setOpen(false); }}
+                className="text-sm px-3 py-1 rounded-lg border hover:bg-gray-50"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========= FREE API (countriesnow.space) =========
+async function _postJSON(url, body) {
+  const res = await axios.post(url, body, { headers: { "Content-Type": "application/json" } });
+  if (!res?.data) throw new Error("Empty response");
+  return res.data;
+}
+
+// Countries (returns [{label,value}])
+ async function fetchCountriesAPI() {
+   const res = await axios.get("https://countriesnow.space/api/v0.1/countries");
+   const arr = res?.data?.data || [];
+   return arr.map(c => ({ label: c.country, value: c.country }));
+ }
+
+// States for a country (returns [{label,value}])
+async function fetchStatesAPI(country) {
+  const data = await _postJSON("https://countriesnow.space/api/v0.1/countries/states", { country });
+  const arr = data?.data?.states || [];
+  return arr.map(s => ({ label: s.name, value: s.name }));
+}
+
+// Cities for a (country,state) (returns [{label,value}])
+async function fetchCitiesAPI(country, state) {
+  const data = await _postJSON("https://countriesnow.space/api/v0.1/countries/state/cities", { country, state });
+  const arr = data?.data || [];
+  return arr.map(c => ({ label: c, value: c }));
+}
 
 // ---------- Validators ----------
 const EMAIL_RE =
@@ -80,6 +215,105 @@ export default function AddTruckerForm({ onSuccess }) {
   // Password visibility (default OPEN / visible)
   const [showPassword, setShowPassword] = useState(true);
   const [showConfirm, setShowConfirm] = useState(true);
+// === GEO state for dropdowns ===
+const [countryOptions, setCountryOptions] = React.useState([]);
+const [stateOptions, setStateOptions]     = React.useState([]);
+const [cityOptions, setCityOptions]       = React.useState([]);
+const [geoLoading, setGeoLoading]         = React.useState({ countries: false, states: false, cities: false });
+
+const statesCacheRef = React.useRef({});  // { [country]: [{label,value}] }
+const citiesCacheRef = React.useRef({});  // { [`${country}|${state}`]: [{label,value}] }
+
+// Countries load (mount)
+React.useEffect(() => {
+  let mounted = true;
+  (async () => {
+    try {
+      setGeoLoading(p => ({ ...p, countries: true }));
+      const list = await fetchCountriesAPI();
+      if (mounted) setCountryOptions(list);
+
+      // OPTIONAL: default United States select (and lock later if you want)
+      if (mounted && !formData.country) {
+        const us = list.find(x => x.value === "United States");
+        if (us) setFormData(p => ({ ...p, country: us.value }));
+      }
+    } catch (e) {
+           console.error("Countries load failed", e?.message || e);
+     // Fallback: kam se kam US dikha do
+     if (mounted) setCountryOptions([{ label: "United States", value: "United States" }]);
+     if (mounted && !formData.country) {
+       setFormData(p => ({ ...p, country: "United States" }));
+     }
+    } finally {
+      if (mounted) setGeoLoading(p => ({ ...p, countries: false }));
+    }
+  })();
+  return () => { mounted = false; };
+}, []);
+
+// States when country changes
+React.useEffect(() => {
+  const c = formData.country?.trim();
+  if (!c) { setStateOptions([]); setCityOptions([]); return; }
+
+  // cache?
+  if (statesCacheRef.current[c]) {
+    setStateOptions(statesCacheRef.current[c]);
+    return;
+  }
+
+  let mounted = true;
+  (async () => {
+    try {
+      setGeoLoading(p => ({ ...p, states: true }));
+      const list = await fetchStatesAPI(c);
+      if (mounted) {
+        setStateOptions(list);
+        statesCacheRef.current[c] = list;
+      }
+    } catch (e) {
+      console.error("States load failed", e);
+      if (mounted) setStateOptions([]);
+    } finally {
+      if (mounted) setGeoLoading(p => ({ ...p, states: false }));
+    }
+  })();
+
+  return () => { mounted = false; };
+}, [formData.country]);
+
+// Cities when state changes
+React.useEffect(() => {
+  const c = formData.country?.trim();
+  const s = formData.state?.trim();
+  if (!c || !s) { setCityOptions([]); return; }
+
+  const key = `${c}|${s}`;
+  if (citiesCacheRef.current[key]) {
+    setCityOptions(citiesCacheRef.current[key]);
+    return;
+  }
+
+  let mounted = true;
+  (async () => {
+    try {
+      setGeoLoading(p => ({ ...p, cities: true }));
+      const list = await fetchCitiesAPI(c, s);
+      if (mounted) {
+        setCityOptions(list);
+        citiesCacheRef.current[key] = list;
+      }
+    } catch (e) {
+      console.error("Cities load failed", e);
+      if (mounted) setCityOptions([]);
+    } finally {
+      if (mounted) setGeoLoading(p => ({ ...p, cities: false }));
+    }
+  })();
+
+  return () => { mounted = false; };
+}, [formData.country, formData.state]);
 
   const documentFields = [
     { key: "brokeragePacket", label: "Brokerage Packet", required: true },
@@ -411,14 +645,21 @@ export default function AddTruckerForm({ onSuccess }) {
                 <label className="text-sm font-medium text-gray-700">
                   Country <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  name="country"
-                  placeholder="Country"
-                  value={formData.country}
-                  onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-                />
+                <SearchableSelect
+  required
+  name="country"
+  value={formData.country || ""}
+  onChange={(val) => {
+    // agar aap country ko US par lock rakhna chahte ho:
+    // const US = "United States"; val = US;
+    setFormData(p => ({ ...p, country: val, state: "", city: "" }));
+  }}
+  options={countryOptions}
+  placeholder="Search country…"
+  loading={geoLoading.countries}
+  error={errors.country}
+/>
+
                 {renderError("country")}
               </div>
             </div>
@@ -428,28 +669,37 @@ export default function AddTruckerForm({ onSuccess }) {
                 <label className="text-sm font-medium text-gray-700">
                   State <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  name="state"
-                  placeholder="State"
-                  value={formData.state}
-                  onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-                />
+                <SearchableSelect
+  required
+  name="state"
+  value={formData.state || ""}
+  onChange={(val) => setFormData(p => ({ ...p, state: val, city: "" }))}
+  options={stateOptions}
+  placeholder={formData.country ? "Search state…" : "Select country first"}
+  disabled={!formData.country}
+  loading={geoLoading.states}
+  error={errors.state}
+/>
+
                 {renderError("state")}
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">
                   City <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  name="city"
-                  placeholder="City"
-                  value={formData.city}
-                  onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-                />
+                <SearchableSelect
+  required
+  name="city"
+  value={formData.city || ""}
+  onChange={(val) => setFormData(p => ({ ...p, city: val }))}
+  options={cityOptions}
+  placeholder={formData.state ? "Search city…" : "Select state first"}
+  allowCustom
+  disabled={!formData.state}
+  loading={geoLoading.cities}
+  error={errors.city}
+/>
+
                 {renderError("city")}
               </div>
             </div>

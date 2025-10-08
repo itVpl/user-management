@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+ import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
+ const getAuthToken = () =>
+   localStorage.getItem('authToken') ||
+   sessionStorage.getItem('authToken') ||
+   localStorage.getItem('token') ||
+   sessionStorage.getItem('token');
+
 const statusColors = {
   Assigned: 'bg-orange-500',
   Posted: 'bg-blue-500',
@@ -39,6 +46,8 @@ function writeLS(key, val) {
 }
 
 const RateRequest = () => {
+ const location = useLocation();
+
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -74,6 +83,8 @@ const RateRequest = () => {
   const [timerStopMap, setTimerStopMap] = useState(() => readLS(LS_STOP_KEY));
   const [tick, setTick] = useState(0); // 1s re-render
   const pollRef = useRef(null);
+// 💡 double-submit lock (same load pe multiple auto-accept calls na ho)
+const autoAcceptingRef = useRef(new Set());
 
   const saveStart = (loadId, ts) => {
     if (!loadId) return;
@@ -143,7 +154,7 @@ const RateRequest = () => {
 
   const fetchRateRequests = async () => {
     try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const token = getAuthToken();
       if (!token) {
         toast.error('Please login to access this resource');
         return;
@@ -263,6 +274,37 @@ const RateRequest = () => {
           userActionAt: approval.userActionAt
         };
       });
+// ---- broadcast new pending approvals (cross-tab + same tab) ----
+try {
+  const prevIdsJson = localStorage.getItem('rr_prev_pending_ids') || '[]';
+  let prevIds;
+  try { prevIds = JSON.parse(prevIdsJson); } catch { prevIds = []; }
+  const prevSet = new Set(prevIds);
+
+  const onlyPending = transformedPending.filter(a => a.status === 'pending');
+  const newbies = onlyPending.filter(a => !prevSet.has(a._id));
+
+  if (newbies.length) {
+    newbies.forEach((approval) => {
+      // 1) BroadcastChannel
+      if ('BroadcastChannel' in window) {
+        try {
+          const bc = new BroadcastChannel('rr_events');
+          bc.postMessage({ type: 'RR_NEW_ASSIGNMENT', approval });
+          bc.close?.();
+        } catch {}
+      }
+      // 2) localStorage pulse (fallback)
+      try {
+        localStorage.setItem('rr_new_assignment', JSON.stringify(approval));
+        setTimeout(() => localStorage.removeItem('rr_new_assignment'), 0);
+      } catch {}
+    });
+  }
+
+  const nextIds = onlyPending.map(a => a._id);
+  localStorage.setItem('rr_prev_pending_ids', JSON.stringify(nextIds));
+} catch {}
 
       setPendingRequests(transformedPending);
       setCompletedRequests(transformedApproved);
@@ -284,7 +326,7 @@ const RateRequest = () => {
 
   const fetchTruckers = async () => {
     try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const token = getAuthToken();
       if (!token) {
         toast.error('Please login to access this resource');
         return;
@@ -305,7 +347,7 @@ const RateRequest = () => {
   const checkFirstBidsForLoads = async (loads) => {
     if (!Array.isArray(loads) || !loads.length) return;
     try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const token = getAuthToken();
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -323,6 +365,17 @@ const RateRequest = () => {
       }
     } catch {}
   };
+ // navigate("/RateRequest", { state: { openApprovalFromBroadcast: approval } }) se aane par modal open
+ useEffect(() => {
+   const approval = location?.state?.openApprovalFromBroadcast;
+   if (approval) {
+     setActiveTab('pending');
+     openApprovalModal(approval, 'approval');
+     // state clear so refresh pe dubara na khule
+     window.history.replaceState({}, document.title);
+   }
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, []);
 
   // init
   useEffect(() => {
@@ -331,34 +384,59 @@ const RateRequest = () => {
   }, []);
 
   // Start auto-accept timer for new pending requests
-  useEffect(() => {
-    const timers = {};
-    
-    pendingRequests.forEach(request => {
-      if (request.status === 'pending' && !loadTimers[request._id]) {
-        // Initialize timer for this request
-        setLoadTimers(prev => ({ ...prev, [request._id]: 30 }));
-        
-        // Create interval for countdown
-        timers[request._id] = setInterval(() => {
-          setLoadTimers(prev => {
-            const newTime = (prev[request._id] || 30) - 1;
-            if (newTime <= 0) {
-              // Auto-accept the load
-              handleAutoAcceptFromTable(request);
-              return { ...prev, [request._id]: 0 };
-            }
-            return { ...prev, [request._id]: newTime };
-          });
-        }, 1000);
-      }
-    });
-    
-    // Cleanup function
-    return () => {
-      Object.values(timers).forEach(timer => clearInterval(timer));
-    };
-  }, [pendingRequests]);
+  // ✅ Stable auto-accept countdown (interval clear + single fire)
+useEffect(() => {
+  const timers = {};
+
+  pendingRequests.forEach((request) => {
+    const id = request._id;
+    // sirf pending items pe timer chalao, aur agar timer init nahi hua to hi
+    if (request.status === "pending" && loadTimers[id] == null) {
+      // init at 30s
+      setLoadTimers((prev) => ({ ...prev, [id]: 30 }));
+
+      timers[id] = setInterval(() => {
+        setLoadTimers((prev) => {
+          const cur = prev[id] ?? 30;
+          const next = cur - 1;
+
+          if (next <= 0) {
+            // interval turant clear, ek hi baar auto-accept fire
+            clearInterval(timers[id]);
+            delete timers[id];
+
+            // sentinel -1 => finish ho gaya, dobara mat chalana
+            const after = { ...prev, [id]: -1 };
+            // allow state update flush, then call
+            setTimeout(() => handleAutoAcceptFromTable(request), 0);
+
+            return after;
+          }
+
+          return { ...prev, [id]: next };
+        });
+      }, 1000);
+    }
+  });
+
+  return () => {
+    Object.values(timers).forEach((t) => clearInterval(t));
+  };
+  // ⚠️ dependency me loadTimers bhi rakho, warna stale state rahegi
+}, [pendingRequests, loadTimers]);
+
+useEffect(() => {
+  const done = new Set(
+    pendingRequests.filter(r => r.status !== 'pending').map(r => r._id)
+  );
+  if (done.size === 0) return;
+
+  setLoadTimers(prev => {
+    const copy = { ...prev };
+    done.forEach(id => { delete copy[id]; });
+    return copy;
+  });
+}, [pendingRequests]);
 
   // 1s ticker
   useEffect(() => {
@@ -450,112 +528,117 @@ const RateRequest = () => {
   };
   
   const handleAutoAccept = async (approval) => {
-    try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-      
-      if (!token || !empId) {
-        toast.error('Missing token or empId. Please log in again.');
-        return;
-      }
+  const id = approval._id;
+  if (autoAcceptingRef.current.has(id)) return;   // ✅ lock
+  autoAcceptingRef.current.add(id);
 
-      const payload = {
-        approvalId: approval._id,
-        action: 'accept',
-        reason: 'Auto-accepted after 30 seconds'
-      };
+  try {
+    const token = getAuthToken();
+    const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
+    if (!token || !empId) {
+      toast.error('Missing token or empId. Please log in again.');
+      return;
+    }
 
-      const response = await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    const payload = {
+      approvalId: id,
+      action: 'accept',
+      reason: 'Auto-accepted after 30 seconds'
+    };
+
+    const response = await axios.post(
+      `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+
+    if (response.data.success) {
+      toast.success('Load auto-accepted successfully!');
+      const acceptedLoadId = approval?.loadId?._id || approval?.loadId;
+      if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
+
+      setPendingRequests(prev =>
+        prev.map(r => (r._id === id ? { ...r, status: 'approved' } : r))
       );
 
-      if (response.data.success) {
-        toast.success('Load auto-accepted successfully!');
-        
-        // Start the 90-min timer on ACCEPT
-        const acceptedLoadId = approval?.loadId?._id || approval?.loadId;
-        if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
-
-        // optimistic UI
-        setPendingRequests((prev) =>
-          prev.map((r) =>
-            r._id === approval._id
-              ? { ...r, status: 'approved' }
-              : r
-          )
-        );
-
-        closeApprovalModal();
-        setTimeout(() => {
-          fetchRateRequests();
-        }, 1000);
-      }
-    } catch (error) {
-      console.error('Auto-accept failed:', error);
+      closeApprovalModal();   // timer bhi clear ho jayega
+      setTimeout(() => { fetchRateRequests(); }, 1000);
+    } else {
       toast.error('Auto-accept failed. Please try again.');
     }
-  };
+  } catch (error) {
+    console.error('Auto-accept failed:', error);
+    toast.error('Auto-accept failed. Please try again.');
+  } finally {
+    autoAcceptingRef.current.delete(id);  // ✅ unlock
+  }
+};
+
 
   const handleAutoAcceptFromTable = async (request) => {
-    try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-      
-      if (!token || !empId) {
-        toast.error('Missing token or empId. Please log in again.');
-        return;
-      }
+  const id = request._id;
 
-      const payload = {
-        approvalId: request._id,
-        action: 'accept',
-        reason: 'Auto-accepted after 30 seconds'
-      };
+  // ✅ already in-flight? to dobara mat bhejo
+  if (autoAcceptingRef.current.has(id)) return;
+  autoAcceptingRef.current.add(id);
 
-      const response = await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+  try {
+    const token = getAuthToken();
+    const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
+    if (!token || !empId) {
+      toast.error('Missing token or empId. Please log in again.');
+      return;
+    }
+
+    const payload = {
+      approvalId: id,
+      action: 'accept',
+      reason: 'Auto-accepted after 30 seconds',
+    };
+
+    const response = await axios.post(
+      `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+
+    if (response.data.success) {
+      toast.success('Load auto-accepted successfully!');
+
+      // 90-min timer start
+      const acceptedLoadId = request?.loadId?._id || request?.loadId;
+      if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
+
+      // optimistic UI
+      setPendingRequests((prev) =>
+        prev.map((r) => (r._id === id ? { ...r, status: 'approved' } : r))
       );
 
-      if (response.data.success) {
-        toast.success('Load auto-accepted successfully!');
-        
-        // Start the 90-min timer on ACCEPT
-        const acceptedLoadId = request?.loadId?._id || request?.loadId;
-        if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
+      // timer state cleanup
+      setLoadTimers((prev) => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
 
-        // optimistic UI
-        setPendingRequests((prev) =>
-          prev.map((r) =>
-            r._id === request._id
-              ? { ...r, status: 'approved' }
-              : r
-          )
-        );
-
-        // Remove timer
-        setLoadTimers(prev => {
-          const newTimers = { ...prev };
-          delete newTimers[request._id];
-          return newTimers;
-        });
-
-        setTimeout(() => {
-          fetchRateRequests();
-        }, 1000);
-      }
-    } catch (error) {
-      console.error('Auto-accept failed:', error);
+      setTimeout(() => {
+        fetchRateRequests();
+      }, 1000);
+    } else {
       toast.error('Auto-accept failed. Please try again.');
     }
-  };
+  } catch (error) {
+    console.error('Auto-accept failed:', error?.response?.data || error.message);
+    toast.error(error?.response?.data?.message || 'Auto-accept failed.');
+  } finally {
+    autoAcceptingRef.current.delete(id);
+  }
+};
+
 
   const handleManualAcceptFromTable = async (request) => {
     try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const token = getAuthToken();
       const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
       
       if (!token || !empId) {
@@ -611,7 +694,7 @@ const RateRequest = () => {
   };
 
   const handleApprovalSubmit = async () => {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const token = getAuthToken();
     const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
     if (!token || !empId) {
       toast.error('Missing token or empId. Please log in again.');
@@ -666,7 +749,7 @@ const RateRequest = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const token = getAuthToken();
     const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
     if (!token || !empId) {
       toast.error('Missing token or empId. Please log in again.');
@@ -1261,7 +1344,7 @@ const RateRequest = () => {
                         <div className="flex gap-2">
                           {item.status !== 'approved' ? (
                             <div className="flex items-center gap-2">
-                              {loadTimers[item._id] > 0 ? (
+                              {(loadTimers[item._id] ?? 0) > 0 ? (
                                 <div className="flex items-center gap-2">
                                   <div className="text-center">
                                     <div className="text-lg font-bold text-orange-600">{loadTimers[item._id]}s</div>
