@@ -169,6 +169,7 @@ export default function RateApproved() {
           },
           // Add shipper info for the new column
           shipperInfo: bid.load?.shipper || null,
+          shipperName: bid.load?.shipper?.compName || 'N/A',
           loadInfo: {
             weight: bid.load?.weight || 0,
             commodity: bid.load?.commodity || 'N/A',
@@ -182,6 +183,8 @@ export default function RateApproved() {
           placedByInhouseUser: bid.placedByInhouseUser,
           approvedByInhouseUser: bid.approvedByInhouseUser,
           approvalStatus: bid.approvalStatus,
+          // Add attachment field for popup display
+          attachment: bid.attachment || null,
           intermediateApprovedAt: bid.intermediateApprovedAt
         }));
 
@@ -242,6 +245,9 @@ export default function RateApproved() {
           createdBy: `${bid.acceptedByInhouseUser?.empName || 'Unknown'} (${bid.acceptedByInhouseUser?.empId || salesUserId || 'Unknown'})`,
           docUpload: bid.doDocument || 'sample-doc.jpg',
           remarks: bid.message || '',
+          // Add shipper info for the new column
+          shipperInfo: bid.load?.shipper || null,
+          shipperName: bid.load?.shipper?.compName || 'N/A',
           // Additional fields from the new API
           carrierInfo: {
             mcDotNo: bid.carrier?.mc_dot_no || 'N/A',
@@ -361,7 +367,8 @@ export default function RateApproved() {
       rate.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rate.truckerName.toLowerCase().includes(searchTerm.toLowerCase());
+      rate.truckerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (rate.shipperName && rate.shipperName.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (searchTerm && matches) {
       console.log('Rate matches search:', rate.id, rate.truckerName);
@@ -408,7 +415,11 @@ export default function RateApproved() {
           createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
           createdBy: `Employee ${bid.placedByInhouseUser}`,
           docUpload: bid.doDocument || 'sample-doc.jpg',
-          remarks: bid.message || ''
+          remarks: bid.message || '',
+          // Add shipper name for display
+          shipperName: bid.load?.shipper?.compName || 'N/A',
+          // Add attachment field for popup display
+          attachment: bid.attachment || null
         }));
 
         return transformedRates;
@@ -459,6 +470,7 @@ export default function RateApproved() {
           },
           // Add shipper info for the new column
           shipperInfo: bid.load?.shipper || null,
+          shipperName: bid.load?.shipper?.compName || 'N/A',
           loadInfo: {
             weight: bid.load?.weight || 0,
             commodity: bid.load?.commodity || 'N/A',
@@ -472,7 +484,9 @@ export default function RateApproved() {
           placedByInhouseUser: bid.placedByInhouseUser,
           salesUserInfo: bid.load?.createdBySalesUser,
           // Add placedByCMTUser data for the new column
-          placedByCMTUser: bid.placedByCMTUser || null
+          placedByCMTUser: bid.placedByCMTUser || null,
+          // Add attachment field for popup display
+          attachment: bid.attachment || null
         }));
 
         console.log('Transformed pending bids:', transformedBids);
@@ -1903,6 +1917,7 @@ export default function RateApproved() {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Accepted By</th>
                   </tr>
@@ -1935,6 +1950,14 @@ export default function RateApproved() {
                             <p className="text-xs text-gray-500">
                               Diff: ${rate.rateDifference} ({rate.rateDifferencePercentage}%)
                             </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
+                          {rate.shipperInfo?.mc_dot_no && (
+                            <p className="text-xs text-gray-500">MC: {rate.shipperInfo.mc_dot_no}</p>
                           )}
                         </div>
                       </td>
@@ -2247,7 +2270,7 @@ export default function RateApproved() {
       {console.log('Modal state:', approvalModal)}
       {approvalModal.visible && (
         <div className="fixed inset-0 z-[9999] backdrop-blur-sm bg-black/30 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
             {/* Header with gradient */}
             <div className={`p-6 text-white ${approvalModal.type === 'manual' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-purple-600'}`}>
               <div className="flex justify-between items-center">
@@ -2313,6 +2336,58 @@ export default function RateApproved() {
                   <p className="text-sm font-medium text-gray-800">{approvalModal.rate.destination}</p>
                 </div>
               </div>
+
+              {/* Attachment Section */}
+              {approvalModal.rate.attachment && (
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-700">Uploaded Document</span>
+                  </div>
+                  
+                  <div className="relative">
+                    <img
+                      src={approvalModal.rate.attachment}
+                      alt="Bid Attachment"
+                      className="w-full h-32 object-cover rounded-lg border-2 border-gray-200 shadow-sm"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div 
+                      className="hidden w-full h-32 bg-gray-100 rounded-lg border-2 border-gray-200 items-center justify-center"
+                    >
+                      <div className="text-center">
+                        <svg className="w-12 h-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-sm text-gray-500">Document Preview</p>
+                        <p className="text-xs text-gray-400">Click to view full size</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-3 flex items-center justify-between">
+                    <a
+                      href={approvalModal.rate.attachment}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      View Full Size
+                    </a>
+                    <span className="text-xs text-gray-500">
+                      {approvalModal.rate.attachment.split('/').pop()}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Rate Input Section */}
               <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
