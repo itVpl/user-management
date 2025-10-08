@@ -75,6 +75,8 @@ const RateRequest = () => {
   const [autoAcceptTimer, setAutoAcceptTimer] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(30);
   const [loadTimers, setLoadTimers] = useState({});
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
 
   // timers
   const [timerStartMap, setTimerStartMap] = useState(() => readLS(LS_START_KEY));
@@ -488,6 +490,8 @@ useEffect(() => {
     setIsTruckerDropdownOpen(false);
     setFormErrors({});
     setTouchedFields({});
+    setUploadedFile(null);
+    setFilePreview(null);
   };
 
   // approval modal
@@ -758,24 +762,58 @@ useEffect(() => {
       return;
     }
 
-    const payload = {
-      loadId: selectedRequest?.loadId || selectedRequest?._id,
-      truckerId: selectedTrucker,
-      empId,
-      rate: parseInt(rate, 10),
-      message,
-      estimatedPickupDate: pickupDate,
-      estimatedDeliveryDate: deliveryDate,
-      driverName,
-      vehicleNumber: vehicleNo
-    };
+    // Use the actual loadId, not the approval _id
+    const actualLoadId = selectedRequest?.loadId;
+    if (!actualLoadId) {
+      toast.error('Load ID not found. Please try again.');
+      return;
+    }
+    
+    // Debug: Log the selectedRequest to see what we have
+    console.log('Selected Request:', selectedRequest);
+    console.log('LoadId being sent:', actualLoadId);
+    console.log('Approval ID:', selectedRequest?._id);
+    
+    // Create FormData for file upload
+    const formData = new FormData();
+    formData.append('loadId', actualLoadId);
+    formData.append('truckerId', selectedTrucker);
+    formData.append('empId', empId);
+    formData.append('rate', parseInt(rate, 10));
+    formData.append('message', message);
+    formData.append('estimatedPickupDate', pickupDate);
+    formData.append('estimatedDeliveryDate', deliveryDate);
+    formData.append('driverName', driverName);
+    formData.append('vehicleNumber', vehicleNo);
+    formData.append('vehicleType', selectedRequest?.vehicleType || 'Truck');
+    
+    // Append file if uploaded
+    if (uploadedFile) {
+      formData.append('attachment', uploadedFile);
+    }
+    
+    // Debug: Log all FormData entries
+    console.log('FormData entries:');
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value);
+    }
 
     try {
       setSubmitting(true);
-      await axios.post(
+      
+      console.log('Sending request to:', `${API_CONFIG.BASE_URL}/api/v1/bid/place-by-inhouse/`);
+      console.log('Request headers:', { Authorization: `Bearer ${token}` });
+      
+      // Try with FormData first (for file upload)
+      const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/bid/place-by-inhouse/`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        formData,
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`
+            // Let axios set Content-Type automatically with boundary
+          } 
+        }
       );
 
       toast.success('Bid submitted!');
@@ -848,6 +886,41 @@ useEffect(() => {
     // Clear trucker error when selected
     if (formErrors.trucker) {
       setFormErrors(prev => ({ ...prev, trucker: '' }));
+    }
+  };
+
+  // File upload handler
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setUploadedFile(file);
+      
+      // Create preview for images
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setFilePreview(e.target.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreview(null);
+      }
+      
+      // Clear file error when file is selected
+      if (formErrors.uploadedFile) {
+        setFormErrors(prev => ({ ...prev, uploadedFile: '' }));
+      }
+    }
+  };
+
+  // Remove uploaded file
+  const removeUploadedFile = () => {
+    setUploadedFile(null);
+    setFilePreview(null);
+    // Reset file input
+    const fileInput = document.getElementById('file-upload');
+    if (fileInput) {
+      fileInput.value = '';
     }
   };
 
@@ -987,6 +1060,21 @@ useEffect(() => {
           error = 'Message cannot exceed 500 characters';
         }
         break;
+      case 'uploadedFile':
+        if (!value) {
+          error = 'Please upload a file';
+        } else {
+          // Check file size (max 10MB)
+          if (value.size > 10 * 1024 * 1024) {
+            error = 'File size must be less than 10MB';
+          }
+          // Check file type
+          const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+          if (!allowedTypes.includes(value.type)) {
+            error = 'File type not supported. Please upload JPG, PNG, GIF, PDF, or DOC files';
+          }
+        }
+        break;
       default:
         break;
     }
@@ -1019,6 +1107,9 @@ useEffect(() => {
         break;
       case 'message':
         value = message;
+        break;
+      case 'uploadedFile':
+        value = uploadedFile;
         break;
       default:
         value = '';
@@ -1068,7 +1159,8 @@ useEffect(() => {
       pickupDate: pickupDate,
       deliveryDate: deliveryDate,
       rate: rate,
-      message: message
+      message: message,
+      uploadedFile: uploadedFile
     };
 
     Object.keys(fields).forEach(field => {
@@ -1086,7 +1178,8 @@ useEffect(() => {
       pickupDate: true,
       deliveryDate: true,
       rate: true,
-      message: true
+      message: true,
+      uploadedFile: true
     });
 
     return Object.keys(errors).length === 0;
@@ -1698,6 +1791,7 @@ useEffect(() => {
                       )}
                     </div>
 
+
                     <div>
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
                         Vehicle Number <span className="text-red-500">*</span>
@@ -1835,13 +1929,99 @@ useEffect(() => {
                         </div>
                       </div>
                     </div>
+
+                    {/* File Upload Field */}
+                    <div className="md:col-span-2">
+                      <label className="block text-gray-700 text-sm font-semibold mb-2">
+                        Upload <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="file-upload"
+                          type="file"
+                          onChange={handleFileUpload}
+                          onBlur={() => handleFieldBlur('uploadedFile')}
+                          accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx"
+                          className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 ${
+                            touchedFields.uploadedFile && formErrors.uploadedFile
+                              ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                              : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                          }`}
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                        </div>
+                      </div>
+                      
+                      {touchedFields.uploadedFile && formErrors.uploadedFile && (
+                        <div className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {formErrors.uploadedFile}
+                        </div>
+                      )}
+
+                      {/* File Preview */}
+                      {uploadedFile && (
+                        <div className="mt-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-xl">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                {uploadedFile.type.startsWith('image/') ? (
+                                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900">{uploadedFile.name}</div>
+                                <div className="text-sm text-gray-500">
+                                  {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={removeUploadedFile}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded-lg transition-all duration-150"
+                              title="Remove file"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                          
+                          {/* Image Preview */}
+                          {filePreview && (
+                            <div className="mt-3">
+                              <div className="text-sm font-medium text-gray-700 mb-2">Preview:</div>
+                              <div className="border-2 border-gray-200 rounded-lg overflow-hidden">
+                                <img
+                                  src={filePreview}
+                                  alt="File preview"
+                                  className="w-full h-48 object-cover"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-6 rounded-b-3xl border-t border-gray-200 flex justify-between items-center">
                 <div className="text-sm text-gray-600">
-                  <span className="font-medium">Note:</span> All fields are required to submit your bid
+                  <span className="font-medium">Note:</span> All fields including file upload are required to submit your bid
                 </div>
                 <div className="flex gap-4">
                   <button

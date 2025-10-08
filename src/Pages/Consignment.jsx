@@ -12,6 +12,9 @@ export default function Consignment() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedConsignment, setSelectedConsignment] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
+  const [pickupImages, setPickupImages] = useState(null);
+  const [dropImages, setDropImages] = useState(null);
+  const [previewImg, setPreviewImg] = useState(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,7 +36,7 @@ export default function Consignment() {
       }
 
       // Fetch data from the new API endpoint for CMT assigned loads
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/cmt-assigned-loads/VPL003`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/cmt-assigned-loads/${sessionStorage.getItem('empId')}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -120,22 +123,78 @@ export default function Consignment() {
     fetchConsignments();
   }, []);
 
+  // Fetch images for a specific shipment
+  const fetchShipmentImages = async (shipmentNumber) => {
+    try {
+      setViewLoading(true);
+      
+      // Get authentication token
+      const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      
+      if (!token) {
+        alertify.error('Authentication required. Please login again.');
+        return null;
+      }
+
+      console.log('Fetching images for shipment:', shipmentNumber);
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${shipmentNumber}/images`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Images API Response:', response.data);
+
+      if (response.data && response.data.success) {
+        console.log('Images data:', response.data.images);
+        return response.data.images;
+      } else {
+        console.log('No images found for shipment:', shipmentNumber);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching shipment images:', error);
+      console.error('Error response:', error.response);
+      alertify.error('Failed to fetch images');
+      return null;
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
   // Handle view pickup details
-  const handleViewPickup = (consignment) => {
+  const handleViewPickup = async (consignment) => {
+    console.log('Opening pickup view for:', consignment.shipmentNo);
     setSelectedConsignment({
       ...consignment,
       viewType: 'pickup'
     });
     setShowViewModal(true);
+    
+    // Fetch pickup images
+    const images = await fetchShipmentImages(consignment.shipmentNo);
+    console.log('Pickup images received:', images);
+    if (images) {
+      setPickupImages(images);
+    }
   };
 
   // Handle view drop details
-  const handleViewDrop = (consignment) => {
+  const handleViewDrop = async (consignment) => {
+    console.log('Opening drop view for:', consignment.shipmentNo);
     setSelectedConsignment({
       ...consignment,
       viewType: 'drop'
     });
     setShowViewModal(true);
+    
+    // Fetch drop images
+    const images = await fetchShipmentImages(consignment.shipmentNo);
+    console.log('Drop images received:', images);
+    if (images) {
+      setDropImages(images);
+    }
   };
 
   // Filter consignments based on search term and sort by creation date (latest first - LIFO)
@@ -179,6 +238,223 @@ export default function Consignment() {
       case 'inactive': return 'bg-gray-100 text-gray-800 border border-gray-200';
       default: return 'bg-gray-100 text-gray-800 border border-gray-200';
     }
+  };
+
+  // Render image gallery
+  const renderImageGallery = (images, title) => {
+    if (!images || images.length === 0) {
+      return (
+        <div className="text-center py-4">
+          <p className="text-gray-500 text-sm">No {title.toLowerCase()} available</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-2 gap-4">
+        {images.map((imageUrl, index) => (
+          <div key={index} className="relative group">
+            {/* Simple direct image display */}
+            <div 
+              className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+              onClick={() => setPreviewImg(imageUrl)}
+            >
+              <img
+                src={imageUrl}
+                alt={`${title} ${index + 1}`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.log('Image error for:', imageUrl);
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+              <div 
+                className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                style={{ display: 'none' }}
+              >
+                <FaTimesCircle className="mb-1" size={16} />
+                <span>Failed to load</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(imageUrl, '_blank');
+                  }}
+                  className="text-xs text-blue-500 hover:underline mt-1"
+                >
+                  Open in new tab
+                </button>
+              </div>
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Individual image component with proper loading states
+  const ImageItem = ({ imageUrl, title, index }) => {
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageError, setImageError] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [retryCount, setRetryCount] = useState(0);
+    const [currentImageUrl, setCurrentImageUrl] = useState(imageUrl);
+    const [objectUrl, setObjectUrl] = useState(null);
+
+    // Load image as blob to bypass CORS
+    const loadImageAsBlob = async (url) => {
+      try {
+        const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          mode: 'cors'
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          return url;
+        }
+        throw new Error('Failed to fetch image');
+      } catch (error) {
+        console.log('Blob loading failed:', error);
+        return null;
+      }
+    };
+
+    const handleImageLoad = () => {
+      setImageLoaded(true);
+      setIsLoading(false);
+      setImageError(false);
+    };
+
+    const handleImageError = () => {
+      console.log('Image failed to load:', currentImageUrl);
+      if (retryCount < 3) {
+        if (retryCount === 0) {
+          // Try without crossOrigin
+          setCurrentImageUrl(imageUrl);
+        } else if (retryCount === 1) {
+          // Try loading as blob
+          loadImageAsBlob(imageUrl).then(blobUrl => {
+            if (blobUrl) {
+              setCurrentImageUrl(blobUrl);
+              setObjectUrl(blobUrl);
+            } else {
+              setImageError(true);
+              setIsLoading(false);
+            }
+          });
+        } else if (retryCount === 2) {
+          // Try direct URL without any restrictions
+          setCurrentImageUrl(imageUrl);
+        }
+        setRetryCount(prev => prev + 1);
+        setIsLoading(true);
+        setImageError(false);
+      } else {
+        setImageError(true);
+        setIsLoading(false);
+        setImageLoaded(false);
+      }
+    };
+
+    const retryImage = () => {
+      setRetryCount(0);
+      setCurrentImageUrl(imageUrl);
+      setIsLoading(true);
+      setImageError(false);
+      setImageLoaded(false);
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        setObjectUrl(null);
+      }
+    };
+
+    // Cleanup object URL on unmount
+    React.useEffect(() => {
+      return () => {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
+      };
+    }, [objectUrl]);
+
+    return (
+      <div className="relative group">
+        {/* Loading state */}
+        {isLoading && (
+          <div className="w-full h-32 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+          </div>
+        )}
+
+        {/* Image */}
+        {retryCount < 2 ? (
+          <img
+            src={currentImageUrl}
+            alt={`${title} ${index + 1}`}
+            className={`w-full h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity ${
+              imageLoaded ? 'block' : 'hidden'
+            }`}
+            onClick={() => window.open(imageUrl, '_blank')}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+            crossOrigin={retryCount === 0 ? "anonymous" : undefined}
+          />
+        ) : (
+          <div 
+            className="w-full h-32 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100"
+            onClick={() => window.open(imageUrl, '_blank')}
+            style={{
+              backgroundImage: `url(${currentImageUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }}
+          >
+            <div className="w-full h-full flex items-center justify-center bg-black bg-opacity-20 rounded-lg">
+              <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+            </div>
+          </div>
+        )}
+
+        {/* Error state */}
+        {imageError && (
+          <div className="w-full h-32 bg-red-50 rounded-lg border border-red-200 flex flex-col items-center justify-center text-red-500 text-sm">
+            <FaTimesCircle className="mb-1" size={16} />
+            <span>Failed to load</span>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={retryImage}
+                className="text-xs text-blue-500 hover:underline"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => window.open(imageUrl, '_blank')}
+                className="text-xs text-blue-500 hover:underline"
+              >
+                Open in new tab
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Hover overlay */}
+        {imageLoaded && (
+          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+            <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -392,7 +668,7 @@ export default function Consignment() {
       {/* View Details Modal */}
       {showViewModal && selectedConsignment && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -410,7 +686,11 @@ export default function Consignment() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowViewModal(false)}
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setPickupImages(null);
+                    setDropImages(null);
+                  }}
                   className="text-white hover:text-gray-200 text-2xl font-bold"
                 >
                   ×
@@ -420,68 +700,440 @@ export default function Consignment() {
 
             {/* Content */}
             <div className="p-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Load Information</h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <p><strong>Load ID:</strong> {selectedConsignment.shipmentNo}</p>
-                    <p><strong>Shipper Name:</strong> {selectedConsignment.shipperName}</p>
-                    <p><strong>Trucker Name:</strong> {selectedConsignment.truckerName}</p>
-                    <p><strong>Driver Name:</strong> {selectedConsignment.driverName}</p>
-                    <p><strong>Vehicle No:</strong> {selectedConsignment.vehicleNo}</p>
-                    <p><strong>Status:</strong> 
-                      <span className={`ml-2 text-white text-xs px-2 py-1 rounded-full ${getStatusColor(selectedConsignment.status)}`}>
-                        {selectedConsignment.status}
-                      </span>
-                    </p>
-                    {selectedConsignment.loadDetails && (
-                      <>
-                        <p><strong>Weight:</strong> {selectedConsignment.loadDetails.weight} lbs</p>
-                        <p><strong>Commodity:</strong> {selectedConsignment.loadDetails.commodity}</p>
-                        <p><strong>Vehicle Type:</strong> {selectedConsignment.loadDetails.vehicleType}</p>
-                        <p><strong>Rate:</strong> ${selectedConsignment.loadDetails.rate}</p>
-                        <p><strong>Pickup Date:</strong> {new Date(selectedConsignment.loadDetails.pickupDate).toLocaleDateString()}</p>
-                        <p><strong>Delivery Date:</strong> {new Date(selectedConsignment.loadDetails.deliveryDate).toLocaleDateString()}</p>
-                      </>
-                    )}
+
+              {/* Images Section */}
+              <div className="mt-6">
+                {viewLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <p className="text-gray-500">Loading images...</p>
                   </div>
-                </div>
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-800">
-                    {selectedConsignment.viewType === 'pickup' ? 'Origin (Pickup)' : 'Destination (Drop)'}
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <p className="text-gray-700 font-medium">
-                      {selectedConsignment.viewType === 'pickup' 
-                        ? selectedConsignment.pickupAddress 
-                        : selectedConsignment.deliveryAddress
-                      }
-                    </p>
-                    {selectedConsignment.viewType === 'drop' && selectedConsignment.dropLocationImages && (
-                      <div className="mt-4">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Drop Location Images:</h4>
-                        <div className="space-y-2">
-                          {selectedConsignment.dropLocationImages.podImages && selectedConsignment.dropLocationImages.podImages.length > 0 && (
-                            <p className="text-xs text-gray-600">POD Images: {selectedConsignment.dropLocationImages.podImages.length}</p>
-                          )}
-                          {selectedConsignment.dropLocationImages.loadedTruckImages && selectedConsignment.dropLocationImages.loadedTruckImages.length > 0 && (
-                            <p className="text-xs text-gray-600">Loaded Truck Images: {selectedConsignment.dropLocationImages.loadedTruckImages.length}</p>
-                          )}
-                          {selectedConsignment.dropLocationImages.dropLocationImages && selectedConsignment.dropLocationImages.dropLocationImages.length > 0 && (
-                            <p className="text-xs text-gray-600">Drop Location Images: {selectedConsignment.dropLocationImages.dropLocationImages.length}</p>
-                          )}
-                          {selectedConsignment.dropLocationImages.emptyTruckImages && selectedConsignment.dropLocationImages.emptyTruckImages.length > 0 && (
-                            <p className="text-xs text-gray-600">Empty Truck Images: {selectedConsignment.dropLocationImages.emptyTruckImages.length}</p>
-                          )}
-                          {selectedConsignment.dropLocationImages.notes && (
-                            <p className="text-xs text-gray-600">Notes: {selectedConsignment.dropLocationImages.notes}</p>
-                          )}
+                ) : (
+                  <>
+                    {selectedConsignment.viewType === 'pickup' && (
+                      <div className="space-y-6">
+                        <h3 className="text-lg font-semibold text-gray-800">Pickup Images</h3>
+                        {!pickupImages ? (
+                          <div className="text-center py-8">
+                            <p className="text-gray-500">No pickup images available</p>
+                          </div>
+                        ) : (
+                          <>
+                        
+                        {/* All Pickup Images in one section */}
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <h4 className="text-md font-semibold text-gray-700 mb-3">Pickup Images</h4>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* Empty Truck Images */}
+                            {pickupImages.emptyTruckImages && pickupImages.emptyTruckImages.map((imageUrl, index) => (
+                              <div key={`empty-${index}`} className="relative group">
+                                <div 
+                                  className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+                                  onClick={() => setPreviewImg(imageUrl)}
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={`Empty Truck ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onLoad={() => console.log('Image loaded successfully:', imageUrl)}
+                                    onError={(e) => {
+                                      console.log('Image error for:', imageUrl);
+                                      console.log('Error details:', e);
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                                    style={{ display: 'none' }}
+                                  >
+                                    <FaTimesCircle className="mb-1" size={16} />
+                                    <span>Failed to load</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(imageUrl, '_blank');
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline mt-1"
+                                    >
+                                      Open in new tab
+                                    </button>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                    <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 text-center">Empty Truck {index + 1}</p>
+                              </div>
+                            ))}
+
+                            {/* EIR Tickets */}
+                            {pickupImages.eirTickets && pickupImages.eirTickets.map((imageUrl, index) => (
+                              <div key={`eir-${index}`} className="relative group">
+                                <div 
+                                  className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+                                  onClick={() => setPreviewImg(imageUrl)}
+                                >
+                                  <img
+                                    src={`https://cors-anywhere.herokuapp.com/${imageUrl}`}
+                                    alt={`EIR Ticket ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onLoad={() => console.log('EIR Ticket loaded successfully:', imageUrl)}
+                                    onError={(e) => {
+                                      console.log('Image error for:', imageUrl);
+                                      // Try direct URL as fallback
+                                      e.target.src = imageUrl;
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                                    style={{ display: 'none' }}
+                                  >
+                                    <FaTimesCircle className="mb-1" size={16} />
+                                    <span>Failed to load</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(imageUrl, '_blank');
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline mt-1"
+                                    >
+                                      Open in new tab
+                                    </button>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                    <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 text-center">EIR Ticket {index + 1}</p>
+                              </div>
+                            ))}
+
+                            {/* Container Images */}
+                            {pickupImages.containerImages && pickupImages.containerImages.map((imageUrl, index) => (
+                              <div key={`container-${index}`} className="relative group">
+                                <div 
+                                  className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+                                  onClick={() => setPreviewImg(imageUrl)}
+                                >
+                                  <img
+                                    src={`https://cors-anywhere.herokuapp.com/${imageUrl}`}
+                                    alt={`Container ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onLoad={() => console.log('Container loaded successfully:', imageUrl)}
+                                    onError={(e) => {
+                                      console.log('Image error for:', imageUrl);
+                                      // Try direct URL as fallback
+                                      e.target.src = imageUrl;
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                                    style={{ display: 'none' }}
+                                  >
+                                    <FaTimesCircle className="mb-1" size={16} />
+                                    <span>Failed to load</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(imageUrl, '_blank');
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline mt-1"
+                                    >
+                                      Open in new tab
+                                    </button>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                    <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 text-center">Container {index + 1}</p>
+                              </div>
+                            ))}
+
+                            {/* Seal Images */}
+                            {pickupImages.sealImages && pickupImages.sealImages.map((imageUrl, index) => (
+                              <div key={`seal-${index}`} className="relative group">
+                                <div 
+                                  className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+                                  onClick={() => setPreviewImg(imageUrl)}
+                                >
+                                  <img
+                                    src={`https://cors-anywhere.herokuapp.com/${imageUrl}`}
+                                    alt={`Seal ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onLoad={() => console.log('Seal loaded successfully:', imageUrl)}
+                                    onError={(e) => {
+                                      console.log('Image error for:', imageUrl);
+                                      // Try direct URL as fallback
+                                      e.target.src = imageUrl;
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                                    style={{ display: 'none' }}
+                                  >
+                                    <FaTimesCircle className="mb-1" size={16} />
+                                    <span>Failed to load</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(imageUrl, '_blank');
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline mt-1"
+                                    >
+                                      Open in new tab
+                                    </button>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                    <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 text-center">Seal {index + 1}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
+
+                        {/* Pickup Notes */}
+                        {pickupImages.notes && (
+                          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                            <h4 className="text-md font-semibold text-blue-800 mb-2">Pickup Notes</h4>
+                            <p className="text-blue-700">{pickupImages.notes}</p>
+                          </div>
+                        )}
+                        </>
+                        )}
                       </div>
                     )}
-                  </div>
-                </div>
+
+                    {selectedConsignment.viewType === 'drop' && (
+                      <div className="space-y-6">
+                        <h3 className="text-lg font-semibold text-gray-800">Drop Location Images</h3>
+                        {!dropImages || !dropImages.dropLocationImages ? (
+                          <div className="text-center py-8">
+                            <p className="text-gray-500">No drop location images available</p>
+                          </div>
+                        ) : (
+                          <>
+                        
+                        {/* All Drop Images in one section */}
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <h4 className="text-md font-semibold text-gray-700 mb-3">Drop Images</h4>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* POD Images */}
+                            {dropImages.dropLocationImages.podImages && dropImages.dropLocationImages.podImages.map((imageUrl, index) => (
+                              <div key={`pod-${index}`} className="relative group">
+                                <div 
+                                  className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+                                  onClick={() => setPreviewImg(imageUrl)}
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={`POD ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onLoad={() => console.log('POD loaded successfully:', imageUrl)}
+                                    onError={(e) => {
+                                      console.log('Image error for:', imageUrl);
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                                    style={{ display: 'none' }}
+                                  >
+                                    <FaTimesCircle className="mb-1" size={16} />
+                                    <span>Failed to load</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(imageUrl, '_blank');
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline mt-1"
+                                    >
+                                      Open in new tab
+                                    </button>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                    <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 text-center">POD {index + 1}</p>
+                              </div>
+                            ))}
+
+                            {/* Loaded Truck Images */}
+                            {dropImages.dropLocationImages.loadedTruckImages && dropImages.dropLocationImages.loadedTruckImages.map((imageUrl, index) => (
+                              <div key={`loaded-${index}`} className="relative group">
+                                <div 
+                                  className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+                                  onClick={() => setPreviewImg(imageUrl)}
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={`Loaded Truck ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onLoad={() => console.log('Loaded Truck loaded successfully:', imageUrl)}
+                                    onError={(e) => {
+                                      console.log('Image error for:', imageUrl);
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                                    style={{ display: 'none' }}
+                                  >
+                                    <FaTimesCircle className="mb-1" size={16} />
+                                    <span>Failed to load</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(imageUrl, '_blank');
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline mt-1"
+                                    >
+                                      Open in new tab
+                                    </button>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                    <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 text-center">Loaded Truck {index + 1}</p>
+                              </div>
+                            ))}
+
+                            {/* Drop Location Images */}
+                            {dropImages.dropLocationImages.dropLocationImages && dropImages.dropLocationImages.dropLocationImages.map((imageUrl, index) => (
+                              <div key={`droploc-${index}`} className="relative group">
+                                <div 
+                                  className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+                                  onClick={() => setPreviewImg(imageUrl)}
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={`Drop Location ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onLoad={() => console.log('Drop Location loaded successfully:', imageUrl)}
+                                    onError={(e) => {
+                                      console.log('Image error for:', imageUrl);
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                                    style={{ display: 'none' }}
+                                  >
+                                    <FaTimesCircle className="mb-1" size={16} />
+                                    <span>Failed to load</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(imageUrl, '_blank');
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline mt-1"
+                                    >
+                                      Open in new tab
+                                    </button>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                    <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 text-center">Drop Location {index + 1}</p>
+                              </div>
+                            ))}
+
+                            {/* Empty Truck Images */}
+                            {dropImages.dropLocationImages.emptyTruckImages && dropImages.dropLocationImages.emptyTruckImages.map((imageUrl, index) => (
+                              <div key={`empty-drop-${index}`} className="relative group">
+                                <div 
+                                  className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
+                                  onClick={() => setPreviewImg(imageUrl)}
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={`Empty Truck ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onLoad={() => console.log('Empty Truck loaded successfully:', imageUrl)}
+                                    onError={(e) => {
+                                      console.log('Image error for:', imageUrl);
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
+                                    style={{ display: 'none' }}
+                                  >
+                                    <FaTimesCircle className="mb-1" size={16} />
+                                    <span>Failed to load</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(imageUrl, '_blank');
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline mt-1"
+                                    >
+                                      Open in new tab
+                                    </button>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                    <FaEye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={16} />
+                                  </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1 text-center">Empty Truck {index + 1}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Drop Notes */}
+                        {dropImages.dropLocationImages.notes && (
+                          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                            <h4 className="text-md font-semibold text-green-800 mb-2">Drop Notes</h4>
+                            <p className="text-green-700">{dropImages.dropLocationImages.notes}</p>
+                          </div>
+                        )}
+                        </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImg && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4">
+          <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl max-h-[90vh]">
+            <img 
+              src={previewImg} 
+              alt="Image Preview" 
+              className="max-h-[80vh] w-full object-contain rounded-xl shadow-lg" 
+            />
+            <button
+              onClick={() => setPreviewImg(null)}
+              className="absolute left-4 top-4 bg-white p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+            >
+              <FaTimesCircle className="text-gray-600" size={20} />
+            </button>
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+              <button
+                onClick={() => window.open(previewImg, '_blank')}
+                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                Open in New Tab
+              </button>
             </div>
           </div>
         </div>
