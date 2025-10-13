@@ -362,6 +362,8 @@ export default function DeliveryOrder() {
   const [customerNameInput, setCustomerNameInput] = useState('');
   const [dispatchers, setDispatchers] = useState([]);
   const [loadingDispatchers, setLoadingDispatchers] = useState(false);
+  const [loads, setLoads] = useState([]);
+  const [loadingLoads, setLoadingLoads] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
   const [orderToDelete, setOrderToDelete] = useState(null);
@@ -470,6 +472,7 @@ export default function DeliveryOrder() {
     shipperName: '',
     containerNo: '',
     containerType: '',
+    selectedLoad: '', // Load reference dropdown
 
     // Pickup Locations - each has weight, individual date, and remarks (optional)
     pickupLocations: [
@@ -636,10 +639,47 @@ export default function DeliveryOrder() {
       setLoadingDispatchers(false);
     }
   };
+
+  // Fetch loads for load reference dropdown
+  const fetchLoads = async () => {
+    try {
+      setLoadingLoads(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      
+      console.log('Fetching loads with token:', token ? 'Present' : 'Missing');
+      console.log('API URL:', `${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`);
+
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      console.log('Loads API Response:', response.data);
+
+      if (response.data && response.data.loads) {
+        setLoads(response.data.loads);
+        console.log('Loads loaded successfully:', response.data.loads.length, 'loads');
+      } else {
+        console.error('No loads data in response:', response.data);
+        setLoads([]);
+      }
+    } catch (error) {
+      console.error('Error fetching loads:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      alertify.error('Failed to load loads');
+      setLoads([]);
+    } finally {
+      setLoadingLoads(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
     fetchDispatchers();
     fetchShippersList();         // ADD: load companies for Bill To dropdown
+    fetchLoads();                // ADD: load loads for load reference dropdown
   }, []);
 
 
@@ -714,6 +754,7 @@ export default function DeliveryOrder() {
         shipperName: src.shipper?.name || '',
         containerNo: src.shipper?.containerNo || '',
         containerType: src.shipper?.containerType || '',
+        selectedLoad: src.selectedLoad || '',
 
         pickupLocations: (src.shipper?.pickUpLocations || [{
           name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: ''
@@ -829,6 +870,14 @@ export default function DeliveryOrder() {
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }));
+  };
+
+  // Handle load selection
+  const handleLoadChange = (value) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedLoad: value
     }));
   };
 
@@ -1220,6 +1269,13 @@ export default function DeliveryOrder() {
         return;
       }
 
+      // Validate load reference
+      if (!formData.selectedLoad || formData.selectedLoad.trim() === '') {
+        alertify.error('Please select a load reference before submitting.');
+        setSubmitting(false);
+        return;
+      }
+
       // user/emp
       const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
       const user = JSON.parse(userStr || '{}');
@@ -1289,8 +1345,14 @@ export default function DeliveryOrder() {
         bols: (formData.bols || [])
           .filter(b => (b.bolNo || '').trim())
           .map(b => ({ bolNo: b.bolNo.trim() })),
+        loadReference: formData.selectedLoad, // Store the selected load _id
         remarks: formData.remarks
       };
+
+      console.log('Submitting delivery order with loadReference:', formData.selectedLoad);
+      console.log('Selected load value type:', typeof formData.selectedLoad);
+      console.log('Selected load value length:', formData.selectedLoad ? formData.selectedLoad.length : 'null/undefined');
+      console.log('Full submit data:', submitData);
 
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
@@ -1342,6 +1404,8 @@ export default function DeliveryOrder() {
         fd.append('customers', JSON.stringify(customersWithTotals));
         fd.append('carrier', JSON.stringify(carrierJSON));
         fd.append('shipper', JSON.stringify(shipperJSON));
+        fd.append('loadReference', formData.selectedLoad); // Add loadReference to multipart form
+        console.log('Multipart form - adding loadReference:', formData.selectedLoad);
         (formData.bols || []).forEach((b, i) => {
           const val = (b?.bolNo || '').trim();
           if (val) fd.append(`bols[${i}][bolNo]`, val);   // 👈 nested fields, no JSON string
@@ -1747,6 +1811,7 @@ export default function DeliveryOrder() {
           shipperName: fullOrderData.shipper?.name || '',
           containerNo: fullOrderData.shipper?.containerNo || '',
           containerType: fullOrderData.shipper?.containerType || '',
+          selectedLoad: fullOrderData.loadReference || '', // Load reference from database
           pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
             ...l,
             pickUpDate: formatDateForInput(l?.pickUpDate || fullOrderData.shipper?.pickUpDate),
@@ -2156,12 +2221,16 @@ export default function DeliveryOrder() {
         customers,  // ✅ includes loadNo
         carrier,
         shipper,
+        loadReference: formData.selectedLoad, // Store the selected load _id
         remarks: formData.remarks || '',
         bols: (formData.bols || []).map((b, i) => ({
           _id: editingOrder?.fullData?.bols?.[i]?._id, // preserve if exists
           bolNo: (b.bolNo || '').trim()
         })).filter(b => b.bolNo),
       };
+
+      console.log('Updating delivery order with loadReference:', formData.selectedLoad);
+      console.log('Full update payload:', updatePayload);
 
       // 1) JSON update
       const res = await axios.put(
@@ -3621,7 +3690,8 @@ export default function DeliveryOrder() {
                         >
                           Edit
                         </button>
-                        <button
+                        {/* Assign Button - Commented Out */}
+                        {/* <button
                           onClick={() => handleAssignOrder(order)}
                           disabled={order.assignmentStatus === 'assigned'}
                           className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${order.assignmentStatus === 'assigned'
@@ -3630,7 +3700,7 @@ export default function DeliveryOrder() {
                             }`}
                         >
                           {order.assignmentStatus === 'assigned' ? 'Assigned' : 'Assign'}
-                        </button>
+                        </button> */}
                         <button
                           onClick={() => handleDuplicateOrder(order)}
                           className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
@@ -4004,6 +4074,32 @@ export default function DeliveryOrder() {
                 </div>
               </div>
 
+              {/* Load Reference Section */}
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-orange-800 mb-4">Load Reference</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <SearchableDropdown
+                      value={formData.selectedLoad || ''}
+                      onChange={handleLoadChange}
+                      options={loads.map(load => ({ 
+                        value: load._id, 
+                        label: `${load.shipmentNumber || 'Load'} - ${load.origin?.city || 'Origin'} to ${load.destination?.city || 'Destination'} (${load.commodity || 'N/A'})` 
+                      }))}
+                      placeholder={loadingLoads ? "Loading loads..." : "Select Assigned Load"}
+                      disabled={loadingLoads}
+                      loading={loadingLoads}
+                      searchPlaceholder="Search loads..."
+                    />
+                    {/* Debug info - remove this later */}
+                    {process.env.NODE_ENV === 'development' && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Loads: {loads.length} | Loading: {loadingLoads ? 'Yes' : 'No'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {/* Shipper Information Section */}
               <div className="bg-purple-50 p-4 rounded-lg">
@@ -5535,6 +5631,32 @@ export default function DeliveryOrder() {
                 </div>
               </div>
 
+              {/* Load Reference Section */}
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-orange-800 mb-4">Load Reference</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <SearchableDropdown
+                      value={formData.selectedLoad || ''}
+                      onChange={handleLoadChange}
+                      options={loads.map(load => ({ 
+                        value: load._id, 
+                        label: `${load.shipmentNumber || 'Load'} - ${load.origin?.city || 'Origin'} to ${load.destination?.city || 'Destination'} (${load.commodity || 'N/A'})` 
+                      }))}
+                      placeholder={loadingLoads ? "Loading loads..." : "Select Assigned Load"}
+                      disabled={loadingLoads}
+                      loading={loadingLoads}
+                      searchPlaceholder="Search loads..."
+                    />
+                    {/* Debug info - remove this later */}
+                    {process.env.NODE_ENV === 'development' && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Loads: {loads.length} | Loading: {loadingLoads ? 'Yes' : 'No'} | Selected: {formData.selectedLoad || 'None'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {/* Shipper Information */}
               <div className="bg-purple-50 p-4 rounded-lg">

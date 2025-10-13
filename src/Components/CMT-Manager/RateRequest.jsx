@@ -344,6 +344,7 @@ try {
     }
   };
 
+
   const checkFirstBidsForLoads = async (loads) => {
     if (!Array.isArray(loads) || !loads.length) return;
     try {
@@ -457,6 +458,7 @@ useEffect(() => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isTruckerDropdownOpen]);
+
 
   // 15s polling for running timers (Rate tab)
   useEffect(() => {
@@ -745,6 +747,9 @@ useEffect(() => {
       setApprovalSubmitting(false);
     }
   };
+
+
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1529,12 +1534,14 @@ useEffect(() => {
                       </td>
                       {/* <td className="px-4 py-3">{renderTimerChip(item.loadId)}</td> */}
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => openModal(item)}
-                          className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
-                        >
-                          View Details
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openModal(item)}
+                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                          >
+                            View Details
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -2170,6 +2177,7 @@ useEffect(() => {
           </div>
         </div>
       )}
+
     </div>
   );
 };
