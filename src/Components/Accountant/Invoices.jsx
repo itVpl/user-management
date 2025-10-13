@@ -54,6 +54,7 @@ import {
   Description as DescriptionIcon,
   Image as ImageIcon,
   Send as SendIcon,
+  Edit as EditIcon,
 } from "@mui/icons-material";
 
 // ========= Config =========
@@ -213,6 +214,328 @@ function TabPanel({ value, index, children }) {
   return value === index ? <Box sx={{ pt: 2 }}>{children}</Box> : null;
 }
 
+// Edit Form Component
+function EditForm({ data, onSubmit, loading }) {
+  // Initialize form data with calculated totals
+  const initializeFormData = (data) => {
+    const customers = (data?.customers || []).map(customer => ({
+      ...customer,
+      totalAmount: (customer.lineHaul || 0) + (customer.fsc || 0) + (customer.other || 0)
+    }));
+    
+    const carrierFees = (data?.carrier?.carrierFees || []).map(fee => ({
+      ...fee,
+      total: (fee.quantity || 0) * (fee.amount || 0)
+    }));
+    
+    const totalCarrierFees = carrierFees.reduce((sum, fee) => sum + (fee.total || 0), 0);
+    
+    return {
+      customers,
+      carrier: {
+        ...data?.carrier,
+        carrierFees,
+        totalCarrierFees
+      }
+    };
+  };
+
+  const [formData, setFormData] = useState(initializeFormData(data));
+
+  // Update form data when data prop changes
+  React.useEffect(() => {
+    setFormData(initializeFormData(data));
+  }, [data]);
+
+  const handleCustomerChange = (index, field, value) => {
+    const newCustomers = [...formData.customers];
+    newCustomers[index] = { ...newCustomers[index], [field]: value };
+    
+    // Auto-calculate total amount when line haul, FSC, or other changes
+    if (field === 'lineHaul' || field === 'fsc' || field === 'other') {
+      const lineHaul = field === 'lineHaul' ? value : (newCustomers[index].lineHaul || 0);
+      const fsc = field === 'fsc' ? value : (newCustomers[index].fsc || 0);
+      const other = field === 'other' ? value : (newCustomers[index].other || 0);
+      newCustomers[index].totalAmount = lineHaul + fsc + other;
+    }
+    
+    setFormData({ ...formData, customers: newCustomers });
+  };
+
+  const handleCarrierChange = (field, value) => {
+    setFormData({
+      ...formData,
+      carrier: { ...formData.carrier, [field]: value }
+    });
+  };
+
+  const handleCarrierFeeChange = (index, field, value) => {
+    const newFees = [...(formData.carrier.carrierFees || [])];
+    newFees[index] = { ...newFees[index], [field]: value };
+    
+    // Auto-calculate total for carrier fee when quantity or amount changes
+    if (field === 'quantity' || field === 'amount') {
+      const quantity = field === 'quantity' ? value : (newFees[index].quantity || 0);
+      const amount = field === 'amount' ? value : (newFees[index].amount || 0);
+      newFees[index].total = quantity * amount;
+    }
+    
+    // Calculate total carrier fees
+    const totalCarrierFees = newFees.reduce((sum, fee) => sum + (fee.total || 0), 0);
+    
+    setFormData({
+      ...formData,
+      carrier: { 
+        ...formData.carrier, 
+        carrierFees: newFees,
+        totalCarrierFees: totalCarrierFees
+      }
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <Stack spacing={3}>
+        {/* Customer Details */}
+        <Card>
+          <CardHeader title="Customer Details" />
+          <CardContent>
+            <Stack spacing={2}>
+              {formData.customers.map((customer, index) => (
+                <Grid container spacing={2} key={index}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Load No"
+                      value={customer.loadNo || ""}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                      sx={{
+                        '& .MuiInputBase-input': {
+                          backgroundColor: '#f5f5f5'
+                        }
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Bill To"
+                      value={customer.billTo || ""}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                      sx={{
+                        '& .MuiInputBase-input': {
+                          backgroundColor: '#f5f5f5'
+                        }
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Dispatcher Name"
+                      value={customer.dispatcherName || ""}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                      sx={{
+                        '& .MuiInputBase-input': {
+                          backgroundColor: '#f5f5f5'
+                        }
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Work Order No"
+                      value={customer.workOrderNo || ""}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                      sx={{
+                        '& .MuiInputBase-input': {
+                          backgroundColor: '#f5f5f5'
+                        }
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      fullWidth
+                      label="Line Haul"
+                      type="number"
+                      value={customer.lineHaul || ""}
+                      onChange={(e) => handleCustomerChange(index, 'lineHaul', parseFloat(e.target.value) || 0)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      fullWidth
+                      label="FSC"
+                      type="number"
+                      value={customer.fsc || ""}
+                      onChange={(e) => handleCustomerChange(index, 'fsc', parseFloat(e.target.value) || 0)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      fullWidth
+                      label="Other"
+                      type="number"
+                      value={customer.other || ""}
+                      onChange={(e) => handleCustomerChange(index, 'other', parseFloat(e.target.value) || 0)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      fullWidth
+                      label="Total Amount"
+                      type="number"
+                      value={customer.totalAmount || ""}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                      sx={{
+                        '& .MuiInputBase-input': {
+                          backgroundColor: '#f5f5f5',
+                          fontWeight: 'bold'
+                        }
+                      }}
+                    />
+                  </Grid>
+                </Grid>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Carrier Details */}
+        <Card>
+          <CardHeader title="Carrier Details" />
+          <CardContent>
+            <Stack spacing={2}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Carrier Name"
+                    value={formData.carrier.carrierName || ""}
+                    InputProps={{
+                      readOnly: true,
+                    }}
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        backgroundColor: '#f5f5f5'
+                      }
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Equipment Type"
+                    value={formData.carrier.equipmentType || ""}
+                    InputProps={{
+                      readOnly: true,
+                    }}
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        backgroundColor: '#f5f5f5'
+                      }
+                    }}
+                  />
+                </Grid>
+              </Grid>
+
+              {/* Carrier Fees */}
+              <Typography variant="h6">Carrier Fees</Typography>
+              {(formData.carrier.carrierFees || []).map((fee, index) => (
+                <Grid container spacing={2} key={index}>
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      fullWidth
+                      label="Quantity"
+                      type="number"
+                      value={fee.quantity || ""}
+                      onChange={(e) => handleCarrierFeeChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      fullWidth
+                      label="Amount"
+                      type="number"
+                      value={fee.amount || ""}
+                      onChange={(e) => handleCarrierFeeChange(index, 'amount', parseFloat(e.target.value) || 0)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={2}>
+                    <TextField
+                      fullWidth
+                      label="Total"
+                      type="number"
+                      value={fee.total || ""}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                      sx={{
+                        '& .MuiInputBase-input': {
+                          backgroundColor: '#f5f5f5',
+                          fontWeight: 'bold'
+                        }
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Total Carrier Fees"
+                  type="number"
+                  value={formData.carrier.totalCarrierFees || ""}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      backgroundColor: '#f5f5f5',
+                      fontWeight: 'bold'
+                    }
+                  }}
+                />
+              </Grid>
+                </Grid>
+              ))}
+
+              
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Submit Button */}
+        <DialogActions>
+          <Button 
+            type="submit" 
+            variant="contained" 
+            disabled={loading}
+            sx={{ minWidth: 120 }}
+          >
+            {loading ? "Updating..." : "Update Details"}
+          </Button>
+        </DialogActions>
+      </Stack>
+    </form>
+  );
+}
+
 // ========= Component =========
 export default function Invoices({ accountantEmpId: propEmpId }) {
   // resolve auth + emp
@@ -295,6 +618,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
   // PDF generation state
   const [pdfLoading, setPdfLoading] = useState({ invoice: false, rate: false, bol: false });
+
+  // Edit functionality state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editData, setEditData] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
 
   // Logo source for PDF generation - using your actual logo
   const logoSrc = Logo;
@@ -1442,6 +1770,54 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
   };
 
+  // ===== PUT: Edit DO Details =====
+  const editDODetails = async (editFormData) => {
+    if (!editData?._id) {
+      setToast({ open: true, severity: "error", msg: "No DO selected for editing." });
+      return;
+    }
+
+    setEditLoading(true);
+    try {
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/edit-do-details`;
+      const body = {
+        doId: editData._id,
+        accountantEmpId: empId,
+        customers: editFormData.customers,
+        carrier: editFormData.carrier
+      };
+      
+      const resp = await axios.put(url, body, { headers });
+      
+      const msg = resp?.data?.message || "DO details updated successfully";
+      setToast({ open: true, severity: "success", msg });
+      
+      // Refresh current tab data
+      if (activeTab === 0) {
+        fetchData(page);
+      } else if (activeTab === 1) {
+        fetchProcessed(processedPage);
+      } else if (activeTab === 2) {
+        fetchRejected(rejectedPage);
+      }
+      
+      // Close edit modal
+      setEditOpen(false);
+      setEditData(null);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Failed to update DO details";
+      setToast({ open: true, severity: "error", msg });
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // ===== Open Edit Modal =====
+  const openEditModal = (row) => {
+    setEditData(row);
+    setEditOpen(true);
+  };
+
   // initial loads
   useEffect(() => {
     fetchData(page);
@@ -1636,15 +2012,6 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             {/* ===== TAB 0: Assigned to Accountant ===== */}
             <TabPanel value={activeTab} index={0}>
               <Toolbar disableGutters sx={{ gap: 2, flexWrap: "wrap", pb: 2 }}>
-                <FormControl size="small" sx={{ minWidth: 160 }}>
-                  <InputLabel>Status</InputLabel>
-                  <Select label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                    <MenuItem value="all">All</MenuItem>
-                    <MenuItem value="pending">Pending</MenuItem>
-                    <MenuItem value="approved">Approved</MenuItem>
-                    <MenuItem value="rejected">Rejected</MenuItem>
-                  </Select>
-                </FormControl>
 
                 <TextField
                   size="small"
@@ -1697,7 +2064,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <TableCell>Carrier</TableCell>
                           <TableCell align="right">Bill Amount</TableCell>
                           <TableCell align="right">Carrier Fees</TableCell>
-                          <TableCell align="right">Net</TableCell>
+                          
                           <TableCell>Status</TableCell>
                           <TableCell>Forwarded By</TableCell>
                           <TableCell>Updated</TableCell>
@@ -1721,9 +2088,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               <TableCell>{row?.carrier?.carrierName || "—"}</TableCell>
                               <TableCell align="right">${fmtMoney(totals.billTotal)}</TableCell>
                               <TableCell align="right">${fmtMoney(totals.carrierTotal)}</TableCell>
-                              <TableCell align="right">
-                                <Typography fontWeight={700}>${fmtMoney(totals.netRevenue)}</Typography>
-                              </TableCell>
+                              
                               <TableCell>
                                 <StatusChip status={row?.accountantApproval?.status} />
                               </TableCell>
@@ -1734,6 +2099,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   <Tooltip title="View Details">
                                     <IconButton onClick={() => openDetails(row)} size="small">
                                       <VisibilityIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Edit Details">
+                                    <IconButton onClick={() => openEditModal(row)} size="small">
+                                      <EditIcon fontSize="small" />
                                     </IconButton>
                                   </Tooltip>
                                 </Stack>
@@ -1814,7 +2184,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <TableCell>Carrier</TableCell>
                           <TableCell align="right">Bill Amount</TableCell>
                           <TableCell align="right">Carrier Fees</TableCell>
-                          <TableCell align="right">Net</TableCell>
+                          
                           <TableCell>Status</TableCell>
                           <TableCell>Approved By</TableCell>
                           <TableCell>Approved At</TableCell>
@@ -1839,9 +2209,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               <TableCell>{row?.carrier?.carrierName || "—"}</TableCell>
                               <TableCell align="right">${fmtMoney(totals.billTotal)}</TableCell>
                               <TableCell align="right">${fmtMoney(totals.carrierTotal)}</TableCell>
-                              <TableCell align="right">
-                                <Typography fontWeight={700}>${fmtMoney(totals.netRevenue)}</Typography>
-                              </TableCell>
+                             
                               <TableCell>
                                 <StatusChip status={row?.accountantApproval?.status} />
                               </TableCell>
@@ -1852,6 +2220,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   <Tooltip title="View Details">
                                     <IconButton onClick={() => openDetails(row)} size="small">
                                       <VisibilityIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Edit Details">
+                                    <IconButton onClick={() => openEditModal(row)} size="small">
+                                      <EditIcon fontSize="small" />
                                     </IconButton>
                                   </Tooltip>
                                 </Stack>
@@ -1931,7 +2304,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <TableCell>Carrier</TableCell>
                           <TableCell align="right">Bill Amount</TableCell>
                           <TableCell align="right">Carrier Fees</TableCell>
-                          <TableCell align="right">Net</TableCell>
+                          
                           <TableCell>Status</TableCell>
                           <TableCell>Rejected By</TableCell>
                           <TableCell>Rejected At</TableCell>
@@ -1956,9 +2329,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               <TableCell>{row?.carrier?.carrierName || "—"}</TableCell>
                               <TableCell align="right">${fmtMoney(totals.billTotal)}</TableCell>
                               <TableCell align="right">${fmtMoney(totals.carrierTotal)}</TableCell>
-                              <TableCell align="right">
-                                <Typography fontWeight={700}>${fmtMoney(totals.netRevenue)}</Typography>
-                              </TableCell>
+                             
                               <TableCell>
                                 <StatusChip status={row?.salesApproval?.status} />
                               </TableCell>
@@ -1969,6 +2340,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   <Tooltip title="View Details">
                                     <IconButton onClick={() => openDetails(row)} size="small">
                                       <VisibilityIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Edit Details">
+                                    <IconButton onClick={() => openEditModal(row)} size="small">
+                                      <EditIcon fontSize="small" />
                                     </IconButton>
                                   </Tooltip>
                                 </Stack>
@@ -2068,46 +2444,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   </CardContent>
                 </Card>
 
-                {/* PDF Generation Buttons */}
-                <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#7c3aed", 0.05) }}>
-                    <Typography variant="subtitle1" fontWeight={700}>Generate PDFs</Typography>
-                  </Box>
-                  <CardContent>
-                    <Stack direction="row" spacing={2} flexWrap="wrap">
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<PrintIcon />}
-                        onClick={() => generatePDF('invoice')}
-                        disabled={pdfLoading.invoice}
-                        sx={{ minWidth: 160 }}
-                      >
-                        {pdfLoading.invoice ? 'Generating...' : 'Invoice PDF'}
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="secondary"
-                        startIcon={<PrintIcon />}
-                        onClick={() => generatePDF('rate')}
-                        disabled={pdfLoading.rate}
-                        sx={{ minWidth: 160 }}
-                      >
-                        {pdfLoading.rate ? 'Generating...' : 'Rate Confirmation PDF'}
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        startIcon={<PrintIcon />}
-                        onClick={() => generatePDF('bol')}
-                        disabled={pdfLoading.bol}
-                        sx={{ minWidth: 160 }}
-                      >
-                        {pdfLoading.bol ? 'Generating...' : 'BOL PDF'}
-                      </Button>
-                    </Stack>
-                  </CardContent>
-                </Card>
+                
 
                 {/* Customer (Billing) */}
                 <Card variant="outlined">
@@ -2527,6 +2864,47 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   </Card>
                 )}
 
+                {/* PDF Generation Buttons */}
+                <Card variant="outlined">
+                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#7c3aed", 0.05) }}>
+                    <Typography variant="subtitle1" fontWeight={700}>Generate PDFs</Typography>
+                  </Box>
+                  <CardContent>
+                    <Stack direction="row" spacing={2} flexWrap="wrap">
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<PrintIcon />}
+                        onClick={() => generatePDF('invoice')}
+                        disabled={pdfLoading.invoice}
+                        sx={{ minWidth: 160 }}
+                      >
+                        {pdfLoading.invoice ? 'Generating...' : 'Invoice PDF'}
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<PrintIcon />}
+                        onClick={() => generatePDF('rate')}
+                        disabled={pdfLoading.rate}
+                        sx={{ minWidth: 160 }}
+                      >
+                        {pdfLoading.rate ? 'Generating...' : 'Rate Confirmation PDF'}
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<PrintIcon />}
+                        onClick={() => generatePDF('bol')}
+                        disabled={pdfLoading.bol}
+                        sx={{ minWidth: 160 }}
+                      >
+                        {pdfLoading.bol ? 'Generating...' : 'BOL PDF'}
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+
                 {/* Resubmit to Sales - Only show for rejected DOs */}
                 {activeTab === 2 && (
                   <Card variant="outlined">
@@ -2593,6 +2971,51 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             <Button onClick={() => setDetailsOpen(false)}>Close</Button>
 
           </DialogActions>
+        </Dialog>
+
+        {/* Edit DO Details Dialog */}
+        <Dialog
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}
+        >
+          <DialogTitle sx={{ p: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                p: 2,
+                backgroundColor: BRAND,
+                color: "white",
+              }}
+            >
+              <Typography variant="h6" fontWeight={700}>
+                Edit DO Details
+              </Typography>
+              <IconButton
+                onClick={() => setEditOpen(false)}
+                sx={{ color: "white" }}
+                size="small"
+              >
+                <CloseIcon />
+              </IconButton>
+            </Box>
+          </DialogTitle>
+
+          <DialogContent dividers sx={{ p: 3 }}>
+            {editData ? (
+              <EditForm 
+                data={editData} 
+                onSubmit={editDODetails}
+                loading={editLoading}
+              />
+            ) : (
+              <Typography>No data available for editing.</Typography>
+            )}
+          </DialogContent>
         </Dialog>
 
 
