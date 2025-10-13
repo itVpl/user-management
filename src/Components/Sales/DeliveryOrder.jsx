@@ -754,7 +754,7 @@ export default function DeliveryOrder() {
         shipperName: src.shipper?.name || '',
         containerNo: src.shipper?.containerNo || '',
         containerType: src.shipper?.containerType || '',
-        selectedLoad: src.selectedLoad || '',
+        selectedLoad: src.loadReference || '', // Load reference from database
 
         pickupLocations: (src.shipper?.pickUpLocations || [{
           name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: ''
@@ -1340,7 +1340,7 @@ export default function DeliveryOrder() {
         bols: (formData.bols || [])
           .filter(b => (b.bolNo || '').trim())
           .map(b => ({ bolNo: b.bolNo.trim() })),
-        loadReference: formData.selectedLoad, // Store the selected load _id
+        ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadReference: formData.selectedLoad } : {}), // Only include loadReference if it has a value
         remarks: formData.remarks
       };
 
@@ -1399,8 +1399,13 @@ export default function DeliveryOrder() {
         fd.append('customers', JSON.stringify(customersWithTotals));
         fd.append('carrier', JSON.stringify(carrierJSON));
         fd.append('shipper', JSON.stringify(shipperJSON));
-        fd.append('loadReference', formData.selectedLoad); // Add loadReference to multipart form
-        console.log('Multipart form - adding loadReference:', formData.selectedLoad);
+        // Only add loadReference if it has a value
+        if (formData.selectedLoad && formData.selectedLoad.trim()) {
+          fd.append('loadReference', formData.selectedLoad);
+          console.log('Multipart form - adding loadReference:', formData.selectedLoad);
+        } else {
+          console.log('Multipart form - skipping loadReference (empty value)');
+        }
         (formData.bols || []).forEach((b, i) => {
           const val = (b?.bolNo || '').trim();
           if (val) fd.append(`bols[${i}][bolNo]`, val);   // 👈 nested fields, no JSON string
@@ -2216,7 +2221,7 @@ export default function DeliveryOrder() {
         customers,  // ✅ includes loadNo
         carrier,
         shipper,
-        loadReference: formData.selectedLoad, // Store the selected load _id
+        ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadReference: formData.selectedLoad } : {}), // Only include loadReference if it has a value
         remarks: formData.remarks || '',
         bols: (formData.bols || []).map((b, i) => ({
           _id: editingOrder?.fullData?.bols?.[i]?._id, // preserve if exists
