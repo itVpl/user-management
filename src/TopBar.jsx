@@ -129,18 +129,8 @@ const Topbar = () => {
 
 
   return (
-    <div className="fixed w-full top-0 right-0 h-20 bg-white shadow z-10 px-6 flex justify-between items-center pl-[220px]">
-      <div className="w-1/3"></div>
-
-      <div className="w-1/3 flex justify-center">
-        <input
-          type="text"
-          placeholder="Search shipments, users, orders...."
-          className="w-full max-w-[650px] px-7 py-3 rounded-full bg-gray-100 outline-none placeholder:text-sm shadow"
-        />
-      </div>
-
-      <div className="w-1/3 flex items-center justify-end gap-4">
+    <div className="fixed w-full top-0 right-0 h-20 bg-white shadow z-10 px-6 flex justify-end items-center pl-[220px]">
+      <div className="flex items-center justify-end gap-4">
         <div className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
           <span className="text-base">🕒</span>
           <span className="font-medium">{elapsedTime}</span>
