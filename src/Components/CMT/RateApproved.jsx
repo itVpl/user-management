@@ -147,6 +147,7 @@ export default function RateApproved() {
         const transformedRates = response.data.bids.map(bid => ({
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
+          loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
           destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
@@ -232,6 +233,7 @@ export default function RateApproved() {
         const transformedBids = response.data.bids.map(bid => ({
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
+          loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
           destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
@@ -406,6 +408,7 @@ export default function RateApproved() {
         const transformedRates = userSpecificBids.map(bid => ({
           id: `RA-${bid._id.slice(-6)}`,
           rateNum: bid._id,
+          loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
           destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
@@ -449,6 +452,7 @@ export default function RateApproved() {
         const transformedBids = response.data.bids.map(bid => ({
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
+          loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
           destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
@@ -1506,8 +1510,9 @@ export default function RateApproved() {
                   <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                     <tr>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
@@ -1521,6 +1526,9 @@ export default function RateApproved() {
                       <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                         <td className="py-2 px-3">
                           <span className="font-medium text-gray-700">{rate.id}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{rate.loadId}</span>
                         </td>
                         <td className="py-2 px-3">
                           <div>
@@ -1766,8 +1774,9 @@ export default function RateApproved() {
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                   <tr>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
@@ -1780,6 +1789,9 @@ export default function RateApproved() {
                     <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                       <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{rate.id}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{rate.loadId}</span>
                       </td>
                       <td className="py-2 px-3">
                         <div>
@@ -1913,8 +1925,9 @@ export default function RateApproved() {
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                   <tr>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
@@ -1927,6 +1940,9 @@ export default function RateApproved() {
                     <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                       <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{rate.id}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{rate.loadId}</span>
                       </td>
                       <td className="py-2 px-3">
                         <div>
