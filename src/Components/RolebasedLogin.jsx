@@ -10,6 +10,7 @@ import TLDashboard from "./TLDashboard/TLDashboard";
 import CMTDashboard from "./CMT/CMTDashbaord";
 import CMTMDashboard from "./CMT-Manager/CMT-MDashboard";
 import AccountantDashboard from "./Accountant/AccountantDashboard";
+import FinanceDashboard from "./Finance/FinanceDashboard";
 
 const RoleBasedDashboard = () => {
   const userData = sessionStorage.getItem("user");
@@ -44,6 +45,12 @@ const RoleBasedDashboard = () => {
   if (department === "Sales" || department === "sales") {
     console.log("Sales department detected, showing AgentDashboard");
     return <AgentDashboard />;
+  }
+
+  // Finance department should show FinanceDashboard
+  if (department === "Finance" || department === "finance") {
+    console.log("Finance department detected, showing FinanceDashboard");
+    return <FinanceDashboard />;
   }
 
   switch (role) {

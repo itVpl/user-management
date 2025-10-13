@@ -1252,7 +1252,6 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
                     <TableCell>Carrier</TableCell>
                     <TableCell align="right">Bill</TableCell>
                     <TableCell align="right">Carrier</TableCell>
-                    <TableCell align="right">Net</TableCell>
                     <TableCell>Approved At</TableCell>
                     <TableCell align="center">Actions</TableCell>
                   </TableRow>
@@ -1270,7 +1269,6 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
                         <TableCell>{r?.carrier?.carrierName || "—"}</TableCell>
                         <TableCell align="right">${fmtMoney(t.bill)}</TableCell>
                         <TableCell align="right">${fmtMoney(t.carrier)}</TableCell>
-                        <TableCell align="right"><Typography fontWeight={700}>${fmtMoney(t.net)}</Typography></TableCell>
                         <TableCell>{fmtDateTime(r?.accountantApproval?.approvedAt)}</TableCell>
                         <TableCell align="center">
                           <Tooltip title="View Details">
