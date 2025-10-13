@@ -57,6 +57,8 @@ import TruckerReport from "./Components/CMT/TruckerReport.jsx";
 import TaskScheduling from "./Components/TaskScheduling/TaskScheduling.jsx";
 import CmtDeptReport from "./Components/CMT/cmtDeptReport.jsx";
 import SalesDeptReport from "./Components/Sales/salesDeptReport.jsx";
+import Invoices from "./Components/Accountant/Invoices.jsx"
+import CheckInvoice from "./Components/Sales/CheckInvoice.jsx"
 
 function GlobalRRListener() {
   const navigate = useNavigate();
@@ -256,6 +258,8 @@ function App() {
           <Route path="/TaskScheduling" element={<TaskScheduling />} />
           <Route path="/CmtDeptReport" element={<CmtDeptReport />} />
           <Route path="/SalesDeptReport" element={<SalesDeptReport />} />
+          <Route path="/Invoices" element={<Invoices />} />
+          <Route path="/CheckInvoice" element={<CheckInvoice />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" />} />
