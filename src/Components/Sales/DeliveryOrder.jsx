@@ -1269,12 +1269,7 @@ export default function DeliveryOrder() {
         return;
       }
 
-      // Validate load reference
-      if (!formData.selectedLoad || formData.selectedLoad.trim() === '') {
-        alertify.error('Please select a load reference before submitting.');
-        setSubmitting(false);
-        return;
-      }
+      // Load reference is now optional - validation removed
 
       // user/emp
       const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
