@@ -329,6 +329,76 @@ const ProfilePage = () => {
     }
   };
 
+  /* ========= CSV Export Function ========= */
+  const exportToCSV = () => {
+    if (!callLogs.length) {
+      alert("No data to export");
+      return;
+    }
+
+    // CSV headers
+    const headers = [
+      "Name",
+      "Mobile No",
+      "Total Experience",
+      "Current Location",
+      "Current Company",
+      "Current Salary",
+      "Notice Period",
+      "Email",
+      "Comment",
+      "Purpose",
+      "Duration (mins)",
+      "Date",
+      "Notes"
+    ];
+
+    // Convert data to CSV format
+    const csvData = callLogs.map(log => {
+      const cd = log.callDetails || {};
+      const get = (k) => cd[k] ?? log[k] ?? "";
+      
+      return [
+        get("name"),
+        get("mobileNo"),
+        get("totalExp"),
+        get("currentLocation"),
+        get("currentCompany"),
+        get("currentSalary"),
+        get("noticePeriod"),
+        get("email"),
+        get("comment"),
+        get("purpose"),
+        cd.duration ?? log.duration ?? "",
+        cd.activityDate ?? log.activityDate ?? log.date ?? "",
+        cd.notes ?? log.notes ?? ""
+      ];
+    });
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map(row => 
+        row.map(field => 
+          typeof field === "string" && field.includes(",") 
+            ? `"${field.replace(/"/g, '""')}"` 
+            : field
+        ).join(",")
+      )
+    ].join("\n");
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `HR_Daily_Activity_${activityDate || new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   /* ================= UI ================= */
 
   if (!employee) {
@@ -873,23 +943,36 @@ const ProfilePage = () => {
 
                 {/* Call Logs */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-indigo-100">
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end mb-4">
+                  <div className="flex flex-col md:flex-row md:items-end gap-3 mb-4">
                     <h2 className="text-lg font-semibold text-indigo-700">Call Logs</h2>
 
-                    <div className="relative w-full md:w-auto md:justify-self-end">
-                      <label className="absolute -top-2.5 left-3 px-1 text-sm text-indigo-600 font-semibold bg-white z-10">
-                        Select Date
-                      </label>
-                      <input
-                        type="date"
-                        className="px-3 py-2 rounded-lg border border-gray-300 w-full"
-                        value={activityDate}
-                        onChange={(e) => {
-                          const d = e.target.value;
-                          setActivityDate(d);
-                          fetchCallLogs(d);
-                        }}
-                      />
+                    <div className="flex flex-col md:flex-row gap-3 md:ml-auto">
+                      <div className="relative w-full md:w-auto">
+                        <label className="absolute -top-2.5 left-3 px-1 text-sm text-indigo-600 font-semibold bg-white z-10">
+                          Select Date
+                        </label>
+                        <input
+                          type="date"
+                          className="px-3 py-2 rounded-lg border border-gray-300 w-full"
+                          value={activityDate}
+                          onChange={(e) => {
+                            const d = e.target.value;
+                            setActivityDate(d);
+                            fetchCallLogs(d);
+                          }}
+                        />
+                      </div>
+
+                      <button
+                        onClick={exportToCSV}
+                        disabled={!callLogs.length}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
+                      >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Export to CSV
+                      </button>
                     </div>
                   </div>
 
