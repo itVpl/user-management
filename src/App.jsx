@@ -61,6 +61,10 @@ import Invoices from "./Components/Accountant/Invoices.jsx"
 import CheckInvoice from "./Components/Sales/CheckInvoice.jsx"
 import AssignLoad from "./Components/CMT-Manager/AssignLoad.jsx";
 import FinanceDashboard from "./Components/Finance/FinanceDashboard.jsx";
+import CallingReport from "./Pages/IddCallingReport.jsx";
+
+
+
 
 function GlobalRRListener() {
   const navigate = useNavigate();
@@ -277,6 +281,8 @@ function App() {
           <Route path="/CheckInvoice" element={<CheckInvoice />} />
           <Route path="/AssignLoad" element={<AssignLoad />} />
           <Route path="/finance-dashboard" element={<FinanceDashboard />} />
+          <Route path="/CallingReport" element={<CallingReport />} />
+
         </Route>
 
         <Route path="*" element={<Navigate to="/" />} />
