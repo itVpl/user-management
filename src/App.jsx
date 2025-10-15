@@ -98,47 +98,60 @@ function GlobalRRListener() {
   }, []);
 
   // global polling (20s) so popup appears on any tab
-  useEffect(() => {
-    let id;
-    const poll = async () => {
-      try {
-        const token =
-          localStorage.getItem("authToken") ||
-          sessionStorage.getItem("authToken") ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token");
-        if (!token) return;
-        const headers = { Authorization: `Bearer ${token}` };
-        const res = await axios.get(
-          `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending`,
-          { headers }
-        );
-        const approvals = res?.data?.data?.approvals || [];
+  // useEffect(() => {
+  //   let id;
+  //   const poll = async () => {
+  //     try {
+  //       const token =
+  //         localStorage.getItem("authToken") ||
+  //         sessionStorage.getItem("authToken") ||
+  //         localStorage.getItem("token") ||
+  //         sessionStorage.getItem("token");
+  //       if (!token) return;
+        
+  //       const headers = { 
+  //         Authorization: `Bearer ${token}`,
+  //         'Content-Type': 'application/json'
+  //       };
+        
+  //       const res = await axios.get(
+  //         `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending`,
+  //         { 
+  //           headers,
+  //           timeout: 10000 // 10 second timeout
+  //         }
+  //       );
+  //       const approvals = res?.data?.data?.approvals || [];
 
-        const current = new Set(
-          approvals
-            .filter(a => (a.overallStatus || a.status) === "pending")
-            .map(a => a._id)
-        );
-        const prev = prevIdsRef.current || new Set();
-        const newbies = [...current].filter(id => !prev.has(id));
+  //       const current = new Set(
+  //         approvals
+  //           .filter(a => (a.overallStatus || a.status) === "pending")
+  //           .map(a => a._id)
+  //       );
+  //       const prev = prevIdsRef.current || new Set();
+  //       const newbies = [...current].filter(id => !prev.has(id));
 
-        if (newbies.length) {
-          newbies.forEach(id => {
-            const approval = approvals.find(a => a._id === id);
-            if (approval) showGlobalToast(approval);
-          });
-        }
-        prevIdsRef.current = current;
-      } catch (e) {
-        // silent
-      }
-    };
+  //       if (newbies.length) {
+  //         newbies.forEach(id => {
+  //           const approval = approvals.find(a => a._id === id);
+  //           if (approval) showGlobalToast(approval);
+  //         });
+  //       }
+  //       prevIdsRef.current = current;
+  //     } catch (e) {
+  //       // Only log errors that are not 403 Forbidden (permission issues)
+  //       if (e.response?.status !== 403) {
+  //         console.error("Polling error:", e);
+  //       }
+  //       // If it's a 403, the user might not have permission for this endpoint
+  //       // or the token might be invalid - we'll silently skip this polling
+  //     }
+  //   };
 
-    poll();
-    id = setInterval(poll, 20000);
-    return () => clearInterval(id);
-  }, []);
+  //   poll();
+  //   id = setInterval(poll, 20000);
+  //   return () => clearInterval(id);
+  // }, []);
 
   function showGlobalToast(approval) {
     toast.info(

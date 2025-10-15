@@ -22,7 +22,16 @@ export default function Loads() {
   // ✅ NEW STATES
   const [showLoadCreationModal, setShowLoadCreationModal] = useState(false);
   const [loadType, setLoadType] = useState("OTR");
+  const [activeTab, setActiveTab] = useState('ALL'); // 'ALL', 'OTR', 'DRAYAGE'
   const [shippers, setShippers] = useState([]);
+  // New states for View, Edit, Delete modals
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedLoadForAction, setSelectedLoadForAction] = useState(null);
+  // CMT Assignment state
+  const [cmtAssignment, setCmtAssignment] = useState(null);
+  const [loadingCmtAssignment, setLoadingCmtAssignment] = useState(false);
   const [autoAcceptTimer, setAutoAcceptTimer] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(30);
   // ZIP → options + UI state (NEW)
@@ -73,11 +82,9 @@ export default function Loads() {
       return [
         "Dry Van",
         "Reefer (Refrigerated Van)",
-        "Flatbed",
         "Step Deck (Drop Deck)",
         "Double Drop / Lowboy",
         "Conestoga",
-        "Tanker",
         "Livestock Trailer",
         "Car Hauler",
         "Container Chassis",
@@ -95,6 +102,34 @@ export default function Loads() {
   const MONEY2 = /^(?:\d+)(?:\.\d{1,2})?$/; // up to 2 decimals, no negatives
 
   const todayStr = () => new Date().toISOString().slice(0, 10);
+  
+  // Format date for input fields (YYYY-MM-DD format)
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    try {
+      // Handle ISO format with timezone offset like "2025-10-15T00:00:00.000+00:00"
+      let date;
+      if (typeof dateString === 'string' && dateString.includes('T')) {
+        // For ISO strings, create date directly
+        date = new Date(dateString);
+      } else {
+        // For other formats, try parsing
+        date = new Date(dateString);
+      }
+      
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date format:', dateString);
+        return '';
+      }
+      
+      // Return in YYYY-MM-DD format
+      return date.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Input:', dateString);
+      return '';
+    }
+  };
+  
   const addDays = (dateStr, n) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -913,6 +948,11 @@ const MaterialShipperDropdown = ({
     e.preventDefault();
     console.log("🚀 Form submit button clicked!");
 
+    // Check if we're in edit mode
+    if (showEditModal && selectedLoadForAction) {
+      return handleEditSubmit(e);
+    }
+
     // pehle se chal raha global guard
     if (creatingLoad) {
       console.log("❌ Already creating load, returning...");
@@ -979,7 +1019,7 @@ const MaterialShipperDropdown = ({
           shipperId: (loadForm.shipperId || "").trim(),
           loadType: "OTR",
           vehicleType: (loadForm.vehicleType || "").trim(),
-          rate: parseFloat((loadForm.rate || '0').replace(/\.$/, '')),
+          rate: parseFloat(String(loadForm.rate || '0').replace(/\.$/, '')),
           rateType: (loadForm.rateType || 'Flat Rate').trim(),
           bidDeadline: loadForm.bidDeadline,
           containerNo: (loadForm.containerNo || "").trim(),
@@ -998,12 +1038,12 @@ const MaterialShipperDropdown = ({
         fromState: (loadForm.fromState || "").trim(),
         toCity: (loadForm.toCity || "").trim(),
         toState: (loadForm.toState || "").trim(),
-        weight: parseFloat((loadForm.weight || '0').replace(/\.$/, '')),
+        weight: parseFloat(String(loadForm.weight || '0').replace(/\.$/, '')),
         commodity: (loadForm.commodity || "").trim(),
         vehicleType: (loadForm.vehicleType || "").trim(),
         pickupDate: loadForm.pickupDate,
         deliveryDate: loadForm.deliveryDate,
-        rate: parseFloat((loadForm.rate || '0').replace(/\.$/, '')),
+        rate: parseFloat(String(loadForm.rate || '0').replace(/\.$/, '')),
         rateType: (loadForm.rateType || 'Flat Rate').trim(),
         bidDeadline: loadForm.bidDeadline,
         containerNo: (loadForm.containerNo || "").trim(),
@@ -1024,7 +1064,7 @@ const MaterialShipperDropdown = ({
         toCity: (loadForm.toCity || "").trim(),
         toState: (loadForm.toState || "").trim(),
         vehicleType: (loadForm.vehicleType || "").trim(),
-        rate: parseFloat((loadForm.rate || '').replace(/\.$/, '')),
+        rate: parseFloat(String(loadForm.rate || '').replace(/\.$/, '')),
         rateType: (loadForm.rateType || 'Flat Rate').trim(),
         pickupDate: loadForm.pickupDate,
         deliveryDate: loadForm.deliveryDate,
@@ -1071,6 +1111,185 @@ const MaterialShipperDropdown = ({
     } finally {
       setCreatingLoad(false);
       if (loadType === 'DRAYAGE') setCreatingDrayage(false);
+    }
+  };
+
+  // ✅ Edit Submit Handler
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    console.log("🔄 Edit form submit button clicked!");
+
+    // Check if we have a selected load to edit
+    if (!selectedLoadForAction) {
+      alertify.error("No load selected for editing");
+      return;
+    }
+
+    // Check if already submitting
+    if (creatingLoad) {
+      console.log("❌ Already submitting, returning...");
+      return;
+    }
+
+    // Client-side validation
+    console.log("🔍 Running form validation for edit...");
+    if (!validateAll()) {
+      console.log("❌ Form validation failed!");
+      return;
+    }
+    console.log("✅ Form validation passed!");
+
+    // Get authentication token
+    const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+    console.log("🔑 Token found:", token ? "Yes" : "No");
+    if (!token) {
+      console.log("❌ No token found, user not logged in");
+      alertify.error("You're not logged in.");
+      return;
+    }
+
+    // Build payload based on load type (same as create)
+    console.log("🔧 Building edit payload for load type:", loadType);
+    console.log("📋 Current form state:", loadForm);
+    console.log("📍 Pickup locations:", pickupLocations);
+    console.log("📍 Delivery locations:", deliveryLocations);
+    let payload;
+    
+    if (loadType === 'OTR') {
+      console.log("📦 Building OTR edit payload...");
+      // OTR Load Structure - Use pickup and delivery locations from state
+      const origins = pickupLocations.map(location => ({
+        addressLine1: (location.address || "").trim(),
+        addressLine2: "",
+        city: (location.city || "").trim(),
+        state: (location.state || "").trim(),
+        zip: location.address ? location.address.split(',').pop()?.trim() : "",
+        weight: parseFloat(String(location.weight || '0').replace(/\.$/, '')),
+        commodity: (location.commodity || "").trim(),
+        pickupDate: location.pickupDate,
+        deliveryDate: location.deliveryDate
+      }));
+
+      const destinations = deliveryLocations.map(location => ({
+        addressLine1: (location.address || "").trim(),
+        addressLine2: "",
+        city: (location.city || "").trim(),
+        state: (location.state || "").trim(),
+        zip: location.address ? location.address.split(',').pop()?.trim() : "",
+        weight: parseFloat(String(location.weight || '0').replace(/\.$/, '')),
+        commodity: (location.commodity || "").trim(),
+        deliveryDate: location.deliveryDate
+      }));
+
+      payload = {
+        shipperId: (loadForm.shipperId || "").trim(),
+        loadType: "OTR",
+        vehicleType: (loadForm.vehicleType || "").trim(),
+        rate: parseFloat(String(loadForm.rate || '0').replace(/\.$/, '')),
+        rateType: (loadForm.rateType || 'Flat Rate').trim(),
+        bidDeadline: loadForm.bidDeadline,
+        containerNo: (loadForm.containerNo || "").trim(),
+        poNumber: (loadForm.poNumber || "").trim(),
+        bolNumber: (loadForm.bolNumber || "").trim(),
+        origins: origins,
+        destinations: destinations
+      };
+    } else if (loadType === 'DRAYAGE') {
+      console.log("📦 Building DRAYAGE edit payload...");
+      // DRAYAGE Load Structure
+      payload = {
+        shipperId: (loadForm.shipperId || "").trim(),
+        loadType: "DRAYAGE",
+        fromCity: (loadForm.fromCity || "").trim(),
+        fromState: (loadForm.fromState || "").trim(),
+        toCity: (loadForm.toCity || "").trim(),
+        toState: (loadForm.toState || "").trim(),
+        weight: parseFloat(String(loadForm.weight || '0').replace(/\.$/, '')),
+        commodity: (loadForm.commodity || "").trim(),
+        vehicleType: (loadForm.vehicleType || "").trim(),
+        pickupDate: loadForm.pickupDate,
+        deliveryDate: loadForm.deliveryDate,
+        rate: parseFloat(String(loadForm.rate || '0').replace(/\.$/, '')),
+        rateType: (loadForm.rateType || 'Flat Rate').trim(),
+        bidDeadline: loadForm.bidDeadline,
+        containerNo: (loadForm.containerNo || "").trim(),
+        poNumber: (loadForm.poNumber || "").trim(),
+        bolNumber: (loadForm.bolNumber || "").trim(),
+        returnDate: loadForm.returnDate,
+        returnLocation: (loadForm.returnLocation || "").trim()
+      };
+    } else {
+      // Fallback to old structure for other load types
+      payload = {
+        loadType,
+        shipperId: (loadForm.shipperId || "").trim(),
+        fromZip: loadForm.fromZip,
+        toZip: loadForm.toZip,
+        fromCity: (loadForm.fromCity || "").trim(),
+        fromState: (loadForm.fromState || "").trim(),
+        toCity: (loadForm.toCity || "").trim(),
+        toState: (loadForm.toState || "").trim(),
+        vehicleType: (loadForm.vehicleType || "").trim(),
+        rate: parseFloat(String(loadForm.rate || '').replace(/\.$/, '')),
+        rateType: (loadForm.rateType || 'Flat Rate').trim(),
+        pickupDate: loadForm.pickupDate,
+        deliveryDate: loadForm.deliveryDate,
+        bidDeadline: loadForm.bidDeadline,
+        ...(loadType === 'DRAYAGE' ? {
+          returnDate: loadForm.returnDate,
+          returnLocation: (loadForm.returnLocation || '').trim(),
+          drayageLocation: (loadForm.returnLocation || '').trim(),
+        } : {}),
+      };
+    }
+
+    try {
+      setCreatingLoad(true);
+
+      console.log("🔄 Sending edit payload to API:", payload);
+      console.log("🔍 Selected load for action:", selectedLoadForAction);
+      console.log("🔍 Load ID being used:", selectedLoadForAction.loadNum);
+      console.log("🔍 Available load properties:", Object.keys(selectedLoadForAction));
+      console.log("🔗 API URL:", `${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${selectedLoadForAction.loadNum}`);
+
+      const res = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${selectedLoadForAction.loadNum}`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (res.data?.success) {
+        alertify.success("✅ Load updated successfully!");
+        setShowEditModal(false);
+        setSelectedLoadForAction(null);
+
+        resetLoadForm();
+        setFormErrors({});
+        fetchLoads(); // refresh table
+      } else {
+        alertify.error(res.data?.message || "❌ Load update failed.");
+      }
+    } catch (err) {
+      console.error("❌ Error updating load:", err?.response?.data || err.message);
+      
+      if (err.response) {
+        console.error('Response status:', err.response.status);
+        console.error('Response data:', err.response.data);
+        alertify.error(`Error: ${err.response.data?.message || `HTTP ${err.response.status}`}`);
+      } else if (err.request) {
+        console.error('Request error:', err.request);
+        alertify.error('Network error. Please check your connection.');
+      } else {
+        console.error('Other error:', err.message);
+        alertify.error(`Error: ${err.message}`);
+      }
+    } finally {
+      setCreatingLoad(false);
     }
   };
 
@@ -1265,18 +1484,14 @@ const MaterialShipperDropdown = ({
           } else if (load.carrier?.compName) {
             truckerName = load.carrier.compName;
           }
-          // status
-          let status = 'available';
-          if (load.status) {
-            switch (load.status.toLowerCase()) {
-              case 'posted':
-              case 'bidding': status = 'available'; break;
-              case 'assigned': status = 'assigned'; break;
+          // status - preserve original status from API
+          let status = load.status || 'available';
+          if (status) {
+            switch (status.toLowerCase()) {
               case 'in transit': status = 'in-transit'; break;
-              case 'completed':
-              case 'delivered': status = 'completed'; break;
               case 'pending approval': status = 'pending-approval'; break;
-              default: status = load.status.toLowerCase();
+              // Keep original status for: posted, bidding, assigned, completed, delivered
+              default: status = status.toLowerCase();
             }
           }
 
@@ -1429,7 +1644,8 @@ const MaterialShipperDropdown = ({
   // Status color helper
   const statusColor = (status) => {
     if (!status) return 'bg-yellow-100 text-yellow-700';
-    if (status === 'available' || status === 'posted' || status === 'bidding') return 'bg-green-100 text-green-700';
+    if (status === 'available' || status === 'posted') return 'bg-green-100 text-green-700';
+    if (status === 'bidding') return 'bg-orange-100 text-orange-700';
     if (status === 'assigned') return 'bg-blue-100 text-blue-700';
     if (status === 'in-transit' || status === 'in transit') return 'bg-purple-100 text-purple-700';
     if (status === 'completed' || status === 'delivered') return 'bg-gray-100 text-gray-700';
@@ -1437,14 +1653,43 @@ const MaterialShipperDropdown = ({
     return 'bg-blue-100 text-blue-700';
   };
 
-  // Filter loads based on search term
-  const filteredLoads = loads.filter(load =>
-    load.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    load.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    load.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    load.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    load.truckerName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Function to handle tab changes
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setLoadType(tab === 'ALL' ? 'OTR' : tab); // Set loadType for form
+  };
+
+  // Calculate counts for each load type
+  const getLoadCounts = () => {
+    const totalCount = loads.length;
+    const otrCount = loads.filter(load => load.loadType === 'OTR').length;
+    const drayageCount = loads.filter(load => load.loadType === 'DRAYAGE').length;
+    
+    return { totalCount, otrCount, drayageCount };
+  };
+
+  const { totalCount, otrCount, drayageCount } = getLoadCounts();
+
+  // Filter loads based on active tab and search term
+  const filteredLoads = loads.filter(load => {
+    // First filter by active tab
+    let matchesTab = true;
+    if (activeTab === 'OTR') {
+      matchesTab = load.loadType === 'OTR';
+    } else if (activeTab === 'DRAYAGE') {
+      matchesTab = load.loadType === 'DRAYAGE';
+    }
+    // If activeTab is 'ALL', show all loads
+
+    // Then filter by search term
+    const matchesSearch = load.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      load.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      load.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      load.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      load.truckerName.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesTab && matchesSearch;
+  });
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredLoads.length / itemsPerPage);
@@ -1563,10 +1808,198 @@ const MaterialShipperDropdown = ({
     });
   };
 
+  // Fetch CMT assignment data
+  const fetchCmtAssignment = async (loadId) => {
+    try {
+      setLoadingCmtAssignment(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${loadId}/cmt-assignment`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      if (response.data?.success) {
+        setCmtAssignment(response.data.data);
+      } else {
+        setCmtAssignment(null);
+      }
+    } catch (error) {
+      console.error('Error fetching CMT assignment:', error);
+      setCmtAssignment(null);
+    } finally {
+      setLoadingCmtAssignment(false);
+    }
+  };
+
   // Handle view load details
   const handleViewLoad = (load) => {
-    setSelectedLoad(load);
-    setShowLoadModal(true);
+    setSelectedLoadForAction(load);
+    setShowViewModal(true);
+    // Fetch CMT assignment data when opening view modal
+    if (load.loadNum) {
+      fetchCmtAssignment(load.loadNum);
+    }
+  };
+
+  // Handle edit load
+  const handleEditLoad = (load) => {
+    setSelectedLoadForAction(load);
+    setShowEditModal(true);
+    
+    // Populate form with existing load data
+    populateEditForm(load);
+  };
+
+  const populateEditForm = (load) => {
+    console.log('🔄 Populating edit form with load data:', load);
+    
+    // Set load type based on the load data
+    setLoadType(load.loadType || 'OTR');
+    
+    // Extract shipper ID from shipper object or direct property
+    const shipperId = load.shipperId || load.shipper?._id || '';
+    console.log('🔍 Extracted shipper ID:', shipperId);
+    
+    // Populate basic form fields
+    setLoadForm({
+      shipperId: shipperId,
+      vehicleType: load.vehicleType || '',
+      rate: load.rate || '',
+      rateType: load.rateType || 'Flat Rate',
+      bidDeadline: load.bidDeadline ? formatDateForInput(load.bidDeadline) : '',
+      containerNo: load.containerNo || '',
+      poNumber: load.poNumber || '',
+      bolNumber: load.bolNumber || '',
+      weight: load.weight || '',
+      commodity: load.commodity || '',
+      pickupDate: load.pickupDate ? formatDateForInput(load.pickupDate) : '',
+      deliveryDate: load.deliveryDate ? formatDateForInput(load.deliveryDate) : '',
+      returnDate: load.returnDate ? formatDateForInput(load.returnDate) : '',
+      returnLocation: load.returnLocation || '',
+      fromZip: load.fromZip || '',
+      fromCity: load.fromCity || '',
+      fromState: load.fromState || '',
+      toZip: load.toZip || '',
+      toCity: load.toCity || '',
+      toState: load.toState || ''
+    });
+
+    // Set shipper input value
+    if (load.shipper) {
+      setShipperInputValue(`${load.shipper.compName} (${load.shipper.mc_dot_no})`);
+    }
+    
+    // Clear any existing form errors
+    setFormErrors({});
+
+    // Populate location arrays for OTR loads
+    if (load.loadType === 'OTR' && load.origins && load.destinations) {
+      // Convert origins to pickup locations
+      const pickupLocs = load.origins.map((origin, index) => ({
+        id: `pickup-${Date.now()}-${index}`,
+        address: origin.addressLine1 || '',
+        city: origin.city || '',
+        state: origin.state || '',
+        weight: origin.weight || '',
+        commodity: origin.commodity || '',
+        pickupDate: origin.pickupDate ? (() => {
+          const formatted = formatDateForInput(origin.pickupDate);
+          console.log('📅 Formatting pickup date:', origin.pickupDate, '→', formatted);
+          return formatted;
+        })() : '',
+        deliveryDate: origin.deliveryDate ? (() => {
+          const formatted = formatDateForInput(origin.deliveryDate);
+          console.log('📅 Formatting delivery date:', origin.deliveryDate, '→', formatted);
+          return formatted;
+        })() : ''
+      }));
+      setPickupLocations(pickupLocs);
+
+      // Convert destinations to delivery locations
+      const deliveryLocs = load.destinations.map((destination, index) => ({
+        id: `delivery-${Date.now()}-${index}`,
+        address: destination.addressLine1 || '',
+        city: destination.city || '',
+        state: destination.state || '',
+        weight: destination.weight || '',
+        commodity: destination.commodity || '',
+        deliveryDate: destination.deliveryDate ? (() => {
+          const formatted = formatDateForInput(destination.deliveryDate);
+          console.log('📅 Formatting destination delivery date:', destination.deliveryDate, '→', formatted);
+          return formatted;
+        })() : ''
+      }));
+      setDeliveryLocations(deliveryLocs);
+    } else if (load.loadType === 'DRAYAGE') {
+      // For DRAYAGE, populate single location fields
+      setLoadForm(prev => ({
+        ...prev,
+        fromZip: load.origin?.address || '',
+        fromCity: load.origin?.city || '',
+        fromState: load.origin?.state || '',
+        toZip: load.destination?.address || '',
+        toCity: load.destination?.city || '',
+        toState: load.destination?.state || ''
+      }));
+    }
+
+    // Clear any existing form errors
+    setFormErrors({});
+  };
+
+  // Handle delete load
+  const handleDeleteLoad = (load) => {
+    setSelectedLoadForAction(load);
+    setShowDeleteModal(true);
+  };
+
+  // Confirm delete
+  const confirmDelete = async () => {
+    if (!selectedLoadForAction) return;
+    
+    try {
+      setSubmitting(true);
+      const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      
+      if (!token) {
+        alertify.error('Authentication required. Please login again.');
+        return;
+      }
+
+      // Call the DELETE API
+      await axios.delete(`${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${selectedLoadForAction.loadNum}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // Remove from local state after successful API call
+      setLoads(prevLoads => prevLoads.filter(load => load.loadNum !== selectedLoadForAction.loadNum));
+      setShowDeleteModal(false);
+      setSelectedLoadForAction(null);
+      alertify.success('Load deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting load:', error);
+      console.error('Error response:', error.response);
+      
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+        alertify.error(`Error: ${error.response.data?.message || `HTTP ${error.response.status}`}`);
+      } else if (error.request) {
+        console.error('Request error:', error.request);
+        alertify.error('Network error. Please check your connection.');
+      } else {
+        console.error('Other error:', error.message);
+        alertify.error(`Error: ${error.message}`);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Loading state
@@ -1674,47 +2107,56 @@ const MaterialShipperDropdown = ({
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          {/* Total Loads - Clickable */}
+          <div 
+            onClick={() => handleTabChange('ALL')}
+            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-lg ${
+              activeTab === 'ALL' ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+            }`}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
                 <Truck className="text-green-600" size={20} />
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Loads</p>
-                <p className="text-xl font-bold text-gray-800">{loads.length}</p>
+                <p className="text-xl font-bold text-gray-800">{totalCount}</p>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+
+          {/* OTR Loads - Clickable */}
+          <div 
+            onClick={() => handleTabChange('OTR')}
+            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-lg ${
+              activeTab === 'OTR' ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+            }`}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                 <CheckCircle className="text-blue-600" size={20} />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Available</p>
-                <p className="text-xl font-bold text-blue-600">{loads.filter(load => ['available', 'posted', 'bidding'].includes(load.status)).length}</p>
+                <p className="text-sm text-gray-600">OTR</p>
+                <p className="text-xl font-bold text-gray-800">{otrCount}</p>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Clock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Assigned</p>
-                <p className="text-xl font-bold text-yellow-600">{loads.filter(load => load.status === 'assigned').length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+
+          {/* DRAYAGE Loads - Clickable */}
+          <div 
+            onClick={() => handleTabChange('DRAYAGE')}
+            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-lg ${
+              activeTab === 'DRAYAGE' ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+            }`}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
                 <Calendar className="text-purple-600" size={20} />
               </div>
               <div>
-                <p className="text-sm text-gray-600">In Transit</p>
-                <p className="text-xl font-bold text-purple-600">{loads.filter(load => ['in-transit', 'in transit'].includes(load.status)).length}</p>
+                <p className="text-sm text-gray-600">DRAYAGE</p>
+                <p className="text-xl font-bold text-gray-800">{drayageCount}</p>
               </div>
             </div>
           </div>
@@ -1741,11 +2183,26 @@ const MaterialShipperDropdown = ({
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
           >
             <PlusCircle className="w-4 h-4" />
-            Add Loads
+            {activeTab === 'ALL' ? 'Add Loads' : `Create ${activeTab} Load`}
           </button>
 
         </div>
 
+      </div>
+
+      {/* Active Tab Indicator */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <span>Showing:</span>
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+            activeTab === 'ALL' ? 'bg-green-100 text-green-700' :
+            activeTab === 'OTR' ? 'bg-blue-100 text-blue-700' :
+            'bg-purple-100 text-purple-700'
+          }`}>
+            {activeTab === 'ALL' ? 'All Loads' : `${activeTab} Loads`}
+          </span>
+          <span className="text-gray-400">({filteredLoads.length} of {loads.length} loads)</span>
+        </div>
       </div>
 
       {viewDoc && selectedLoad ? (
@@ -1815,43 +2272,37 @@ const MaterialShipperDropdown = ({
       ) : (
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                 <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Created</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Load ID</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-80">Origin</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-80">Destination</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Rate</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Status</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {currentLoads.map((load, index) => (
                   <tr key={load.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{load.id}</span>
+                    <td className="py-2 px-3 w-32">
+                      <span className="font-medium text-gray-700 text-sm">{load.id}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{load.shipmentNumber}</span>
+                    <td className="py-2 px-3 w-80">
+                      <span className="font-medium text-gray-700 text-sm leading-relaxed" title={load.origin}>
+                        {load.origin}
+                      </span>
                     </td>
-                    <td className="py-2 px-3 w-48">
-                      <span className="font-medium text-gray-700">{load.origin}</span>
+                    <td className="py-2 px-3 w-80">
+                      <span className="font-medium text-gray-700 text-sm leading-relaxed" title={load.destination}>
+                        {load.destination}
+                      </span>
                     </td>
-                    <td className="py-2 px-3 w-48">
-                      <span className="font-medium text-gray-700">{load.destination}</span>
+                    <td className="py-2 px-3 w-24">
+                      <span className="font-bold text-green-600 text-sm">${load.rate.toLocaleString()}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-bold text-green-600">${load.rate.toLocaleString()}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <p className="font-medium text-gray-700">{load.truckerName}</p>
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 w-32">
                       <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${statusColor(load.status)}`}>
                         {(load.status === 'available' || load.status === 'posted' || load.status === 'bidding') && <CheckCircle size={12} />}
                         {load.status === 'assigned' && <Clock size={12} />}
@@ -1865,11 +2316,29 @@ const MaterialShipperDropdown = ({
                                     load.status || 'Available'}
                       </div>
                     </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <p className="text-sm text-gray-800">{toDMY(load.createdAt)}</p>
-
-                        <p className="text-xs text-gray-500">by {load.createdBy}</p>
+                    <td className="py-2 px-3 w-48">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleViewLoad(load)}
+                          className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-xs font-medium"
+                        >
+                          <User size={10} />
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleEditLoad(load)}
+                          className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-xs font-medium"
+                        >
+                          <FileText size={10} />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLoad(load)}
+                          className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
+                        >
+                          <XCircle size={10} />
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -3125,10 +3594,1350 @@ const MaterialShipperDropdown = ({
         </>
       )}
 
+      {/* View Load Modal */}
+      {showViewModal && selectedLoadForAction && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <style>{`
+              .view-modal-scroll::-webkit-scrollbar {
+                display: none;
+              }
+              .view-modal-scroll {
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+              }
+            `}</style>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-2xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <Truck className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">Load Details</h2>
+                    <p className="text-blue-100">Complete information about the load</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedLoadForAction(null);
+                    setCmtAssignment(null);
+                    setLoadingCmtAssignment(false);
+                  }}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6 view-modal-scroll">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <FileText className="text-blue-600" size={18} />
+                    Basic Information
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Load ID:</span>
+                      <span className="font-medium">{selectedLoadForAction.id}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Shipment Number:</span>
+                      <span className="font-medium">{selectedLoadForAction.shipmentNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Load Type:</span>
+                      <span className="font-medium">{selectedLoadForAction.loadType}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Vehicle Type:</span>
+                      <span className="font-medium">{selectedLoadForAction.vehicleType}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Rate:</span>
+                      <span className="font-bold text-green-600">${selectedLoadForAction.rate.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <MapPin className="text-green-600" size={18} />
+                    Location Details
+                  </h3>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-gray-600">Origin:</span>
+                      <p className="font-medium">{selectedLoadForAction.origin}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Destination:</span>
+                      <p className="font-medium">{selectedLoadForAction.destination}</p>
+                    </div>
+                    {selectedLoadForAction.weight && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Weight:</span>
+                        <span className="font-medium">{selectedLoadForAction.weight} lbs</span>
+                      </div>
+                    )}
+                    {selectedLoadForAction.commodity && (
+                      <div>
+                        <span className="text-gray-600">Commodity:</span>
+                        <p className="font-medium">{selectedLoadForAction.commodity}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Schedule Information */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <Calendar className="text-purple-600" size={18} />
+                  Schedule & Timeline
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {selectedLoadForAction.pickupDate && (
+                    <div>
+                      <span className="text-gray-600">Pickup Date:</span>
+                      <p className="font-medium">{toDMY(selectedLoadForAction.pickupDate)}</p>
+                    </div>
+                  )}
+                  {selectedLoadForAction.deliveryDate && (
+                    <div>
+                      <span className="text-gray-600">Delivery Date:</span>
+                      <p className="font-medium">{toDMY(selectedLoadForAction.deliveryDate)}</p>
+                    </div>
+                  )}
+                  {selectedLoadForAction.bidDeadline && (
+                    <div>
+                      <span className="text-gray-600">Bid Deadline:</span>
+                      <p className="font-medium">{toDMY(selectedLoadForAction.bidDeadline)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CMT Assignment Information */}
+              {loadingCmtAssignment ? (
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <User className="text-purple-600" size={18} />
+                    CMT Assignment
+                  </h3>
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+                    <span className="ml-2 text-gray-600">Loading CMT assignment...</span>
+                  </div>
+                </div>
+              ) : cmtAssignment ? (
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <User className="text-purple-600" size={18} />
+                    CMT Assignment
+                  </h3>
+                  <div className="space-y-4">
+                    {cmtAssignment.hasCMTAssignment && cmtAssignment.cmtAssignment?.assignedCMTUser ? (
+                      <>
+                        <div className="bg-white rounded-lg p-4 border border-purple-200">
+                          <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                            <User className="text-purple-600" size={16} />
+                            Assigned CMT User
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Name:</span>
+                              <span className="font-medium">{cmtAssignment.cmtAssignment.assignedCMTUser.displayName || cmtAssignment.cmtAssignment.assignedCMTUser.employeeName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Employee ID:</span>
+                              <span className="font-medium">{cmtAssignment.cmtAssignment.assignedCMTUser.empId}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Email:</span>
+                              <span className="font-medium text-sm">{cmtAssignment.cmtAssignment.assignedCMTUser.email}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Mobile:</span>
+                              <span className="font-medium">{cmtAssignment.cmtAssignment.assignedCMTUser.mobileNo}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Assigned At:</span>
+                              <span className="font-medium">{toDMY(cmtAssignment.cmtAssignment.assignedCMTUser.assignedAt)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                      </>
+                    ) : (
+                      <div className="text-center py-4">
+                        <User className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                        <p className="text-gray-500">No CMT user assigned to this load</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Additional Details */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <FileText className="text-orange-600" size={18} />
+                  Additional Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Status:</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${statusColor(selectedLoadForAction.status)}`}>
+                      {selectedLoadForAction.status === 'completed' || selectedLoadForAction.status === 'delivered' ? 'Completed' :
+                        selectedLoadForAction.status === 'in-transit' || selectedLoadForAction.status === 'in transit' ? 'In Transit' :
+                          selectedLoadForAction.status === 'assigned' ? 'Assigned' :
+                            selectedLoadForAction.status === 'pending-approval' || selectedLoadForAction.status === 'pending approval' ? 'Pending Approval' :
+                              selectedLoadForAction.status === 'posted' ? 'Posted' :
+                                selectedLoadForAction.status === 'bidding' ? 'Bidding' :
+                                  selectedLoadForAction.status || 'Available'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Trucker:</span>
+                    <span className="font-medium">{selectedLoadForAction.truckerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Created:</span>
+                    <span className="font-medium">{toDMY(selectedLoadForAction.createdAt)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Created By:</span>
+                    <span className="font-medium">{selectedLoadForAction.createdBy}</span>
+                  </div>
+                  {selectedLoadForAction.containerNo && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Container No:</span>
+                      <span className="font-medium">{selectedLoadForAction.containerNo}</span>
+                    </div>
+                  )}
+                  {selectedLoadForAction.poNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">PO Number:</span>
+                      <span className="font-medium">{selectedLoadForAction.poNumber}</span>
+                    </div>
+                  )}
+                  {selectedLoadForAction.bolNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">BOL Number:</span>
+                      <span className="font-medium">{selectedLoadForAction.bolNumber}</span>
+                    </div>
+                  )}
+                </div>
+                {selectedLoadForAction.remarks && (
+                  <div className="mt-4">
+                    <span className="text-gray-600">Remarks:</span>
+                    <p className="font-medium mt-1">{selectedLoadForAction.remarks}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Load Modal */}
+      {showEditModal && selectedLoadForAction && (
+        <>
+          <style>{`
+            .edit-modal-scroll::-webkit-scrollbar {
+              width: 8px;
+            }
+            .edit-modal-scroll::-webkit-scrollbar-track {
+              background: #f1f5f9;
+              border-radius: 4px;
+            }
+            .edit-modal-scroll::-webkit-scrollbar-thumb {
+              background: #cbd5e1;
+              border-radius: 4px;
+            }
+            .edit-modal-scroll::-webkit-scrollbar-thumb:hover {
+              background: #94a3b8;
+            }
+            .edit-modal-scroll {
+              scrollbar-width: thin;
+              scrollbar-color: #cbd5e1 #f1f5f9;
+            }
+          `}</style>
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200">
+            
+            {/* Clean Header Design */}
+            <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-2xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <FileText className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">Edit Load</h2>
+                    <p className="text-green-100">Update load information</p>
+                  </div>
+                </div>
+                
+                {/* Load Type Selector - Fixed */}
+                <div className="flex bg-white/20 rounded-xl p-1">
+                  {["OTR", "DRAYAGE"].map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => { setLoadType(type); setFormErrors({}); }}
+                      className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
+                        loadType === type 
+                          ? "bg-white text-green-700 shadow-sm" 
+                          : "text-white hover:bg-white/10"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Enhanced Form Container - Scrollable */}
+            <div className="flex-1 overflow-y-auto bg-gray-50/50 edit-modal-scroll">
+              <div className="p-8">
+                <form onSubmit={handleLoadSubmit} noValidate className="space-y-8">
+                
+                {/* Shipper Selection Section */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <Building className="text-blue-600" size={20} />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800">Shipper Information</h3>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Select Shipper <span className="text-red-500">*</span>
+                    </label>
+                    <div className={`${formErrors.shipperId ? 'border-red-400 bg-red-50' : ''}`}>
+                      <MaterialShipperDropdown
+                        open={shipperDropdownOpen}
+                        setOpen={setShipperDropdownOpen}
+                        options={shippers}
+                        searchQuery={shipperSearchQuery}
+                        setSearchQuery={setShipperSearchQuery}
+                        onSelect={handleShipperSelect}
+                        inputValue={shipperInputValue}
+                        setInputValue={setShipperInputValue}
+                      />
+                    </div>
+                    {formErrors.shipperId && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <XCircle className="text-red-500" size={16} />
+                        <p className="text-sm text-red-600">{formErrors.shipperId}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Location Information Section */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                      <MapPin className="text-green-600" size={20} />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800">Location Details</h3>
+                  </div>
+                  
+                  {loadType === "OTR" ? (
+                    /* OTR - Multiple Pickup and Delivery Locations */
+                    <div className="space-y-8">
+                      {/* Multiple Pickup Locations */}
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <h4 className="font-semibold text-gray-700">Pickup Locations</h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addPickupLocation}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            <Plus size={16} />
+                            Add Pickup Location
+                          </button>
+                        </div>
+                        
+                        {pickupLocations.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <MapPin size={48} className="mx-auto mb-4 text-gray-300" />
+                            <p>No pickup locations added yet</p>
+                            <p className="text-sm">Click "Add Pickup Location" to get started</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {pickupLocations.map((location, index) => (
+                              <div key={location.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                <div className="flex items-center justify-between mb-4">
+                                  <h5 className="font-medium text-gray-700">Pickup Location {index + 1}</h5>
+                                  <button
+                                    type="button"
+                                    onClick={() => removePickupLocation(location.id)}
+                                    className="text-red-500 hover:text-red-700"
+                                  >
+                                    <XCircle size={20} />
+                                  </button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  <div className="relative">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Pickup Address <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.address}
+                                      onChange={(e) => handleLocationAddressChange(location.id, e.target.value, 'pickup')}
+                                      onFocus={() => pickupZipOptions[location.id]?.length && setShowPickupZipDD(prev => ({ ...prev, [location.id]: true }))}
+                                      onBlur={() => setTimeout(() => setShowPickupZipDD(prev => ({ ...prev, [location.id]: false })), 150)}
+                                      placeholder="Enter ZIP code or full address"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <SearchableZipDropdown
+                                      which="pickup"
+                                      open={showPickupZipDD[location.id] || false}
+                                      setOpen={(open) => setShowPickupZipDD(prev => ({ ...prev, [location.id]: open }))}
+                                      options={pickupZipOptions[location.id] || []}
+                                      query={pickupZipQueries[location.id] || ""}
+                                      setQuery={(query) => setPickupZipQueries(prev => ({ ...prev, [location.id]: query }))}
+                                      onSelect={(which, item) => applyZipToLocation(location.id, item, 'pickup')}
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      City <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.city}
+                                      onChange={(e) => updatePickupLocation(location.id, 'city', e.target.value)}
+                                      placeholder="Enter city"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      State <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.state}
+                                      onChange={(e) => updatePickupLocation(location.id, 'state', e.target.value)}
+                                      placeholder="Enter state"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Weight (lbs) <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.weight}
+                                      onChange={(e) => updatePickupLocation(location.id, 'weight', e.target.value)}
+                                      placeholder="Enter weight"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Commodity
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.commodity}
+                                      onChange={(e) => updatePickupLocation(location.id, 'commodity', e.target.value)}
+                                      placeholder="Enter commodity"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Pickup Date <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={location.pickupDate}
+                                      onChange={(e) => updatePickupLocation(location.id, 'pickupDate', e.target.value)}
+                                      min={todayStr()}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Delivery Date <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={location.deliveryDate}
+                                      onChange={(e) => updatePickupLocation(location.id, 'deliveryDate', e.target.value)}
+                                      min={location.pickupDate || todayStr()}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Multiple Delivery Locations */}
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <h4 className="font-semibold text-gray-700">Delivery Locations</h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addDeliveryLocation}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                          >
+                            <Plus size={16} />
+                            Add Delivery Location
+                          </button>
+                        </div>
+                        
+                        {deliveryLocations.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <MapPin size={48} className="mx-auto mb-4 text-gray-300" />
+                            <p>No delivery locations added yet</p>
+                            <p className="text-sm">Click "Add Delivery Location" to get started</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {deliveryLocations.map((location, index) => (
+                              <div key={location.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                <div className="flex items-center justify-between mb-4">
+                                  <h5 className="font-medium text-gray-700">Delivery Location {index + 1}</h5>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeDeliveryLocation(location.id)}
+                                    className="text-red-500 hover:text-red-700"
+                                  >
+                                    <XCircle size={20} />
+                                  </button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  <div className="relative">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Delivery Address <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.address}
+                                      onChange={(e) => handleLocationAddressChange(location.id, e.target.value, 'delivery')}
+                                      onFocus={() => deliveryZipOptions[location.id]?.length && setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: true }))}
+                                      onBlur={() => setTimeout(() => setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: false })), 150)}
+                                      placeholder="Enter ZIP code or full address"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <SearchableZipDropdown
+                                      which="delivery"
+                                      open={showDeliveryZipDD[location.id] || false}
+                                      setOpen={(open) => setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: open }))}
+                                      options={deliveryZipOptions[location.id] || []}
+                                      query={deliveryZipQueries[location.id] || ""}
+                                      setQuery={(query) => setDeliveryZipQueries(prev => ({ ...prev, [location.id]: query }))}
+                                      onSelect={(which, item) => applyZipToLocation(location.id, item, 'delivery')}
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      City <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.city}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'city', e.target.value)}
+                                      placeholder="Enter city"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      State <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.state}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'state', e.target.value)}
+                                      placeholder="Enter state"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Weight (lbs) <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.weight}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'weight', e.target.value)}
+                                      placeholder="Enter weight"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Commodity
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.commodity}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'commodity', e.target.value)}
+                                      placeholder="Enter commodity"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Delivery Date <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={location.deliveryDate}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'deliveryDate', e.target.value)}
+                                      min={todayStr()}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* DRAYAGE - Single Pickup and Loading/Unloading Location */
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Pickup Location */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <h4 className="font-semibold text-gray-700">Pickup Location</h4>
+                        </div>
+                        
+                        <div className="relative">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Pickup Address <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['fromZip'] = el)}
+                            name="fromZip"
+                            placeholder="Enter ZIP code or full addresses..."
+                            value={loadForm.fromZip}
+                            onChange={handleChange}
+                            onFocus={() => fromZipOptions.length && setShowFromZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowFromZipDD(false), 150)}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.fromZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.fromZip && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.fromZip}</p>
+                            </div>
+                          )}
+                          <SearchableZipDropdown
+                            which="from"
+                            open={showFromZipDD}
+                            setOpen={setShowFromZipDD}
+                            options={fromZipOptions}
+                            query={fromZipQuery}
+                            setQuery={setFromZipQuery}
+                            onSelect={applyZipSelection}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            City <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['fromCity'] = el)}
+                            name="fromCity"
+                            value={loadForm.fromCity}
+                            onChange={handleChange}
+                            placeholder="Auto-filled from ZIP (editable)"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.fromCity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.fromCity && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.fromCity}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            State <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['fromState'] = el)}
+                            name="fromState"
+                            value={loadForm.fromState}
+                            onChange={handleChange}
+                            placeholder="Auto-filled from ZIP (editable, e.g., NJ)"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.fromState ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.fromState && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.fromState}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Loading/Unloading Location */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <h4 className="font-semibold text-gray-700">Loading/Unloading Location</h4>
+                        </div>
+                        
+                        <div className="relative">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Loading/Unloading Address <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['toZip'] = el)}
+                            name="toZip"
+                            placeholder="Enter ZIP code or full addresses..."
+                            value={loadForm.toZip}
+                            onChange={handleChange}
+                            onFocus={() => toZipOptions.length && setShowToZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowToZipDD(false), 150)}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.toZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.toZip && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.toZip}</p>
+                            </div>
+                          )}
+                          <SearchableZipDropdown
+                            which="to"
+                            open={showToZipDD}
+                            setOpen={setShowToZipDD}
+                            options={toZipOptions}
+                            query={toZipQuery}
+                            setQuery={setToZipQuery}
+                            onSelect={applyZipSelection}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            City <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['toCity'] = el)}
+                            name="toCity"
+                            value={loadForm.toCity}
+                            onChange={handleChange}
+                            placeholder="Auto-filled from ZIP (editable)"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.toCity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.toCity && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.toCity}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            State <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['toState'] = el)}
+                            name="toState"
+                            value={loadForm.toState}
+                            onChange={handleChange}
+                            placeholder="Auto-filled from ZIP (editable, e.g., AZ)"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.toState ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.toState && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.toState}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Drayage Details - Moved under Loading/Unloading Location */}
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                          <h4 className="font-semibold text-gray-700">Drayage Details</h4>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div onClick={() => openDatePicker('returnDate')} className="cursor-pointer">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Return Date <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              ref={(el) => (fieldRefs.current['returnDate'] = el)}
+                              type="date"
+                              name="returnDate"
+                              value={loadForm.returnDate}
+                              onChange={handleChange}
+                              min={todayStr()}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                                formErrors.returnDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                              onClick={(e) => e.target.showPicker?.()}
+                            />
+                            {formErrors.returnDate && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnDate}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Return Location <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              ref={(el) => (fieldRefs.current['returnLocation'] = el)}
+                              name="returnLocation"
+                              value={loadForm.returnLocation}
+                              onChange={handleChange}
+                              placeholder="Enter Return Location"
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.returnLocation ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            />
+                            {formErrors.returnLocation && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnLocation}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
 
+                {/* Load Details Section */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                      <Truck className="text-purple-600" size={20} />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800">Load Details</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Vehicle Type <span className="text-red-500">*</span>
+                      </label>
+                      <div className={`${formErrors.vehicleType ? 'border-red-400 bg-red-50' : ''}`}>
+                        <VehicleTypeDropdown
+                          open={vehicleTypeDropdownOpen}
+                          setOpen={setVehicleTypeDropdownOpen}
+                          options={vehicleTypeOptions}
+                          searchQuery={vehicleTypeSearchQuery}
+                          setSearchQuery={setVehicleTypeSearchQuery}
+                          onSelect={handleVehicleTypeSelect}
+                          inputValue={loadForm.vehicleType}
+                          setInputValue={(value) => setLoadForm(prev => ({ ...prev, vehicleType: value }))}
+                        />
+                      </div>
+                      {formErrors.vehicleType && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <XCircle className="text-red-500" size={16} />
+                          <p className="text-sm text-red-600">{formErrors.vehicleType}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Target Rate ($)
+                      </label>
+                      <input
+                        ref={(el) => (fieldRefs.current['rate'] = el)}
+                        name="rate"
+                        inputMode="decimal"
+                        placeholder="e.g., 2500 or 2500.50"
+                        value={loadForm.rate}
+                        onChange={handleChange}
+                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                          formErrors.rate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      />
+                      {formErrors.rate && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <XCircle className="text-red-500" size={16} />
+                          <p className="text-sm text-red-600">{formErrors.rate}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {loadType === 'DRAYAGE' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Weight (lbs) <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['weight'] = el)}
+                            name="weight"
+                            placeholder="e.g., 25000"
+                            value={loadForm.weight}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.weight ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.weight && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.weight}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Commodity <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['commodity'] = el)}
+                            name="commodity"
+                            placeholder="e.g., Electronics, Furniture"
+                            value={loadForm.commodity}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.commodity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.commodity && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.commodity}</p>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Schedule Section */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                      <Calendar className="text-indigo-600" size={20} />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800">Schedule & Timeline</h3>
+                  </div>
+                  
+                  {loadType === "DRAYAGE" ? (
+                    /* DRAYAGE - Show Pickup Date, Delivery Date, and Bid Deadline */
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div onClick={() => openDatePicker('pickupDate')} className="cursor-pointer">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Pickup Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['pickupDate'] = el)}
+                          type="date"
+                          name="pickupDate"
+                          value={loadForm.pickupDate}
+                          onChange={handleChange}
+                          min={todayStr()}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                            formErrors.pickupDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={(e) => e.target.showPicker?.()}
+                        />
+                        {formErrors.pickupDate && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.pickupDate}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div onClick={() => openDatePicker('deliveryDate')} className="cursor-pointer">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Delivery Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['deliveryDate'] = el)}
+                          type="date"
+                          name="deliveryDate"
+                          value={loadForm.deliveryDate}
+                          onChange={handleChange}
+                          min={loadForm.pickupDate || todayStr()}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                            formErrors.deliveryDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={(e) => e.target.showPicker?.()}
+                        />
+                        {formErrors.deliveryDate && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.deliveryDate}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div onClick={() => openDatePicker('bidDeadline')} className="cursor-pointer">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Bid Deadline <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
+                          type="date"
+                          name="bidDeadline"
+                          value={loadForm.bidDeadline}
+                          onChange={handleChange}
+                          min={todayStr()}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                            formErrors.bidDeadline ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={(e) => e.target.showPicker?.()}
+                        />
+                        {formErrors.bidDeadline && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.bidDeadline}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* OTR - Show only Bid Deadline */
+                    <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
+                      <div onClick={() => openDatePicker('bidDeadline')} className="cursor-pointer">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Bid Deadline <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
+                          type="date"
+                          name="bidDeadline"
+                          value={loadForm.bidDeadline}
+                          onChange={handleChange}
+                          min={todayStr()}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                            formErrors.bidDeadline ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={(e) => e.target.showPicker?.()}
+                        />
+                        {formErrors.bidDeadline && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.bidDeadline}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Additional Details Section */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                      <FileText className="text-orange-600" size={20} />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800">Additional Details</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Container No
+                      </label>
+                      <input
+                        ref={(el) => (fieldRefs.current['containerNo'] = el)}
+                        name="containerNo"
+                        value={loadForm.containerNo || ''}
+                        onChange={handleChange}
+                        placeholder="Alphanumeric only"
+                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                          formErrors.containerNo ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      />
+                      {formErrors.containerNo && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <XCircle className="text-red-500" size={16} />
+                          <p className="text-sm text-red-600">{formErrors.containerNo}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        PO Number
+                      </label>
+                      <input
+                        ref={(el) => (fieldRefs.current['poNumber'] = el)}
+                        name="poNumber"
+                        value={loadForm.poNumber || ''}
+                        onChange={handleChange}
+                        placeholder="Alphanumeric only"
+                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                          formErrors.poNumber ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      />
+                      {formErrors.poNumber && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <XCircle className="text-red-500" size={16} />
+                          <p className="text-sm text-red-600">{formErrors.poNumber}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        BOL Number
+                      </label>
+                      <input
+                        ref={(el) => (fieldRefs.current['bolNumber'] = el)}
+                        name="bolNumber"
+                        value={loadForm.bolNumber || ''}
+                        onChange={handleChange}
+                        placeholder="Alphanumeric only"
+                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                          formErrors.bolNumber ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      />
+                      {formErrors.bolNumber && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <XCircle className="text-red-500" size={16} />
+                          <p className="text-sm text-red-600">{formErrors.bolNumber}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Rate Type
+                      </label>
+                      <input
+                        ref={(el) => (fieldRefs.current['rateType'] = el)}
+                        name="rateType"
+                        value={loadForm.rateType}
+                        onChange={handleChange}
+                        placeholder="e.g., Flat Rate / Per Mile"
+                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                          formErrors.rateType ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      />
+                      {formErrors.rateType && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <XCircle className="text-red-500" size={16} />
+                          <p className="text-sm text-red-600">{formErrors.rateType}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
 
+                {/* Enhanced Form Actions */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                        <CheckCircle className="text-gray-600" size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">Ready to Update?</h3>
+                        <p className="text-sm text-gray-600">Review your changes and update the load</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEditModal(false);
+                          setSelectedLoadForAction(null);
+                        }}
+                        disabled={creatingLoad || (loadType === "DRAYAGE" && creatingDrayage)}
+                        className="px-6 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Cancel
+                      </button>
+
+                      {(() => {
+                        const isSubmitting = creatingLoad || (loadType === "DRAYAGE" && creatingDrayage);
+                        return (
+                          <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            aria-busy={isSubmitting}
+                            onClick={() => console.log("🔥 Edit Submit button clicked!")}
+                            className={[
+                              "relative inline-flex items-center justify-center gap-3",
+                              "px-8 py-3 rounded-xl text-white font-semibold shadow-lg",
+                              "bg-gradient-to-r from-green-600 to-green-700",
+                              "hover:from-green-700 hover:to-green-800",
+                              "transform hover:scale-105 transition-all duration-200",
+                              isSubmitting ? "opacity-75 cursor-not-allowed" : "",
+                              "min-w-[180px]"
+                            ].join(" ")}
+                          >
+                            {isSubmitting && (
+                              <span
+                                className="inline-block h-5 w-5 border-2 border-white/90 border-t-transparent rounded-full animate-spin"
+                                aria-hidden="true"
+                              />
+                            )}
+                            <span>
+                              {isSubmitting ? (loadType === "DRAYAGE" ? "Updating Drayage..." : "Updating...") : "Update Load"}
+                            </span>
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+        </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedLoadForAction && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <XCircle className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Delete Load</h2>
+                    <p className="text-red-100">This action cannot be undone</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedLoadForAction(null);
+                  }}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="text-center mb-6">
+                <XCircle className="w-16 h-16 text-red-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">Are you sure?</h3>
+                <p className="text-gray-500">
+                  You are about to delete load <span className="font-semibold">{selectedLoadForAction.id}</span>.
+                  This action cannot be undone.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedLoadForAction(null);
+                  }}
+                  disabled={submitting}
+                  className={`flex-1 px-4 py-3 rounded-lg transition-colors font-medium ${
+                    submitting 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  disabled={submitting}
+                  className={`flex-1 px-4 py-3 rounded-lg transition-colors font-medium flex items-center justify-center gap-2 ${
+                    submitting 
+                      ? 'bg-red-400 text-white cursor-not-allowed' 
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
+                >
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete Load'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -918,11 +918,23 @@ export default function DeliveryOrder() {
   const handlePickupLocationChange = (index, field, value) => {
     setFormData(prev => {
       const updated = [...prev.pickupLocations];
-      // ZIP => alphanumeric only, WEIGHT => digits only
-      const val =
-        field === 'zipCode' ? sanitizeAlphaNum(value)
-          : field === 'weight' ? digitsOnly(value)
-            : value;
+      // ZIP => alphanumeric only, WEIGHT => allow decimals
+      let val = value;
+      if (field === 'zipCode') {
+        val = sanitizeAlphaNum(value);
+      } else if (field === 'weight') {
+        // Allow decimal points for weight (max 2 decimal places)
+        val = value.replace(/[^\d.]/g, '');
+        // Ensure only one decimal point
+        const parts = val.split('.');
+        if (parts.length > 2) {
+          val = parts[0] + '.' + parts.slice(1).join('');
+        }
+        // Limit to 2 decimal places
+        if (parts[1] && parts[1].length > 2) {
+          val = parts[0] + '.' + parts[1].substring(0, 2);
+        }
+      }
 
       updated[index] = { ...updated[index], [field]: val };
       return { ...prev, pickupLocations: updated };
@@ -935,11 +947,23 @@ export default function DeliveryOrder() {
   const handleDropLocationChange = (index, field, value) => {
     setFormData(prev => {
       const updated = [...prev.dropLocations];
-      // ZIP => alphanumeric only, WEIGHT => digits only
-      const val =
-        field === 'zipCode' ? sanitizeAlphaNum(value)
-          : field === 'weight' ? digitsOnly(value)
-            : value;
+      // ZIP => alphanumeric only, WEIGHT => allow decimals
+      let val = value;
+      if (field === 'zipCode') {
+        val = sanitizeAlphaNum(value);
+      } else if (field === 'weight') {
+        // Allow decimal points for weight (max 2 decimal places)
+        val = value.replace(/[^\d.]/g, '');
+        // Ensure only one decimal point
+        const parts = val.split('.');
+        if (parts.length > 2) {
+          val = parts[0] + '.' + parts.slice(1).join('');
+        }
+        // Limit to 2 decimal places
+        if (parts[1] && parts[1].length > 2) {
+          val = parts[0] + '.' + parts[1].substring(0, 2);
+        }
+      }
 
       updated[index] = { ...updated[index], [field]: val };
       return { ...prev, dropLocations: updated };
@@ -1089,13 +1113,26 @@ export default function DeliveryOrder() {
     const updated = [...charges];
 
     if (field === 'name') value = onlyAlpha(value);
-    if (field === 'quantity' || field === 'amt') value = clampPosInt(value);
+    if (field === 'quantity') value = clampPosInt(value);
+    if (field === 'amt') {
+      // Allow decimal points for amounts (max 2 decimal places)
+      value = value.replace(/[^\d.]/g, '');
+      // Ensure only one decimal point
+      const parts = value.split('.');
+      if (parts.length > 2) {
+        value = parts[0] + '.' + parts.slice(1).join('');
+      }
+      // Limit to 2 decimal places
+      if (parts[1] && parts[1].length > 2) {
+        value = parts[0] + '.' + parts[1].substring(0, 2);
+      }
+    }
 
     updated[index] = { ...updated[index], [field]: value };
 
-    // total = quantity * amount (integers; zero allowed for live calc)
+    // total = quantity * amount (quantity as integer, amount as decimal; zero allowed for live calc)
     const q = parseInt(updated[index].quantity, 10) || 0;
-    const a = parseInt(updated[index].amt, 10) || 0;
+    const a = parseFloat(updated[index].amt) || 0;
     updated[index].total = q * a;
 
     setCharges(updated);
@@ -1168,7 +1205,7 @@ export default function DeliveryOrder() {
 
         const aRaw = String(ch?.amt ?? '');
         if (aRaw === '') row.amt = 'Please enter the amount';
-        else if (!/^[1-9]\d*$/.test(aRaw)) row.amt = 'Amount must be a positive integer';
+        else if (!/^\d+(\.\d{1,2})?$/.test(aRaw)) row.amt = 'Amount must be a positive number (max 2 decimal places)';
       }
       return row;
     });
@@ -1190,8 +1227,8 @@ export default function DeliveryOrder() {
       const carrierFeesData = (charges || []).map(ch => ({
         name: ch.name.trim(),
         quantity: parseInt(ch.quantity, 10) || 0,
-        amount: parseInt(ch.amt, 10) || 0,
-        total: (parseInt(ch.quantity, 10) || 0) * (parseInt(ch.amt, 10) || 0),
+        amount: parseFloat(ch.amt) || 0,
+        total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
       }));
       await updateCarrierFees(editingOrder._id, carrierFeesData);
     }
@@ -1301,8 +1338,8 @@ export default function DeliveryOrder() {
         carrierFees: (charges || []).map(ch => ({
           name: ch.name,
           quantity: parseInt(ch.quantity) || 0,
-          amount: parseInt(ch.amt) || 0,
-          total: (parseFloat(ch.quantity) || 0) * (parseFloat(ch.amt) || 0)
+          amount: parseFloat(ch.amt) || 0,
+          total: (parseInt(ch.quantity) || 0) * (parseFloat(ch.amt) || 0)
         })),
         totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0)
       };
@@ -1364,8 +1401,8 @@ export default function DeliveryOrder() {
           carrierFees: (charges || []).map(ch => ({
             name: ch.name,
             quantity: parseInt(ch.quantity) || 0,
-            amount: parseInt(ch.amt) || 0,
-            total: (parseFloat(ch.quantity) || 0) * (parseFloat(ch.amt) || 0),
+            amount: parseFloat(ch.amt) || 0,
+            total: (parseInt(ch.quantity) || 0) * (parseFloat(ch.amt) || 0),
           })),
           totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0),
         };
@@ -1577,8 +1614,8 @@ export default function DeliveryOrder() {
       // Amount: required + positive integer
       if (r.amt === '' || r.amt === null || r.amt === undefined) {
         rErr.amt = 'Please enter the amount';
-      } else if (!/^[1-9]\d*$/.test(String(r.amt))) {
-        rErr.amt = 'Amount must be a positive integer';
+      } else if (!/^\d+(\.\d{1,2})?$/.test(String(r.amt))) {
+        rErr.amt = 'Amount must be a positive number (max 2 decimal places)';
       }
 
       return rErr;
@@ -4241,10 +4278,13 @@ export default function DeliveryOrder() {
                               type="number"
                               value={formData.pickupLocations?.[locationIndex]?.weight ?? ''}
                               onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
-                              onKeyDown={blockIntChars}
+                              onKeyDown={(e) => {
+                                // Allow decimal point, but block negative signs and scientific notation
+                                if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                              }}
                               min="0"
-                              step="1"
-                              inputMode="numeric"
+                              step="0.01"
+                              inputMode="decimal"
                               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${lErr.weight ? 'border-red-400' : 'border-gray-300'}`}
                               placeholder="Weight (lbs) *"
                             />
@@ -4402,10 +4442,13 @@ export default function DeliveryOrder() {
                               onChange={(e) =>
                                 handleDropLocationChange(locationIndex, 'weight', e.target.value)
                               }
-                              onKeyDown={blockIntChars}
+                              onKeyDown={(e) => {
+                                // Allow decimal point, but block negative signs and scientific notation
+                                if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                              }}
                               min="0"
-                              step="1"
-                              inputMode="numeric"
+                              step="0.01"
+                              inputMode="decimal"
                               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${dErr.weight ? 'border-red-400' : 'border-gray-300'
                                 }`}
                               placeholder="Weight (lbs) *"
@@ -5231,10 +5274,13 @@ export default function DeliveryOrder() {
                   <div>
                     <input
                       type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      onKeyDown={blockIntNoSign}
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      onKeyDown={(e) => {
+                        // Allow decimal point, but block negative signs and scientific notation
+                        if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                      }}
                       value={charge.amt}
                       onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
                       onBlur={() => {
@@ -5243,7 +5289,7 @@ export default function DeliveryOrder() {
                           const raw = String(charge.amt ?? '');
                           next[index] = { ...(next[index] || {}) };
                           if (raw === '') next[index].amt = 'Please enter the amount';
-                          else if (!/^[1-9]\d*$/.test(raw)) next[index].amt = 'Amount must be a positive integer';
+                          else if (!/^\d+(\.\d{1,2})?$/.test(raw)) next[index].amt = 'Amount must be a positive number (max 2 decimal places)';
                           else next[index].amt = '';
                           return next;
                         });
@@ -5253,7 +5299,7 @@ export default function DeliveryOrder() {
                         ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
                         : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
                         }`}
-                      placeholder="0"
+                      placeholder="0.00"
                     />
 
                     {chargeErrors[index]?.amt && (
@@ -5811,13 +5857,18 @@ export default function DeliveryOrder() {
                         {/* Weight */}
                         <div>
                           <input
-                            type="text"
+                            type="number"
                             value={location.weight}
-                            onKeyDown={blockIntChars}   // -, +, e, E, . ko block karta hai
+                            onKeyDown={(e) => {
+                              // Allow decimal point, but block negative signs and scientific notation
+                              if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                            }}
                             onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
                             className={errCls(!!errors.pickups?.[locationIndex]?.weight)}
                             placeholder="Weight (lbs) *"
-                            inputMode="numeric"
+                            inputMode="decimal"
+                            min="0"
+                            step="0.01"
                           />
                           {errors.pickups?.[locationIndex]?.weight && (
                             <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].weight}</p>
@@ -5950,13 +6001,18 @@ export default function DeliveryOrder() {
                         {/* Weight */}
                         <div>
                           <input
-                            type="text"
+                            type="number"
                             value={location.weight}
-                            onKeyDown={blockIntChars}
+                            onKeyDown={(e) => {
+                              // Allow decimal point, but block negative signs and scientific notation
+                              if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                            }}
                             onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
                             className={errCls(!!errors.drops?.[locationIndex]?.weight)}
                             placeholder="Weight (lbs) *"
-                            inputMode="numeric"
+                            inputMode="decimal"
+                            min="0"
+                            step="0.01"
                           />
                           {errors.drops?.[locationIndex]?.weight && (
                             <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].weight}</p>
