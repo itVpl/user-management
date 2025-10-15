@@ -38,6 +38,58 @@ export default function Loads() {
   const [shipperDropdownOpen, setShipperDropdownOpen] = useState(false);
   const [shipperSearchQuery, setShipperSearchQuery] = useState("");
 
+  // Vehicle Type dropdown state
+  const [vehicleTypeDropdownOpen, setVehicleTypeDropdownOpen] = useState(false);
+  const [vehicleTypeSearchQuery, setVehicleTypeSearchQuery] = useState("");
+
+  // Multiple locations state for OTR
+  const [pickupLocations, setPickupLocations] = useState([]);
+  const [deliveryLocations, setDeliveryLocations] = useState([]);
+  
+  // ZIP code options for multiple locations
+  const [pickupZipOptions, setPickupZipOptions] = useState({});
+  const [deliveryZipOptions, setDeliveryZipOptions] = useState({});
+  const [pickupZipQueries, setPickupZipQueries] = useState({});
+  const [deliveryZipQueries, setDeliveryZipQueries] = useState({});
+  const [showPickupZipDD, setShowPickupZipDD] = useState({});
+  const [showDeliveryZipDD, setShowDeliveryZipDD] = useState({});
+
+  // Vehicle Type options - Dynamic based on load type
+  const getVehicleTypeOptions = (type) => {
+    if (type === "DRAYAGE") {
+      return [
+        "20' Standard (Dry Van)",
+        "40' Standard (Dry Van)",
+        "45' Standard (Dry Van)",
+        "20' Reefer",
+        "40' Reefer (High Cube or Standard)",
+        "Open Top Container",
+        "Flat Rack Container",
+        "Tank Container (ISO Tank)",
+        "40' High Cube (HC)",
+        "45' High Cube (HC)"
+      ];
+    } else { // OTR
+      return [
+        "Dry Van",
+        "Reefer (Refrigerated Van)",
+        "Flatbed",
+        "Step Deck (Drop Deck)",
+        "Double Drop / Lowboy",
+        "Conestoga",
+        "Tanker",
+        "Livestock Trailer",
+        "Car Hauler",
+        "Container Chassis",
+        "End Dump",
+        "Side Dump",
+        "Hopper Bottom"
+      ];
+    }
+  };
+
+  const vehicleTypeOptions = getVehicleTypeOptions(loadType);
+
   // === Validation helpers & state (ADD) ===
   const ALNUM = /^[A-Za-z0-9]+$/;
   const MONEY2 = /^(?:\d+)(?:\.\d{1,2})?$/; // up to 2 decimals, no negatives
@@ -129,13 +181,16 @@ export default function Loads() {
     toCity: "",
     toState: "",
     vehicleType: "",
-    commodity: "",
-    weight: "",
     rate: "",
     rateType: "Flat Rate",
     pickupDate: "",
     deliveryDate: "",
     bidDeadline: "",
+    weight: "",
+    commodity: "",
+    containerNo: "",
+    poNumber: "",
+    bolNumber: "",
     // DRAYAGE-only:
     returnDate: "",
     returnLocation: "",
@@ -185,6 +240,143 @@ export default function Loads() {
     setShipperInputValue(shipper.compName);
     setShipperSearchQuery("");
     setShipperDropdownOpen(false);
+  };
+
+  // Vehicle Type selection handler
+  const handleVehicleTypeSelect = (vehicleType) => {
+    setLoadForm(prev => ({
+      ...prev,
+      vehicleType: vehicleType,
+    }));
+    setFormErrors(p => {
+      const n = { ...p };
+      delete n.vehicleType;
+      return n;
+    });
+  };
+
+  // Multiple locations handlers for OTR
+  const addPickupLocation = () => {
+    setPickupLocations(prev => [...prev, {
+      id: Date.now(),
+      address: '',
+      city: '',
+      state: '',
+      weight: '',
+      commodity: '',
+      pickupDate: '',
+      deliveryDate: ''
+    }]);
+  };
+
+  const removePickupLocation = (id) => {
+    setPickupLocations(prev => prev.filter(loc => loc.id !== id));
+  };
+
+  const updatePickupLocation = (id, field, value) => {
+    setPickupLocations(prev => prev.map(loc => 
+      loc.id === id ? { ...loc, [field]: value } : loc
+    ));
+  };
+
+  const addDeliveryLocation = () => {
+    setDeliveryLocations(prev => [...prev, {
+      id: Date.now(),
+      address: '',
+      city: '',
+      state: '',
+      weight: '',
+      commodity: '',
+      deliveryDate: ''
+    }]);
+  };
+
+  const removeDeliveryLocation = (id) => {
+    setDeliveryLocations(prev => prev.filter(loc => loc.id !== id));
+  };
+
+  const updateDeliveryLocation = (id, field, value) => {
+    setDeliveryLocations(prev => prev.map(loc => 
+      loc.id === id ? { ...loc, [field]: value } : loc
+    ));
+  };
+
+  // ZIP code functionality for multiple locations
+  const fetchZipForLocation = async (zip, locationId, type) => {
+    try {
+      if (!ZIP5.test(zip)) return;
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/load/zipcode/${zip}/samples`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+
+      const samples = Array.isArray(res?.data?.data?.sampleAddresses)
+        ? res.data.data.sampleAddresses : [];
+
+      if (type === 'pickup') {
+        setPickupZipOptions(prev => ({ ...prev, [locationId]: samples }));
+        setShowPickupZipDD(prev => ({ ...prev, [locationId]: true }));
+      } else {
+        setDeliveryZipOptions(prev => ({ ...prev, [locationId]: samples }));
+        setShowDeliveryZipDD(prev => ({ ...prev, [locationId]: true }));
+      }
+
+      // Auto-fill with first match if available
+      if (samples[0]) {
+        applyZipToLocation(locationId, samples[0], type);
+      }
+
+    } catch (e) {
+      console.warn("ZIP lookup failed:", e?.response?.data || e.message);
+      if (type === 'pickup') {
+        setShowPickupZipDD(prev => ({ ...prev, [locationId]: false }));
+      } else {
+        setShowDeliveryZipDD(prev => ({ ...prev, [locationId]: false }));
+      }
+    }
+  };
+
+  const applyZipToLocation = (locationId, item, type) => {
+    const completeAddress = item.formattedAddress || 
+      `${item.addressLine1 || ''}${item.addressLine2 ? ', ' + item.addressLine2 : ''}${item.city ? ', ' + item.city : ''}${item.stateCode ? ', ' + item.stateCode : ''}`;
+    
+    if (type === 'pickup') {
+      setPickupLocations(prev => prev.map(loc => 
+        loc.id === locationId ? {
+          ...loc,
+          address: completeAddress,
+          city: item.city || loc.city,
+          state: item.stateCode || item.state || loc.state
+        } : loc
+      ));
+      setShowPickupZipDD(prev => ({ ...prev, [locationId]: false }));
+    } else {
+      setDeliveryLocations(prev => prev.map(loc => 
+        loc.id === locationId ? {
+          ...loc,
+          address: completeAddress,
+          city: item.city || loc.city,
+          state: item.stateCode || item.state || loc.state
+        } : loc
+      ));
+      setShowDeliveryZipDD(prev => ({ ...prev, [locationId]: false }));
+    }
+  };
+
+  const handleLocationAddressChange = (locationId, value, type) => {
+    // Update the address field
+    if (type === 'pickup') {
+      updatePickupLocation(locationId, 'address', value);
+    } else {
+      updateDeliveryLocation(locationId, 'address', value);
+    }
+
+    // If user is typing digits only (ZIP code), trigger search
+    if (/^\d+$/.test(value) && value.length <= 5) {
+      debounceZip(`location-${locationId}`, () => fetchZipForLocation(value, locationId, type), 450);
+    }
   };
 
   // API call (UPDATED to set options)
@@ -271,6 +463,99 @@ const SearchableZipDropdown = ({
       </ul>
     </div>
   ) : null;
+};
+
+// Vehicle Type Searchable Dropdown
+const VehicleTypeDropdown = ({
+  open,
+  setOpen,
+  options,
+  searchQuery,
+  setSearchQuery,
+  onSelect,
+  inputValue,
+  setInputValue
+}) => {
+  const filteredOptions = (options || []).filter(option => {
+    const searchText = option.toLowerCase();
+    return searchText.includes(searchQuery.toLowerCase());
+  });
+
+  const handleSelect = (option) => {
+    setInputValue(option);
+    onSelect(option);
+    setSearchQuery("");
+    setOpen(false);
+  };
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setInputValue(value);
+    setSearchQuery(value);
+    setOpen(true);
+  };
+
+  const handleInputFocus = () => {
+    setOpen(true);
+  };
+
+  const handleInputBlur = () => {
+    // Delay closing to allow click on dropdown items
+    setTimeout(() => setOpen(false), 200);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={inputValue}
+        onChange={handleInputChange}
+        onFocus={handleInputFocus}
+        onBlur={handleInputBlur}
+        placeholder="Search container types..."
+        className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 border-gray-200 hover:border-gray-300"
+      />
+      
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-hidden">
+          <div className="p-2 border-b bg-gray-50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search container types..."
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+            </div>
+          </div>
+          
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length === 0 ? (
+              <div className="p-4 text-center text-gray-500 text-sm">
+                {searchQuery ? "No container types found" : "Start typing to search container types"}
+              </div>
+            ) : (
+              filteredOptions.map((option, index) => (
+                <div
+                  key={index}
+                  className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150"
+                  onClick={() => handleSelect(option)}
+                  onMouseDown={(e) => e.preventDefault()} // Prevent input blur
+                >
+                  <div className="font-medium text-gray-800 text-sm">
+                    {option}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // Material UI Style SearchableShipperDropdown
@@ -401,6 +686,36 @@ const MaterialShipperDropdown = ({
     setShipperInputValue("");
     setShipperDropdownOpen(false);
     setShipperSearchQuery("");
+    // Reset vehicle type state
+    setVehicleTypeDropdownOpen(false);
+    setVehicleTypeSearchQuery("");
+    // Reset multiple locations state with defaults
+    setPickupLocations([{
+      id: Date.now(),
+      address: '',
+      city: '',
+      state: '',
+      weight: '',
+      commodity: '',
+      pickupDate: '',
+      deliveryDate: ''
+    }]);
+    setDeliveryLocations([{
+      id: Date.now() + 1,
+      address: '',
+      city: '',
+      state: '',
+      weight: '',
+      commodity: '',
+      deliveryDate: ''
+    }]);
+    // Reset ZIP code states
+    setPickupZipOptions({});
+    setDeliveryZipOptions({});
+    setPickupZipQueries({});
+    setDeliveryZipQueries({});
+    setShowPickupZipDD({});
+    setShowDeliveryZipDD({});
   };
 
 
@@ -424,8 +739,13 @@ const MaterialShipperDropdown = ({
 
 
     // Numeric fields with up to 2 decimals (no negatives)
-    if (name === 'weight' || name === 'rate') {
+    if (name === 'rate') {
       value = sanitizeMoney2(value);
+    }
+
+    // Numeric fields for weight
+    if (name === 'weight') {
+      value = value.replace(/[^\d]/g, '');
     }
 
     // Alphanumeric only for these
@@ -434,7 +754,7 @@ const MaterialShipperDropdown = ({
     }
 
     // Simple trim for strings
-    if (['fromCity', 'fromState', 'toCity', 'toState', 'vehicleType', 'commodity', 'rateType', 'returnLocation'].includes(name)) {
+    if (['fromCity', 'fromState', 'toCity', 'toState', 'vehicleType', 'rateType', 'returnLocation', 'commodity'].includes(name)) {
       value = value.replace(/\s{2,}/g, ' ');
     }
 
@@ -454,16 +774,8 @@ const MaterialShipperDropdown = ({
     toState: (v) => v ? '' : 'Please enter  the To State name.',
 
     vehicleType: (v) => v ? '' : 'Please enter the Vehicle Type.',
-    commodity: (v) => v ? '' : 'Please enter the Commodity.',
-    weight: (v) => {
-      if (!v) return 'Please enter the Weight.';
-      if (!MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
-      if (parseFloat(v) <= 0) return 'Please enter a weight more than 0.';
-      return '';
-    },
     rate: (v) => {
-      if (!v) return 'Please enter the Expected Price.';
-      if (!MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
+      if (v && !MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
       return '';
     },
 
@@ -471,15 +783,15 @@ const MaterialShipperDropdown = ({
     pickupDate: (v) => v ? '' : 'Please select the Pickup Date .',
     deliveryDate: (v, all) => {
       if (!v) return 'Please select the Delivery Date .';
-      // must be > pickupDate and >= today
+      // must be >= pickupDate and >= today
       const today = todayStr();
-      const mustMin = addDays(all.pickupDate || today, all.pickupDate ? 1 : 0); // strictly > pickup if provided
-      if (all.pickupDate && v <= all.pickupDate) return 'Drop date should be greater than Pickup Date.';
+      if (all.pickupDate && v < all.pickupDate) return 'Delivery date should be greater than or equal to Pickup Date.';
       if (v < today) return 'The calendar shows only present and future dates only.';
-      if (mustMin && v < mustMin) return 'Drop date should be greater than Pickup Date.';
       return '';
     },
     bidDeadline: (v) => v ? '' : 'Please select the Bid Deadline .',
+    weight: (v) => v ? '' : 'Please enter the weight.',
+    commodity: (v) => v ? '' : 'Please enter the commodity.',
     containerNo: (v) => (v && !ALNUM.test(v)) ? 'It should accept only alpha numeric.' : '',
     poNumber: (v) => (v && !ALNUM.test(v)) ? 'It should accept only alpha numeric.' : '',
     bolNumber: (v) => (v && !ALNUM.test(v)) ? 'It should accept only alpha numeric.' : '',
@@ -488,17 +800,29 @@ const MaterialShipperDropdown = ({
     returnLocation: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please enter the Return Location.') : ''),
   };
 
-  // field order for scroll-to-first-invalid
-  // field order for scroll-to-first-invalid
-  const fieldOrder = [
-    'shipperId',
-    'fromZip', 'fromCity', 'fromState',
-    'toZip', 'toCity', 'toState',
-    'vehicleType', 'commodity', 'weight', 'rate', 'rateType',
-    'pickupDate', 'deliveryDate', 'bidDeadline',
-    'containerNo', 'poNumber', 'bolNumber',
-    'returnDate', 'returnLocation'
-  ];
+  // field order for scroll-to-first-invalid - Load type specific
+  const getFieldOrder = () => {
+    if (loadType === 'OTR') {
+      return [
+        'shipperId',
+        'vehicleType', 'rate', 'rateType',
+        'bidDeadline',
+        'containerNo', 'poNumber', 'bolNumber'
+      ];
+    } else if (loadType === 'DRAYAGE') {
+      return [
+        'shipperId',
+        'fromZip', 'fromCity', 'fromState',
+        'toZip', 'toCity', 'toState',
+        'vehicleType', 'rate', 'rateType',
+        'pickupDate', 'deliveryDate', 'bidDeadline',
+        'weight', 'commodity',
+        'containerNo', 'poNumber', 'bolNumber',
+        'returnDate', 'returnLocation'
+      ];
+    }
+    return [];
+  };
 
 
 
@@ -506,11 +830,79 @@ const MaterialShipperDropdown = ({
   // ✅ Validate all
   const validateAll = () => {
     const errs = {};
+    const fieldOrder = getFieldOrder();
+    console.log(`🔍 Validating fields for ${loadType} load:`, fieldOrder);
+    
     fieldOrder.forEach((name) => {
       const v = loadForm[name] ?? '';
       const m = validators[name] ? validators[name](v, loadForm) : '';
-      if (m) errs[name] = m;
+      if (m) {
+        errs[name] = m;
+        console.log(`❌ Validation failed for ${name}:`, m);
+      }
     });
+
+    // Additional validation for OTR loads - check pickup and delivery locations
+    if (loadType === 'OTR') {
+      if (pickupLocations.length === 0) {
+        errs.pickupLocations = 'Please add at least one pickup location.';
+        console.log(`❌ Validation failed for pickupLocations: Please add at least one pickup location.`);
+      } else {
+        // Validate each pickup location
+        pickupLocations.forEach((location, index) => {
+          if (!location.address) {
+            errs[`pickupLocation${index}_address`] = `Pickup location ${index + 1} address is required.`;
+          }
+          if (!location.city) {
+            errs[`pickupLocation${index}_city`] = `Pickup location ${index + 1} city is required.`;
+          }
+          if (!location.state) {
+            errs[`pickupLocation${index}_state`] = `Pickup location ${index + 1} state is required.`;
+          }
+          if (!location.weight) {
+            errs[`pickupLocation${index}_weight`] = `Pickup location ${index + 1} weight is required.`;
+          }
+          if (!location.commodity) {
+            errs[`pickupLocation${index}_commodity`] = `Pickup location ${index + 1} commodity is required.`;
+          }
+          if (!location.pickupDate) {
+            errs[`pickupLocation${index}_pickupDate`] = `Pickup location ${index + 1} pickup date is required.`;
+          }
+          if (!location.deliveryDate) {
+            errs[`pickupLocation${index}_deliveryDate`] = `Pickup location ${index + 1} delivery date is required.`;
+          }
+        });
+      }
+
+      if (deliveryLocations.length === 0) {
+        errs.deliveryLocations = 'Please add at least one delivery location.';
+        console.log(`❌ Validation failed for deliveryLocations: Please add at least one delivery location.`);
+      } else {
+        // Validate each delivery location
+        deliveryLocations.forEach((location, index) => {
+          if (!location.address) {
+            errs[`deliveryLocation${index}_address`] = `Delivery location ${index + 1} address is required.`;
+          }
+          if (!location.city) {
+            errs[`deliveryLocation${index}_city`] = `Delivery location ${index + 1} city is required.`;
+          }
+          if (!location.state) {
+            errs[`deliveryLocation${index}_state`] = `Delivery location ${index + 1} state is required.`;
+          }
+          if (!location.weight) {
+            errs[`deliveryLocation${index}_weight`] = `Delivery location ${index + 1} weight is required.`;
+          }
+          if (!location.commodity) {
+            errs[`deliveryLocation${index}_commodity`] = `Delivery location ${index + 1} commodity is required.`;
+          }
+          if (!location.deliveryDate) {
+            errs[`deliveryLocation${index}_deliveryDate`] = `Delivery location ${index + 1} delivery date is required.`;
+          }
+        });
+      }
+    }
+
+    console.log("🔍 Validation errors:", errs);
     setFormErrors(errs);
     if (Object.keys(errs).length) scrollToField(Object.keys(errs)[0]);
     return Object.keys(errs).length === 0;
@@ -519,55 +911,138 @@ const MaterialShipperDropdown = ({
   // ✅ Submit
   const handleLoadSubmit = async (e) => {
     e.preventDefault();
+    console.log("🚀 Form submit button clicked!");
 
     // pehle se chal raha global guard
-    if (creatingLoad) return;
+    if (creatingLoad) {
+      console.log("❌ Already creating load, returning...");
+      return;
+    }
 
     // NEW: DRAYAGE single-shot guard
-    if (loadType === 'DRAYAGE' && creatingDrayage) return;
+    if (loadType === 'DRAYAGE' && creatingDrayage) {
+      console.log("❌ Already creating drayage, returning...");
+      return;
+    }
 
     // client-side validation
-    if (!validateAll()) return;
+    console.log("🔍 Running form validation...");
+    if (!validateAll()) {
+      console.log("❌ Form validation failed!");
+      return;
+    }
+    console.log("✅ Form validation passed!");
 
     // token fallback (sessionStorage || localStorage)
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+    console.log("🔑 Token found:", token ? "Yes" : "No");
     if (!token) {
+      console.log("❌ No token found, user not logged in");
       alertify.error("You're not logged in.");
       return;
     }
 
-    const payload = {
-      loadType,
-      shipperId: (loadForm.shipperId || "").trim(),
-      // include ZIPs (NEW)
-      fromZip: loadForm.fromZip,
-      toZip: loadForm.toZip,
+    // Build payload based on load type
+    console.log("🔧 Building payload for load type:", loadType);
+    console.log("📋 Current form state:", loadForm);
+    console.log("📍 Pickup locations:", pickupLocations);
+    console.log("📍 Delivery locations:", deliveryLocations);
+    let payload;
+    
+      if (loadType === 'OTR') {
+        console.log("📦 Building OTR payload...");
+        // OTR Load Structure - Use pickup and delivery locations from state
+        const origins = pickupLocations.map(location => ({
+          addressLine1: (location.address || "").trim(),
+          addressLine2: "",
+          city: (location.city || "").trim(),
+          state: (location.state || "").trim(),
+          zip: location.address ? location.address.split(',').pop()?.trim() : "",
+          weight: parseFloat((location.weight || '0').replace(/\.$/, '')),
+          commodity: (location.commodity || "").trim(),
+          pickupDate: location.pickupDate,
+          deliveryDate: location.deliveryDate
+        }));
 
-      fromCity: (loadForm.fromCity || "").trim(),
-      fromState: (loadForm.fromState || "").trim(),
-      toCity: (loadForm.toCity || "").trim(),
-      toState: (loadForm.toState || "").trim(),
+        const destinations = deliveryLocations.map(location => ({
+          addressLine1: (location.address || "").trim(),
+          addressLine2: "",
+          city: (location.city || "").trim(),
+          state: (location.state || "").trim(),
+          zip: location.address ? location.address.split(',').pop()?.trim() : "",
+          weight: parseFloat((location.weight || '0').replace(/\.$/, '')),
+          commodity: (location.commodity || "").trim(),
+          deliveryDate: location.deliveryDate
+        }));
 
-      vehicleType: (loadForm.vehicleType || "").trim(),
-      commodity: (loadForm.commodity || "").trim(),
-      // trailing dot safe parse: "12." -> "12"
-      weight: parseFloat((loadForm.weight || '').replace(/\.$/, '')),
-      rate: parseFloat((loadForm.rate || '').replace(/\.$/, '')),
-      rateType: (loadForm.rateType || 'Flat Rate').trim(),
-      pickupDate: loadForm.pickupDate,
-      deliveryDate: loadForm.deliveryDate,
-      bidDeadline: loadForm.bidDeadline,
-      ...(loadType === 'DRAYAGE' ? {
+        payload = {
+          shipperId: (loadForm.shipperId || "").trim(),
+          loadType: "OTR",
+          vehicleType: (loadForm.vehicleType || "").trim(),
+          rate: parseFloat((loadForm.rate || '0').replace(/\.$/, '')),
+          rateType: (loadForm.rateType || 'Flat Rate').trim(),
+          bidDeadline: loadForm.bidDeadline,
+          containerNo: (loadForm.containerNo || "").trim(),
+          poNumber: (loadForm.poNumber || "").trim(),
+          bolNumber: (loadForm.bolNumber || "").trim(),
+          origins: origins,
+          destinations: destinations
+        };
+    } else if (loadType === 'DRAYAGE') {
+      console.log("📦 Building DRAYAGE payload...");
+      // DRAYAGE Load Structure
+      payload = {
+        shipperId: (loadForm.shipperId || "").trim(),
+        loadType: "DRAYAGE",
+        fromCity: (loadForm.fromCity || "").trim(),
+        fromState: (loadForm.fromState || "").trim(),
+        toCity: (loadForm.toCity || "").trim(),
+        toState: (loadForm.toState || "").trim(),
+        weight: parseFloat((loadForm.weight || '0').replace(/\.$/, '')),
+        commodity: (loadForm.commodity || "").trim(),
+        vehicleType: (loadForm.vehicleType || "").trim(),
+        pickupDate: loadForm.pickupDate,
+        deliveryDate: loadForm.deliveryDate,
+        rate: parseFloat((loadForm.rate || '0').replace(/\.$/, '')),
+        rateType: (loadForm.rateType || 'Flat Rate').trim(),
+        bidDeadline: loadForm.bidDeadline,
+        containerNo: (loadForm.containerNo || "").trim(),
+        poNumber: (loadForm.poNumber || "").trim(),
+        bolNumber: (loadForm.bolNumber || "").trim(),
         returnDate: loadForm.returnDate,
-        // backend compat: dono bhejo
-        returnLocation: (loadForm.returnLocation || '').trim(),
-        drayageLocation: (loadForm.returnLocation || '').trim(),
-      } : {}),
-    };
+        returnLocation: (loadForm.returnLocation || "").trim()
+      };
+    } else {
+      // Fallback to old structure for other load types
+      payload = {
+        loadType,
+        shipperId: (loadForm.shipperId || "").trim(),
+        fromZip: loadForm.fromZip,
+        toZip: loadForm.toZip,
+        fromCity: (loadForm.fromCity || "").trim(),
+        fromState: (loadForm.fromState || "").trim(),
+        toCity: (loadForm.toCity || "").trim(),
+        toState: (loadForm.toState || "").trim(),
+        vehicleType: (loadForm.vehicleType || "").trim(),
+        rate: parseFloat((loadForm.rate || '').replace(/\.$/, '')),
+        rateType: (loadForm.rateType || 'Flat Rate').trim(),
+        pickupDate: loadForm.pickupDate,
+        deliveryDate: loadForm.deliveryDate,
+        bidDeadline: loadForm.bidDeadline,
+        ...(loadType === 'DRAYAGE' ? {
+          returnDate: loadForm.returnDate,
+          returnLocation: (loadForm.returnLocation || '').trim(),
+          drayageLocation: (loadForm.returnLocation || '').trim(),
+        } : {}),
+      };
+    }
 
     try {
       setCreatingLoad(true);
       if (loadType === 'DRAYAGE') setCreatingDrayage(true);
+
+      console.log("🚀 Sending payload to API:", payload);
+      console.log("🔗 API URL:", `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`);
 
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`,
@@ -730,20 +1205,51 @@ const MaterialShipperDropdown = ({
         allRaw = pickArray(res.data);
       }
 
-      // === Your existing transform logic (kept same) ===
+      // === Updated transform logic for new API structure ===
       const transformedLoads = allRaw.map((load, index) => {
         try {
-          // origin
+          // origin - Handle both old and new structure
           let originText = 'N/A';
-          if (load.origin) {
+          if (load.origins && load.origins.length > 0) {
+            // New structure with origins array
+            const firstOrigin = load.origins[0];
+            if (firstOrigin.addressLine1) {
+              originText = firstOrigin.addressLine1;
+            } else if (firstOrigin.city && firstOrigin.state) {
+              originText = `${firstOrigin.city}, ${firstOrigin.state}`;
+            } else if (firstOrigin.city) {
+              originText = firstOrigin.city;
+            }
+            // If multiple origins, show count
+            if (load.origins.length > 1) {
+              originText += ` (+${load.origins.length - 1} more)`;
+            }
+          } else if (load.origin) {
+            // Old structure with single origin
             if (typeof load.origin === 'string') originText = load.origin;
             else if (load.origin.city && load.origin.state) originText = `${load.origin.city}, ${load.origin.state}`;
             else if (load.origin.city) originText = load.origin.city;
             else if (load.origin.addressLine1) originText = load.origin.addressLine1;
           }
-          // destination
+
+          // destination - Handle both old and new structure
           let destinationText = 'N/A';
-          if (load.destination) {
+          if (load.destinations && load.destinations.length > 0) {
+            // New structure with destinations array
+            const firstDestination = load.destinations[0];
+            if (firstDestination.addressLine1) {
+              destinationText = firstDestination.addressLine1;
+            } else if (firstDestination.city && firstDestination.state) {
+              destinationText = `${firstDestination.city}, ${firstDestination.state}`;
+            } else if (firstDestination.city) {
+              destinationText = firstDestination.city;
+            }
+            // If multiple destinations, show count
+            if (load.destinations.length > 1) {
+              destinationText += ` (+${load.destinations.length - 1} more)`;
+            }
+          } else if (load.destination) {
+            // Old structure with single destination
             if (typeof load.destination === 'string') destinationText = load.destination;
             else if (load.destination.city && load.destination.state) destinationText = `${load.destination.city}, ${load.destination.state}`;
             else if (load.destination.city) destinationText = load.destination.city;
@@ -751,11 +1257,11 @@ const MaterialShipperDropdown = ({
           }
           // trucker
           let truckerName = 'N/A';
-          if (load.assignedTo) {
+          if (load.acceptedBid?.driverName) {
+            truckerName = load.acceptedBid.driverName;
+          } else if (load.assignedTo) {
             if (typeof load.assignedTo === 'string') truckerName = load.assignedTo;
             else if (load.assignedTo.compName) truckerName = load.assignedTo.compName;
-          } else if (load.acceptedBid?.driverName) {
-            truckerName = load.acceptedBid.driverName;
           } else if (load.carrier?.compName) {
             truckerName = load.carrier.compName;
           }
@@ -769,6 +1275,7 @@ const MaterialShipperDropdown = ({
               case 'in transit': status = 'in-transit'; break;
               case 'completed':
               case 'delivered': status = 'completed'; break;
+              case 'pending approval': status = 'pending-approval'; break;
               default: status = load.status.toLowerCase();
             }
           }
@@ -787,9 +1294,25 @@ const MaterialShipperDropdown = ({
               : load.createdAt
                 ? new Date(load.createdAt).toISOString().split('T')[0]
                 : 'N/A',
-            createdBy: `Shipper: ${load.shipper?.compName || 'N/A'}`,
+            createdBy: load.createdBySalesUser 
+              ? `Sales: ${load.createdBySalesUser.empName} (${load.createdBySalesUser.empId})`
+              : `Shipper: ${load.shipper?.compName || 'N/A'}`,
             docUpload: 'sample-doc.jpg',
             remarks: load.commodity || load.notes || '',
+            loadType: load.loadType || 'OTR',
+            vehicleType: load.vehicleType || 'N/A',
+            weight: load.weight || 0,
+            commodity: load.commodity || 'N/A',
+            pickupDate: load.pickupDate,
+            deliveryDate: load.deliveryDate,
+            bidDeadline: load.bidDeadline,
+            containerNo: load.containerNo || '',
+            poNumber: load.poNumber || '',
+            bolNumber: load.bolNumber || '',
+            origins: load.origins || [],
+            destinations: load.destinations || [],
+            shipper: load.shipper || null,
+            acceptedBid: load.acceptedBid || null,
           };
         } catch {
           return {
@@ -825,6 +1348,31 @@ const MaterialShipperDropdown = ({
   useEffect(() => {
     fetchLoads();
   }, []);
+
+  // Initialize default locations for OTR
+  useEffect(() => {
+    if (loadType === "OTR" && pickupLocations.length === 0 && deliveryLocations.length === 0) {
+      setPickupLocations([{
+        id: Date.now(),
+        address: '',
+        city: '',
+        state: '',
+        weight: '',
+        commodity: '',
+        pickupDate: '',
+        deliveryDate: ''
+      }]);
+      setDeliveryLocations([{
+        id: Date.now() + 1,
+        address: '',
+        city: '',
+        state: '',
+        weight: '',
+        commodity: '',
+        deliveryDate: ''
+      }]);
+    }
+  }, [loadType, pickupLocations.length, deliveryLocations.length]);
 
   const handleStatusUpdate = async (status) => {
     try {
@@ -885,6 +1433,7 @@ const MaterialShipperDropdown = ({
     if (status === 'assigned') return 'bg-blue-100 text-blue-700';
     if (status === 'in-transit' || status === 'in transit') return 'bg-purple-100 text-purple-700';
     if (status === 'completed' || status === 'delivered') return 'bg-gray-100 text-gray-700';
+    if (status === 'pending-approval' || status === 'pending approval') return 'bg-yellow-100 text-yellow-700';
     return 'bg-blue-100 text-blue-700';
   };
 
@@ -1184,8 +1733,10 @@ const MaterialShipperDropdown = ({
           {/* // ✅ BUTTON TO OPEN MODAL */}
           <button
             onClick={() => {
+              console.log("Create Load button clicked!"); // Debug log
               resetLoadForm();                 // ✅ clear everything first
               setShowLoadCreationModal(true);  // then open the modal
+              console.log("Modal should be opening..."); // Debug log
             }}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
           >
@@ -1244,9 +1795,10 @@ const MaterialShipperDropdown = ({
                 {selectedLoad.status === 'completed' || selectedLoad.status === 'delivered' ? 'Completed' :
                   selectedLoad.status === 'in-transit' || selectedLoad.status === 'in transit' ? 'In Transit' :
                     selectedLoad.status === 'assigned' ? 'Assigned' :
-                      selectedLoad.status === 'posted' ? 'Posted' :
-                        selectedLoad.status === 'bidding' ? 'Bidding' :
-                          selectedLoad.status || 'Available'}
+                      selectedLoad.status === 'pending-approval' || selectedLoad.status === 'pending approval' ? 'Pending Approval' :
+                        selectedLoad.status === 'posted' ? 'Posted' :
+                          selectedLoad.status === 'bidding' ? 'Bidding' :
+                            selectedLoad.status || 'Available'}
               </div>
             </div>
             <div className="flex flex-col items-center justify-center">
@@ -1267,10 +1819,9 @@ const MaterialShipperDropdown = ({
               <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                 <tr>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
@@ -1284,15 +1835,12 @@ const MaterialShipperDropdown = ({
                       <span className="font-medium text-gray-700">{load.id}</span>
                     </td>
                     <td className="py-2 px-3">
-                      <span className="font-mono text-sm text-gray-600">{load.loadNum}</span>
-                    </td>
-                    <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{load.shipmentNumber}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 w-48">
                       <span className="font-medium text-gray-700">{load.origin}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 w-48">
                       <span className="font-medium text-gray-700">{load.destination}</span>
                     </td>
                     <td className="py-2 px-3">
@@ -1311,9 +1859,10 @@ const MaterialShipperDropdown = ({
                         {load.status === 'completed' || load.status === 'delivered' ? 'Completed' :
                           load.status === 'in-transit' || load.status === 'in transit' ? 'In Transit' :
                             load.status === 'assigned' ? 'Assigned' :
-                              load.status === 'posted' ? 'Posted' :
-                                load.status === 'bidding' ? 'Bidding' :
-                                  load.status || 'Available'}
+                              load.status === 'pending-approval' || load.status === 'pending approval' ? 'Pending Approval' :
+                                load.status === 'posted' ? 'Posted' :
+                                  load.status === 'bidding' ? 'Bidding' :
+                                    load.status || 'Available'}
                       </div>
                     </td>
                     <td className="py-2 px-3">
@@ -1560,6 +2109,7 @@ const MaterialShipperDropdown = ({
         </div>
       )}
       {/* ✅ ENHANCED MODAL UI */}
+      {console.log("showLoadCreationModal state:", showLoadCreationModal)}
       {showLoadCreationModal && (
         <>
           <style>{`
@@ -1667,177 +2217,520 @@ const MaterialShipperDropdown = ({
                     <h3 className="text-xl font-semibold text-gray-800">Location Details</h3>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* From Location */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        <h4 className="font-semibold text-gray-700">From Location</h4>
-                      </div>
-                      
-                      <div className="relative">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          From Address <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={(el) => (fieldRefs.current['fromZip'] = el)}
-                          name="fromZip"
-                          placeholder="Enter ZIP code or full addresses..."
-                          value={loadForm.fromZip}
-                          onChange={handleChange}
-                          onFocus={() => fromZipOptions.length && setShowFromZipDD(true)}
-                          onBlur={() => setTimeout(() => setShowFromZipDD(false), 150)}
-                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                            formErrors.fromZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        />
-                        {formErrors.fromZip && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <XCircle className="text-red-500" size={16} />
-                            <p className="text-sm text-red-600">{formErrors.fromZip}</p>
+                  {loadType === "OTR" ? (
+                    /* OTR - Multiple Pickup and Delivery Locations */
+                    <div className="space-y-8">
+                      {/* Multiple Pickup Locations */}
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <h4 className="font-semibold text-gray-700">Pickup Locations</h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addPickupLocation}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            <Plus size={16} />
+                            Add Pickup Location
+                          </button>
+                        </div>
+                        
+                        {pickupLocations.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <MapPin size={48} className="mx-auto mb-4 text-gray-300" />
+                            <p>No pickup locations added yet</p>
+                            <p className="text-sm">Click "Add Pickup Location" to get started</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {pickupLocations.map((location, index) => (
+                              <div key={location.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                <div className="flex items-center justify-between mb-4">
+                                  <h5 className="font-medium text-gray-700">Pickup Location {index + 1}</h5>
+                                  <button
+                                    type="button"
+                                    onClick={() => removePickupLocation(location.id)}
+                                    className="text-red-500 hover:text-red-700"
+                                  >
+                                    <XCircle size={20} />
+                                  </button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  <div className="relative">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Pickup Address <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.address}
+                                      onChange={(e) => handleLocationAddressChange(location.id, e.target.value, 'pickup')}
+                                      onFocus={() => pickupZipOptions[location.id]?.length && setShowPickupZipDD(prev => ({ ...prev, [location.id]: true }))}
+                                      onBlur={() => setTimeout(() => setShowPickupZipDD(prev => ({ ...prev, [location.id]: false })), 150)}
+                                      placeholder="Enter ZIP code or full address"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <SearchableZipDropdown
+                                      which="pickup"
+                                      open={showPickupZipDD[location.id] || false}
+                                      setOpen={(open) => setShowPickupZipDD(prev => ({ ...prev, [location.id]: open }))}
+                                      options={pickupZipOptions[location.id] || []}
+                                      query={pickupZipQueries[location.id] || ""}
+                                      setQuery={(query) => setPickupZipQueries(prev => ({ ...prev, [location.id]: query }))}
+                                      onSelect={(which, item) => applyZipToLocation(location.id, item, 'pickup')}
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      City <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.city}
+                                      onChange={(e) => updatePickupLocation(location.id, 'city', e.target.value)}
+                                      placeholder="Enter city"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      State <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.state}
+                                      onChange={(e) => updatePickupLocation(location.id, 'state', e.target.value)}
+                                      placeholder="Enter state"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Weight (lbs) <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.weight}
+                                      onChange={(e) => updatePickupLocation(location.id, 'weight', e.target.value)}
+                                      placeholder="Enter weight"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Commodity
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.commodity}
+                                      onChange={(e) => updatePickupLocation(location.id, 'commodity', e.target.value)}
+                                      placeholder="Enter commodity"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Pickup Date <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={location.pickupDate}
+                                      onChange={(e) => updatePickupLocation(location.id, 'pickupDate', e.target.value)}
+                                      min={todayStr()}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Delivery Date <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={location.deliveryDate}
+                                      onChange={(e) => updatePickupLocation(location.id, 'deliveryDate', e.target.value)}
+                                      min={location.pickupDate || todayStr()}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         )}
-                        <SearchableZipDropdown
-                          which="from"
-                          open={showFromZipDD}
-                          setOpen={setShowFromZipDD}
-                          options={fromZipOptions}
-                          query={fromZipQuery}
-                          setQuery={setFromZipQuery}
-                          onSelect={applyZipSelection}
-                        />
                       </div>
 
+                      {/* Multiple Delivery Locations */}
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          City <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={(el) => (fieldRefs.current['fromCity'] = el)}
-                          name="fromCity"
-                          value={loadForm.fromCity}
-                          onChange={handleChange}
-                          placeholder="Auto-filled from ZIP (editable)"
-                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                            formErrors.fromCity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        />
-                        {formErrors.fromCity && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <XCircle className="text-red-500" size={16} />
-                            <p className="text-sm text-red-600">{formErrors.fromCity}</p>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <h4 className="font-semibold text-gray-700">Delivery Locations</h4>
                           </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          State <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={(el) => (fieldRefs.current['fromState'] = el)}
-                          name="fromState"
-                          value={loadForm.fromState}
-                          onChange={handleChange}
-                          placeholder="Auto-filled from ZIP (editable, e.g., NJ)"
-                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                            formErrors.fromState ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        />
-                        {formErrors.fromState && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <XCircle className="text-red-500" size={16} />
-                            <p className="text-sm text-red-600">{formErrors.fromState}</p>
+                          <button
+                            type="button"
+                            onClick={addDeliveryLocation}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                          >
+                            <Plus size={16} />
+                            Add Delivery Location
+                          </button>
+                        </div>
+                        
+                        {deliveryLocations.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <MapPin size={48} className="mx-auto mb-4 text-gray-300" />
+                            <p>No delivery locations added yet</p>
+                            <p className="text-sm">Click "Add Delivery Location" to get started</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {deliveryLocations.map((location, index) => (
+                              <div key={location.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                <div className="flex items-center justify-between mb-4">
+                                  <h5 className="font-medium text-gray-700">Delivery Location {index + 1}</h5>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeDeliveryLocation(location.id)}
+                                    className="text-red-500 hover:text-red-700"
+                                  >
+                                    <XCircle size={20} />
+                                  </button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  <div className="relative">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Delivery Address <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.address}
+                                      onChange={(e) => handleLocationAddressChange(location.id, e.target.value, 'delivery')}
+                                      onFocus={() => deliveryZipOptions[location.id]?.length && setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: true }))}
+                                      onBlur={() => setTimeout(() => setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: false })), 150)}
+                                      placeholder="Enter ZIP code or full address"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <SearchableZipDropdown
+                                      which="delivery"
+                                      open={showDeliveryZipDD[location.id] || false}
+                                      setOpen={(open) => setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: open }))}
+                                      options={deliveryZipOptions[location.id] || []}
+                                      query={deliveryZipQueries[location.id] || ""}
+                                      setQuery={(query) => setDeliveryZipQueries(prev => ({ ...prev, [location.id]: query }))}
+                                      onSelect={(which, item) => applyZipToLocation(location.id, item, 'delivery')}
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      City <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.city}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'city', e.target.value)}
+                                      placeholder="Enter city"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      State <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.state}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'state', e.target.value)}
+                                      placeholder="Enter state"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Weight (lbs) <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.weight}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'weight', e.target.value)}
+                                      placeholder="Enter weight"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Commodity
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.commodity}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'commodity', e.target.value)}
+                                      placeholder="Enter commodity"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Delivery Date <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={location.deliveryDate}
+                                      onChange={(e) => updateDeliveryLocation(location.id, 'deliveryDate', e.target.value)}
+                                      min={todayStr()}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
                     </div>
+                  ) : (
+                    /* DRAYAGE - Single Pickup and Loading/Unloading Location */
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Pickup Location */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <h4 className="font-semibold text-gray-700">Pickup Location</h4>
+                        </div>
+                        
+                        <div className="relative">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Pickup Address <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['fromZip'] = el)}
+                            name="fromZip"
+                            placeholder="Enter ZIP code or full addresses..."
+                            value={loadForm.fromZip}
+                            onChange={handleChange}
+                            onFocus={() => fromZipOptions.length && setShowFromZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowFromZipDD(false), 150)}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.fromZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.fromZip && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.fromZip}</p>
+                            </div>
+                          )}
+                          <SearchableZipDropdown
+                            which="from"
+                            open={showFromZipDD}
+                            setOpen={setShowFromZipDD}
+                            options={fromZipOptions}
+                            query={fromZipQuery}
+                            setQuery={setFromZipQuery}
+                            onSelect={applyZipSelection}
+                          />
+                        </div>
 
-                    {/* To Location */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <h4 className="font-semibold text-gray-700">To Location</h4>
-                      </div>
-                      
-                      <div className="relative">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          To Address <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={(el) => (fieldRefs.current['toZip'] = el)}
-                          name="toZip"
-                          placeholder="Enter ZIP code or full addresses..."
-                          value={loadForm.toZip}
-                          onChange={handleChange}
-                          onFocus={() => toZipOptions.length && setShowToZipDD(true)}
-                          onBlur={() => setTimeout(() => setShowToZipDD(false), 150)}
-                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                            formErrors.toZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        />
-                        {formErrors.toZip && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <XCircle className="text-red-500" size={16} />
-                            <p className="text-sm text-red-600">{formErrors.toZip}</p>
-                          </div>
-                        )}
-                        <SearchableZipDropdown
-                          which="to"
-                          open={showToZipDD}
-                          setOpen={setShowToZipDD}
-                          options={toZipOptions}
-                          query={toZipQuery}
-                          setQuery={setToZipQuery}
-                          onSelect={applyZipSelection}
-                        />
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            City <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['fromCity'] = el)}
+                            name="fromCity"
+                            value={loadForm.fromCity}
+                            onChange={handleChange}
+                            placeholder="Auto-filled from ZIP (editable)"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.fromCity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.fromCity && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.fromCity}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            State <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['fromState'] = el)}
+                            name="fromState"
+                            value={loadForm.fromState}
+                            onChange={handleChange}
+                            placeholder="Auto-filled from ZIP (editable, e.g., NJ)"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.fromState ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.fromState && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.fromState}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          City <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={(el) => (fieldRefs.current['toCity'] = el)}
-                          name="toCity"
-                          value={loadForm.toCity}
-                          onChange={handleChange}
-                          placeholder="Auto-filled from ZIP (editable)"
-                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                            formErrors.toCity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        />
-                        {formErrors.toCity && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <XCircle className="text-red-500" size={16} />
-                            <p className="text-sm text-red-600">{formErrors.toCity}</p>
-                          </div>
-                        )}
+                      {/* Loading/Unloading Location */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <h4 className="font-semibold text-gray-700">Loading/Unloading Location</h4>
+                        </div>
+                        
+                        <div className="relative">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Loading/Unloading Address <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['toZip'] = el)}
+                            name="toZip"
+                            placeholder="Enter ZIP code or full addresses..."
+                            value={loadForm.toZip}
+                            onChange={handleChange}
+                            onFocus={() => toZipOptions.length && setShowToZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowToZipDD(false), 150)}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.toZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.toZip && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.toZip}</p>
+                            </div>
+                          )}
+                          <SearchableZipDropdown
+                            which="to"
+                            open={showToZipDD}
+                            setOpen={setShowToZipDD}
+                            options={toZipOptions}
+                            query={toZipQuery}
+                            setQuery={setToZipQuery}
+                            onSelect={applyZipSelection}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            City <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['toCity'] = el)}
+                            name="toCity"
+                            value={loadForm.toCity}
+                            onChange={handleChange}
+                            placeholder="Auto-filled from ZIP (editable)"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.toCity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.toCity && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.toCity}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            State <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['toState'] = el)}
+                            name="toState"
+                            value={loadForm.toState}
+                            onChange={handleChange}
+                            placeholder="Auto-filled from ZIP (editable, e.g., AZ)"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.toState ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.toState && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.toState}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          State <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={(el) => (fieldRefs.current['toState'] = el)}
-                          name="toState"
-                          value={loadForm.toState}
-                          onChange={handleChange}
-                          placeholder="Auto-filled from ZIP (editable, e.g., AZ)"
-                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                            formErrors.toState ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        />
-                        {formErrors.toState && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <XCircle className="text-red-500" size={16} />
-                            <p className="text-sm text-red-600">{formErrors.toState}</p>
+                      {/* Drayage Details - Moved under Loading/Unloading Location */}
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                          <h4 className="font-semibold text-gray-700">Drayage Details</h4>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div onClick={() => openDatePicker('returnDate')} className="cursor-pointer">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Return Date <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              ref={(el) => (fieldRefs.current['returnDate'] = el)}
+                              type="date"
+                              name="returnDate"
+                              value={loadForm.returnDate}
+                              onChange={handleChange}
+                              min={todayStr()}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                                formErrors.returnDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                              onClick={(e) => e.target.showPicker?.()}
+                            />
+                            {formErrors.returnDate && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnDate}</p>
+                              </div>
+                            )}
                           </div>
-                        )}
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Return Location <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              ref={(el) => (fieldRefs.current['returnLocation'] = el)}
+                              name="returnLocation"
+                              value={loadForm.returnLocation}
+                              onChange={handleChange}
+                              placeholder="Enter Return Location"
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.returnLocation ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            />
+                            {formErrors.returnLocation && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnLocation}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
 
@@ -1855,16 +2748,18 @@ const MaterialShipperDropdown = ({
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Vehicle Type <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['vehicleType'] = el)}
-                        name="vehicleType"
-                        value={loadForm.vehicleType}
-                        onChange={handleChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                          formErrors.vehicleType ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        placeholder="e.g., Flatbed, Dry Van, Refrigerated"
-                      />
+                      <div className={`${formErrors.vehicleType ? 'border-red-400 bg-red-50' : ''}`}>
+                        <VehicleTypeDropdown
+                          open={vehicleTypeDropdownOpen}
+                          setOpen={setVehicleTypeDropdownOpen}
+                          options={vehicleTypeOptions}
+                          searchQuery={vehicleTypeSearchQuery}
+                          setSearchQuery={setVehicleTypeSearchQuery}
+                          onSelect={handleVehicleTypeSelect}
+                          inputValue={loadForm.vehicleType}
+                          setInputValue={(value) => setLoadForm(prev => ({ ...prev, vehicleType: value }))}
+                        />
+                      </div>
                       {formErrors.vehicleType && (
                         <div className="flex items-center gap-2 mt-2">
                           <XCircle className="text-red-500" size={16} />
@@ -1875,52 +2770,7 @@ const MaterialShipperDropdown = ({
                     
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Commodity <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['commodity'] = el)}
-                        name="commodity"
-                        value={loadForm.commodity}
-                        onChange={handleChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                          formErrors.commodity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        placeholder="e.g., Steel Coils, Electronics, Food Products"
-                      />
-                      {formErrors.commodity && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.commodity}</p>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Weight (kg) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['weight'] = el)}
-                        name="weight"
-                        inputMode="decimal"
-                        placeholder="e.g., 12000.50"
-                        value={loadForm.weight}
-                        onChange={handleChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                          formErrors.weight ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      />
-                      {formErrors.weight && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.weight}</p>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Expected Price ($) <span className="text-red-500">*</span>
+                        Target Rate ($)
                       </label>
                       <input
                         ref={(el) => (fieldRefs.current['rate'] = el)}
@@ -1940,7 +2790,169 @@ const MaterialShipperDropdown = ({
                         </div>
                       )}
                     </div>
+
+                    {loadType === 'DRAYAGE' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Weight (lbs) <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['weight'] = el)}
+                            name="weight"
+                            placeholder="e.g., 25000"
+                            value={loadForm.weight}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.weight ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.weight && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.weight}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Commodity <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['commodity'] = el)}
+                            name="commodity"
+                            placeholder="e.g., Electronics, Furniture"
+                            value={loadForm.commodity}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.commodity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.commodity && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.commodity}</p>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
+                </div>
+
+                {/* Schedule Section */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                      <Calendar className="text-indigo-600" size={20} />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800">Schedule & Timeline</h3>
+                  </div>
+                  
+                  {loadType === "DRAYAGE" ? (
+                    /* DRAYAGE - Show Pickup Date, Delivery Date, and Bid Deadline */
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div onClick={() => openDatePicker('pickupDate')} className="cursor-pointer">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Pickup Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['pickupDate'] = el)}
+                          type="date"
+                          name="pickupDate"
+                          value={loadForm.pickupDate}
+                          onChange={handleChange}
+                          min={todayStr()}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                            formErrors.pickupDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={(e) => e.target.showPicker?.()}
+                        />
+                        {formErrors.pickupDate && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.pickupDate}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div onClick={() => openDatePicker('deliveryDate')} className="cursor-pointer">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Delivery Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['deliveryDate'] = el)}
+                          type="date"
+                          name="deliveryDate"
+                          value={loadForm.deliveryDate}
+                          onChange={handleChange}
+                          min={loadForm.pickupDate || todayStr()}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                            formErrors.deliveryDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={(e) => e.target.showPicker?.()}
+                        />
+                        {formErrors.deliveryDate && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.deliveryDate}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div onClick={() => openDatePicker('bidDeadline')} className="cursor-pointer">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Bid Deadline <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
+                          type="date"
+                          name="bidDeadline"
+                          value={loadForm.bidDeadline}
+                          onChange={handleChange}
+                          min={todayStr()}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                            formErrors.bidDeadline ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={(e) => e.target.showPicker?.()}
+                        />
+                        {formErrors.bidDeadline && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.bidDeadline}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* OTR - Show only Bid Deadline */
+                    <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
+                      <div onClick={() => openDatePicker('bidDeadline')} className="cursor-pointer">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Bid Deadline <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
+                          type="date"
+                          name="bidDeadline"
+                          value={loadForm.bidDeadline}
+                          onChange={handleChange}
+                          min={todayStr()}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                            formErrors.bidDeadline ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={(e) => e.target.showPicker?.()}
+                        />
+                        {formErrors.bidDeadline && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.bidDeadline}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Additional Details Section */}
@@ -2043,149 +3055,6 @@ const MaterialShipperDropdown = ({
                   </div>
                 </div>
 
-                {/* Schedule Section */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                      <Calendar className="text-indigo-600" size={20} />
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-800">Schedule & Timeline</h3>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div onClick={() => openDatePicker('pickupDate')} className="cursor-pointer">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Pickup Date <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['pickupDate'] = el)}
-                        type="date"
-                        name="pickupDate"
-                        value={loadForm.pickupDate}
-                        onChange={handleChange}
-                        min={todayStr()}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
-                          formErrors.pickupDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={(e) => e.target.showPicker?.()}
-                      />
-                      {formErrors.pickupDate && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.pickupDate}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div onClick={() => openDatePicker('deliveryDate')} className="cursor-pointer">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Delivery Date <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['deliveryDate'] = el)}
-                        type="date"
-                        name="deliveryDate"
-                        value={loadForm.deliveryDate}
-                        onChange={handleChange}
-                        min={loadForm.pickupDate ? addDays(loadForm.pickupDate, 1) : todayStr()}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
-                          formErrors.deliveryDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={(e) => e.target.showPicker?.()}
-                      />
-                      {formErrors.deliveryDate && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.deliveryDate}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div onClick={() => openDatePicker('bidDeadline')} className="cursor-pointer">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Bid Deadline <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
-                        type="date"
-                        name="bidDeadline"
-                        value={loadForm.bidDeadline}
-                        onChange={handleChange}
-                        min={todayStr()}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
-                          formErrors.bidDeadline ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={(e) => e.target.showPicker?.()}
-                      />
-                      {formErrors.bidDeadline && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.bidDeadline}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* DRAYAGE-specific Section */}
-                {loadType === "DRAYAGE" && (
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                        <Truck className="text-yellow-600" size={20} />
-                      </div>
-                      <h3 className="text-xl font-semibold text-gray-800">Drayage Details</h3>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div onClick={() => openDatePicker('returnDate')} className="cursor-pointer">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Return Date <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={(el) => (fieldRefs.current['returnDate'] = el)}
-                          type="date"
-                          name="returnDate"
-                          value={loadForm.returnDate}
-                          onChange={handleChange}
-                          min={todayStr()}
-                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
-                            formErrors.returnDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                          onClick={(e) => e.target.showPicker?.()}
-                        />
-                        {formErrors.returnDate && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <XCircle className="text-red-500" size={16} />
-                            <p className="text-sm text-red-600">{formErrors.returnDate}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Return Location <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={(el) => (fieldRefs.current['returnLocation'] = el)}
-                          name="returnLocation"
-                          value={loadForm.returnLocation}
-                          onChange={handleChange}
-                          placeholder="Enter Return Location"
-                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                            formErrors.returnLocation ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        />
-                        {formErrors.returnLocation && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <XCircle className="text-red-500" size={16} />
-                            <p className="text-sm text-red-600">{formErrors.returnLocation}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Enhanced Form Actions */}
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -2220,6 +3089,7 @@ const MaterialShipperDropdown = ({
                             type="submit"
                             disabled={isSubmitting}
                             aria-busy={isSubmitting}
+                            onClick={() => console.log("🔥 Submit button clicked!")}
                             className={[
                               "relative inline-flex items-center justify-center gap-3",
                               "px-8 py-3 rounded-xl text-white font-semibold shadow-lg",
