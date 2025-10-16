@@ -149,8 +149,24 @@ export default function RateApproved() {
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
-          origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
-          destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
+          origin: bid.load ? (() => {
+            if (bid.load.origin && bid.load.origin.city) {
+              return `${bid.load.origin.city}, ${bid.load.origin.state || 'N/A'}`;
+            }
+            if (bid.load.origins && bid.load.origins.length > 0) {
+              return `${bid.load.origins[0].city}, ${bid.load.origins[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
+          destination: bid.load ? (() => {
+            if (bid.load.destination && bid.load.destination.city) {
+              return `${bid.load.destination.city}, ${bid.load.destination.state || 'N/A'}`;
+            }
+            if (bid.load.destinations && bid.load.destinations.length > 0) {
+              return `${bid.load.destinations[0].city}, ${bid.load.destinations[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
           originalRate: bid.originalRate || bid.load?.rate || 0,
           intermediateRate: bid.intermediateRate || 0,
           rate: bid.intermediateRate || bid.originalRate || 0,
@@ -235,8 +251,24 @@ export default function RateApproved() {
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
-          origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
-          destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
+          origin: bid.load ? (() => {
+            if (bid.load.origin && bid.load.origin.city) {
+              return `${bid.load.origin.city}, ${bid.load.origin.state || 'N/A'}`;
+            }
+            if (bid.load.origins && bid.load.origins.length > 0) {
+              return `${bid.load.origins[0].city}, ${bid.load.origins[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
+          destination: bid.load ? (() => {
+            if (bid.load.destination && bid.load.destination.city) {
+              return `${bid.load.destination.city}, ${bid.load.destination.state || 'N/A'}`;
+            }
+            if (bid.load.destinations && bid.load.destinations.length > 0) {
+              return `${bid.load.destinations[0].city}, ${bid.load.destinations[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
           originalRate: bid.originalRate || bid.load?.rate || 0,
           intermediateRate: bid.intermediateRate || 0,
           rate: bid.intermediateRate || bid.originalRate || 0,
@@ -410,8 +442,24 @@ export default function RateApproved() {
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
-          origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
-          destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
+          origin: bid.load ? (() => {
+            if (bid.load.origin && bid.load.origin.city) {
+              return `${bid.load.origin.city}, ${bid.load.origin.state || 'N/A'}`;
+            }
+            if (bid.load.origins && bid.load.origins.length > 0) {
+              return `${bid.load.origins[0].city}, ${bid.load.origins[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
+          destination: bid.load ? (() => {
+            if (bid.load.destination && bid.load.destination.city) {
+              return `${bid.load.destination.city}, ${bid.load.destination.state || 'N/A'}`;
+            }
+            if (bid.load.destinations && bid.load.destinations.length > 0) {
+              return `${bid.load.destinations[0].city}, ${bid.load.destinations[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
           rate: bid.rate,
           truckerName: bid.carrier?.compName || 'N/A',
           status: 'pending',
@@ -454,8 +502,24 @@ export default function RateApproved() {
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
-          origin: bid.load ? `${bid.load.origin?.city || 'N/A'}, ${bid.load.origin?.state || 'N/A'}` : 'N/A, N/A',
-          destination: bid.load ? `${bid.load.destination?.city || 'N/A'}, ${bid.load.destination?.state || 'N/A'}` : 'N/A, N/A',
+          origin: bid.load ? (() => {
+            if (bid.load.origin && bid.load.origin.city) {
+              return `${bid.load.origin.city}, ${bid.load.origin.state || 'N/A'}`;
+            }
+            if (bid.load.origins && bid.load.origins.length > 0) {
+              return `${bid.load.origins[0].city}, ${bid.load.origins[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
+          destination: bid.load ? (() => {
+            if (bid.load.destination && bid.load.destination.city) {
+              return `${bid.load.destination.city}, ${bid.load.destination.state || 'N/A'}`;
+            }
+            if (bid.load.destinations && bid.load.destinations.length > 0) {
+              return `${bid.load.destinations[0].city}, ${bid.load.destinations[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
           rate: bid.rate,
           truckerName: bid.carrier?.compName || 'N/A',
           status: 'pending',

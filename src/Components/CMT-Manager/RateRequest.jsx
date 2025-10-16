@@ -200,13 +200,38 @@ const autoAcceptingRef = useRef(new Set());
           };
         }
 
+        // Helper function to get origin data (check both single object and array)
+        const getOriginData = () => {
+          if (approval.loadId.origin && approval.loadId.origin.city) {
+            return { city: approval.loadId.origin.city, state: approval.loadId.origin.state };
+          }
+          if (approval.loadId.origins && approval.loadId.origins.length > 0) {
+            return { city: approval.loadId.origins[0].city, state: approval.loadId.origins[0].state };
+          }
+          return { city: 'N/A', state: 'N/A' };
+        };
+
+        // Helper function to get destination data (check both single object and array)
+        const getDestinationData = () => {
+          if (approval.loadId.destination && approval.loadId.destination.city) {
+            return { city: approval.loadId.destination.city, state: approval.loadId.destination.state };
+          }
+          if (approval.loadId.destinations && approval.loadId.destinations.length > 0) {
+            return { city: approval.loadId.destinations[0].city, state: approval.loadId.destinations[0].state };
+          }
+          return { city: 'N/A', state: 'N/A' };
+        };
+
+        const originData = getOriginData();
+        const destinationData = getDestinationData();
+
         return {
           _id: approval._id, // approval id
           loadId, // real load id for timers
           shipmentNumber: approval.loadId.shipmentNumber || null,
           weight: approval.loadId.weight || 0,
-          origin: approval.loadId.origin || { city: 'N/A', state: 'N/A' },
-          destination: approval.loadId.destination || { city: 'N/A', state: 'N/A' },
+          origin: originData,
+          destination: destinationData,
           vehicleType: approval.loadId.vehicleType || 'N/A',
           rate: approval.loadId.rate || 0,
           commodity: approval.loadId.commodity || 'N/A',
@@ -233,6 +258,10 @@ const autoAcceptingRef = useRef(new Set());
       const transformedApproved = approvedApprovals.map((approval) => {
         const loadId = approval?.loadId?._id || null;
 
+        console.log('Debug - approval object:', approval);
+        console.log('Debug - approval.loadId:', approval.loadId);
+        console.log('Debug - loadId:', loadId);
+
         if (!approval.loadId) {
           return {
             _id: approval._id,
@@ -257,13 +286,38 @@ const autoAcceptingRef = useRef(new Set());
           };
         }
 
+        // Helper function to get origin data (check both single object and array)
+        const getOriginData = () => {
+          if (approval.loadId.origin && approval.loadId.origin.city) {
+            return { city: approval.loadId.origin.city, state: approval.loadId.origin.state };
+          }
+          if (approval.loadId.origins && approval.loadId.origins.length > 0) {
+            return { city: approval.loadId.origins[0].city, state: approval.loadId.origins[0].state };
+          }
+          return { city: 'N/A', state: 'N/A' };
+        };
+
+        // Helper function to get destination data (check both single object and array)
+        const getDestinationData = () => {
+          if (approval.loadId.destination && approval.loadId.destination.city) {
+            return { city: approval.loadId.destination.city, state: approval.loadId.destination.state };
+          }
+          if (approval.loadId.destinations && approval.loadId.destinations.length > 0) {
+            return { city: approval.loadId.destinations[0].city, state: approval.loadId.destinations[0].state };
+          }
+          return { city: 'N/A', state: 'N/A' };
+        };
+
+        const originData = getOriginData();
+        const destinationData = getDestinationData();
+
         return {
           _id: approval._id, // approval id
           loadId, // real load id for timers
           shipmentNumber: approval.loadId.shipmentNumber || null,
           weight: approval.loadId.weight || 0,
-          origin: approval.loadId.origin || { city: 'N/A', state: 'N/A' },
-          destination: approval.loadId.destination || { city: 'N/A', state: 'N/A' },
+          origin: originData,
+          destination: destinationData,
           vehicleType: approval.loadId.vehicleType || 'N/A',
           rate: approval.loadId.rate || 0,
           commodity: approval.loadId.commodity || 'N/A',

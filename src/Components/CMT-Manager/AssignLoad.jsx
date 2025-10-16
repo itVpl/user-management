@@ -66,6 +66,31 @@ export default function AssignLoad() {
               console.log(`Load ${load._id} CMT Assignment:`, load.cmtAssignment);
             }
             
+            // Helper function to get origin data (check both single object and array)
+            const getOriginData = () => {
+              if (load.origin && load.origin.city) {
+                return { city: load.origin.city, state: load.origin.state };
+              }
+              if (load.origins && load.origins.length > 0) {
+                return { city: load.origins[0].city, state: load.origins[0].state };
+              }
+              return { city: 'N/A', state: 'N/A' };
+            };
+
+            // Helper function to get destination data (check both single object and array)
+            const getDestinationData = () => {
+              if (load.destination && load.destination.city) {
+                return { city: load.destination.city, state: load.destination.state };
+              }
+              if (load.destinations && load.destinations.length > 0) {
+                return { city: load.destinations[0].city, state: load.destinations[0].state };
+              }
+              return { city: 'N/A', state: 'N/A' };
+            };
+
+            const originData = getOriginData();
+            const destinationData = getDestinationData();
+
             return {
               id: load._id || index,
               sNo: index + 1,
@@ -80,10 +105,10 @@ export default function AssignLoad() {
               rateType: load.rateType || 'N/A',
               status: load.status || 'N/A',
               loadType: load.loadType || 'N/A',
-              pickupAddress: load.origin?.city || 'N/A',
-              pickupState: load.origin?.state || 'N/A',
-              deliveryAddress: load.destination?.city || 'N/A',
-              deliveryState: load.destination?.state || 'N/A',
+              pickupAddress: originData.city,
+              pickupState: originData.state,
+              deliveryAddress: destinationData.city,
+              deliveryState: destinationData.state,
               pickupDate: load.pickupDate,
               deliveryDate: load.deliveryDate,
               createdAt: load.createdAt || new Date().toISOString().split('T')[0],
@@ -438,8 +463,8 @@ export default function AssignLoad() {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load ID</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Shipper</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Origin</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Destination</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Pickup</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Delivery</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Status</th>
