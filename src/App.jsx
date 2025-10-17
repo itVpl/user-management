@@ -62,6 +62,7 @@ import CheckInvoice from "./Components/Sales/CheckInvoice.jsx"
 import AssignLoad from "./Components/CMT-Manager/AssignLoad.jsx";
 import FinanceDashboard from "./Components/Finance/FinanceDashboard.jsx";
 import CallingReport from "./Pages/IddCallingReport.jsx";
+import AddFleet from "./Components/CMT-Manager/addFleet.jsx";
 
 
 
@@ -282,6 +283,7 @@ function App() {
           <Route path="/AssignLoad" element={<AssignLoad />} />
           <Route path="/finance-dashboard" element={<FinanceDashboard />} />
           <Route path="/CallingReport" element={<CallingReport />} />
+          <Route path="/AddFleet" element={<AddFleet />} />
 
         </Route>
 
