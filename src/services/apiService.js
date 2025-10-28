@@ -234,6 +234,11 @@ class ApiService {
   async updateTruckerStatus(userId, statusData) {
     return this.patch(`${this.endpoints.UPDATE_TRUCKER_STATUS}/${userId}`, statusData);
   }
+
+  // Terms and Conditions methods
+  async acceptTerms(termsData) {
+    return this.post(this.endpoints.ACCEPT_TERMS, termsData);
+  }
 }
 
 // Create and export singleton instance

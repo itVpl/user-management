@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { MoreHorizontal, Phone, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Award, Truck, DollarSign, Target } from 'lucide-react';
+import UpcomingBirthdays from '../UpcomingBirthdays';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -576,6 +577,11 @@ const Dashboard = () => {
             </div>
           </div>
 
+          {/* Upcoming Birthdays */}
+          <div className="mb-8">
+            <UpcomingBirthdays limit={3}  />
+          </div>
+
                      {/* Pending Load Table */}
            <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
              <div className="flex items-center justify-between mb-6">
@@ -755,6 +761,7 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+            
 
             {/* Recent DO (instead of Recent Carrier) */}
             <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
@@ -808,7 +815,10 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-
+{/* Upcoming Birthdays */}
+<div className="mb-8">
+            <UpcomingBirthdays limit={3}  />
+          </div>
           {/* DO Data Table */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
             <div className="flex items-center justify-between mb-6">

@@ -2168,17 +2168,7 @@ export default function DODetails({ overrideEmpId }) {
         </div>
       </div>
 
-      {/* Debug info for rejected tab */}
-      {activeTab === 'rejected' && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="text-sm text-blue-800">
-            <strong>Debug Info:</strong> CMT EmpId: {resolvedEmpId} | 
-            API URL: {API_CONFIG.BASE_URL}/api/v1/accountant/cmt-user/rejected-dos?cmtEmpId={resolvedEmpId} | 
-            Loading: {rejectedLoading ? 'Yes' : 'No'} | 
-            Data Count: {rejectedDOs.length}
-          </div>
-        </div>
-      )}
+      
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">

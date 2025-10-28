@@ -20,6 +20,7 @@ const API_CONFIG = {
     TRUCKERS: '/api/v1/truckers',
     UPDATE_TRUCKER_STATUS: '/api/v1/truckers',
     CMT_USERS: '/api/v1/inhouseUser/department/CMT',
+    ACCEPT_TERMS: '/api/v1/inhouseUser/terms/accept',
   },
   
   // Helper function to get full URL

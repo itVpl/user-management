@@ -3,6 +3,7 @@ import logo from '../../../assets/LogoFinal.png';
 import VideoBg from '../../../assets/BackgroundVideo.mp4';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import TermsAndConditions from '../../../Components/TermsAndConditions';
 
 // Simple inline icons (no extra libs)
 const Eye = (props) => (
@@ -31,6 +32,10 @@ function Login({ setIsAuthenticated }) {
   // Auth error (invalid id/password)
   const [authError, setAuthError] = useState('');
 
+  // Terms and conditions state
+  const [showTerms, setShowTerms] = useState(false);
+  const [userData, setUserData] = useState(null);
+
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -57,18 +62,25 @@ function Login({ setIsAuthenticated }) {
       );
 
       if (res.data?.success) {
-        setIsAuthenticated?.(true);
-
         const user = res.data.employee;
         const token = res.data.token;
 
-        // Always store for the session (you can add "Remember me" UI if needed)
+        // Store user data and token
         sessionStorage.setItem('token', token);
         sessionStorage.setItem('empId', user.empId);
         sessionStorage.setItem('user', JSON.stringify(user));
         sessionStorage.setItem('authToken', token);
 
-        navigate('/dashboard');
+        // Check if terms are accepted
+        if (user.termsAccepted === false || user.termsAccepted === undefined) {
+          // Show terms and conditions modal
+          setUserData(user);
+          setShowTerms(true);
+        } else {
+          // Terms already accepted, proceed to dashboard
+          setIsAuthenticated?.(true);
+          navigate('/dashboard');
+        }
       } else {
         // Generic auth error message (no backend phrasing like "Employee not found this id")
         setAuthError('Please enter the valid employee id or password.');
@@ -99,6 +111,13 @@ function Login({ setIsAuthenticated }) {
     if (password) setFieldErrors((e) => ({ ...e, password: '' }));
     if (authError && password) setAuthError('');
   }, [password]);
+
+  // Handle terms acceptance
+  const handleTermsAccepted = (termsData) => {
+    setShowTerms(false);
+    setIsAuthenticated?.(true);
+    navigate('/dashboard');
+  };
 
   return (
     <div className="relative flex justify-center items-center min-h-screen px-4 overflow-hidden">
@@ -197,6 +216,14 @@ function Login({ setIsAuthenticated }) {
           </button>
         </form>
       </div>
+
+      {/* Terms and Conditions Modal */}
+      {showTerms && userData && (
+        <TermsAndConditions 
+          onAccept={handleTermsAccepted} 
+          user={userData} 
+        />
+      )}
     </div>
   );
 }

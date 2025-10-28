@@ -62,7 +62,11 @@ import CheckInvoice from "./Components/Sales/CheckInvoice.jsx"
 import AssignLoad from "./Components/CMT-Manager/AssignLoad.jsx";
 import FinanceDashboard from "./Components/Finance/FinanceDashboard.jsx";
 import CallingReport from "./Pages/IddCallingReport.jsx";
+
+import TermsAndConditions from "./Components/TermsAndConditions.jsx";
+
 import AddFleet from "./Components/CMT-Manager/addFleet.jsx";
+
 
 
 
@@ -193,14 +197,46 @@ function GlobalRRListener() {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showTerms, setShowTerms] = useState(false);
+  const [userData, setUserData] = useState(null);
 
   useEffect(() => {
     const token =
       localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
     const user = localStorage.getItem("user") || sessionStorage.getItem("user");
-    setIsAuthenticated(!!token && !!user);
+    
+    if (token && user) {
+      try {
+        const userObj = JSON.parse(user);
+        // Check if terms are accepted
+        if (userObj.termsAccepted === false || userObj.termsAccepted === undefined) {
+          setShowTerms(true);
+          setUserData(userObj);
+          setIsAuthenticated(false); // Don't authenticate until terms are accepted
+        } else {
+          setIsAuthenticated(true);
+        }
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        setIsAuthenticated(false);
+      }
+    } else {
+      setIsAuthenticated(false);
+    }
     setLoading(false);
   }, []);
+
+  // Handle terms acceptance
+  const handleTermsAccepted = (termsData) => {
+    setShowTerms(false);
+    setIsAuthenticated(true);
+    // Update user data in storage with terms acceptance
+    if (userData) {
+      const updatedUser = { ...userData, termsAccepted: true };
+      sessionStorage.setItem('user', JSON.stringify(updatedUser));
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+  };
 
   if (loading) {
     return (
@@ -289,6 +325,14 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+
+      {/* Terms and Conditions Modal */}
+      {showTerms && userData && (
+        <TermsAndConditions 
+          onAccept={handleTermsAccepted} 
+          user={userData} 
+        />
+      )}
     </>
   );
 }
