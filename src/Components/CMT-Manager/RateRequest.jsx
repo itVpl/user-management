@@ -32,6 +32,7 @@ const loadShort = (id) => {
   return s ? `L-${s.slice(-4)}` : 'L-0000';
 };
 
+
 function readLS(key) {
   try {
     return JSON.parse(localStorage.getItem(key) || '{}');
@@ -182,8 +183,8 @@ const autoAcceptingRef = useRef(new Set());
             loadId,
             shipmentNumber: null,
             weight: 0,
-            origin: { city: 'N/A', state: 'N/A' },
-            destination: { city: 'N/A', state: 'N/A' },
+            origin: { city: 'N/A', state: 'N/A', zipcode: 'N/A' },
+            destination: { city: 'N/A', state: 'N/A', zipcode: 'N/A' },
             vehicleType: 'N/A',
             rate: 0,
             commodity: 'N/A',
@@ -203,23 +204,39 @@ const autoAcceptingRef = useRef(new Set());
         // Helper function to get origin data (check both single object and array)
         const getOriginData = () => {
           if (approval.loadId.origin && approval.loadId.origin.city) {
-            return { city: approval.loadId.origin.city, state: approval.loadId.origin.state };
+            return { 
+              city: approval.loadId.origin.city, 
+              state: approval.loadId.origin.state,
+              zipcode: approval.loadId.origin.zipcode || approval.loadId.origin.zip || 'N/A'
+            };
           }
           if (approval.loadId.origins && approval.loadId.origins.length > 0) {
-            return { city: approval.loadId.origins[0].city, state: approval.loadId.origins[0].state };
+            return { 
+              city: approval.loadId.origins[0].city, 
+              state: approval.loadId.origins[0].state,
+              zipcode: approval.loadId.origins[0].zipcode || approval.loadId.origins[0].zip || 'N/A'
+            };
           }
-          return { city: 'N/A', state: 'N/A' };
+          return { city: 'N/A', state: 'N/A', zipcode: 'N/A' };
         };
 
         // Helper function to get destination data (check both single object and array)
         const getDestinationData = () => {
           if (approval.loadId.destination && approval.loadId.destination.city) {
-            return { city: approval.loadId.destination.city, state: approval.loadId.destination.state };
+            return { 
+              city: approval.loadId.destination.city, 
+              state: approval.loadId.destination.state,
+              zipcode: approval.loadId.destination.zipcode || approval.loadId.destination.zip || 'N/A'
+            };
           }
           if (approval.loadId.destinations && approval.loadId.destinations.length > 0) {
-            return { city: approval.loadId.destinations[0].city, state: approval.loadId.destinations[0].state };
+            return { 
+              city: approval.loadId.destinations[0].city, 
+              state: approval.loadId.destinations[0].state,
+              zipcode: approval.loadId.destinations[0].zipcode || approval.loadId.destinations[0].zip || 'N/A'
+            };
           }
-          return { city: 'N/A', state: 'N/A' };
+          return { city: 'N/A', state: 'N/A', zipcode: 'N/A' };
         };
 
         const originData = getOriginData();
@@ -268,8 +285,8 @@ const autoAcceptingRef = useRef(new Set());
             loadId,
             shipmentNumber: null,
             weight: 0,
-            origin: { city: 'N/A', state: 'N/A' },
-            destination: { city: 'N/A', state: 'N/A' },
+            origin: { city: 'N/A', state: 'N/A', zipcode: 'N/A' },
+            destination: { city: 'N/A', state: 'N/A', zipcode: 'N/A' },
             vehicleType: 'N/A',
             rate: 0,
             commodity: 'N/A',
@@ -289,23 +306,39 @@ const autoAcceptingRef = useRef(new Set());
         // Helper function to get origin data (check both single object and array)
         const getOriginData = () => {
           if (approval.loadId.origin && approval.loadId.origin.city) {
-            return { city: approval.loadId.origin.city, state: approval.loadId.origin.state };
+            return { 
+              city: approval.loadId.origin.city, 
+              state: approval.loadId.origin.state,
+              zipcode: approval.loadId.origin.zipcode || approval.loadId.origin.zip || 'N/A'
+            };
           }
           if (approval.loadId.origins && approval.loadId.origins.length > 0) {
-            return { city: approval.loadId.origins[0].city, state: approval.loadId.origins[0].state };
+            return { 
+              city: approval.loadId.origins[0].city, 
+              state: approval.loadId.origins[0].state,
+              zipcode: approval.loadId.origins[0].zipcode || approval.loadId.origins[0].zip || 'N/A'
+            };
           }
-          return { city: 'N/A', state: 'N/A' };
+          return { city: 'N/A', state: 'N/A', zipcode: 'N/A' };
         };
 
         // Helper function to get destination data (check both single object and array)
         const getDestinationData = () => {
           if (approval.loadId.destination && approval.loadId.destination.city) {
-            return { city: approval.loadId.destination.city, state: approval.loadId.destination.state };
+            return { 
+              city: approval.loadId.destination.city, 
+              state: approval.loadId.destination.state,
+              zipcode: approval.loadId.destination.zipcode || approval.loadId.destination.zip || 'N/A'
+            };
           }
           if (approval.loadId.destinations && approval.loadId.destinations.length > 0) {
-            return { city: approval.loadId.destinations[0].city, state: approval.loadId.destinations[0].state };
+            return { 
+              city: approval.loadId.destinations[0].city, 
+              state: approval.loadId.destinations[0].state,
+              zipcode: approval.loadId.destinations[0].zipcode || approval.loadId.destinations[0].zip || 'N/A'
+            };
           }
-          return { city: 'N/A', state: 'N/A' };
+          return { city: 'N/A', state: 'N/A', zipcode: 'N/A' };
         };
 
         const originData = getOriginData();
@@ -1115,7 +1148,7 @@ useEffect(() => {
         'S.No': index + 1,
         'Load ID': loadShort(item._id),
         'Shipment Number': item.shipmentNumber || 'N/A',
-        'Weight (Kg)': item.weight || 0,
+        'Weight (lbs)': item.weight || 0,
         'Pickup City': item.origin?.city || 'N/A',
         'Pickup State': item.origin?.state || 'N/A',
         'Delivery City': item.destination?.city || 'N/A',
@@ -1481,7 +1514,7 @@ useEffect(() => {
                   <tr>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight (lbs)</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle</th>
@@ -1506,7 +1539,7 @@ useEffect(() => {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.weight} Kg</span>
+                        <span className="font-medium text-gray-700">{item.weight} lbs</span>
                       </td>
                       <td className="px-4 py-3">
                         <div>
@@ -1670,7 +1703,7 @@ useEffect(() => {
                   <tr>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
                     {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment No</th> */}
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight (lbs)</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle</th>
@@ -1693,7 +1726,7 @@ useEffect(() => {
                         <span className="font-medium text-gray-700">{item.shipmentNumber || 'N/A'}</span>
                       </td> */}
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.weight} Kg</span>
+                        <span className="font-medium text-gray-700">{item.weight} lbs</span>
                       </td>
                       <td className="px-4 py-3">
                         <div>
@@ -1808,15 +1841,17 @@ useEffect(() => {
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pickup Location</div>
                       <div className="text-sm font-semibold text-gray-800">{selectedRequest?.origin?.city || '—'}</div>
                       <div className="text-xs text-gray-500">{selectedRequest?.origin?.state || ''}</div>
+                      <div className="text-xs text-gray-400">ZIP: {selectedRequest?.origin?.zipcode || 'N/A'}</div>
                     </div>
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Delivery Location</div>
                       <div className="text-sm font-semibold text-gray-800">{selectedRequest?.destination?.city || '—'}</div>
                       <div className="text-xs text-gray-500">{selectedRequest?.destination?.state || ''}</div>
+                      <div className="text-xs text-gray-400">ZIP: {selectedRequest?.destination?.zipcode || 'N/A'}</div>
                     </div>
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weight</div>
-                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.weight} Kg</div>
+                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.weight} lbs</div>
                     </div>
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Vehicle Type</div>
@@ -2301,7 +2336,7 @@ useEffect(() => {
               <div>
                 <strong>Weight:</strong>
                 <br />
-                {approvalModal.approval?.weight || 0} Kg
+                {approvalModal.approval?.weight || 0} lbs
               </div>
               <div>
                 <strong>Rate:</strong>
@@ -2545,7 +2580,7 @@ useEffect(() => {
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Shipper</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Origin</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Destination</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight</th>
+                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight (lbs)</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Rate</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Status</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Assigned To</th>
@@ -2590,7 +2625,7 @@ useEffect(() => {
                             </div>
                           </td>
                           <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{load.load?.weight || 0} Kg</span>
+                            <span className="font-medium text-gray-700">{load.load?.weight || 0} lbs</span>
                           </td>
                           <td className="py-2 px-3">
                             <span className="font-medium text-gray-700">${load.load?.rate?.toLocaleString() || '0'}</span>

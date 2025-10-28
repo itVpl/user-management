@@ -11,6 +11,28 @@ const getAuthToken = () =>
   localStorage.getItem('token') ||
   sessionStorage.getItem('token');
 
+// Helper function to format date and time
+const formatDateTime = (dateString) => {
+  if (!dateString) return 'N/A';
+  try {
+    const date = new Date(dateString);
+    return {
+      date: date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      }),
+      time: date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
+    };
+  } catch (error) {
+    return { date: 'N/A', time: 'N/A' };
+  }
+};
+
 export default function AssignLoad() {
   const [loads, setLoads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +139,7 @@ export default function AssignLoad() {
               assignedTo: load.assignedTo,
               cmtAssignment: load.cmtAssignment || null,
               customerAddedBy: load.customerAddedBy || {},
+              createdBy: load.customerAddedBy || load.addedBy || {},
               loadApprovalStatus: load.loadApprovalStatus || 'N/A',
               cmtApprovals: load.cmtApprovals || [],
               approvalExpiry: load.approvalExpiry,
@@ -469,6 +492,7 @@ export default function AssignLoad() {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Status</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">CMT Assignment</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Date & Time</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Approval</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Action</th>
                   </tr>
@@ -501,7 +525,7 @@ export default function AssignLoad() {
                         </div>
                       </td>
                       <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{load.weight} Kg</span>
+                        <span className="font-medium text-gray-700">{load.weight} lbs</span>
                       </td>
                       <td className="py-2 px-3">
                         <span className="font-bold text-green-600">{formatCurrency(load.rate)}</span>
@@ -520,6 +544,12 @@ export default function AssignLoad() {
                         ) : (
                           <span className="text-gray-400 text-sm">Not Assigned</span>
                         )}
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <span className="font-medium text-gray-700 text-sm">{formatDateTime(load.createdAt).date}</span>
+                          <p className="text-xs text-gray-500">{formatDateTime(load.createdAt).time}</p>
+                        </div>
                       </td>
                       <td className="py-2 px-3">
                         <span className={`text-xs px-3 py-1 rounded-full font-bold ${getApprovalStatusColor(load.loadApprovalStatus)}`}>
