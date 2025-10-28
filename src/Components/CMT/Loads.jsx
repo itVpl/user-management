@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Plus } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Plus, Copy } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -29,6 +29,7 @@ export default function Loads() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedLoadForAction, setSelectedLoadForAction] = useState(null);
+  const [isDuplicating, setIsDuplicating] = useState(false);
   // CMT Assignment state
   const [cmtAssignment, setCmtAssignment] = useState(null);
   const [loadingCmtAssignment, setLoadingCmtAssignment] = useState(false);
@@ -1140,7 +1141,7 @@ const MaterialShipperDropdown = ({
     console.log("✅ Form validation passed!");
 
     // Get authentication token
-    const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     console.log("🔑 Token found:", token ? "Yes" : "No");
     if (!token) {
       console.log("❌ No token found, user not logged in");
@@ -1248,25 +1249,51 @@ const MaterialShipperDropdown = ({
 
       console.log("🔄 Sending edit payload to API:", payload);
       console.log("🔍 Selected load for action:", selectedLoadForAction);
-      console.log("🔍 Load ID being used:", selectedLoadForAction.loadNum);
-      console.log("🔍 Available load properties:", Object.keys(selectedLoadForAction));
-      console.log("🔗 API URL:", `${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${selectedLoadForAction.loadNum}`);
+      console.log("🔍 Is duplicating:", isDuplicating);
+      
+      let res;
+      if (isDuplicating) {
+        // If duplicating, create a new load using the same API as add load
+        console.log("🔄 Creating new load (duplicate)...");
+        console.log("🔗 API URL:", `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`);
+        
+        res = await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`,
+          payload,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      } else {
+        // If editing, update existing load
+        console.log("🔍 Load ID being used:", selectedLoadForAction.loadNum);
+        console.log("🔍 Available load properties:", Object.keys(selectedLoadForAction));
+        console.log("🔗 API URL:", `${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${selectedLoadForAction.loadNum}`);
 
-      const res = await axios.put(
-        `${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${selectedLoadForAction.loadNum}`,
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+        res = await axios.put(
+          `${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${selectedLoadForAction.loadNum}`,
+          payload,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      }
 
       if (res.data?.success) {
-        alertify.success("✅ Load updated successfully!");
+        if (isDuplicating) {
+          alertify.success("✅ Load duplicated successfully!");
+        } else {
+          alertify.success("✅ Load updated successfully!");
+        }
         setShowEditModal(false);
         setSelectedLoadForAction(null);
+        setIsDuplicating(false);
 
         resetLoadForm();
         setFormErrors({});
@@ -1849,6 +1876,9 @@ const MaterialShipperDropdown = ({
     setSelectedLoadForAction(load);
     setShowEditModal(true);
     
+    // Set flag to indicate we're editing (not duplicating)
+    setIsDuplicating(false);
+    
     // Populate form with existing load data
     populateEditForm(load);
   };
@@ -1954,6 +1984,100 @@ const MaterialShipperDropdown = ({
   const handleDeleteLoad = (load) => {
     setSelectedLoadForAction(load);
     setShowDeleteModal(true);
+  };
+
+  // Handle duplicate load
+  const handleDuplicateLoad = (load) => {
+    console.log('🔄 Duplicating load:', load);
+    
+    // Set selected load for action (needed for edit modal)
+    setSelectedLoadForAction(load);
+    
+    // Set flag to indicate we're duplicating (not editing)
+    setIsDuplicating(true);
+    
+    // Set load type based on the load data
+    setLoadType(load.loadType || 'OTR');
+    
+    // Extract shipper ID from shipper object or direct property
+    const shipperId = load.shipperId || load.shipper?._id || '';
+    
+    // Populate form with existing load data (same as edit but for duplication)
+    setLoadForm({
+      shipperId: shipperId,
+      vehicleType: load.vehicleType || '',
+      rate: load.rate || '',
+      rateType: load.rateType || 'Flat Rate',
+      bidDeadline: load.bidDeadline ? formatDateForInput(load.bidDeadline) : '',
+      containerNo: load.containerNo || '',
+      poNumber: load.poNumber || '',
+      bolNumber: load.bolNumber || '',
+      weight: load.weight || '',
+      commodity: load.commodity || '',
+      pickupDate: load.pickupDate ? formatDateForInput(load.pickupDate) : '',
+      deliveryDate: load.deliveryDate ? formatDateForInput(load.deliveryDate) : '',
+      returnDate: load.returnDate ? formatDateForInput(load.returnDate) : '',
+      returnLocation: load.returnLocation || '',
+      fromZip: load.fromZip || '',
+      fromCity: load.fromCity || '',
+      fromState: load.fromState || '',
+      toZip: load.toZip || '',
+      toCity: load.toCity || '',
+      toState: load.toState || ''
+    });
+
+    // Set shipper input value
+    if (load.shipper) {
+      setShipperInputValue(`${load.shipper.compName} (${load.shipper.mc_dot_no})`);
+    }
+    
+    // Clear any existing form errors
+    setFormErrors({});
+
+    // Populate location arrays for OTR loads
+    if (load.loadType === 'OTR' && load.origins && load.destinations) {
+      // Convert origins to pickup locations
+      const pickupLocs = load.origins.map((origin, index) => ({
+        id: `pickup-${Date.now()}-${index}`,
+        address: origin.addressLine1 || '',
+        city: origin.city || '',
+        state: origin.state || '',
+        weight: origin.weight || '',
+        commodity: origin.commodity || '',
+        pickupDate: origin.pickupDate ? formatDateForInput(origin.pickupDate) : '',
+        deliveryDate: origin.deliveryDate ? formatDateForInput(origin.deliveryDate) : ''
+      }));
+      setPickupLocations(pickupLocs);
+
+      // Convert destinations to delivery locations
+      const deliveryLocs = load.destinations.map((destination, index) => ({
+        id: `delivery-${Date.now()}-${index}`,
+        address: destination.addressLine1 || '',
+        city: destination.city || '',
+        state: destination.state || '',
+        weight: destination.weight || '',
+        commodity: destination.commodity || '',
+        deliveryDate: destination.deliveryDate ? formatDateForInput(destination.deliveryDate) : ''
+      }));
+      setDeliveryLocations(deliveryLocs);
+    } else if (load.loadType === 'DRAYAGE') {
+      // For DRAYAGE, populate single location fields
+      setLoadForm(prev => ({
+        ...prev,
+        fromZip: load.origin?.address || '',
+        fromCity: load.origin?.city || '',
+        fromState: load.origin?.state || '',
+        toZip: load.destination?.address || '',
+        toCity: load.destination?.city || '',
+        toState: load.destination?.state || ''
+      }));
+    }
+
+    // Open the edit modal (same as edit button)
+    setShowEditModal(true);
+    
+    // Show success message
+    alertify.success('Load data duplicated successfully! Please modify the details and save.');
   };
 
   // Confirm delete
@@ -2331,6 +2455,13 @@ const MaterialShipperDropdown = ({
                         >
                           <FileText size={10} />
                           Edit
+                        </button>
+                        <button
+                          onClick={() => handleDuplicateLoad(load)}
+                          className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-xs font-medium"
+                        >
+                          <Copy size={10} />
+                          Duplicate
                         </button>
                         <button
                           onClick={() => handleDeleteLoad(load)}
@@ -3881,8 +4012,8 @@ const MaterialShipperDropdown = ({
                     <FileText className="text-white" size={24} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold">Edit Load</h2>
-                    <p className="text-green-100">Update load information</p>
+                    <h2 className="text-2xl font-bold">{isDuplicating ? 'Duplicate Load' : 'Edit Load'}</h2>
+                    <p className="text-green-100">{isDuplicating ? 'Create a copy of this load' : 'Update load information'}</p>
                   </div>
                 </div>
                 
@@ -4843,7 +4974,7 @@ const MaterialShipperDropdown = ({
                               />
                             )}
                             <span>
-                              {isSubmitting ? (loadType === "DRAYAGE" ? "Updating Drayage..." : "Updating...") : "Update Load"}
+                              {isSubmitting ? (loadType === "DRAYAGE" ? (isDuplicating ? "Creating Drayage..." : "Updating Drayage...") : (isDuplicating ? "Creating..." : "Updating...")) : (isDuplicating ? "Duplicate Load" : "Update Load")}
                             </span>
                           </button>
                         );
