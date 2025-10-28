@@ -12,7 +12,7 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
     {
       id: 1,
       title: "PRIVACY POLICY",
-      content: "WEBSITE TERMS & CONDITIONS AND PRIVACY POLICY\nLast Updated: [Insert Date]\n________________________________________\nPART A: TERMS AND CONDITIONS OF USE\n1. Acceptance of Terms\nBy accessing or using the website www.vpowerlogistics.com (\"Website\"), you agree to be bound by these Terms and Conditions (\"Terms\") and our Privacy Policy. If you do not agree, you must not use the Website.\n\n2. About Us\nThe Website is operated by VE Power Consultancy Private Limited (\"Company\", \"we\", \"us\", or \"our\"), a company incorporated under the Companies Act, 2013 with its registered office at [Insert Address].\n\n3. User Eligibility\nBy using the Website, you represent that you are at least 18 years of age and are competent to enter into a legally binding agreement.\n\n4. Permitted Use\nYou agree to use the Website solely for legitimate purposes related to engaging VE Power Consultancy for logistics, supply chain, and related services. You shall not:\n• Use the Website in violation of applicable laws;\n• Interfere with security or functionality;\n• Upload malware or malicious code;\n• Infringe upon our intellectual property or that of any third party.\n\n5. Account Registration\nCertain areas of the Website may require registration. You agree to provide accurate, current, and complete information and maintain the confidentiality of your credentials.\n\n6. Intellectual Property Rights\nAll content on the Website including logos, graphics, software, data compilations, and other materials is the intellectual property of VE Power Consultancy and protected under applicable IP laws. No part of the Website may be copied, reproduced, or used without our prior written consent.\n\n7. Third-Party Links\nOur Website may contain links to external websites for your convenience. We do not control or endorse such sites and are not responsible for their content, accuracy, or availability.\n\n8. Limitation of Liability\nTo the maximum extent permitted by law, VE Power Consultancy disclaims all liability for any direct, indirect, incidental, consequential, or special damages arising out of your use or inability to use the Website.\n\n9. Indemnity\nYou agree to indemnify and hold harmless VE Power Consultancy, its directors, officers, employees, and affiliates from any claims, losses, or damages arising out of your misuse of the Website or violation of these Terms.\n\n10. Termination of Access\nWe reserve the right to suspend or terminate your access to the Website at any time, without notice, for conduct we believe violates these Terms or is harmful to other users or the Company.\n\n11. Governing Law and Jurisdiction\nThese Terms shall be governed by the laws of India. Courts in Gurugram, Haryana shall have exclusive jurisdiction.\n\n12. Modifications to Terms\nWe reserve the right to modify these Terms at any time. Continued use of the Website post-update will signify acceptance.\n\nPART B: PRIVACY POLICY\nI. Introduction\nThis Privacy Policy explains how VE Power Consultancy collects, uses, stores, discloses, and protects your personal information in compliance with the Information Technology Act, 2000 and applicable data protection laws.\n\nII. Information We Collect\na. We may collect the following information:\nb. Name, email address, phone number, and postal address;\nc. Business/company details;\nd. User credentials and preferences;\ne. Technical data including IP address, browser type, time zone settings, and device information;\nf. Usage data such as pages visited, time spent, and interaction with content.\n\nIII. How We Collect Information\na. We collect information:\nb. When you fill out forms or contact us via the Website;\nc. Through cookies and web analytics tools;\nd. When you subscribe to newsletters or request information;\ne. When you engage with our services.\n\nIV. Use of Information\na. We use the collected data for:\nb. Providing and improving our services;\nc. Responding to user queries;\nd. Internal business analytics and security;\ne. Marketing, promotions, and service updates (only with your consent);\nf. Compliance with legal obligations.\n\nV. Sharing of Information\na. We may share your information:\nb. With our employees and authorized agents for internal business purposes;\nc. With third-party service providers (e.g., payment gateways, analytics partners);\nd. When required by law, legal process, or governmental request;\ne. In case of a merger, acquisition, or sale of business assets.\n\nVI. Cookies\nWe use cookies and similar technologies to improve user experience. Users may choose to disable cookies via browser settings, though some features may be limited.\n\nVII. Data Retention\nWe retain personal data as long as necessary for the purposes stated or as required by law. Once data is no longer needed, it is securely deleted or anonymized.\n\nVIII. Security Practices\nWe implement appropriate technical and organizational measures to protect personal data from unauthorized access, disclosure, alteration, or destruction.\n\nIX. Your Rights\na. Subject to applicable law, you have rights to:\nb. Access, update, or delete your personal data;\nc. Withdraw consent at any time;\nd. Object to direct marketing;\ne. Lodge complaints with a regulatory authority.\n\nX. Third-Party Services\nOur Website may use services such as Google Analytics. Such third-party tools have their own privacy policies which we do not control.\n\nXI. Children's Privacy\nOur services are not intended for children under 18. We do not knowingly collect personal information from minors.\n\nXII. Grievance Redressal\nFor any privacy concerns or complaints, please contact:\nGrievance Officer\nName: [Insert Name]\nEmail: [Insert Email]\nPhone: [Insert Phone Number]\n\nXIII. Changes to this Policy\nWe reserve the right to update this Privacy Policy at any time. Changes will be posted on this page and, where appropriate, notified to you.\n________________________________________\n© VE Power Consultancy Pvt. Ltd. All Rights Reserved."
+      content: "WEBSITE TERMS & CONDITIONS AND PRIVACY POLICY\nLast Updated: [Insert Date]\n________________________________________\nPART A: TERMS AND CONDITIONS OF USE\n1. Acceptance of Terms\nBy accessing or using the website www.vpowerlogistics.com (\"Website\"), you agree to be bound by these Terms and Conditions (\"Terms\") and our Privacy Policy. If you do not agree, you must not use the Website.\n\n2. About Us\nThe Website is operated by VE Power Consultancy Private Limited (\"Company\", \"we\", \"us\", or \"our\"), a company incorporated under the Companies Act, 2013 with its registered office at [Insert Address].\n\n3. User Eligibility\nBy using the Website, you represent that you are at least 18 years of age and are competent to enter into a legally binding agreement.\n\n4. Permitted Use\nYou agree to use the Website solely for legitimate purposes related to engaging VE Power Consultancy for logistics, supply chain, and related services. You shall not:\n• Use the Website in violation of applicable laws;\n• Interfere with security or functionality;\n• Upload malware or malicious code;\n• Infringe upon our intellectual property or that of any third party.\n\n5. Account Registration\nCertain areas of the Website may require registration. You agree to provide accurate, current, and complete information and maintain the confidentiality of your credentials.\n\n6. Intellectual Property Rights\nAll content on the Website including logos, graphics, software, data compilations, and other materials is the intellectual property of VE Power Consultancy and protected under applicable IP laws. No part of the Website may be copied, reproduced, or used without our prior written consent.\n\n7. Third-Party Links\nOur Website may contain links to external websites for your convenience. We do not control or endorse such sites and are not responsible for their content, accuracy, or availability.\n\n8. Limitation of Liability\nTo the maximum extent permitted by law, VE Power Consultancy disclaims all liability for any direct, indirect, incidental, consequential, or special damages arising out of your use or inability to use the Website.\n\n9. Indemnity\nYou agree to indemnify and hold harmless VE Power Consultancy, its directors, officers, employees, and affiliates from any claims, losses, or damages arising out of your misuse of the Website or violation of these Terms.\n\n10. Termination of Access\nWe reserve the right to suspend or terminate your access to the Website at any time, without notice, for conduct we believe violates these Terms or is harmful to other users or the Company.\n\n11. Governing Law and Jurisdiction\nThese Terms shall be governed by the laws of India. Courts in Gurugram, Haryana shall have exclusive jurisdiction.\n\n12. Modifications to Terms\nWe reserve the right to modify these Terms at any time. Continued use of the Website post-update will signify acceptance.\n\nPART B: PRIVACY POLICY\nI. Introduction\nThis Privacy Policy explains how VE Power Consultancy collects, uses, stores, discloses, and protects your personal information in compliance with the Information Technology Act, 2000 and applicable data protection laws.\n\nII. Information We Collect\na. We may collect the following information:\nb. Name, email address, phone number, and postal address;\nc. Business/company details;\nd. User credentials and preferences;\ne. Technical data including IP address, browser type, time zone settings, and device information;\nf. Usage data such as pages visited, time spent, and interaction with content.\n\nIII. How We Collect Information\na. We collect information:\nb. When you fill out forms or contact us via the Website;\nc. Through cookies and web analytics tools;\nd. When you subscribe to newsletters or request information;\ne. When you engage with our services.\n\nIV. Use of Information\na. We use the collected data for:\nb. Providing and improving our services;\nc. Responding to user queries;\nd. Internal business analytics and security;\ne. Marketing, promotions, and service updates (only with your consent);\nf. Compliance with legal obligations.\n\nV. Sharing of Information\na. We may share your information:\nb. With our employees and authorized agents for internal business purposes;\nc. With third-party service providers (e.g., payment gateways, analytics partners);\nd. When required by law, legal process, or governmental request;\ne. In case of a merger, acquisition, or sale of business assets.\n\nVI. Cookies\nWe use cookies and similar technologies to improve user experience. Users may choose to disable cookies via browser settings, though some features may be limited.\n\nVII. Data Retention\nWe retain personal data as long as necessary for the purposes stated or as required by law. Once data is no longer needed, it is securely deleted or anonymized.\n\nVIII. Security Practices\nWe implement appropriate technical and organizational measures to protect personal data from unauthorized access, disclosure, alteration, or destruction.\n\nIX. Your Rights\na. Subject to applicable law, you have rights to:\nb. Access, update, or delete your personal data;\nc. Withdraw consent at any time;\nd. Object to direct marketing;\ne. Lodge complaints with a regulatory authority.\n\nX. Third-Party Services\nOur Website may use services such as Google Analytics. Such third-party tools have their own privacy policies which we do not control.\n\nXI. Children's Privacy\nOur services are not intended for children under 18. We do not knowingly collect personal information from minors.\n\nXII. Grievance Redressal\nFor any privacy concerns or complaints, please contact:\nGrievance Officer\nName: Rachna - HR\nEmail: Hr@vpower-logistics.com\nPhone: 9310023990\n\nXIII. Changes to this Policy\nWe reserve the right to update this Privacy Policy at any time. Changes will be posted on this page and, where appropriate, notified to you.\n________________________________________\n© VE Power Consultancy Pvt. Ltd. All Rights Reserved."
     },
     {
       id: 2,
@@ -47,7 +47,7 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
 
   const handleAcceptCurrentTerm = () => {
     setAcceptedTerms(prev => new Set([...prev, currentTerm.id]));
-    
+
     // Move to next term or complete if all accepted
     if (currentTermIndex < terms.length - 1) {
       setCurrentTermIndex(prev => prev + 1);
@@ -116,7 +116,7 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
             <h3 className="text-xl font-medium mb-4 text-gray-800">
               {currentTerm.title}
             </h3>
-            
+
             <div className="bg-gray-50 p-6 rounded-lg mb-6">
               <div className="max-h-96 overflow-y-auto">
                 <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">
@@ -130,11 +130,10 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
               <button
                 onClick={handlePrevious}
                 disabled={currentTermIndex === 0}
-                className={`px-4 py-2 rounded-lg text-sm ${
-                  currentTermIndex === 0
+                className={`px-4 py-2 rounded-lg text-sm ${currentTermIndex === 0
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-gray-600 text-white hover:bg-gray-700'
-                }`}
+                  }`}
               >
                 Previous
               </button>
@@ -144,11 +143,10 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
                   <button
                     key={term.id}
                     onClick={() => setCurrentTermIndex(index)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      currentTermIndex === index
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${currentTermIndex === index
                         ? 'bg-green-600 text-white'
                         : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                    }`}
+                      }`}
                   >
                     {index + 1}
                   </button>
@@ -158,11 +156,10 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
               <button
                 onClick={handleNext}
                 disabled={currentTermIndex === terms.length - 1}
-                className={`px-4 py-2 rounded-lg text-sm ${
-                  currentTermIndex === terms.length - 1
+                className={`px-4 py-2 rounded-lg text-sm ${currentTermIndex === terms.length - 1
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-gray-600 text-white hover:bg-gray-700'
-                }`}
+                  }`}
               >
                 Next
               </button>
@@ -194,7 +191,7 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
           <h3 className="text-xl font-medium mb-4 text-gray-800">
             {currentTerm.title}
           </h3>
-          
+
           <div className="bg-gray-50 p-6 rounded-lg mb-6">
             <div className="max-h-64 overflow-y-auto">
               <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">
@@ -208,11 +205,10 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
             <button
               onClick={handleAcceptCurrentTerm}
               disabled={isCurrentTermAccepted}
-              className={`px-6 py-3 rounded-lg text-sm font-medium ${
-                isCurrentTermAccepted
+              className={`px-6 py-3 rounded-lg text-sm font-medium ${isCurrentTermAccepted
                   ? 'bg-green-100 text-green-700 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+                }`}
             >
               {isCurrentTermAccepted ? '✓ Accepted' : 'Accept This Term'}
             </button>
@@ -224,16 +220,14 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
             <div className="space-y-2">
               {terms.map((term) => (
                 <div key={term.id} className="flex items-center text-xs">
-                  <span className={`w-4 h-4 rounded-full mr-3 ${
-                    acceptedTerms.has(term.id) ? 'bg-green-500' : 'bg-gray-300'
-                  }`}>
+                  <span className={`w-4 h-4 rounded-full mr-3 ${acceptedTerms.has(term.id) ? 'bg-green-500' : 'bg-gray-300'
+                    }`}>
                     {acceptedTerms.has(term.id) && (
                       <span className="text-white text-xs flex items-center justify-center h-full">✓</span>
                     )}
                   </span>
-                  <span className={`${
-                    acceptedTerms.has(term.id) ? 'text-green-700' : 'text-gray-500'
-                  }`}>
+                  <span className={`${acceptedTerms.has(term.id) ? 'text-green-700' : 'text-gray-500'
+                    }`}>
                     {term.title}
                   </span>
                 </div>
@@ -247,11 +241,10 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
           <button
             onClick={handlePrevious}
             disabled={currentTermIndex === 0}
-            className={`px-4 py-2 rounded-lg text-sm ${
-              currentTermIndex === 0
+            className={`px-4 py-2 rounded-lg text-sm ${currentTermIndex === 0
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 : 'bg-gray-600 text-white hover:bg-gray-700'
-            }`}
+              }`}
           >
             Previous
           </button>
@@ -260,11 +253,10 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
             <button
               onClick={handleNext}
               disabled={currentTermIndex === terms.length - 1}
-              className={`px-4 py-2 rounded-lg text-sm ${
-                currentTermIndex === terms.length - 1
+              className={`px-4 py-2 rounded-lg text-sm ${currentTermIndex === terms.length - 1
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   : 'bg-gray-600 text-white hover:bg-gray-700'
-              }`}
+                }`}
             >
               Next
             </button>
@@ -272,11 +264,10 @@ const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
             <button
               onClick={handleAcceptAllTerms}
               disabled={!allTermsAccepted || loading}
-              className={`px-6 py-2 rounded-lg text-sm font-medium ${
-                !allTermsAccepted || loading
+              className={`px-6 py-2 rounded-lg text-sm font-medium ${!allTermsAccepted || loading
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   : 'bg-green-600 text-white hover:bg-green-700'
-              }`}
+                }`}
             >
               {loading ? 'Accepting...' : 'Accept All'}
             </button>
