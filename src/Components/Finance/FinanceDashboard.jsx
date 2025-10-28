@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { MoreHorizontal, DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt, PieChart, BarChart3, Calendar, Users, FileText, CheckCircle, AlertCircle, Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
+import UpcomingBirthdays from '../UpcomingBirthdays';
 
 const FinanceDashboard = () => {
   const [financialData, setFinancialData] = useState({
@@ -413,6 +414,19 @@ const FinanceDashboard = () => {
           trend="down"
           trendValue="-5%"
         />
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid lg:grid-cols-3 gap-8 mb-8">
+        {/* Upcoming Birthdays */}
+        <div className="lg:col-span-1">
+          <UpcomingBirthdays limit={3} />
+        </div>
+        
+        {/* Placeholder for additional content */}
+        <div className="lg:col-span-2">
+          {/* Additional finance content can go here */}
+        </div>
       </div>
 
       {/* Billing Table */}
