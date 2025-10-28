@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import TermsAndConditions from "../Components/TermsAndConditions";
 
 /* ---------- Helpers ---------- */
 const todayISO = () => new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -37,6 +38,7 @@ const overlapRanges = (aStart, aEnd, bStart, bEnd) =>
 const ProfilePage = () => {
   const [employee, setEmployee] = useState(null);
   const [activeTab, setActiveTab] = useState("attendance");
+  const [termsAccepted, setTermsAccepted] = useState(true); // Default to true since user is authenticated
 
   // Leave state
   const [leaveType, setLeaveType] = useState("");
@@ -133,6 +135,7 @@ const ProfilePage = () => {
       else setCallLogs([]);
     } catch {}
   };
+
 
   /* ========= Bootstrap ========= */
   useEffect(() => {
@@ -484,6 +487,12 @@ const ProfilePage = () => {
           >
             Leave
           </button>
+          <button
+            onClick={() => setActiveTab("terms")}
+            className={`px-4 py-2 cursor-pointer rounded-md font-semibold ${activeTab === "terms" ? "bg-indigo-600 text-white" : "bg-white text-indigo-600 border border-indigo-300"}`}
+          >
+            Terms and Conditions
+          </button>
           {employee?.department === "HR" && (
             <button
               onClick={() => setActiveTab("hrActivity")}
@@ -766,6 +775,34 @@ const ProfilePage = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ================= TERMS AND CONDITIONS TAB ================= */}
+          {activeTab === "terms" && (
+            <div className="bg-gradient-to-br from-white to-indigo-50 p-8 rounded-3xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center gap-3">
+                  <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-2 rounded-xl">
+                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  Terms and Conditions
+                </h2>
+              </div>
+              
+              <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 p-6">
+                <TermsAndConditions 
+                  onAccept={(data) => {
+                    console.log('Terms accepted:', data);
+                    setTermsAccepted(true);
+                    // You can add any additional logic here after terms are accepted
+                  }}
+                  user={employee}
+                  viewOnly={termsAccepted}
+                />
               </div>
             </div>
           )}

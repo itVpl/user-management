@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 import apiService from '../services/apiService';
 
-const TermsAndConditions = ({ onAccept, user }) => {
+const TermsAndConditions = ({ onAccept, user, viewOnly = false }) => {
   const [currentTermIndex, setCurrentTermIndex] = useState(0);
   const [acceptedTerms, setAcceptedTerms] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -92,6 +92,86 @@ const TermsAndConditions = ({ onAccept, user }) => {
       setCurrentTermIndex(prev => prev + 1);
     }
   };
+
+  // If view-only mode, show a different layout
+  if (viewOnly) {
+    return (
+      <div className="w-full">
+        <div className="bg-white rounded-lg shadow-lg max-w-6xl w-full overflow-hidden">
+          {/* Header */}
+          <div className="bg-green-600 text-white p-4">
+            <h2 className="text-xl font-medium text-center">Terms and Conditions</h2>
+            <p className="text-center text-sm mt-1 opacity-90">
+              ✓ You have already accepted all terms
+            </p>
+          </div>
+
+          {/* Progress */}
+          <div className="bg-gray-100 px-4 py-2 text-center text-sm text-gray-600">
+            Term {currentTermIndex + 1} of {terms.length}
+          </div>
+
+          {/* Term Content */}
+          <div className="p-8">
+            <h3 className="text-xl font-medium mb-4 text-gray-800">
+              {currentTerm.title}
+            </h3>
+            
+            <div className="bg-gray-50 p-6 rounded-lg mb-6">
+              <div className="max-h-96 overflow-y-auto">
+                <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">
+                  {currentTerm.content}
+                </p>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <div className="flex justify-between items-center">
+              <button
+                onClick={handlePrevious}
+                disabled={currentTermIndex === 0}
+                className={`px-4 py-2 rounded-lg text-sm ${
+                  currentTermIndex === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                }`}
+              >
+                Previous
+              </button>
+
+              <div className="flex gap-2">
+                {terms.map((term, index) => (
+                  <button
+                    key={term.id}
+                    onClick={() => setCurrentTermIndex(index)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      currentTermIndex === index
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    }`}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handleNext}
+                disabled={currentTermIndex === terms.length - 1}
+                className={`px-4 py-2 rounded-lg text-sm ${
+                  currentTermIndex === terms.length - 1
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
