@@ -68,9 +68,9 @@ export default function Loads() {
   const getVehicleTypeOptions = (type) => {
     if (type === "DRAYAGE") {
       return [
-        "20' Standard (Dry Van)",
-        "40' Standard (Dry Van)",
-        "45' Standard (Dry Van)",
+        "20' Standard",
+        "40' Standard",
+        "45' Standard",
         "20' Reefer",
         "40' Reefer (High Cube or Standard)",
         "Open Top Container",

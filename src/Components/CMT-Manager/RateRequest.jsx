@@ -188,6 +188,7 @@ const autoAcceptingRef = useRef(new Set());
             vehicleType: 'N/A',
             rate: 0,
             commodity: 'N/A',
+            loadType: null,
             pickupDate: null,
             deliveryDate: null,
             status: approval.overallStatus || 'pending',
@@ -252,6 +253,7 @@ const autoAcceptingRef = useRef(new Set());
           vehicleType: approval.loadId.vehicleType || 'N/A',
           rate: approval.loadId.rate || 0,
           commodity: approval.loadId.commodity || 'N/A',
+          loadType: approval.loadId.loadType,
           pickupDate: approval.loadId.pickupDate,
           deliveryDate: approval.loadId.deliveryDate,
           status: approval.overallStatus || 'pending',
@@ -290,6 +292,7 @@ const autoAcceptingRef = useRef(new Set());
             vehicleType: 'N/A',
             rate: 0,
             commodity: 'N/A',
+            loadType: null,
             pickupDate: null,
             deliveryDate: null,
             status: approval.overallStatus || 'approved',
@@ -354,6 +357,7 @@ const autoAcceptingRef = useRef(new Set());
           vehicleType: approval.loadId.vehicleType || 'N/A',
           rate: approval.loadId.rate || 0,
           commodity: approval.loadId.commodity || 'N/A',
+          loadType: approval.loadId.loadType,
           pickupDate: approval.loadId.pickupDate,
           deliveryDate: approval.loadId.deliveryDate,
           status: approval.overallStatus || 'approved',
@@ -1518,6 +1522,8 @@ useEffect(() => {
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
@@ -1555,6 +1561,25 @@ useEffect(() => {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {item.loadType ? (
+                          <span className="font-medium text-gray-700">{item.loadType}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        {item.createdAt ? (
+                          <div>
+                            <div className="font-medium text-gray-700">
+                              {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="font-medium text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-bold text-green-600">
@@ -1604,7 +1629,7 @@ useEffect(() => {
                   ))}
                   {filteredRequests.length === 0 && (
                     <tr>
-                      <td colSpan="9" className="text-center py-12">
+                      <td colSpan="11" className="text-center py-12">
                         <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">
                           {search ? 'No pending requests found matching your search' : 'No pending requests found'}
@@ -1707,6 +1732,8 @@ useEffect(() => {
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                     {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Time</th> */}
@@ -1744,6 +1771,25 @@ useEffect(() => {
                         <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
                       </td>
                       <td className="px-4 py-3">
+                        {item.loadType ? (
+                          <span className="font-medium text-gray-700">{item.loadType}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        {item.createdAt ? (
+                          <div>
+                            <div className="font-medium text-gray-700">
+                              {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="font-medium text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
                         <span className="font-bold text-green-600">
                           ${item.rate?.toLocaleString() || '0'}
                         </span>
@@ -1772,7 +1818,7 @@ useEffect(() => {
                   ))}
                   {filteredRequests.length === 0 && (
                     <tr>
-                      <td colSpan="8" className="text-center py-12">
+                      <td colSpan="10" className="text-center py-12">
                         <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">
                           {search ? 'No requests found matching your search' : 'No requests found'}
@@ -2167,7 +2213,7 @@ useEffect(() => {
                     {/* File Upload Field */}
                     <div className="md:col-span-2">
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
-                        Upload <span className="text-red-500">*</span>
+                        Upload screenshot of the rate from the trucker <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
                         <input
