@@ -1580,7 +1580,7 @@ export default function RateApproved() {
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Placed By</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CMT User</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                     </tr>
