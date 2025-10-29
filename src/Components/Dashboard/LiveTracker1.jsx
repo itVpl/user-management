@@ -123,12 +123,17 @@ export default function ConsignmentTracker() {
   const handleTruckClick = (e) => {
     if (trackingData) {
       const truckData = {
-        driverName: trackingData.driverName || "Sam",
-        vehicleNumber: trackingData.vehicleNumber || "WH06AL7844",
-        batteryHealth: trackingData.locationData?.deviceInfo?.batteryLevel || 80,
-        speed: Math.round((trackingData.locationData?.speed || 0) * 3.6), // Convert m/s to km/h
+        driverName: trackingData.driverName || "Driver Not Assigned",
+        vehicleNumber: trackingData.vehicleNumber || "Vehicle Not Assigned",
+        batteryHealth: trackingData.locationData?.deviceInfo?.batteryLevel || "N/A",
+        speed: trackingData.locationData?.speed ? Math.round(trackingData.locationData.speed * 3.6) : "N/A", // Convert m/s to km/h
         address: trackingData.locationData?.address || "Location not available",
-        currentLocation: trackingData.currentLocation
+        currentLocation: trackingData.currentLocation,
+        // Add additional info from the new API structure
+        shipperName: trackingData.load?.shipper?.compName || "N/A",
+        truckerName: trackingData.truckerName || "N/A",
+        commodity: trackingData.load?.commodity || "N/A",
+        weight: trackingData.load?.weight || "N/A"
       };
       setTruckPopupData(truckData);
 
@@ -220,63 +225,88 @@ export default function ConsignmentTracker() {
       const track = res.data?.tracking;
 
       if (track) {
-        // Store the complete tracking data for polyline
-        setTrackingData(track);
+        // Extract location data from the new API structure
+        const originData = track.load?.origins?.[0];
+        const destinationData = track.load?.destinations?.[0];
+        
+        // Create proper location names
+        const originName = originData ? `${originData.city}, ${originData.state}` : "Origin Location";
+        const destinationName = destinationData ? `${destinationData.city}, ${destinationData.state}` : "Destination Location";
+        
+        // Create enhanced tracking data with proper location info
+        const enhancedTrack = {
+          ...track,
+          originName,
+          destinationName,
+          // Use fallback coordinates if originLatLng/destinationLatLng are invalid
+          originLatLng: track.originLatLng?.lat !== 0 ? track.originLatLng : null,
+          destinationLatLng: track.destinationLatLng?.lat !== 0 ? track.destinationLatLng : null,
+          // Use proper driver name
+          driverName: track.driverName && track.driverName !== "na" ? track.driverName : "Driver Not Assigned",
+          // Use proper vehicle number
+          vehicleNumber: track.vehicleNumber && track.vehicleNumber !== "naaa" ? track.vehicleNumber : "Vehicle Not Assigned"
+        };
+
+        // Store the enhanced tracking data for polyline
+        setTrackingData(enhancedTrack);
 
         // Debug: Log current location
-        console.log("Current Location:", track.currentLocation);
-        console.log("Origin:", track.originLatLng);
-        console.log("Destination:", track.destinationLatLng);
+        console.log("Enhanced Tracking Data:", enhancedTrack);
+        console.log("Current Location:", enhancedTrack.currentLocation);
+        console.log("Origin:", enhancedTrack.originLatLng);
+        console.log("Destination:", enhancedTrack.destinationLatLng);
 
-        // Fetch the road route if we have origin and destination
-        if (track.originLatLng && track.destinationLatLng) {
-          fetchRoute(track.originLatLng, track.destinationLatLng);
+        // Fetch the road route if we have valid origin and destination coordinates
+        if (enhancedTrack.originLatLng && enhancedTrack.destinationLatLng) {
+          fetchRoute(enhancedTrack.originLatLng, enhancedTrack.destinationLatLng);
+        } else {
+          console.warn("Invalid coordinates - cannot fetch route");
         }
 
         // Fetch current location route after main route is loaded
-        if (track.currentLocation) {
+        if (enhancedTrack.currentLocation) {
           // Wait a bit for main route to load, then fetch current location route
           setTimeout(() => {
             if (routeCoordinates.length > 0) {
-              fetchCurrentLocationRoute(track.currentLocation, routeCoordinates);
+              fetchCurrentLocationRoute(enhancedTrack.currentLocation, routeCoordinates);
             }
           }, 1000);
         }
 
-        const activity = getActivity(track);
+        const activity = getActivity(enhancedTrack);
 
         const consignment = {
-          id: track._id,
-          number: track.shipmentNumber,
-          location: `${track.originName} → ${track.destinationName}`,
-          lat: track.originLatLng?.lat,
-          lng: track.originLatLng?.lon,
+          id: enhancedTrack._id,
+          number: enhancedTrack.shipmentNumber,
+          location: `${originName} → ${destinationName}`,
+          lat: enhancedTrack.originLatLng?.lat || 0,
+          lng: enhancedTrack.originLatLng?.lon || 0,
           activity, // {label, dotClass, textClass}
           deliveryProgress:
-            track.status === "delivered" ? 100
-              : track.status === "in_transit" ? 60
+            enhancedTrack.status === "delivered" ? 100
+              : enhancedTrack.status === "in_transit" ? 60
                 : 20,
           status: [
             {
               label: "Loading",
-              name: track.driverName || "Driver",
-              time: formatDDMMYYYY(track.startedAt),
+              name: enhancedTrack.driverName,
+              time: formatDDMMYYYY(enhancedTrack.startedAt),
               done: true,
             },
             {
               label: "In-Transit",
-              name: track.driverName || "Driver",
+              name: enhancedTrack.driverName,
               time: formatDDMMYYYY(Date.now()),
-              done: String(track.status).toLowerCase() !== "loading",
+              done: String(enhancedTrack.status).toLowerCase() !== "loading",
             },
             {
               label: "Delivered",
-              name: track.driverName || "Driver",
-              time: formatDDMMYYYY(track.load?.deliveryDate || Date.now()),
-              done: String(track.status).toLowerCase() === "delivered",
+              name: enhancedTrack.driverName,
+              time: formatDDMMYYYY(enhancedTrack.load?.deliveryDate || Date.now()),
+              done: String(enhancedTrack.status).toLowerCase() === "delivered",
             },
           ],
-          mapLineColor: getRouteColorByStatus(track.status),
+          mapLineColor: getRouteColorByStatus(enhancedTrack.status),
         };
 
         setConsignments([consignment]);
@@ -665,7 +695,7 @@ export default function ConsignmentTracker() {
             transform: 'translateX(-50%)'
           }}
         >
-          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[240px] pointer-events-auto">
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[280px] pointer-events-auto">
             {/* Close Button */}
             <div className="flex justify-end mb-2">
               <button
@@ -688,6 +718,26 @@ export default function ConsignmentTracker() {
               <p className="text-xs text-gray-600">Vehicle: <span className="font-semibold text-gray-800">{truckPopupData.vehicleNumber}</span></p>
             </div>
 
+            {/* Shipper */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-600">Shipper: <span className="font-semibold text-gray-800">{truckPopupData.shipperName}</span></p>
+            </div>
+
+            {/* Trucker */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-600">Trucker: <span className="font-semibold text-gray-800">{truckPopupData.truckerName}</span></p>
+            </div>
+
+            {/* Commodity */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-600">Commodity: <span className="font-semibold text-gray-800">{truckPopupData.commodity}</span></p>
+            </div>
+
+            {/* Weight */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-600">Weight: <span className="font-semibold text-gray-800">{truckPopupData.weight} lbs</span></p>
+            </div>
+
             {/* Address */}
             <div className="mb-2">
               <p className="text-xs text-gray-600">Location: <span className="font-semibold text-gray-800">{truckPopupData.address}</span></p>
@@ -695,12 +745,12 @@ export default function ConsignmentTracker() {
 
             {/* Battery Health */}
             <div className="mb-2">
-              <p className="text-xs text-gray-600">Battery: <span className="font-semibold text-gray-800">{truckPopupData.batteryHealth}%</span></p>
+              <p className="text-xs text-gray-600">Battery: <span className="font-semibold text-gray-800">{truckPopupData.batteryHealth}{typeof truckPopupData.batteryHealth === 'number' ? '%' : ''}</span></p>
             </div>
 
             {/* Speed */} 
             <div className="mb-1">
-              <p className="text-xs text-gray-600">Speed: <span className="font-semibold text-gray-800">{truckPopupData.speed} km/h</span></p>
+              <p className="text-xs text-gray-600">Speed: <span className="font-semibold text-gray-800">{truckPopupData.speed}{typeof truckPopupData.speed === 'number' ? ' km/h' : ''}</span></p>
             </div>
           </div>
 

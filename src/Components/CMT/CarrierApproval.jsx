@@ -30,6 +30,22 @@ export default function CarrierApproval() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
+  // Get current user's department
+  const getCurrentUserDepartment = () => {
+    try {
+      const userData = sessionStorage.getItem("user") || localStorage.getItem("user");
+      if (userData) {
+        const user = JSON.parse(userData);
+        return user?.department || null;
+      }
+    } catch (err) {
+      console.error('Error fetching user department:', err);
+    }
+    return null;
+  };
+
+  const currentUserDepartment = useMemo(() => getCurrentUserDepartment(), []);
+
   useEffect(() => { fetchCarriers(); }, []);
 
   const fetchCarriers = async () => {
@@ -130,13 +146,32 @@ export default function CarrierApproval() {
     setSelectedDocument({ url: documentUrl, name: documentName });
   };
 
+  // Check if approve/reject buttons should be shown
+  const shouldShowActionButtons = (carrierStatus) => {
+    const isFinance = currentUserDepartment === "Finance" || currentUserDepartment === "finance";
+    const isAccountantApproved = carrierStatus?.toLowerCase() === "accountant_approved";
+    
+    // If Finance department user and status is accountant_approved, hide buttons
+    if (isFinance && isAccountantApproved) {
+      return false;
+    }
+    
+    // For non-Finance users: if status is accountant_approved, show buttons (they can approve/reject)
+    if (!isFinance && isAccountantApproved) {
+      return true;
+    }
+    
+    // For all other cases, show buttons only if pending
+    return isPending(carrierStatus);
+  };
+
   const handleStatusUpdate = async (action) => {
     try {
       if (!selectedCarrier) return;
 
-      // Guard: don’t allow further action if already finalized
-      if (!isPending(selectedCarrier.status)) {
-        alertify.message('This carrier is already finalized.');
+      // Guard: Check if buttons should be shown (department-based logic)
+      if (!shouldShowActionButtons(selectedCarrier.status)) {
+        alertify.message('This carrier is already finalized or you do not have permission to perform this action.');
         return;
       }
 
@@ -147,14 +182,30 @@ export default function CarrierApproval() {
       }
 
       const { userId } = selectedCarrier;
+      const isFinance = currentUserDepartment === "Finance" || currentUserDepartment === "finance";
 
       if (action === 'approved') {
-        const response = await axios.patch(
-          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/accountant/${userId}`,
-          { approvalReason: reason || 'Documents verified and approved' },
-          { headers: { 'Content-Type': 'application/json' } }
-        );
-        if (response.data?.success) alertify.success('✅ Carrier approved successfully!');
+        let apiUrl, payload;
+        
+        if (isFinance) {
+          // Finance department users use accountant approval API (PATCH)
+          apiUrl = `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/accountant/${userId}`;
+          payload = { approvalReason: reason || 'Documents verified and approved' };
+          
+          const response = await axios.patch(apiUrl, payload, {
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (response.data?.success) alertify.success('✅ Carrier approved successfully!');
+        } else {
+          // Non-Finance department users use manager approval API (PATCH)
+          apiUrl = `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/manager/${userId}`;
+          payload = { approvalReason: reason || 'Documents verified and approved' };
+          
+          const response = await axios.patch(apiUrl, payload, {
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (response.data?.success) alertify.success('✅ Carrier approved successfully!');
+        }
       } else if (action === 'rejected') {
         const response = await axios.patch(
           `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/reject/${userId}`,
@@ -309,7 +360,7 @@ export default function CarrierApproval() {
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
           <div className="flex justify-between items-center mb-8">
             <div className="flex gap-4">
-              {isPending(selectedCarrier.status) && (
+              {shouldShowActionButtons(selectedCarrier.status) && (
                 <>
                   <button
                     onClick={() => setModalType('approval')}
@@ -671,8 +722,8 @@ export default function CarrierApproval() {
                 </div>
               )}
 
-              {/* Action Buttons – show ONLY if pending */}
-              {isPending(selectedCarrier.status) ? (
+              {/* Action Buttons – show based on department and status */}
+              {shouldShowActionButtons(selectedCarrier.status) ? (
                 <div className="flex gap-4 justify-center pt-2">
                   <button
                     onClick={() => setModalType('approval')}
