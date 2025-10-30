@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Plus, Copy } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Plus, Copy, Trash2 } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -38,10 +38,13 @@ export default function Loads() {
   // ZIP → options + UI state (NEW)
   const [fromZipOptions, setFromZipOptions] = useState([]);
   const [toZipOptions, setToZipOptions] = useState([]);
+  const [returnZipOptions, setReturnZipOptions] = useState([]);
   const [fromZipQuery, setFromZipQuery] = useState("");
   const [toZipQuery, setToZipQuery] = useState("");
+  const [returnZipQuery, setReturnZipQuery] = useState("");
   const [showFromZipDD, setShowFromZipDD] = useState(false);
   const [showToZipDD, setShowToZipDD] = useState(false);
+  const [showReturnZipDD, setShowReturnZipDD] = useState(false);
   
   // Material UI style shipper dropdown state
   const [shipperInputValue, setShipperInputValue] = useState("");
@@ -64,6 +67,10 @@ export default function Loads() {
   const [showPickupZipDD, setShowPickupZipDD] = useState({});
   const [showDeliveryZipDD, setShowDeliveryZipDD] = useState({});
 
+  // Charges Calculator state
+  const [showChargesCalculator, setShowChargesCalculator] = useState(false);
+  const [charges, setCharges] = useState([{ id: Date.now(), name: '', quantity: 0, amount: 0.00 }]);
+
   // Vehicle Type options - Dynamic based on load type
   const getVehicleTypeOptions = (type) => {
     if (type === "DRAYAGE") {
@@ -72,18 +79,18 @@ export default function Loads() {
         "40' Standard",
         "45' Standard",
         "20' Reefer",
-        "40' Reefer (High Cube or Standard)",
+        "40' Reefer",
         "Open Top Container",
         "Flat Rack Container",
-        "Tank Container (ISO Tank)",
-        "40' High Cube (HC)",
-        "45' High Cube (HC)"
+        "Tank Container",
+        "40' High Cube",
+        "45' High Cube"
       ];
     } else { // OTR
       return [
         "Dry Van",
-        "Reefer (Refrigerated Van)",
-        "Step Deck (Drop Deck)",
+        "Reefer",
+        "Step Deck",
         "Double Drop / Lowboy",
         "Conestoga",
         "Livestock Trailer",
@@ -207,17 +214,20 @@ export default function Loads() {
   };
 
   // 👇 Default/blank values for the Create Load form
-  // 👇 Default/blank values for the Create Load form
   const INITIAL_LOAD_FORM = {
     shipperId: "",
     fromZip: "",       // NEW
+    fromAddress: "",
     fromCity: "",
     fromState: "",
     toZip: "",         // NEW
+    toAddress: "",
     toCity: "",
     toState: "",
     vehicleType: "",
-    rate: "",
+    lineHaul: "",
+    fsc: "",
+    other: "",
     rateType: "Flat Rate",
     pickupDate: "",
     deliveryDate: "",
@@ -229,7 +239,10 @@ export default function Loads() {
     bolNumber: "",
     // DRAYAGE-only:
     returnDate: "",
-    returnLocation: "",
+    returnZip: "",
+    returnAddress: "",
+    returnCity: "",
+    returnState: "",
   };
   // === ZIP helpers (NEW) ===
   const ZIP5 = /^\d{5}$/;
@@ -249,13 +262,13 @@ export default function Loads() {
     
     setLoadForm(prev => ({
       ...prev,
-      [`${which}Zip`]: completeAddress, // Set the complete address in the zip field
+      [`${which}Address`]: completeAddress, // Set the complete address in address field
       [`${which}City`]: item.city || prev[`${which}City`] || "",
       [`${which}State`]: (item.stateCode || item.state || ""),
     }));
     setFormErrors(p => {
       const n = { ...p };
-      delete n[`${which}City`]; delete n[`${which}State`]; delete n[`${which}Zip`];
+      delete n[`${which}City`]; delete n[`${which}State`]; delete n[`${which}Address`];
       return n;
     });
     if (which === 'from') { setShowFromZipDD(false); }
@@ -295,6 +308,7 @@ export default function Loads() {
   const addPickupLocation = () => {
     setPickupLocations(prev => [...prev, {
       id: Date.now(),
+      zip: '',
       address: '',
       city: '',
       state: '',
@@ -318,6 +332,7 @@ export default function Loads() {
   const addDeliveryLocation = () => {
     setDeliveryLocations(prev => [...prev, {
       id: Date.now(),
+      zip: '',
       address: '',
       city: '',
       state: '',
@@ -382,6 +397,7 @@ export default function Loads() {
       setPickupLocations(prev => prev.map(loc => 
         loc.id === locationId ? {
           ...loc,
+          // keep existing zip as typed
           address: completeAddress,
           city: item.city || loc.city,
           state: item.stateCode || item.state || loc.state
@@ -392,6 +408,7 @@ export default function Loads() {
       setDeliveryLocations(prev => prev.map(loc => 
         loc.id === locationId ? {
           ...loc,
+          // keep existing zip as typed
           address: completeAddress,
           city: item.city || loc.city,
           state: item.stateCode || item.state || loc.state
@@ -402,15 +419,23 @@ export default function Loads() {
   };
 
   const handleLocationAddressChange = (locationId, value, type) => {
-    // Update the address field
+    // Update only the full address field
     if (type === 'pickup') {
       updatePickupLocation(locationId, 'address', value);
     } else {
       updateDeliveryLocation(locationId, 'address', value);
     }
+  };
 
-    // If user is typing digits only (ZIP code), trigger search
-    if (/^\d+$/.test(value) && value.length <= 5) {
+  const handleLocationZipChange = (locationId, value, type) => {
+    // Update zip field and trigger lookup when 5-digit numeric
+    if (type === 'pickup') {
+      updatePickupLocation(locationId, 'zip', value);
+    } else {
+      updateDeliveryLocation(locationId, 'zip', value);
+    }
+
+    if (/^\d{1,5}$/.test(value)) {
       debounceZip(`location-${locationId}`, () => fetchZipForLocation(value, locationId, type), 450);
     }
   };
@@ -433,9 +458,12 @@ export default function Loads() {
       if (which === 'from') {
         setFromZipOptions(samples);
         setShowFromZipDD(true);
-      } else {
+      } else if (which === 'to') {
         setToZipOptions(samples);
         setShowToZipDD(true);
+      } else if (which === 'return') {
+        setReturnZipOptions(samples);
+        setShowReturnZipDD(true);
       }
 
       // also pre-fill with first match (optional)
@@ -443,7 +471,9 @@ export default function Loads() {
 
     } catch (e) {
       console.warn("ZIP lookup failed:", e?.response?.data || e.message);
-      if (which === 'from') setShowFromZipDD(false); else setShowToZipDD(false);
+      if (which === 'from') setShowFromZipDD(false);
+      else if (which === 'to') setShowToZipDD(false);
+      else if (which === 'return') setShowReturnZipDD(false);
     }
   };
 // SearchableZipDropdown (NEW)
@@ -728,6 +758,7 @@ const MaterialShipperDropdown = ({
     // Reset multiple locations state with defaults
     setPickupLocations([{
       id: Date.now(),
+      zip: '',
       address: '',
       city: '',
       state: '',
@@ -738,6 +769,7 @@ const MaterialShipperDropdown = ({
     }]);
     setDeliveryLocations([{
       id: Date.now() + 1,
+      zip: '',
       address: '',
       city: '',
       state: '',
@@ -752,6 +784,8 @@ const MaterialShipperDropdown = ({
     setDeliveryZipQueries({});
     setShowPickupZipDD({});
     setShowDeliveryZipDD({});
+    // Reset charges calculator
+    setCharges([{ id: Date.now(), name: '', quantity: 0, amount: 0.00 }]);
   };
 
 
@@ -761,12 +795,14 @@ const MaterialShipperDropdown = ({
     let { value } = e.target;
 
     // ZIP fields: handle both ZIP code input and complete address display
-    if (name === 'fromZip' || name === 'toZip') {
-      const which = name === 'fromZip' ? 'from' : 'to';
+    if (name === 'fromZip' || name === 'toZip' || name === 'returnZip') {
+      const which = name === 'fromZip' ? 'from' : (name === 'toZip' ? 'to' : 'return');
       
       // If user is typing digits only (ZIP code), trigger search
       if (/^\d+$/.test(value) && value.length <= 5) {
-        if (which === 'from') setFromZipQuery(""); else setToZipQuery("");
+        if (which === 'from') setFromZipQuery("");
+        else if (which === 'to') setToZipQuery("");
+        else setReturnZipQuery("");
         debounceZip(name, () => fetchCityStateByZip(value, which), 450);
       }
       // If user is typing a complete address or clearing the field, just update the value
@@ -775,7 +811,7 @@ const MaterialShipperDropdown = ({
 
 
     // Numeric fields with up to 2 decimals (no negatives)
-    if (name === 'rate') {
+    if (name === 'lineHaul' || name === 'fsc' || name === 'other') {
       value = sanitizeMoney2(value);
     }
 
@@ -790,32 +826,114 @@ const MaterialShipperDropdown = ({
     }
 
     // Simple trim for strings
-    if (['fromCity', 'fromState', 'toCity', 'toState', 'vehicleType', 'rateType', 'returnLocation', 'commodity'].includes(name)) {
+    if (['fromCity', 'fromState', 'toCity', 'toState', 'vehicleType', 'rateType', 'returnAddress', 'returnCity', 'returnState', 'commodity'].includes(name)) {
       value = value.replace(/\s{2,}/g, ' ');
+    }
+
+    if (name === 'returnZip') {
+      value = value.replace(/[^\d]/g, '').slice(0, 5);
     }
 
     setLoadForm((prev) => ({ ...prev, [name]: value }));
     if (formErrors[name]) setFormErrors((p) => { const n = { ...p }; delete n[name]; return n; });
   };
 
+  // Charges Calculator handlers
+  const calculateChargesTotal = () => {
+    const total = charges.reduce((sum, charge) => {
+      const quantity = parseFloat(charge.quantity) || 0;
+      const amount = parseFloat(charge.amount) || 0;
+      return sum + (quantity * amount);
+    }, 0);
+    return total.toFixed(2);
+  };
+
+  const handleChargeChange = (id, field, value) => {
+    setCharges(prev => prev.map(charge => {
+      if (charge.id === id) {
+        if (field === 'quantity' || field === 'amount') {
+          // Allow numeric values with decimals
+          value = value.replace(/[^\d.]/g, '');
+          // Ensure only one decimal point
+          const parts = value.split('.');
+          if (parts.length > 2) {
+            value = parts[0] + '.' + parts.slice(1).join('');
+          }
+          // Limit to 2 decimal places
+          if (parts.length === 2 && parts[1].length > 2) {
+            value = parts[0] + '.' + parts[1].substring(0, 2);
+          }
+        }
+        return { ...charge, [field]: value };
+      }
+      return charge;
+    }));
+  };
+
+  const addNewCharge = () => {
+    setCharges(prev => [...prev, { id: Date.now(), name: '', quantity: 0, amount: 0.00 }]);
+  };
+
+  const deleteCharge = (id) => {
+    if (charges.length > 1) {
+      setCharges(prev => prev.filter(charge => charge.id !== id));
+    }
+  };
+
+  const handleApplyCharges = () => {
+    const total = calculateChargesTotal();
+    setLoadForm(prev => ({ ...prev, other: total }));
+    setShowChargesCalculator(false);
+  };
+
+  // Get charges array for API payload (filter out empty charges)
+  const getChargesForPayload = () => {
+    return charges
+      .filter(charge => charge.name.trim() || charge.quantity || charge.amount)
+      .map(charge => {
+        const quantity = parseFloat(charge.quantity) || 0;
+        const amount = parseFloat(charge.amount) || 0;
+        const total = quantity * amount;
+        return {
+          name: charge.name.trim(),
+          quantity: quantity,
+          amount: amount,
+          total: total
+        };
+      });
+  };
+
+  const handleCancelCharges = () => {
+    setShowChargesCalculator(false);
+  };
 
   // ✅ Per-field validators with EXACT messages
   const validators = {
     shipperId: (v) => v ? '' : 'Please select the shipper',
-    fromZip: (v) => v ? '' : 'Please select an address from the dropdown.',
+    fromZip: (v) => v ? '' : 'Please enter the ZIP code.',
+    fromAddress: (v) => v ? '' : 'Please enter/select the full address.',
     fromCity: (v) => v ? '' : 'Please enter  the From City name.',
     fromState: (v) => v ? '' : 'Please enter  the From State name.',
-    toZip: (v) => v ? '' : 'Please select an address from the dropdown.',
+    toZip: (v) => v ? '' : 'Please enter the ZIP code.',
+    toAddress: (v) => v ? '' : 'Please enter/select the full address.',
     toCity: (v) => v ? '' : 'Please enter  the To City name.',
     toState: (v) => v ? '' : 'Please enter  the To State name.',
 
     vehicleType: (v) => v ? '' : 'Please enter the Vehicle Type.',
-    rate: (v) => {
+    lineHaul: (v) => {
+      if (v && !MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
+      return '';
+    },
+    fsc: (v) => {
+      if (v && !MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
+      return '';
+    },
+    other: (v) => {
       if (v && !MONEY2.test(v)) return 'It should accept only numeric values. After decimal only two digits are accepted.';
       return '';
     },
 
-    rateType: (v) => v ? '' : '', // they only said "unable to enter"; not mandating text. Keep permissive.
+    rateType: (v, all) => (loadType !== 'DRAYAGE' ? (v ? '' : '') : ''), // Only validate for OTR loads
     pickupDate: (v) => v ? '' : 'Please select the Pickup Date .',
     deliveryDate: (v, all) => {
       if (!v) return 'Please select the Delivery Date .';
@@ -833,7 +951,10 @@ const MaterialShipperDropdown = ({
     bolNumber: (v) => (v && !ALNUM.test(v)) ? 'It should accept only alpha numeric.' : '',
     // DRAYAGE-only mandatory
     returnDate: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please select the Return Date.') : ''),
-    returnLocation: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please enter the Return Location.') : ''),
+    returnZip: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please enter the Return ZIP code.') : ''),
+    returnAddress: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please enter/select the Return Address.') : ''),
+    returnCity: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please enter the Return City.') : ''),
+    returnState: (v, all) => (loadType === 'DRAYAGE' ? (v ? '' : 'Please enter the Return State.') : ''),
   };
 
   // field order for scroll-to-first-invalid - Load type specific
@@ -841,20 +962,20 @@ const MaterialShipperDropdown = ({
     if (loadType === 'OTR') {
       return [
         'shipperId',
-        'vehicleType', 'rate', 'rateType',
+        'vehicleType', 'lineHaul', 'fsc', 'other', ...(loadType !== 'DRAYAGE' ? ['rateType'] : []),
         'bidDeadline',
         'containerNo', 'poNumber', 'bolNumber'
       ];
     } else if (loadType === 'DRAYAGE') {
       return [
         'shipperId',
-        'fromZip', 'fromCity', 'fromState',
-        'toZip', 'toCity', 'toState',
-        'vehicleType', 'rate', 'rateType',
+        'fromZip', 'fromAddress', 'fromCity', 'fromState',
+        'toZip', 'toAddress', 'toCity', 'toState',
+        'vehicleType', 'lineHaul', 'fsc', 'other', ...(loadType !== 'DRAYAGE' ? ['rateType'] : []),
         'pickupDate', 'deliveryDate', 'bidDeadline',
         'weight', 'commodity',
         'containerNo', 'poNumber', 'bolNumber',
-        'returnDate', 'returnLocation'
+        'returnDate', 'returnZip', 'returnAddress', 'returnCity', 'returnState'
       ];
     }
     return [];
@@ -998,7 +1119,7 @@ const MaterialShipperDropdown = ({
           addressLine2: "",
           city: (location.city || "").trim(),
           state: (location.state || "").trim(),
-          zip: location.address ? location.address.split(',').pop()?.trim() : "",
+          zip: location.zip || "",
           weight: parseFloat((location.weight || '0').replace(/\.$/, '')),
           commodity: (location.commodity || "").trim(),
           pickupDate: location.pickupDate,
@@ -1010,18 +1131,30 @@ const MaterialShipperDropdown = ({
           addressLine2: "",
           city: (location.city || "").trim(),
           state: (location.state || "").trim(),
-          zip: location.address ? location.address.split(',').pop()?.trim() : "",
+          zip: location.zip || "",
           weight: parseFloat((location.weight || '0').replace(/\.$/, '')),
           commodity: (location.commodity || "").trim(),
           deliveryDate: location.deliveryDate
         }));
 
+        // Calculate totals
+        const lineHaul = parseFloat(String(loadForm.lineHaul || '0').replace(/\.$/, '')) || 0;
+        const fsc = parseFloat(String(loadForm.fsc || '0').replace(/\.$/, '')) || 0;
+        const otherCharges = getChargesForPayload();
+        const otherTotal = otherCharges.reduce((sum, charge) => sum + (charge.quantity * charge.amount), 0);
+        const totalRate = lineHaul + fsc + otherTotal;
+
         payload = {
           shipperId: (loadForm.shipperId || "").trim(),
           loadType: "OTR",
           vehicleType: (loadForm.vehicleType || "").trim(),
-          rate: parseFloat(String(loadForm.rate || '0').replace(/\.$/, '')),
-          rateType: (loadForm.rateType || 'Flat Rate').trim(),
+          rateDetails: {
+            lineHaul: lineHaul,
+            fsc: fsc,
+            other: otherCharges.length > 0 ? otherCharges : []
+          },
+          rate: totalRate, // Optional but calculating total
+          ...(loadType !== 'DRAYAGE' ? { rateType: (loadForm.rateType || 'Flat Rate').trim() } : {}),
           bidDeadline: loadForm.bidDeadline,
           containerNo: (loadForm.containerNo || "").trim(),
           poNumber: (loadForm.poNumber || "").trim(),
@@ -1031,6 +1164,13 @@ const MaterialShipperDropdown = ({
         };
     } else if (loadType === 'DRAYAGE') {
       console.log("📦 Building DRAYAGE payload...");
+      // Calculate totals
+      const lineHaulDrayage = parseFloat(String(loadForm.lineHaul || '0').replace(/\.$/, '')) || 0;
+      const fscDrayage = parseFloat(String(loadForm.fsc || '0').replace(/\.$/, '')) || 0;
+      const otherChargesDrayage = getChargesForPayload();
+      const otherTotalDrayage = otherChargesDrayage.reduce((sum, charge) => sum + (charge.quantity * charge.amount), 0);
+      const totalRateDrayage = lineHaulDrayage + fscDrayage + otherTotalDrayage;
+
       // DRAYAGE Load Structure
       payload = {
         shipperId: (loadForm.shipperId || "").trim(),
@@ -1044,14 +1184,22 @@ const MaterialShipperDropdown = ({
         vehicleType: (loadForm.vehicleType || "").trim(),
         pickupDate: loadForm.pickupDate,
         deliveryDate: loadForm.deliveryDate,
-        rate: parseFloat(String(loadForm.rate || '0').replace(/\.$/, '')),
+        rateDetails: {
+          lineHaul: lineHaulDrayage,
+          fsc: fscDrayage,
+          other: otherChargesDrayage.length > 0 ? otherChargesDrayage : []
+        },
+        rate: totalRateDrayage, // Optional but calculating total
         rateType: (loadForm.rateType || 'Flat Rate').trim(),
         bidDeadline: loadForm.bidDeadline,
         containerNo: (loadForm.containerNo || "").trim(),
         poNumber: (loadForm.poNumber || "").trim(),
         bolNumber: (loadForm.bolNumber || "").trim(),
         returnDate: loadForm.returnDate,
-        returnLocation: (loadForm.returnLocation || "").trim()
+        returnAddress: (loadForm.returnAddress || "").trim(),
+        returnCity: (loadForm.returnCity || "").trim(),
+        returnState: (loadForm.returnState || "").trim(),
+        returnZip: (loadForm.returnZip || "").trim()
       };
     } else {
       // Fallback to old structure for other load types
@@ -1065,15 +1213,22 @@ const MaterialShipperDropdown = ({
         toCity: (loadForm.toCity || "").trim(),
         toState: (loadForm.toState || "").trim(),
         vehicleType: (loadForm.vehicleType || "").trim(),
-        rate: parseFloat(String(loadForm.rate || '').replace(/\.$/, '')),
+        rate: (() => {
+          const lineHaul = parseFloat(String(loadForm.lineHaul || '0').replace(/\.$/, '')) || 0;
+          const fsc = parseFloat(String(loadForm.fsc || '0').replace(/\.$/, '')) || 0;
+          const other = parseFloat(String(loadForm.other || '0').replace(/\.$/, '')) || 0;
+          return lineHaul + fsc + other;
+        })(),
         rateType: (loadForm.rateType || 'Flat Rate').trim(),
         pickupDate: loadForm.pickupDate,
         deliveryDate: loadForm.deliveryDate,
         bidDeadline: loadForm.bidDeadline,
         ...(loadType === 'DRAYAGE' ? {
           returnDate: loadForm.returnDate,
-          returnLocation: (loadForm.returnLocation || '').trim(),
-          drayageLocation: (loadForm.returnLocation || '').trim(),
+          returnAddress: (loadForm.returnAddress || '').trim(),
+          returnCity: (loadForm.returnCity || '').trim(),
+          returnState: (loadForm.returnState || '').trim(),
+          returnZip: (loadForm.returnZip || '').trim(),
         } : {}),
       };
     }
@@ -1164,7 +1319,7 @@ const MaterialShipperDropdown = ({
         addressLine2: "",
         city: (location.city || "").trim(),
         state: (location.state || "").trim(),
-        zip: location.address ? location.address.split(',').pop()?.trim() : "",
+        zip: location.zip || "",
         weight: parseFloat(String(location.weight || '0').replace(/\.$/, '')),
         commodity: (location.commodity || "").trim(),
         pickupDate: location.pickupDate,
@@ -1176,17 +1331,29 @@ const MaterialShipperDropdown = ({
         addressLine2: "",
         city: (location.city || "").trim(),
         state: (location.state || "").trim(),
-        zip: location.address ? location.address.split(',').pop()?.trim() : "",
+        zip: location.zip || "",
         weight: parseFloat(String(location.weight || '0').replace(/\.$/, '')),
         commodity: (location.commodity || "").trim(),
         deliveryDate: location.deliveryDate
       }));
 
+      // Calculate totals for edit
+      const lineHaulEdit = parseFloat(String(loadForm.lineHaul || '0').replace(/\.$/, '')) || 0;
+      const fscEdit = parseFloat(String(loadForm.fsc || '0').replace(/\.$/, '')) || 0;
+      const otherChargesEdit = getChargesForPayload();
+      const otherTotalEdit = otherChargesEdit.reduce((sum, charge) => sum + (charge.quantity * charge.amount), 0);
+      const totalRateEdit = lineHaulEdit + fscEdit + otherTotalEdit;
+
       payload = {
         shipperId: (loadForm.shipperId || "").trim(),
         loadType: "OTR",
         vehicleType: (loadForm.vehicleType || "").trim(),
-        rate: parseFloat(String(loadForm.rate || '0').replace(/\.$/, '')),
+        rateDetails: {
+          lineHaul: lineHaulEdit,
+          fsc: fscEdit,
+          other: otherChargesEdit.length > 0 ? otherChargesEdit : []
+        },
+        rate: totalRateEdit, // Optional but calculating total
         rateType: (loadForm.rateType || 'Flat Rate').trim(),
         bidDeadline: loadForm.bidDeadline,
         containerNo: (loadForm.containerNo || "").trim(),
@@ -1197,6 +1364,13 @@ const MaterialShipperDropdown = ({
       };
     } else if (loadType === 'DRAYAGE') {
       console.log("📦 Building DRAYAGE edit payload...");
+      // Calculate totals for DRAYAGE edit
+      const lineHaulDrayageEdit = parseFloat(String(loadForm.lineHaul || '0').replace(/\.$/, '')) || 0;
+      const fscDrayageEdit = parseFloat(String(loadForm.fsc || '0').replace(/\.$/, '')) || 0;
+      const otherChargesDrayageEdit = getChargesForPayload();
+      const otherTotalDrayageEdit = otherChargesDrayageEdit.reduce((sum, charge) => sum + (charge.quantity * charge.amount), 0);
+      const totalRateDrayageEdit = lineHaulDrayageEdit + fscDrayageEdit + otherTotalDrayageEdit;
+
       // DRAYAGE Load Structure
       payload = {
         shipperId: (loadForm.shipperId || "").trim(),
@@ -1210,14 +1384,22 @@ const MaterialShipperDropdown = ({
         vehicleType: (loadForm.vehicleType || "").trim(),
         pickupDate: loadForm.pickupDate,
         deliveryDate: loadForm.deliveryDate,
-        rate: parseFloat(String(loadForm.rate || '0').replace(/\.$/, '')),
+        rateDetails: {
+          lineHaul: lineHaulDrayageEdit,
+          fsc: fscDrayageEdit,
+          other: otherChargesDrayageEdit.length > 0 ? otherChargesDrayageEdit : []
+        },
+        rate: totalRateDrayageEdit, // Optional but calculating total
         rateType: (loadForm.rateType || 'Flat Rate').trim(),
         bidDeadline: loadForm.bidDeadline,
         containerNo: (loadForm.containerNo || "").trim(),
         poNumber: (loadForm.poNumber || "").trim(),
         bolNumber: (loadForm.bolNumber || "").trim(),
         returnDate: loadForm.returnDate,
-        returnLocation: (loadForm.returnLocation || "").trim()
+        returnAddress: (loadForm.returnAddress || "").trim(),
+        returnCity: (loadForm.returnCity || "").trim(),
+        returnState: (loadForm.returnState || "").trim(),
+        returnZip: (loadForm.returnZip || "").trim()
       };
     } else {
       // Fallback to old structure for other load types
@@ -1231,15 +1413,22 @@ const MaterialShipperDropdown = ({
         toCity: (loadForm.toCity || "").trim(),
         toState: (loadForm.toState || "").trim(),
         vehicleType: (loadForm.vehicleType || "").trim(),
-        rate: parseFloat(String(loadForm.rate || '').replace(/\.$/, '')),
+        rate: (() => {
+          const lineHaul = parseFloat(String(loadForm.lineHaul || '0').replace(/\.$/, '')) || 0;
+          const fsc = parseFloat(String(loadForm.fsc || '0').replace(/\.$/, '')) || 0;
+          const other = parseFloat(String(loadForm.other || '0').replace(/\.$/, '')) || 0;
+          return lineHaul + fsc + other;
+        })(),
         rateType: (loadForm.rateType || 'Flat Rate').trim(),
         pickupDate: loadForm.pickupDate,
         deliveryDate: loadForm.deliveryDate,
         bidDeadline: loadForm.bidDeadline,
         ...(loadType === 'DRAYAGE' ? {
           returnDate: loadForm.returnDate,
-          returnLocation: (loadForm.returnLocation || '').trim(),
-          drayageLocation: (loadForm.returnLocation || '').trim(),
+          returnAddress: (loadForm.returnAddress || '').trim(),
+          returnCity: (loadForm.returnCity || '').trim(),
+          returnState: (loadForm.returnState || '').trim(),
+          returnZip: (loadForm.returnZip || '').trim(),
         } : {}),
       };
     }
@@ -1553,8 +1742,32 @@ const MaterialShipperDropdown = ({
             bolNumber: load.bolNumber || '',
             origins: load.origins || [],
             destinations: load.destinations || [],
+            // Preserve raw fields for edit/duplicate (esp. DRAYAGE)
+            originRaw: load.origin || null,
+            destinationRaw: load.destination || null,
+            fromAddress: (load.origin?.addressLine1 || load.origin?.address || load.fromAddress || ''),
+            toAddress: (load.destination?.addressLine1 || load.destination?.address || load.toAddress || ''),
+            fromZip: (
+              load.origin?.zip || load.origin?.zipcode || load.origin?.zipCode || load.origin?.postalCode ||
+              load.fromZip || ''
+            ),
+            toZip: (
+              load.destination?.zip || load.destination?.zipcode || load.destination?.zipCode || load.destination?.postalCode ||
+              load.toZip || ''
+            ),
+            fromCity: (load.origin?.city || load.fromCity || ''),
+            fromState: (load.origin?.state || load.fromState || ''),
+            toCity: (load.destination?.city || load.toCity || ''),
+            toState: (load.destination?.state || load.toState || ''),
             shipper: load.shipper || null,
             acceptedBid: load.acceptedBid || null,
+            rateDetails: load.rateDetails || null,
+            // Drayage Return fields (support both new and legacy keys)
+            returnDate: load.returnDate || null,
+            returnAddress: load.returnAddress || load.returnLocation || '',
+            returnCity: load.returnCity || (load.returnLocationCity || ''),
+            returnState: load.returnState || (load.returnLocationState || ''),
+            returnZip: load.returnZip || (load.returnLocationZip || ''),
           };
         } catch {
           return {
@@ -1596,6 +1809,7 @@ const MaterialShipperDropdown = ({
     if (loadType === "OTR" && pickupLocations.length === 0 && deliveryLocations.length === 0) {
       setPickupLocations([{
         id: Date.now(),
+        zip: '',
         address: '',
         city: '',
         state: '',
@@ -1606,6 +1820,7 @@ const MaterialShipperDropdown = ({
       }]);
       setDeliveryLocations([{
         id: Date.now() + 1,
+        zip: '',
         address: '',
         city: '',
         state: '',
@@ -1894,11 +2109,106 @@ const MaterialShipperDropdown = ({
     console.log('🔍 Extracted shipper ID:', shipperId);
     
     // Populate basic form fields
+    // Handle rateDetails structure (new API) or direct fields (old API)
+    const lineHaulValue = load.rateDetails?.lineHaul || load.lineHaul || '';
+    const fscValue = load.rateDetails?.fsc || load.fsc || '';
+    const otherChargesFromAPI = load.rateDetails?.other || [];
+    
+    // Calculate other total if charges array exists
+    let otherTotal = '';
+    if (otherChargesFromAPI && Array.isArray(otherChargesFromAPI) && otherChargesFromAPI.length > 0) {
+      otherTotal = otherChargesFromAPI.reduce((sum, charge) => sum + ((charge.total || (charge.quantity * charge.amount)) || 0), 0).toFixed(2);
+      // Populate charges array
+      setCharges(otherChargesFromAPI.map((charge, index) => ({
+        id: Date.now() + index,
+        name: charge.name || '',
+        quantity: charge.quantity || 0,
+        amount: charge.amount || 0.00
+      })));
+    } else {
+      // Fallback to direct other value
+      otherTotal = load.other || '';
+      setCharges([{ id: Date.now(), name: '', quantity: 0, amount: 0.00 }]);
+    }
+
+    // For drayage loads, handle location data differently
+    let fromZip = '', fromCity = '', fromState = '', fromAddress = '';
+    let toZip = '', toCity = '', toState = '', toAddress = '';
+    
+    if (load.loadType === 'DRAYAGE') {
+      // Prefer preserved raw fields if available (added during transform)
+      const originRaw = load.originRaw || load.origin;
+      const destinationRaw = load.destinationRaw || load.destination;
+
+      // From (Pickup)
+      if (typeof originRaw === 'string') {
+        // Try to extract address, city/state, zip from string
+        const text = originRaw || '';
+        fromAddress = text;
+        const zipMatch = text.match(/\b\d{5}(?:-\d{4})?\b/);
+        if (zipMatch) fromZip = zipMatch[0];
+        if (text.includes(',')) {
+          const parts = text.split(',');
+          const cityPart = (parts[0] || '').trim();
+          const statePart = (parts[1] || '').trim();
+          if (cityPart) fromCity = cityPart;
+          const stateCode = statePart.match(/([A-Z]{2})/i);
+          if (stateCode) fromState = stateCode[1].toUpperCase();
+        }
+      } else if (originRaw && typeof originRaw === 'object') {
+        fromAddress = originRaw.addressLine1 || originRaw.address || '';
+        fromZip = originRaw.zip || originRaw.zipcode || originRaw.zipCode || originRaw.postalCode || '';
+        fromCity = originRaw.city || '';
+        fromState = originRaw.state || '';
+      }
+      // Fallback to direct fields preserved from API
+      fromAddress = fromAddress || load.fromAddress || '';
+      fromZip = fromZip || load.fromZip || '';
+      fromCity = fromCity || load.fromCity || '';
+      fromState = fromState || load.fromState || '';
+
+      // To (Loading/Unloading)
+      if (typeof destinationRaw === 'string') {
+        const text = destinationRaw || '';
+        toAddress = text;
+        const zipMatch = text.match(/\b\d{5}(?:-\d{4})?\b/);
+        if (zipMatch) toZip = zipMatch[0];
+        if (text.includes(',')) {
+          const parts = text.split(',');
+          const cityPart = (parts[0] || '').trim();
+          const statePart = (parts[1] || '').trim();
+          if (cityPart) toCity = cityPart;
+          const stateCode = statePart.match(/([A-Z]{2})/i);
+          if (stateCode) toState = stateCode[1].toUpperCase();
+        }
+      } else if (destinationRaw && typeof destinationRaw === 'object') {
+        toAddress = destinationRaw.addressLine1 || destinationRaw.address || '';
+        toZip = destinationRaw.zip || destinationRaw.zipcode || destinationRaw.zipCode || destinationRaw.postalCode || '';
+        toCity = destinationRaw.city || '';
+        toState = destinationRaw.state || '';
+      }
+      // Fallback to direct fields preserved from API
+      toAddress = toAddress || load.toAddress || '';
+      toZip = toZip || load.toZip || '';
+      toCity = toCity || load.toCity || '';
+      toState = toState || load.toState || '';
+    } else {
+      // For OTR loads, use direct properties
+      fromZip = load.fromZip || '';
+      fromCity = load.fromCity || '';
+      fromState = load.fromState || '';
+      toZip = load.toZip || '';
+      toCity = load.toCity || '';
+      toState = load.toState || '';
+    }
+
     setLoadForm({
       shipperId: shipperId,
       vehicleType: load.vehicleType || '',
-      rate: load.rate || '',
-      rateType: load.rateType || 'Flat Rate',
+      lineHaul: String(lineHaulValue),
+      fsc: String(fscValue),
+      other: String(otherTotal),
+      ...(loadType !== 'DRAYAGE' ? { rateType: load.rateType || 'Flat Rate' } : {}),
       bidDeadline: load.bidDeadline ? formatDateForInput(load.bidDeadline) : '',
       containerNo: load.containerNo || '',
       poNumber: load.poNumber || '',
@@ -1908,13 +2218,18 @@ const MaterialShipperDropdown = ({
       pickupDate: load.pickupDate ? formatDateForInput(load.pickupDate) : '',
       deliveryDate: load.deliveryDate ? formatDateForInput(load.deliveryDate) : '',
       returnDate: load.returnDate ? formatDateForInput(load.returnDate) : '',
-      returnLocation: load.returnLocation || '',
-      fromZip: load.fromZip || '',
-      fromCity: load.fromCity || '',
-      fromState: load.fromState || '',
-      toZip: load.toZip || '',
-      toCity: load.toCity || '',
-      toState: load.toState || ''
+      returnZip: load.returnZip || '',
+      returnAddress: load.returnAddress || '',
+      returnCity: load.returnCity || '',
+      returnState: load.returnState || '',
+      fromZip: fromZip,
+      fromAddress: fromAddress,
+      fromCity: fromCity,
+      fromState: fromState,
+      toZip: toZip,
+      toAddress: toAddress,
+      toCity: toCity,
+      toState: toState
     });
 
     // Set shipper input value
@@ -1963,17 +2278,6 @@ const MaterialShipperDropdown = ({
         })() : ''
       }));
       setDeliveryLocations(deliveryLocs);
-    } else if (load.loadType === 'DRAYAGE') {
-      // For DRAYAGE, populate single location fields
-      setLoadForm(prev => ({
-        ...prev,
-        fromZip: load.origin?.address || '',
-        fromCity: load.origin?.city || '',
-        fromState: load.origin?.state || '',
-        toZip: load.destination?.address || '',
-        toCity: load.destination?.city || '',
-        toState: load.destination?.state || ''
-      }));
     }
 
     // Clear any existing form errors
@@ -1990,93 +2294,17 @@ const MaterialShipperDropdown = ({
   const handleDuplicateLoad = (load) => {
     console.log('🔄 Duplicating load:', load);
     
-    // Set selected load for action (needed for edit modal)
+    // Mark selected and duplicating
     setSelectedLoadForAction(load);
-    
-    // Set flag to indicate we're duplicating (not editing)
     setIsDuplicating(true);
     
-    // Set load type based on the load data
-    setLoadType(load.loadType || 'OTR');
+    // Populate the form exactly like edit to include lineHaul, fsc, other, etc.
+    populateEditForm(load);
     
-    // Extract shipper ID from shipper object or direct property
-    const shipperId = load.shipperId || load.shipper?._id || '';
-    
-    // Populate form with existing load data (same as edit but for duplication)
-    setLoadForm({
-      shipperId: shipperId,
-      vehicleType: load.vehicleType || '',
-      rate: load.rate || '',
-      rateType: load.rateType || 'Flat Rate',
-      bidDeadline: load.bidDeadline ? formatDateForInput(load.bidDeadline) : '',
-      containerNo: load.containerNo || '',
-      poNumber: load.poNumber || '',
-      bolNumber: load.bolNumber || '',
-      weight: load.weight || '',
-      commodity: load.commodity || '',
-      pickupDate: load.pickupDate ? formatDateForInput(load.pickupDate) : '',
-      deliveryDate: load.deliveryDate ? formatDateForInput(load.deliveryDate) : '',
-      returnDate: load.returnDate ? formatDateForInput(load.returnDate) : '',
-      returnLocation: load.returnLocation || '',
-      fromZip: load.fromZip || '',
-      fromCity: load.fromCity || '',
-      fromState: load.fromState || '',
-      toZip: load.toZip || '',
-      toCity: load.toCity || '',
-      toState: load.toState || ''
-    });
-
-    // Set shipper input value
-    if (load.shipper) {
-      setShipperInputValue(`${load.shipper.compName} (${load.shipper.mc_dot_no})`);
-    }
-    
-    // Clear any existing form errors
-    setFormErrors({});
-
-    // Populate location arrays for OTR loads
-    if (load.loadType === 'OTR' && load.origins && load.destinations) {
-      // Convert origins to pickup locations
-      const pickupLocs = load.origins.map((origin, index) => ({
-        id: `pickup-${Date.now()}-${index}`,
-        address: origin.addressLine1 || '',
-        city: origin.city || '',
-        state: origin.state || '',
-        weight: origin.weight || '',
-        commodity: origin.commodity || '',
-        pickupDate: origin.pickupDate ? formatDateForInput(origin.pickupDate) : '',
-        deliveryDate: origin.deliveryDate ? formatDateForInput(origin.deliveryDate) : ''
-      }));
-      setPickupLocations(pickupLocs);
-
-      // Convert destinations to delivery locations
-      const deliveryLocs = load.destinations.map((destination, index) => ({
-        id: `delivery-${Date.now()}-${index}`,
-        address: destination.addressLine1 || '',
-        city: destination.city || '',
-        state: destination.state || '',
-        weight: destination.weight || '',
-        commodity: destination.commodity || '',
-        deliveryDate: destination.deliveryDate ? formatDateForInput(destination.deliveryDate) : ''
-      }));
-      setDeliveryLocations(deliveryLocs);
-    } else if (load.loadType === 'DRAYAGE') {
-      // For DRAYAGE, populate single location fields
-      setLoadForm(prev => ({
-        ...prev,
-        fromZip: load.origin?.address || '',
-        fromCity: load.origin?.city || '',
-        fromState: load.origin?.state || '',
-        toZip: load.destination?.address || '',
-        toCity: load.destination?.city || '',
-        toState: load.destination?.state || ''
-      }));
-    }
-
-    // Open the edit modal (same as edit button)
+    // Open the edit modal
     setShowEditModal(true);
     
-    // Show success message
+    // Notify user
     alertify.success('Load data duplicated successfully! Please modify the details and save.');
   };
 
@@ -2748,23 +2976,37 @@ const MaterialShipperDropdown = ({
                   </div>
                 </div>
                 
-                {/* Load Type Selector - Fixed */}
-                <div className="flex bg-white/20 rounded-xl p-1">
-                  {["OTR", "DRAYAGE"].map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => { if (!creatingDrayage) { setLoadType(type); setFormErrors({}); } }}
-                      disabled={creatingDrayage}
-                      className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
-                        loadType === type 
-                          ? "bg-white text-blue-700 shadow-sm" 
-                          : "text-white hover:bg-white/10"
-                      } ${creatingDrayage ? "opacity-60 cursor-not-allowed" : ""}`}
-                      title={creatingDrayage ? "Submission in progress…" : ""}
-                    >
-                      {type}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-4">
+                  {/* Load Type Selector - Fixed */}
+                  <div className="flex bg-white/20 rounded-xl p-1">
+                    {["OTR", "DRAYAGE"].map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => { if (!creatingDrayage) { setLoadType(type); setFormErrors({}); } }}
+                        disabled={creatingDrayage}
+                        className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
+                          loadType === type 
+                            ? "bg-white text-blue-700 shadow-sm" 
+                            : "text-white hover:bg-white/10"
+                        } ${creatingDrayage ? "opacity-60 cursor-not-allowed" : ""}`}
+                        title={creatingDrayage ? "Submission in progress…" : ""}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Close Button */}
+                  <button
+                    onClick={() => {
+                      setShowLoadCreationModal(false);
+                      resetLoadForm();
+                    }}
+                    className="text-white hover:text-gray-200 text-2xl font-bold p-2 hover:bg-white/10 rounded-lg transition-all duration-200"
+                    title="Close Modal"
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
             </div>
@@ -2859,7 +3101,9 @@ const MaterialShipperDropdown = ({
                                 </div>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  <div className="relative">
+                                  
+
+                                  <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                       Pickup Address <span className="text-red-500">*</span>
                                     </label>
@@ -2867,19 +3111,8 @@ const MaterialShipperDropdown = ({
                                       type="text"
                                       value={location.address}
                                       onChange={(e) => handleLocationAddressChange(location.id, e.target.value, 'pickup')}
-                                      onFocus={() => pickupZipOptions[location.id]?.length && setShowPickupZipDD(prev => ({ ...prev, [location.id]: true }))}
-                                      onBlur={() => setTimeout(() => setShowPickupZipDD(prev => ({ ...prev, [location.id]: false })), 150)}
-                                      placeholder="Enter ZIP code or full address"
+                                      placeholder="Enter full address"
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                    <SearchableZipDropdown
-                                      which="pickup"
-                                      open={showPickupZipDD[location.id] || false}
-                                      setOpen={(open) => setShowPickupZipDD(prev => ({ ...prev, [location.id]: open }))}
-                                      options={pickupZipOptions[location.id] || []}
-                                      query={pickupZipQueries[location.id] || ""}
-                                      setQuery={(query) => setPickupZipQueries(prev => ({ ...prev, [location.id]: query }))}
-                                      onSelect={(which, item) => applyZipToLocation(location.id, item, 'pickup')}
                                     />
                                   </div>
                                   
@@ -2906,6 +3139,29 @@ const MaterialShipperDropdown = ({
                                       onChange={(e) => updatePickupLocation(location.id, 'state', e.target.value)}
                                       placeholder="Enter state"
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  <div className="relative">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      ZIP Code <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.zip || ''}
+                                      onChange={(e) => handleLocationZipChange(location.id, e.target.value, 'pickup')}
+                                      onFocus={() => pickupZipOptions[location.id]?.length && setShowPickupZipDD(prev => ({ ...prev, [location.id]: true }))}
+                                      onBlur={() => setTimeout(() => setShowPickupZipDD(prev => ({ ...prev, [location.id]: false })), 150)}
+                                      placeholder="Enter ZIP code"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <SearchableZipDropdown
+                                      which="pickup"
+                                      open={showPickupZipDD[location.id] || false}
+                                      setOpen={(open) => setShowPickupZipDD(prev => ({ ...prev, [location.id]: open }))}
+                                      options={pickupZipOptions[location.id] || []}
+                                      query={pickupZipQueries[location.id] || ""}
+                                      setQuery={(query) => setPickupZipQueries(prev => ({ ...prev, [location.id]: query }))}
+                                      onSelect={(which, item) => applyZipToLocation(location.id, item, 'pickup')}
                                     />
                                   </div>
                                   
@@ -3006,7 +3262,9 @@ const MaterialShipperDropdown = ({
                                 </div>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  <div className="relative">
+                                  
+
+                                  <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                       Delivery Address <span className="text-red-500">*</span>
                                     </label>
@@ -3014,19 +3272,8 @@ const MaterialShipperDropdown = ({
                                       type="text"
                                       value={location.address}
                                       onChange={(e) => handleLocationAddressChange(location.id, e.target.value, 'delivery')}
-                                      onFocus={() => deliveryZipOptions[location.id]?.length && setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: true }))}
-                                      onBlur={() => setTimeout(() => setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: false })), 150)}
-                                      placeholder="Enter ZIP code or full address"
+                                      placeholder="Enter full address"
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                    <SearchableZipDropdown
-                                      which="delivery"
-                                      open={showDeliveryZipDD[location.id] || false}
-                                      setOpen={(open) => setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: open }))}
-                                      options={deliveryZipOptions[location.id] || []}
-                                      query={deliveryZipQueries[location.id] || ""}
-                                      setQuery={(query) => setDeliveryZipQueries(prev => ({ ...prev, [location.id]: query }))}
-                                      onSelect={(which, item) => applyZipToLocation(location.id, item, 'delivery')}
                                     />
                                   </div>
                                   
@@ -3055,7 +3302,29 @@ const MaterialShipperDropdown = ({
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                   </div>
-                                  
+                                  <div className="relative">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      ZIP Code <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={location.zip || ''}
+                                      onChange={(e) => handleLocationZipChange(location.id, e.target.value, 'delivery')}
+                                      onFocus={() => deliveryZipOptions[location.id]?.length && setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: true }))}
+                                      onBlur={() => setTimeout(() => setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: false })), 150)}
+                                      placeholder="Enter ZIP code"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <SearchableZipDropdown
+                                      which="delivery"
+                                      open={showDeliveryZipDD[location.id] || false}
+                                      setOpen={(open) => setShowDeliveryZipDD(prev => ({ ...prev, [location.id]: open }))}
+                                      options={deliveryZipOptions[location.id] || []}
+                                      query={deliveryZipQueries[location.id] || ""}
+                                      setQuery={(query) => setDeliveryZipQueries(prev => ({ ...prev, [location.id]: query }))}
+                                      onSelect={(which, item) => applyZipToLocation(location.id, item, 'delivery')}
+                                    />
+                                  </div>
                                   <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                       Weight (lbs) <span className="text-red-500">*</span>
@@ -3111,37 +3380,28 @@ const MaterialShipperDropdown = ({
                           <h4 className="font-semibold text-gray-700">Pickup Location</h4>
                         </div>
                         
-                        <div className="relative">
+                        
+
+                        <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Pickup Address <span className="text-red-500">*</span>
+                            Pickup Full Address <span className="text-red-500">*</span>
                           </label>
                           <input
-                            ref={(el) => (fieldRefs.current['fromZip'] = el)}
-                            name="fromZip"
-                            placeholder="Enter ZIP code or full addresses..."
-                            value={loadForm.fromZip}
+                            ref={(el) => (fieldRefs.current['fromAddress'] = el)}
+                            name="fromAddress"
+                            value={loadForm.fromAddress}
                             onChange={handleChange}
-                            onFocus={() => fromZipOptions.length && setShowFromZipDD(true)}
-                            onBlur={() => setTimeout(() => setShowFromZipDD(false), 150)}
+                            placeholder="Select from dropdown or type full address"
                             className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                              formErrors.fromZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              formErrors.fromAddress ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                             }`}
                           />
-                          {formErrors.fromZip && (
+                          {formErrors.fromAddress && (
                             <div className="flex items-center gap-2 mt-2">
                               <XCircle className="text-red-500" size={16} />
-                              <p className="text-sm text-red-600">{formErrors.fromZip}</p>
+                              <p className="text-sm text-red-600">{formErrors.fromAddress}</p>
                             </div>
                           )}
-                          <SearchableZipDropdown
-                            which="from"
-                            open={showFromZipDD}
-                            setOpen={setShowFromZipDD}
-                            options={fromZipOptions}
-                            query={fromZipQuery}
-                            setQuery={setFromZipQuery}
-                            onSelect={applyZipSelection}
-                          />
                         </div>
 
                         <div>
@@ -3188,6 +3448,38 @@ const MaterialShipperDropdown = ({
                           )}
                         </div>
                       </div>
+                      <div className="relative">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            ZIP Code <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['fromZip'] = el)}
+                            name="fromZip"
+                            placeholder="Enter 5-digit ZIP code"
+                            value={loadForm.fromZip}
+                            onChange={handleChange}
+                            onFocus={() => fromZipOptions.length && setShowFromZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowFromZipDD(false), 150)}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.fromZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.fromZip && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.fromZip}</p>
+                            </div>
+                          )}
+                          <SearchableZipDropdown
+                            which="from"
+                            open={showFromZipDD}
+                            setOpen={setShowFromZipDD}
+                            options={fromZipOptions}
+                            query={fromZipQuery}
+                            setQuery={setFromZipQuery}
+                            onSelect={applyZipSelection}
+                          />
+                        </div>
 
                       {/* Loading/Unloading Location */}
                       <div className="space-y-4">
@@ -3196,37 +3488,28 @@ const MaterialShipperDropdown = ({
                           <h4 className="font-semibold text-gray-700">Loading/Unloading Location</h4>
                         </div>
                         
-                        <div className="relative">
+                        
+
+                        <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Loading/Unloading Address <span className="text-red-500">*</span>
+                            Loading/Unloading Full Address <span className="text-red-500">*</span>
                           </label>
                           <input
-                            ref={(el) => (fieldRefs.current['toZip'] = el)}
-                            name="toZip"
-                            placeholder="Enter ZIP code or full addresses..."
-                            value={loadForm.toZip}
+                            ref={(el) => (fieldRefs.current['toAddress'] = el)}
+                            name="toAddress"
+                            value={loadForm.toAddress}
                             onChange={handleChange}
-                            onFocus={() => toZipOptions.length && setShowToZipDD(true)}
-                            onBlur={() => setTimeout(() => setShowToZipDD(false), 150)}
+                            placeholder="Select from dropdown or type full address"
                             className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                              formErrors.toZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              formErrors.toAddress ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                             }`}
                           />
-                          {formErrors.toZip && (
+                          {formErrors.toAddress && (
                             <div className="flex items-center gap-2 mt-2">
                               <XCircle className="text-red-500" size={16} />
-                              <p className="text-sm text-red-600">{formErrors.toZip}</p>
+                              <p className="text-sm text-red-600">{formErrors.toAddress}</p>
                             </div>
                           )}
-                          <SearchableZipDropdown
-                            which="to"
-                            open={showToZipDD}
-                            setOpen={setShowToZipDD}
-                            options={toZipOptions}
-                            query={toZipQuery}
-                            setQuery={setToZipQuery}
-                            onSelect={applyZipSelection}
-                          />
                         </div>
 
                         <div>
@@ -3273,59 +3556,145 @@ const MaterialShipperDropdown = ({
                           )}
                         </div>
                       </div>
+                      <div className="relative">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            ZIP Code <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['toZip'] = el)}
+                            name="toZip"
+                            placeholder="Enter 5-digit ZIP code"
+                            value={loadForm.toZip}
+                            onChange={handleChange}
+                            onFocus={() => toZipOptions.length && setShowToZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowToZipDD(false), 150)}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.toZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.toZip && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.toZip}</p>
+                            </div>
+                          )}
+                          <SearchableZipDropdown
+                            which="to"
+                            open={showToZipDD}
+                            setOpen={setShowToZipDD}
+                            options={toZipOptions}
+                            query={toZipQuery}
+                            setQuery={setToZipQuery}
+                            onSelect={applyZipSelection}
+                          />
+                        </div>
 
                       {/* Drayage Details - Moved under Loading/Unloading Location */}
                       <div className="mt-6 pt-6 border-t border-gray-200">
                         <div className="flex items-center gap-2 mb-4">
                           <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                          <h4 className="font-semibold text-gray-700">Drayage Details</h4>
+                          <h4 className="font-semibold text-gray-700">Return Location</h4>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div onClick={() => openDatePicker('returnDate')} className="cursor-pointer">
+                          
+
+                          <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Return Date <span className="text-red-500">*</span>
+                              Return Full Address <span className="text-red-500">*</span>
                             </label>
                             <input
-                              ref={(el) => (fieldRefs.current['returnDate'] = el)}
-                              type="date"
-                              name="returnDate"
-                              value={loadForm.returnDate}
+                              ref={(el) => (fieldRefs.current['returnAddress'] = el)}
+                              name="returnAddress"
+                              value={loadForm.returnAddress}
                               onChange={handleChange}
-                              min={todayStr()}
-                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
-                                formErrors.returnDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              placeholder="Enter full address"
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.returnAddress ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                               }`}
-                              onClick={(e) => e.target.showPicker?.()}
                             />
-                            {formErrors.returnDate && (
+                            {formErrors.returnAddress && (
                               <div className="flex items-center gap-2 mt-2">
                                 <XCircle className="text-red-500" size={16} />
-                                <p className="text-sm text-red-600">{formErrors.returnDate}</p>
+                                <p className="text-sm text-red-600">{formErrors.returnAddress}</p>
                               </div>
                             )}
                           </div>
 
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Return Location <span className="text-red-500">*</span>
+                              City <span className="text-red-500">*</span>
                             </label>
                             <input
-                              ref={(el) => (fieldRefs.current['returnLocation'] = el)}
-                              name="returnLocation"
-                              value={loadForm.returnLocation}
+                              ref={(el) => (fieldRefs.current['returnCity'] = el)}
+                              name="returnCity"
+                              value={loadForm.returnCity}
                               onChange={handleChange}
-                              placeholder="Enter Return Location"
+                              placeholder="Enter city"
                               className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                                formErrors.returnLocation ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                                formErrors.returnCity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                               }`}
                             />
-                            {formErrors.returnLocation && (
+                            {formErrors.returnCity && (
                               <div className="flex items-center gap-2 mt-2">
                                 <XCircle className="text-red-500" size={16} />
-                                <p className="text-sm text-red-600">{formErrors.returnLocation}</p>
+                                <p className="text-sm text-red-600">{formErrors.returnCity}</p>
                               </div>
                             )}
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              State <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              ref={(el) => (fieldRefs.current['returnState'] = el)}
+                              name="returnState"
+                              value={loadForm.returnState}
+                              onChange={handleChange}
+                              placeholder="Enter state (e.g., CA)"
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.returnState ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            />
+                            {formErrors.returnState && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnState}</p>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                               ZIP Code <span className="text-red-500">*</span>
+                            </label>
+                          <input
+                              ref={(el) => (fieldRefs.current['returnZip'] = el)}
+                              name="returnZip"
+                              value={loadForm.returnZip}
+                            onChange={handleChange}
+                            onFocus={() => returnZipOptions.length && setShowReturnZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowReturnZipDD(false), 150)}
+                            placeholder="Enter 5-digit ZIP code"
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.returnZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            />
+                            {formErrors.returnZip && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnZip}</p>
+                              </div>
+                            )}
+                          <SearchableZipDropdown
+                            which="return"
+                            open={showReturnZipDD}
+                            setOpen={setShowReturnZipDD}
+                            options={returnZipOptions}
+                            query={returnZipQuery}
+                            setQuery={setReturnZipQuery}
+                            onSelect={applyZipSelection}
+                          />
                           </div>
                         </div>
                       </div>
@@ -3368,27 +3737,92 @@ const MaterialShipperDropdown = ({
                       )}
                     </div>
                     
-                    <div>
+                    {/* Rate Fields: Line Haul, FSC, Other */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 col-span-2">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Line Haul ($)
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['lineHaul'] = el)}
+                          name="lineHaul"
+                          inputMode="decimal"
+                          placeholder="e.g., 1500 or 1500.50"
+                          value={loadForm.lineHaul}
+                          onChange={handleChange}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                            formErrors.lineHaul ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        />
+                        {formErrors.lineHaul && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.lineHaul}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          FSC (%)
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['fsc'] = el)}
+                          name="fsc"
+                          inputMode="decimal"
+                          placeholder="e.g., 500 or 500.50"
+                          value={loadForm.fsc}
+                          onChange={handleChange}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                            formErrors.fsc ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        />
+                        {formErrors.fsc && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.fsc}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Other accessorials ($)
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['other'] = el)}
+                          name="other"
+                          readOnly
+                          onClick={() => setShowChargesCalculator(true)}
+                          placeholder="Click to add charges"
+                          value={loadForm.other || ''}
+                          className={`w-full px-4 py-3 border-2 rounded-xl cursor-pointer bg-white hover:border-blue-400 transition-all duration-200 ${
+                            formErrors.other ? 'border-red-400 bg-red-50' : 'border-gray-200'
+                          }`}
+                        />
+                        {formErrors.other && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.other}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Total Rate Display */}
+                    <div className="col-span-2">
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Target Rate ($)
+                        Total Rate ($)
                       </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['rate'] = el)}
-                        name="rate"
-                        inputMode="decimal"
-                        placeholder="e.g., 2500 or 2500.50"
-                        value={loadForm.rate}
-                        onChange={handleChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                          formErrors.rate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      />
-                      {formErrors.rate && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.rate}</p>
-                        </div>
-                      )}
+                      <div className="w-full px-4 py-3 border-2 rounded-xl bg-gray-50 border-gray-300 font-semibold text-gray-700">
+                        ${(() => {
+                          const lineHaul = parseFloat(String(loadForm.lineHaul || '0').replace(/\.$/, '')) || 0;
+                          const fsc = parseFloat(String(loadForm.fsc || '0').replace(/\.$/, '')) || 0;
+                          const other = parseFloat(String(loadForm.other || '0').replace(/\.$/, '')) || 0;
+                          const total = lineHaul + fsc + other;
+                          return total.toFixed(2);
+                        })()}
+                      </div>
                     </div>
 
                     {loadType === 'DRAYAGE' && (
@@ -3500,6 +3934,29 @@ const MaterialShipperDropdown = ({
                           </div>
                         )}
                       </div>
+                      <div onClick={() => openDatePicker('returnDate')} className="cursor-pointer">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Return Date <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              ref={(el) => (fieldRefs.current['returnDate'] = el)}
+                              type="date"
+                              name="returnDate"
+                              value={loadForm.returnDate}
+                              onChange={handleChange}
+                              min={todayStr()}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                                formErrors.returnDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                              onClick={(e) => e.target.showPicker?.()}
+                            />
+                            {formErrors.returnDate && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnDate}</p>
+                              </div>
+                            )}
+                          </div>
 
                       <div onClick={() => openDatePicker('bidDeadline')} className="cursor-pointer">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -3631,27 +4088,29 @@ const MaterialShipperDropdown = ({
                       )}
                     </div>
                     
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Rate Type
-                      </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['rateType'] = el)}
-                        name="rateType"
-                        value={loadForm.rateType}
-                        onChange={handleChange}
-                        placeholder="e.g., Flat Rate / Per Mile"
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                          formErrors.rateType ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      />
-                      {formErrors.rateType && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.rateType}</p>
-                        </div>
-                      )}
-                    </div>
+                    {loadType !== 'DRAYAGE' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Rate Type
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['rateType'] = el)}
+                          name="rateType"
+                          value={loadForm.rateType}
+                          onChange={handleChange}
+                          placeholder="e.g., Flat Rate / Per Mile"
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                            formErrors.rateType ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        />
+                        {formErrors.rateType && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.rateType}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -3916,6 +4375,64 @@ const MaterialShipperDropdown = ({
                 </div>
               ) : null}
 
+              {/* Rate Details */}
+              {selectedLoadForAction.rateDetails && (
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <DollarSign className="text-green-600" size={18} />
+                    Rate Details
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {selectedLoadForAction.rateDetails.lineHaul !== undefined && selectedLoadForAction.rateDetails.lineHaul !== null && (
+                        <div className="bg-white rounded-lg p-3 border border-gray-200">
+                          <span className="text-gray-600 text-sm">Line Haul:</span>
+                          <p className="font-bold text-green-600 text-lg">${parseFloat(selectedLoadForAction.rateDetails.lineHaul || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        </div>
+                      )}
+                      {selectedLoadForAction.rateDetails.fsc !== undefined && selectedLoadForAction.rateDetails.fsc !== null && (
+                        <div className="bg-white rounded-lg p-3 border border-gray-200">
+                          <span className="text-gray-600 text-sm">FSC:</span>
+                          <p className="font-bold text-green-600 text-lg">${parseFloat(selectedLoadForAction.rateDetails.fsc || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {selectedLoadForAction.rateDetails.other && Array.isArray(selectedLoadForAction.rateDetails.other) && selectedLoadForAction.rateDetails.other.length > 0 && (
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <span className="text-gray-600 text-sm font-semibold mb-2 block">Other Charges:</span>
+                        <div className="space-y-2">
+                          {selectedLoadForAction.rateDetails.other.map((charge, index) => (
+                            <div key={charge._id || index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                              <div>
+                                <span className="font-medium text-gray-800">{charge.name || 'Unnamed Charge'}</span>
+                                <span className="text-gray-500 text-sm ml-2">
+                                  ({charge.quantity || 0} × ${parseFloat(charge.amount || 0).toFixed(2)})
+                                </span>
+                              </div>
+                              <span className="font-bold text-green-600">
+                                ${parseFloat(charge.total || (charge.quantity * charge.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedLoadForAction.rateDetails.totalRates !== undefined && selectedLoadForAction.rateDetails.totalRates !== null && (
+                      <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 border-2 border-green-400">
+                        <div className="flex justify-between items-center">
+                          <span className="text-white font-semibold text-lg">Total Rates:</span>
+                          <span className="font-bold text-white text-2xl">
+                            ${parseFloat(selectedLoadForAction.rateDetails.totalRates || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Additional Details */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
@@ -4017,21 +4534,36 @@ const MaterialShipperDropdown = ({
                   </div>
                 </div>
                 
-                {/* Load Type Selector - Fixed */}
-                <div className="flex bg-white/20 rounded-xl p-1">
-                  {["OTR", "DRAYAGE"].map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => { setLoadType(type); setFormErrors({}); }}
-                      className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
-                        loadType === type 
-                          ? "bg-white text-green-700 shadow-sm" 
-                          : "text-white hover:bg-white/10"
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-4">
+                  {/* Load Type Selector - Fixed */}
+                  <div className="flex bg-white/20 rounded-xl p-1">
+                    {["OTR", "DRAYAGE"].map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => { setLoadType(type); setFormErrors({}); }}
+                        className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
+                          loadType === type 
+                            ? "bg-white text-green-700 shadow-sm" 
+                            : "text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Close Button */}
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setSelectedLoadForAction(null);
+                      resetLoadForm();
+                    }}
+                    className="text-white hover:text-gray-200 text-2xl font-bold p-2 hover:bg-white/10 rounded-lg transition-all duration-200"
+                    title="Close Modal"
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
             </div>
@@ -4378,37 +4910,28 @@ const MaterialShipperDropdown = ({
                           <h4 className="font-semibold text-gray-700">Pickup Location</h4>
                         </div>
                         
-                        <div className="relative">
+                        
+
+                        <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Pickup Address <span className="text-red-500">*</span>
+                            Pickup Full Address <span className="text-red-500">*</span>
                           </label>
                           <input
-                            ref={(el) => (fieldRefs.current['fromZip'] = el)}
-                            name="fromZip"
-                            placeholder="Enter ZIP code or full addresses..."
-                            value={loadForm.fromZip}
+                            ref={(el) => (fieldRefs.current['fromAddress'] = el)}
+                            name="fromAddress"
+                            value={loadForm.fromAddress}
                             onChange={handleChange}
-                            onFocus={() => fromZipOptions.length && setShowFromZipDD(true)}
-                            onBlur={() => setTimeout(() => setShowFromZipDD(false), 150)}
+                            placeholder="Select from dropdown or type full address"
                             className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                              formErrors.fromZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              formErrors.fromAddress ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                             }`}
                           />
-                          {formErrors.fromZip && (
+                          {formErrors.fromAddress && (
                             <div className="flex items-center gap-2 mt-2">
                               <XCircle className="text-red-500" size={16} />
-                              <p className="text-sm text-red-600">{formErrors.fromZip}</p>
+                              <p className="text-sm text-red-600">{formErrors.fromAddress}</p>
                             </div>
                           )}
-                          <SearchableZipDropdown
-                            which="from"
-                            open={showFromZipDD}
-                            setOpen={setShowFromZipDD}
-                            options={fromZipOptions}
-                            query={fromZipQuery}
-                            setQuery={setFromZipQuery}
-                            onSelect={applyZipSelection}
-                          />
                         </div>
 
                         <div>
@@ -4455,6 +4978,38 @@ const MaterialShipperDropdown = ({
                           )}
                         </div>
                       </div>
+                      <div className="relative">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            ZIP Code <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['fromZip'] = el)}
+                            name="fromZip"
+                            placeholder="Enter 5-digit ZIP code"
+                            value={loadForm.fromZip}
+                            onChange={handleChange}
+                            onFocus={() => fromZipOptions.length && setShowFromZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowFromZipDD(false), 150)}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.fromZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.fromZip && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.fromZip}</p>
+                            </div>
+                          )}
+                          <SearchableZipDropdown
+                            which="from"
+                            open={showFromZipDD}
+                            setOpen={setShowFromZipDD}
+                            options={fromZipOptions}
+                            query={fromZipQuery}
+                            setQuery={setFromZipQuery}
+                            onSelect={applyZipSelection}
+                          />
+                        </div>
 
                       {/* Loading/Unloading Location */}
                       <div className="space-y-4">
@@ -4463,37 +5018,28 @@ const MaterialShipperDropdown = ({
                           <h4 className="font-semibold text-gray-700">Loading/Unloading Location</h4>
                         </div>
                         
-                        <div className="relative">
+                        
+
+                        <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Loading/Unloading Address <span className="text-red-500">*</span>
+                            Loading/Unloading Full Address <span className="text-red-500">*</span>
                           </label>
                           <input
-                            ref={(el) => (fieldRefs.current['toZip'] = el)}
-                            name="toZip"
-                            placeholder="Enter ZIP code or full addresses..."
-                            value={loadForm.toZip}
+                            ref={(el) => (fieldRefs.current['toAddress'] = el)}
+                            name="toAddress"
+                            value={loadForm.toAddress}
                             onChange={handleChange}
-                            onFocus={() => toZipOptions.length && setShowToZipDD(true)}
-                            onBlur={() => setTimeout(() => setShowToZipDD(false), 150)}
+                            placeholder="Select from dropdown or type full address"
                             className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                              formErrors.toZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              formErrors.toAddress ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                             }`}
                           />
-                          {formErrors.toZip && (
+                          {formErrors.toAddress && (
                             <div className="flex items-center gap-2 mt-2">
                               <XCircle className="text-red-500" size={16} />
-                              <p className="text-sm text-red-600">{formErrors.toZip}</p>
+                              <p className="text-sm text-red-600">{formErrors.toAddress}</p>
                             </div>
                           )}
-                          <SearchableZipDropdown
-                            which="to"
-                            open={showToZipDD}
-                            setOpen={setShowToZipDD}
-                            options={toZipOptions}
-                            query={toZipQuery}
-                            setQuery={setToZipQuery}
-                            onSelect={applyZipSelection}
-                          />
                         </div>
 
                         <div>
@@ -4540,59 +5086,143 @@ const MaterialShipperDropdown = ({
                           )}
                         </div>
                       </div>
+                      <div className="relative">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                             ZIP Code <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={(el) => (fieldRefs.current['toZip'] = el)}
+                            name="toZip"
+                            placeholder="Enter 5-digit ZIP code"
+                            value={loadForm.toZip}
+                            onChange={handleChange}
+                            onFocus={() => toZipOptions.length && setShowToZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowToZipDD(false), 150)}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                              formErrors.toZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          />
+                          {formErrors.toZip && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <XCircle className="text-red-500" size={16} />
+                              <p className="text-sm text-red-600">{formErrors.toZip}</p>
+                            </div>
+                          )}
+                          <SearchableZipDropdown
+                            which="to"
+                            open={showToZipDD}
+                            setOpen={setShowToZipDD}
+                            options={toZipOptions}
+                            query={toZipQuery}
+                            setQuery={setToZipQuery}
+                            onSelect={applyZipSelection}
+                          />
+                        </div>
 
                       {/* Drayage Details - Moved under Loading/Unloading Location */}
                       <div className="mt-6 pt-6 border-t border-gray-200">
                         <div className="flex items-center gap-2 mb-4">
                           <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                          <h4 className="font-semibold text-gray-700">Drayage Details</h4>
+                          <h4 className="font-semibold text-gray-700">Return Location</h4>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div onClick={() => openDatePicker('returnDate')} className="cursor-pointer">
+                          <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Return Date <span className="text-red-500">*</span>
+                              Return Full Address <span className="text-red-500">*</span>
                             </label>
                             <input
-                              ref={(el) => (fieldRefs.current['returnDate'] = el)}
-                              type="date"
-                              name="returnDate"
-                              value={loadForm.returnDate}
+                              ref={(el) => (fieldRefs.current['returnAddress'] = el)}
+                              name="returnAddress"
+                              value={loadForm.returnAddress}
                               onChange={handleChange}
-                              min={todayStr()}
-                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
-                                formErrors.returnDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              placeholder="Enter full address"
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.returnAddress ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                               }`}
-                              onClick={(e) => e.target.showPicker?.()}
                             />
-                            {formErrors.returnDate && (
+                            {formErrors.returnAddress && (
                               <div className="flex items-center gap-2 mt-2">
                                 <XCircle className="text-red-500" size={16} />
-                                <p className="text-sm text-red-600">{formErrors.returnDate}</p>
+                                <p className="text-sm text-red-600">{formErrors.returnAddress}</p>
                               </div>
                             )}
                           </div>
 
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Return Location <span className="text-red-500">*</span>
+                              City <span className="text-red-500">*</span>
                             </label>
                             <input
-                              ref={(el) => (fieldRefs.current['returnLocation'] = el)}
-                              name="returnLocation"
-                              value={loadForm.returnLocation}
+                              ref={(el) => (fieldRefs.current['returnCity'] = el)}
+                              name="returnCity"
+                              value={loadForm.returnCity}
                               onChange={handleChange}
-                              placeholder="Enter Return Location"
+                              placeholder="Enter city"
                               className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                                formErrors.returnLocation ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                                formErrors.returnCity ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                               }`}
                             />
-                            {formErrors.returnLocation && (
+                            {formErrors.returnCity && (
                               <div className="flex items-center gap-2 mt-2">
                                 <XCircle className="text-red-500" size={16} />
-                                <p className="text-sm text-red-600">{formErrors.returnLocation}</p>
+                                <p className="text-sm text-red-600">{formErrors.returnCity}</p>
                               </div>
                             )}
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              State <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              ref={(el) => (fieldRefs.current['returnState'] = el)}
+                              name="returnState"
+                              value={loadForm.returnState}
+                              onChange={handleChange}
+                              placeholder="Enter state (e.g., CA)"
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.returnState ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            />
+                            {formErrors.returnState && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnState}</p>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                               ZIP Code <span className="text-red-500">*</span>
+                            </label>
+                          <input
+                              ref={(el) => (fieldRefs.current['returnZip'] = el)}
+                              name="returnZip"
+                              value={loadForm.returnZip}
+                            onChange={handleChange}
+                            onFocus={() => returnZipOptions.length && setShowReturnZipDD(true)}
+                            onBlur={() => setTimeout(() => setShowReturnZipDD(false), 150)}
+                            placeholder="Enter 5-digit ZIP code"
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.returnZip ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            />
+                            {formErrors.returnZip && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnZip}</p>
+                              </div>
+                            )}
+                          <SearchableZipDropdown
+                            which="return"
+                            open={showReturnZipDD}
+                            setOpen={setShowReturnZipDD}
+                            options={returnZipOptions}
+                            query={returnZipQuery}
+                            setQuery={setReturnZipQuery}
+                            onSelect={applyZipSelection}
+                          />
                           </div>
                         </div>
                       </div>
@@ -4635,27 +5265,92 @@ const MaterialShipperDropdown = ({
                       )}
                     </div>
                     
-                    <div>
+                    {/* Rate Fields: Line Haul, FSC, Other */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 col-span-2">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Line Haul ($)
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['lineHaul'] = el)}
+                          name="lineHaul"
+                          inputMode="decimal"
+                          placeholder="e.g., 1500 or 1500.50"
+                          value={loadForm.lineHaul}
+                          onChange={handleChange}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                            formErrors.lineHaul ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        />
+                        {formErrors.lineHaul && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.lineHaul}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          FSC ($)
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['fsc'] = el)}
+                          name="fsc"
+                          inputMode="decimal"
+                          placeholder="e.g., 500 or 500.50"
+                          value={loadForm.fsc}
+                          onChange={handleChange}
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                            formErrors.fsc ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        />
+                        {formErrors.fsc && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.fsc}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Other ($)
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['other'] = el)}
+                          name="other"
+                          readOnly
+                          onClick={() => setShowChargesCalculator(true)}
+                          placeholder="Click to add charges"
+                          value={loadForm.other || ''}
+                          className={`w-full px-4 py-3 border-2 rounded-xl cursor-pointer bg-white hover:border-blue-400 transition-all duration-200 ${
+                            formErrors.other ? 'border-red-400 bg-red-50' : 'border-gray-200'
+                          }`}
+                        />
+                        {formErrors.other && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.other}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Total Rate Display */}
+                    <div className="col-span-2">
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Target Rate ($)
+                        Total Rate ($)
                       </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['rate'] = el)}
-                        name="rate"
-                        inputMode="decimal"
-                        placeholder="e.g., 2500 or 2500.50"
-                        value={loadForm.rate}
-                        onChange={handleChange}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                          formErrors.rate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      />
-                      {formErrors.rate && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.rate}</p>
-                        </div>
-                      )}
+                      <div className="w-full px-4 py-3 border-2 rounded-xl bg-gray-50 border-gray-300 font-semibold text-gray-700">
+                        ${(() => {
+                          const lineHaul = parseFloat(String(loadForm.lineHaul || '0').replace(/\.$/, '')) || 0;
+                          const fsc = parseFloat(String(loadForm.fsc || '0').replace(/\.$/, '')) || 0;
+                          const other = parseFloat(String(loadForm.other || '0').replace(/\.$/, '')) || 0;
+                          const total = lineHaul + fsc + other;
+                          return total.toFixed(2);
+                        })()}
+                      </div>
                     </div>
 
                     {loadType === 'DRAYAGE' && (
@@ -4767,6 +5462,29 @@ const MaterialShipperDropdown = ({
                           </div>
                         )}
                       </div>
+                      <div onClick={() => openDatePicker('returnDate')} className="cursor-pointer">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Return Date <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              ref={(el) => (fieldRefs.current['returnDate'] = el)}
+                              type="date"
+                              name="returnDate"
+                              value={loadForm.returnDate}
+                              onChange={handleChange}
+                              min={todayStr()}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
+                                formErrors.returnDate ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                              onClick={(e) => e.target.showPicker?.()}
+                            />
+                            {formErrors.returnDate && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">{formErrors.returnDate}</p>
+                              </div>
+                            )}
+                          </div>
 
                       <div onClick={() => openDatePicker('bidDeadline')} className="cursor-pointer">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -4898,27 +5616,29 @@ const MaterialShipperDropdown = ({
                       )}
                     </div>
                     
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Rate Type
-                      </label>
-                      <input
-                        ref={(el) => (fieldRefs.current['rateType'] = el)}
-                        name="rateType"
-                        value={loadForm.rateType}
-                        onChange={handleChange}
-                        placeholder="e.g., Flat Rate / Per Mile"
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
-                          formErrors.rateType ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      />
-                      {formErrors.rateType && (
-                        <div className="flex items-center gap-2 mt-2">
-                          <XCircle className="text-red-500" size={16} />
-                          <p className="text-sm text-red-600">{formErrors.rateType}</p>
-                        </div>
-                      )}
-                    </div>
+                    {loadType !== 'DRAYAGE' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Rate Type
+                        </label>
+                        <input
+                          ref={(el) => (fieldRefs.current['rateType'] = el)}
+                          name="rateType"
+                          value={loadForm.rateType}
+                          onChange={handleChange}
+                          placeholder="e.g., Flat Rate / Per Mile"
+                          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                            formErrors.rateType ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        />
+                        {formErrors.rateType && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <XCircle className="text-red-500" size={16} />
+                            <p className="text-sm text-red-600">{formErrors.rateType}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -5064,6 +5784,140 @@ const MaterialShipperDropdown = ({
                     'Delete Load'
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Charges Calculator Modal */}
+      {showChargesCalculator && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">Charges Calculator</h2>
+                <button
+                  onClick={handleCancelCharges}
+                  className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-4 mb-4 font-semibold text-gray-700 text-sm">
+                <div className="col-span-4">
+                  Name <span className="text-red-500">*</span>
+                </div>
+                <div className="col-span-2">
+                  # Quantity <span className="text-red-500">*</span>
+                </div>
+                <div className="col-span-2">
+                  $ Amount <span className="text-red-500">*</span>
+                </div>
+                <div className="col-span-3">
+                  $ Total
+                </div>
+                <div className="col-span-1">
+                  Action
+                </div>
+              </div>
+
+              {/* Charges Rows */}
+              {charges.map((charge, index) => {
+                const quantity = parseFloat(charge.quantity) || 0;
+                const amount = parseFloat(charge.amount) || 0;
+                const total = (quantity * amount).toFixed(2);
+                
+                return (
+                  <div key={charge.id} className="grid grid-cols-12 gap-4 mb-4 items-center">
+                    <div className="col-span-4">
+                      <input
+                        type="text"
+                        placeholder="Enter charge name"
+                        value={charge.name}
+                        onChange={(e) => handleChargeChange(charge.id, 'name', e.target.value)}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={charge.quantity}
+                        onChange={(e) => handleChargeChange(charge.id, 'quantity', e.target.value)}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={charge.amount}
+                        onChange={(e) => handleChargeChange(charge.id, 'amount', e.target.value)}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <div className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-green-50 font-semibold text-gray-700">
+                        ${total}
+                      </div>
+                    </div>
+                    <div className="col-span-1 flex justify-center">
+                      <button
+                        onClick={() => deleteCharge(charge.id)}
+                        disabled={charges.length === 1}
+                        className={`p-2 rounded-lg transition-colors ${
+                          charges.length === 1
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-gray-600 hover:bg-red-100 hover:text-red-600'
+                        }`}
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Add New Charge Button */}
+              <div className="flex justify-center mb-6">
+                <button
+                  onClick={addNewCharge}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg"
+                >
+                  <Plus size={20} />
+                  Add New Charge
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-white border-t border-gray-200 p-6 rounded-b-2xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3 bg-green-500 text-white px-6 py-4 rounded-xl font-semibold shadow-lg">
+                  <DollarSign size={24} className="text-white" />
+                  <span>Total Charges ${calculateChargesTotal()}</span>
+                </div>
+                <div className="flex gap-4">
+                  <button
+                    onClick={handleCancelCharges}
+                    className="px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleApplyCharges}
+                    className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-colors shadow-lg"
+                  >
+                    Apply to Carrier Fees
+                  </button>
+                </div>
               </div>
             </div>
           </div>

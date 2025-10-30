@@ -364,6 +364,8 @@ export default function DeliveryOrder() {
   const [loadingDispatchers, setLoadingDispatchers] = useState(false);
   const [loads, setLoads] = useState([]);
   const [loadingLoads, setLoadingLoads] = useState(false);
+  const [selectedLoadData, setSelectedLoadData] = useState(null);
+  const [loadingSelectedLoad, setLoadingSelectedLoad] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
   const [orderToDelete, setOrderToDelete] = useState(null);
@@ -874,11 +876,147 @@ export default function DeliveryOrder() {
   };
 
   // Handle load selection
-  const handleLoadChange = (value) => {
+  const handleLoadChange = async (value) => {
     setFormData(prev => ({
       ...prev,
       selectedLoad: value
     }));
+
+    // Fetch load data when a load is selected
+    if (value) {
+      try {
+        setLoadingSelectedLoad(true);
+        console.log('Fetching load data for loadId:', value);
+        
+        const response = await apiService.getLoadById(value);
+        console.log('Load data response:', response);
+        
+        if (response.success && response.load) {
+          const loadData = response.load;
+          setSelectedLoadData(loadData);
+          console.log('Load data loaded successfully:', loadData);
+          
+          // Auto-fill form fields with load data
+          setFormData(prev => ({
+            ...prev,
+            selectedLoad: value,
+            
+            // Auto-fill shipper information
+            shipperName: loadData.shipper?.compName || prev.shipperName,
+            containerNo: loadData.containerNo || prev.containerNo,
+            containerType: loadData.vehicleType || prev.containerType,
+            
+            // Auto-fill carrier information
+            carrierName: loadData.assignedTo?.compName || prev.carrierName,
+            equipmentType: loadData.commodity || prev.equipmentType,
+            
+            // Auto-fill pickup locations (zipCode and name should remain empty per requirement)
+            pickupLocations: loadData.origins && loadData.origins.length > 0 ? 
+              loadData.origins.map((origin, index) => ({
+                name: '',
+                address: origin.addressLine1 || '',
+                city: origin.city || '',
+                state: origin.state || '',
+                zipCode: '',
+                weight: origin.weight || '',
+                pickUpDate: origin.pickupDate ? new Date(origin.pickupDate).toISOString().split('T')[0] : '',
+                remarks: ''
+              })) : prev.pickupLocations,
+            
+            // Auto-fill drop locations (zipCode and name should remain empty per requirement)
+            dropLocations: loadData.destinations && loadData.destinations.length > 0 ? 
+              loadData.destinations.map((destination, index) => ({
+                name: '',
+                address: destination.addressLine1 || '',
+                city: destination.city || '',
+                state: destination.state || '',
+                zipCode: '',
+                weight: destination.weight || '',
+                dropDate: destination.deliveryDate ? new Date(destination.deliveryDate).toISOString().split('T')[0] : '',
+                remarks: ''
+              })) : prev.dropLocations,
+            
+            // Auto-fill customer information with load details
+            customers: [{
+              billTo: loadData.shipper?.compName || prev.customers[0]?.billTo || '',
+              // Keep dispatcher empty; user must select manually
+              dispatcherName: prev.customers[0]?.dispatcherName || '',
+              // Keep work order no empty; user must enter manually
+              workOrderNo: prev.customers[0]?.workOrderNo || '',
+              lineHaul: loadData.rateDetails?.lineHaul || prev.customers[0]?.lineHaul || '',
+              fsc: loadData.rateDetails?.fsc || prev.customers[0]?.fsc || '',
+              other: loadData.rateDetails?.other?.reduce((sum, charge) => sum + (charge.total || 0), 0) || prev.customers[0]?.other || '',
+              totalAmount: loadData.rate || prev.customers[0]?.totalAmount || 0
+            }],
+            
+            // Auto-fill BOL information
+            bols: loadData.bolNumber ? [{ bolNo: loadData.bolNumber }] : prev.bols,
+            
+            // Auto-fill remarks with comprehensive load information
+            remarks: `=== LOAD INFORMATION ===\n` +
+                    `Load ID: ${loadData._id}\n` +
+                    `Shipment Number: ${loadData.shipmentNumber || 'N/A'}\n` +
+                    `Status: ${loadData.status}\n` +
+                    `Load Type: ${loadData.loadType}\n` +
+                    `Vehicle Type: ${loadData.vehicleType}\n` +
+                    `Rate Type: ${loadData.rateType}\n` +
+                    `Total Rate: $${loadData.rate}\n` +
+                    `Weight: ${loadData.weight} lbs\n` +
+                    `Commodity: ${loadData.commodity}\n` +
+                    `PO Number: ${loadData.poNumber || 'N/A'}\n` +
+                    `Container No: ${loadData.containerNo || 'N/A'}\n\n` +
+                    `=== SHIPPER INFO ===\n` +
+                    `Company: ${loadData.shipper?.compName || 'N/A'}\n` +
+                    `MC/DOT: ${loadData.shipper?.mc_dot_no || 'N/A'}\n` +
+                    `Location: ${loadData.shipper?.city || 'N/A'}, ${loadData.shipper?.state || 'N/A'}\n` +
+                    `Phone: ${loadData.shipper?.phoneNo || 'N/A'}\n` +
+                    `Email: ${loadData.shipper?.email || 'N/A'}\n\n` +
+                    `=== CARRIER INFO ===\n` +
+                    `Company: ${loadData.assignedTo?.compName || 'N/A'}\n` +
+                    `MC/DOT: ${loadData.assignedTo?.mc_dot_no || 'N/A'}\n` +
+                    `Location: ${loadData.assignedTo?.city || 'N/A'}, ${loadData.assignedTo?.state || 'N/A'}\n` +
+                    `Phone: ${loadData.assignedTo?.phoneNo || 'N/A'}\n` +
+                    `Email: ${loadData.assignedTo?.email || 'N/A'}\n\n` +
+                    `=== DRIVER INFO ===\n` +
+                    `Driver: ${loadData.acceptedBid?.driverName || 'N/A'}\n` +
+                    `Phone: ${loadData.acceptedBid?.driverPhone || 'N/A'}\n` +
+                    `Vehicle: ${loadData.acceptedBid?.vehicleNumber || 'N/A'}\n` +
+                    `Bid Rate: $${loadData.acceptedBid?.rate || 'N/A'}\n` +
+                    `Message: ${loadData.acceptedBid?.message || 'N/A'}\n\n` +
+                    `=== DATES ===\n` +
+                    `Pickup: ${loadData.pickupDate ? new Date(loadData.pickupDate).toLocaleDateString() : 'N/A'}\n` +
+                    `Delivery: ${loadData.deliveryDate ? new Date(loadData.deliveryDate).toLocaleDateString() : 'N/A'}\n` +
+                    `Bid Deadline: ${loadData.bidDeadline ? new Date(loadData.bidDeadline).toLocaleDateString() : 'N/A'}\n\n` +
+                    (prev.remarks ? `=== ADDITIONAL REMARKS ===\n${prev.remarks}` : '')
+          }));
+          
+          console.log('Auto-filled form data:', {
+            shipperName: loadData.shipper?.compName,
+            carrierName: loadData.assignedTo?.compName,
+            dispatcherName: loadData.assignedTo?.compName,
+            workOrderNo: loadData.poNumber || loadData.shipmentNumber,
+            pickupLocations: loadData.origins?.length,
+            dropLocations: loadData.destinations?.length,
+            zipCode: loadData.origins?.[0]?.zip,
+            city: loadData.origins?.[0]?.city,
+            state: loadData.origins?.[0]?.state
+          });
+          alertify.success('Load data loaded and form fields auto-filled!');
+        } else {
+          console.error('No load data in response:', response);
+          setSelectedLoadData(null);
+        }
+      } catch (error) {
+        console.error('Error fetching load data:', error);
+        alertify.error('Failed to load selected load data');
+        setSelectedLoadData(null);
+      } finally {
+        setLoadingSelectedLoad(false);
+      }
+    } else {
+      // Clear load data when no load is selected
+      setSelectedLoadData(null);
+    }
   };
 
   // Handle customer input changes
@@ -3876,6 +4014,461 @@ export default function DeliveryOrder() {
               onSubmit={formMode === 'edit' ? handleUpdateOrder : handleSubmit}
               className="p-6 space-y-6"
             >
+              {/* Load Reference Section */}
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-orange-800 mb-4">Load Reference</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <SearchableDropdown
+                      value={formData.selectedLoad || ''}
+                      onChange={handleLoadChange}
+                      options={loads.map(load => ({ 
+                        value: load._id, 
+                        label: `${load.shipmentNumber || 'Load'} - ${load.origins?.[0]?.city || 'Origin'} to ${load.destinations?.[0]?.city || 'Destination'} (${load.commodity || 'N/A'})` 
+                      }))}
+                      placeholder={loadingLoads ? "Loading loads..." : loadingSelectedLoad ? "Loading load data..." : "Select Assigned Load"}
+                      disabled={loadingLoads || loadingSelectedLoad}
+                      loading={loadingLoads || loadingSelectedLoad}
+                      searchPlaceholder="Search loads..."
+                    />
+                    {/* Debug info - remove this later */}
+                    {process.env.NODE_ENV === 'development' && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Loads: {loads.length} | Loading: {loadingLoads ? 'Yes' : 'No'} | Selected Load Data: {selectedLoadData ? 'Loaded' : 'None'}
+                      </div>
+                    )}
+
+                    {/* Selected Load Data Display */}
+                    {selectedLoadData && (
+                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="text-sm font-semibold text-green-800 mb-3">Selected Load Information</h4>
+                        
+                        {/* Basic Load Information */}
+                        <div className="mb-4">
+                          <h5 className="text-xs font-semibold text-gray-700 mb-2">Basic Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <span className="font-medium text-gray-600">Load ID:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData._id}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Status:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.status}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Load Type:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.loadType}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Vehicle Type:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.vehicleType}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Rate Type:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.rateType}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Total Rate:</span>
+                              <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.rate}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Weight:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.weight} lbs</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Commodity:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.commodity}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Container No:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.containerNo || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">PO Number:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.poNumber || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">BOL Number:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.bolNumber || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Shipment Number:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.shipmentNumber || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Rate Details */}
+                        {selectedLoadData.rateDetails && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Rate Breakdown</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Line Haul:</span>
+                                <span className="ml-2 text-gray-800">${selectedLoadData.rateDetails.lineHaul}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">FSC:</span>
+                                <span className="ml-2 text-gray-800">${selectedLoadData.rateDetails.fsc}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-600">Total Rates:</span>
+                                <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.rateDetails.totalRates}</span>
+                              </div>
+                              {selectedLoadData.rateDetails.other && selectedLoadData.rateDetails.other.length > 0 && (
+                                <div className="md:col-span-2">
+                                  <span className="font-medium text-gray-600">Other Charges:</span>
+                                  <div className="ml-2 mt-1">
+                                    {selectedLoadData.rateDetails.other.map((charge, index) => (
+                                      <div key={index} className="text-gray-800">
+                                        {charge.name}: ${charge.total} ({charge.quantity} × ${charge.amount})
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Shipper Information */}
+                        {selectedLoadData.shipper && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Shipper Details</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Company:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.compName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">MC/DOT:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.mc_dot_no}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Location:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.city}, {selectedLoadData.shipper.state}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Phone:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.phoneNo}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-600">Email:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.email}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Assigned To Information */}
+                        {selectedLoadData.assignedTo && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Assigned Carrier</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Company:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.compName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">MC/DOT:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.mc_dot_no}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Location:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.city}, {selectedLoadData.assignedTo.state}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Phone:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.phoneNo}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-600">Email:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.email}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Accepted Bid Information */}
+                        {selectedLoadData.acceptedBid && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Accepted Bid Details</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Driver:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.driverName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Driver Phone:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.driverPhone}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Vehicle:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.vehicleNumber}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Vehicle Type:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.vehicleType}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Bid Rate:</span>
+                                <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.acceptedBid.rate}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Bid Status:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.status}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-600">Message:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.message}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Est. Pickup:</span>
+                                <span className="ml-2 text-gray-800">
+                                  {selectedLoadData.acceptedBid.estimatedPickupDate ? 
+                                    new Date(selectedLoadData.acceptedBid.estimatedPickupDate).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Est. Delivery:</span>
+                                <span className="ml-2 text-gray-800">
+                                  {selectedLoadData.acceptedBid.estimatedDeliveryDate ? 
+                                    new Date(selectedLoadData.acceptedBid.estimatedDeliveryDate).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Origins */}
+                        {selectedLoadData.origins && selectedLoadData.origins.length > 0 && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Pickup Locations</h5>
+                            {selectedLoadData.origins.map((origin, index) => (
+                              <div key={index} className="mb-2 p-2 bg-white rounded border text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <div>
+                                    <span className="font-medium text-gray-600">Address:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.addressLine1} {origin.addressLine2 && `, ${origin.addressLine2}`}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">City, State, ZIP:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.city}, {origin.state} {origin.zip}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Weight:</span>
+                                    <span className="ml-2 text-gray-800">{origin.weight} lbs</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Commodity:</span>
+                                    <span className="ml-2 text-gray-800">{origin.commodity}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Pickup Date:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.pickupDate ? new Date(origin.pickupDate).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Delivery Date:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.deliveryDate ? new Date(origin.deliveryDate).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Destinations */}
+                        {selectedLoadData.destinations && selectedLoadData.destinations.length > 0 && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Delivery Locations</h5>
+                            {selectedLoadData.destinations.map((destination, index) => (
+                              <div key={index} className="mb-2 p-2 bg-white rounded border text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <div>
+                                    <span className="font-medium text-gray-600">Address:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {destination.addressLine1} {destination.addressLine2 && `, ${destination.addressLine2}`}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">City, State, ZIP:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {destination.city}, {destination.state} {destination.zip}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Weight:</span>
+                                    <span className="ml-2 text-gray-800">{destination.weight} lbs</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Commodity:</span>
+                                    <span className="ml-2 text-gray-800">{destination.commodity}</span>
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <span className="font-medium text-gray-600">Delivery Date:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {destination.deliveryDate ? new Date(destination.deliveryDate).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* CMT Assignment Details */}
+                        {selectedLoadData.cmtAssignmentDetails && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">CMT Assignment</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Assigned CMT:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.employeeName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Approval Status:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.approvalStatus}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Employee ID:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.empId}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Email:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.email}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Mobile:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.mobileNo}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Department:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.department}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Timer Status */}
+                        {selectedLoadData.timerStatus && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Timer Status</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Has Timer:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.hasTimer ? 'Yes' : 'No'}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Is Expired:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.isExpired ? 'Yes' : 'No'}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Remaining Minutes:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.remainingMinutes}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Deadline:</span>
+                                <span className="ml-2 text-gray-800">
+                                  {selectedLoadData.timerStatus.deadline ? 
+                                    new Date(selectedLoadData.timerStatus.deadline).toLocaleString() : 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Created By Information */}
+                        {selectedLoadData.createdBySalesUser && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Created By</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Employee ID:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.empId}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Name:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.empName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Department:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.department}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Customer Added By */}
+                        {selectedLoadData.customerAddedBy && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Customer Added By</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Employee ID:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.empId}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Name:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.empName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Department:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.department}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Dates */}
+                        <div className="mb-4">
+                          <h5 className="text-xs font-semibold text-gray-700 mb-2">Important Dates</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <span className="font-medium text-gray-600">Pickup Date:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.pickupDate ? new Date(selectedLoadData.pickupDate).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Delivery Date:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.deliveryDate ? new Date(selectedLoadData.deliveryDate).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Bid Deadline:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.bidDeadline ? new Date(selectedLoadData.bidDeadline).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Created At:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.createdAt ? new Date(selectedLoadData.createdAt).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Updated At:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.updatedAt ? new Date(selectedLoadData.updatedAt).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Customer Information Section */}
               {/* Customer Information Section */}
               <div className="bg-blue-50 p-4 rounded-lg">
@@ -4107,33 +4700,6 @@ export default function DeliveryOrder() {
                       className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
                       placeholder="Enter BOL number"
                     />
-                  </div>
-                </div>
-              </div>
-
-              {/* Load Reference Section */}
-              <div className="bg-orange-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-orange-800 mb-4">Load Reference</h3>
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <SearchableDropdown
-                      value={formData.selectedLoad || ''}
-                      onChange={handleLoadChange}
-                      options={loads.map(load => ({ 
-                        value: load._id, 
-                        label: `${load.shipmentNumber || 'Load'} - ${load.origin?.city || 'Origin'} to ${load.destination?.city || 'Destination'} (${load.commodity || 'N/A'})` 
-                      }))}
-                      placeholder={loadingLoads ? "Loading loads..." : "Select Assigned Load"}
-                      disabled={loadingLoads}
-                      loading={loadingLoads}
-                      searchPlaceholder="Search loads..."
-                    />
-                    {/* Debug info - remove this later */}
-                    {process.env.NODE_ENV === 'development' && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Loads: {loads.length} | Loading: {loadingLoads ? 'Yes' : 'No'}
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -5687,17 +6253,445 @@ export default function DeliveryOrder() {
                       onChange={handleLoadChange}
                       options={loads.map(load => ({ 
                         value: load._id, 
-                        label: `${load.shipmentNumber || 'Load'} - ${load.origin?.city || 'Origin'} to ${load.destination?.city || 'Destination'} (${load.commodity || 'N/A'})` 
+                        label: `${load.shipmentNumber || 'Load'} - ${load.origins?.[0]?.city || 'Origin'} to ${load.destinations?.[0]?.city || 'Destination'} (${load.commodity || 'N/A'})` 
                       }))}
-                      placeholder={loadingLoads ? "Loading loads..." : "Select Assigned Load"}
-                      disabled={loadingLoads}
-                      loading={loadingLoads}
+                      placeholder={loadingLoads ? "Loading loads..." : loadingSelectedLoad ? "Loading load data..." : "Select Assigned Load"}
+                      disabled={loadingLoads || loadingSelectedLoad}
+                      loading={loadingLoads || loadingSelectedLoad}
                       searchPlaceholder="Search loads..."
                     />
                     {/* Debug info - remove this later */}
                     {process.env.NODE_ENV === 'development' && (
                       <div className="text-xs text-gray-500 mt-1">
-                        Loads: {loads.length} | Loading: {loadingLoads ? 'Yes' : 'No'} | Selected: {formData.selectedLoad || 'None'}
+                        Loads: {loads.length} | Loading: {loadingLoads ? 'Yes' : 'No'} | Selected: {formData.selectedLoad || 'None'} | Selected Load Data: {selectedLoadData ? 'Loaded' : 'None'}
+                      </div>
+                    )}
+
+                    {/* Selected Load Data Display */}
+                    {selectedLoadData && (
+                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="text-sm font-semibold text-green-800 mb-3">Selected Load Information</h4>
+                        
+                        {/* Basic Load Information */}
+                        <div className="mb-4">
+                          <h5 className="text-xs font-semibold text-gray-700 mb-2">Basic Information</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <span className="font-medium text-gray-600">Load ID:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData._id}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Status:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.status}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Load Type:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.loadType}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Vehicle Type:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.vehicleType}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Rate Type:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.rateType}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Total Rate:</span>
+                              <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.rate}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Weight:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.weight} lbs</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Commodity:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.commodity}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Container No:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.containerNo || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">PO Number:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.poNumber || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">BOL Number:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.bolNumber || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Shipment Number:</span>
+                              <span className="ml-2 text-gray-800">{selectedLoadData.shipmentNumber || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Rate Details */}
+                        {selectedLoadData.rateDetails && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Rate Breakdown</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Line Haul:</span>
+                                <span className="ml-2 text-gray-800">${selectedLoadData.rateDetails.lineHaul}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">FSC:</span>
+                                <span className="ml-2 text-gray-800">${selectedLoadData.rateDetails.fsc}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-600">Total Rates:</span>
+                                <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.rateDetails.totalRates}</span>
+                              </div>
+                              {selectedLoadData.rateDetails.other && selectedLoadData.rateDetails.other.length > 0 && (
+                                <div className="md:col-span-2">
+                                  <span className="font-medium text-gray-600">Other Charges:</span>
+                                  <div className="ml-2 mt-1">
+                                    {selectedLoadData.rateDetails.other.map((charge, index) => (
+                                      <div key={index} className="text-gray-800">
+                                        {charge.name}: ${charge.total} ({charge.quantity} × ${charge.amount})
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Shipper Information */}
+                        {selectedLoadData.shipper && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Shipper Details</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Company:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.compName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">MC/DOT:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.mc_dot_no}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Location:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.city}, {selectedLoadData.shipper.state}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Phone:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.phoneNo}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-600">Email:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.email}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Assigned To Information */}
+                        {selectedLoadData.assignedTo && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Assigned Carrier</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Company:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.compName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">MC/DOT:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.mc_dot_no}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Location:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.city}, {selectedLoadData.assignedTo.state}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Phone:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.phoneNo}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-600">Email:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.email}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Accepted Bid Information */}
+                        {selectedLoadData.acceptedBid && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Accepted Bid Details</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Driver:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.driverName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Driver Phone:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.driverPhone}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Vehicle:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.vehicleNumber}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Vehicle Type:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.vehicleType}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Bid Rate:</span>
+                                <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.acceptedBid.rate}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Bid Status:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.status}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-600">Message:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.message}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Est. Pickup:</span>
+                                <span className="ml-2 text-gray-800">
+                                  {selectedLoadData.acceptedBid.estimatedPickupDate ? 
+                                    new Date(selectedLoadData.acceptedBid.estimatedPickupDate).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Est. Delivery:</span>
+                                <span className="ml-2 text-gray-800">
+                                  {selectedLoadData.acceptedBid.estimatedDeliveryDate ? 
+                                    new Date(selectedLoadData.acceptedBid.estimatedDeliveryDate).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Origins */}
+                        {selectedLoadData.origins && selectedLoadData.origins.length > 0 && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Pickup Locations</h5>
+                            {selectedLoadData.origins.map((origin, index) => (
+                              <div key={index} className="mb-2 p-2 bg-white rounded border text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <div>
+                                    <span className="font-medium text-gray-600">Address:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.addressLine1} {origin.addressLine2 && `, ${origin.addressLine2}`}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">City, State, ZIP:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.city}, {origin.state} {origin.zip}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Weight:</span>
+                                    <span className="ml-2 text-gray-800">{origin.weight} lbs</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Commodity:</span>
+                                    <span className="ml-2 text-gray-800">{origin.commodity}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Pickup Date:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.pickupDate ? new Date(origin.pickupDate).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Delivery Date:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.deliveryDate ? new Date(origin.deliveryDate).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Destinations */}
+                        {selectedLoadData.destinations && selectedLoadData.destinations.length > 0 && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Delivery Locations</h5>
+                            {selectedLoadData.destinations.map((destination, index) => (
+                              <div key={index} className="mb-2 p-2 bg-white rounded border text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <div>
+                                    <span className="font-medium text-gray-600">Address:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {destination.addressLine1} {destination.addressLine2 && `, ${destination.addressLine2}`}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">City, State, ZIP:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {destination.city}, {destination.state} {destination.zip}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Weight:</span>
+                                    <span className="ml-2 text-gray-800">{destination.weight} lbs</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-600">Commodity:</span>
+                                    <span className="ml-2 text-gray-800">{destination.commodity}</span>
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <span className="font-medium text-gray-600">Delivery Date:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {destination.deliveryDate ? new Date(destination.deliveryDate).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* CMT Assignment Details */}
+                        {selectedLoadData.cmtAssignmentDetails && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">CMT Assignment</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Assigned CMT:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.employeeName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Approval Status:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.approvalStatus}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Employee ID:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.empId}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Email:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.email}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Mobile:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.mobileNo}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Department:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.department}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Timer Status */}
+                        {selectedLoadData.timerStatus && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Timer Status</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Has Timer:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.hasTimer ? 'Yes' : 'No'}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Is Expired:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.isExpired ? 'Yes' : 'No'}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Remaining Minutes:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.remainingMinutes}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Deadline:</span>
+                                <span className="ml-2 text-gray-800">
+                                  {selectedLoadData.timerStatus.deadline ? 
+                                    new Date(selectedLoadData.timerStatus.deadline).toLocaleString() : 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Created By Information */}
+                        {selectedLoadData.createdBySalesUser && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Created By</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Employee ID:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.empId}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Name:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.empName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Department:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.department}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Customer Added By */}
+                        {selectedLoadData.customerAddedBy && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Customer Added By</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-600">Employee ID:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.empId}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Name:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.empName}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">Department:</span>
+                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.department}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Dates */}
+                        <div className="mb-4">
+                          <h5 className="text-xs font-semibold text-gray-700 mb-2">Important Dates</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <span className="font-medium text-gray-600">Pickup Date:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.pickupDate ? new Date(selectedLoadData.pickupDate).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Delivery Date:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.deliveryDate ? new Date(selectedLoadData.deliveryDate).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Bid Deadline:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.bidDeadline ? new Date(selectedLoadData.bidDeadline).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Created At:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.createdAt ? new Date(selectedLoadData.createdAt).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-600">Updated At:</span>
+                              <span className="ml-2 text-gray-800">
+                                {selectedLoadData.updatedAt ? new Date(selectedLoadData.updatedAt).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

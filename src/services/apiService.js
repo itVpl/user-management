@@ -239,6 +239,11 @@ class ApiService {
   async acceptTerms(termsData) {
     return this.post(this.endpoints.ACCEPT_TERMS, termsData);
   }
+
+  // Load methods
+  async getLoadById(loadId) {
+    return this.get(`${this.endpoints.GET_LOAD_BY_ID}/${loadId}`);
+  }
 }
 
 // Create and export singleton instance
