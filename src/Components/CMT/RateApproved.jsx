@@ -1581,6 +1581,7 @@ export default function RateApproved() {
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CMT User</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                     </tr>
@@ -1634,6 +1635,14 @@ export default function RateApproved() {
                           </div>
                         </td>
                         <td className="py-2 px-3">
+                          <div>
+                            <p className="font-medium text-gray-700">{rate.createdAt || 'N/A'}</p>
+                            <p className="text-xs text-gray-500">
+                              {rate.createdAt ? new Date(rate.createdAt).toLocaleTimeString() : 'N/A'}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
                           <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${statusColor(rate.status)}`}>
                             {rate.status === 'approved' && <CheckCircle size={12} />}
                             {rate.status === 'rejected' && <XCircle size={12} />}
@@ -1663,7 +1672,7 @@ export default function RateApproved() {
                               ) : (
                                 <>
                                   <CheckCircle size={12} className="animate-pulse" />
-                                  <span>Approve</span>
+                                  <span>Add Margin</span>
                                 </>
                               )}
                             </button>
@@ -1845,6 +1854,7 @@ export default function RateApproved() {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                   </tr>
                 </thead>
@@ -1896,6 +1906,14 @@ export default function RateApproved() {
                           {rate.carrierInfo && (
                             <p className="text-xs text-gray-500">MC: {rate.carrierInfo.mcDotNo}</p>
                           )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <p className="font-medium text-gray-700">{rate.createdAt || 'N/A'}</p>
+                          <p className="text-xs text-gray-500">
+                            {rate.createdAt ? new Date(rate.createdAt).toLocaleTimeString() : 'N/A'}
+                          </p>
                         </div>
                       </td>
                       <td className="py-2 px-3">
@@ -1996,6 +2014,7 @@ export default function RateApproved() {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Accepted By</th>
                   </tr>
                 </thead>
@@ -2047,6 +2066,14 @@ export default function RateApproved() {
                           {rate.carrierInfo && (
                             <p className="text-xs text-gray-500">MC: {rate.carrierInfo.mcDotNo}</p>
                           )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <p className="font-medium text-gray-700">{rate.acceptedAt || rate.createdAt || 'N/A'}</p>
+                          <p className="text-xs text-gray-500">
+                            {(rate.acceptedAt || rate.createdAt) ? new Date(rate.acceptedAt || rate.createdAt).toLocaleTimeString() : 'N/A'}
+                          </p>
                         </div>
                       </td>
                       <td className="py-2 px-3">
@@ -2520,6 +2547,22 @@ export default function RateApproved() {
                 )}
               </div>
 
+              {/* Message Display Section */}
+              {approvalModal.rate.remarks && (
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <label className="text-sm font-semibold text-gray-700">Message</label>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-sm text-gray-800 leading-relaxed">
+                      {approvalModal.rate.remarks || 'No message provided'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-4">

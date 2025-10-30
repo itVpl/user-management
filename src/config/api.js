@@ -21,6 +21,7 @@ const API_CONFIG = {
     UPDATE_TRUCKER_STATUS: '/api/v1/truckers',
     CMT_USERS: '/api/v1/inhouseUser/department/CMT',
     ACCEPT_TERMS: '/api/v1/inhouseUser/terms/accept',
+    GET_LOAD_BY_ID: '/api/v1/load',
   },
   
   // Helper function to get full URL
