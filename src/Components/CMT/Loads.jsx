@@ -138,6 +138,23 @@ export default function Loads() {
     }
   };
   
+  // Format date-time for input fields (YYYY-MM-DDTHH:MM for datetime-local)
+  const formatDateTimeForInput = (dateString) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      const yyyy = String(date.getFullYear());
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      const hh = String(date.getHours()).padStart(2, '0');
+      const mi = String(date.getMinutes()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    } catch (_) {
+      return '';
+    }
+  };
+  
   const addDays = (dateStr, n) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -195,12 +212,17 @@ export default function Loads() {
     return intP;
   };
 
-  // Show date as DD-MM-YYYY without timezone drift
-  const toDMY = (val) => {
+  // Show date-time as DD-MM-YYYY HH:mm
+  const formatDateTimeDisplay = (val) => {
     if (!val) return 'N/A';
-    const isoPart = String(val).split('T')[0];        // e.g., "2025-09-15"
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoPart);
-    return m ? `${m[3]}-${m[2]}-${m[1]}` : isoPart;   // => "15-09-2025"
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return 'N/A';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(d.getFullYear());
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}-${mm}-${yyyy} ${hh}:${mi}`;
   };
   // Make full date field clickable
   const openDatePicker = (refName) => {
@@ -937,10 +959,16 @@ const MaterialShipperDropdown = ({
     pickupDate: (v) => v ? '' : 'Please select the Pickup Date .',
     deliveryDate: (v, all) => {
       if (!v) return 'Please select the Delivery Date .';
-      // must be >= pickupDate and >= today
-      const today = todayStr();
-      if (all.pickupDate && v < all.pickupDate) return 'Delivery date should be greater than or equal to Pickup Date.';
-      if (v < today) return 'The calendar shows only present and future dates only.';
+      // must be >= pickupDate and >= now
+      const nowMs = Date.now();
+      const vMs = Date.parse(v);
+      if (Number.isFinite(vMs)) {
+        if (all.pickupDate) {
+          const pMs = Date.parse(all.pickupDate);
+          if (Number.isFinite(pMs) && vMs < pMs) return 'Delivery date should be greater than or equal to Pickup Date.';
+        }
+        if (vMs < nowMs) return 'The calendar shows only present and future dates only.';
+      }
       return '';
     },
     bidDeadline: (v) => v ? '' : 'Please select the Bid Deadline .',
@@ -964,7 +992,7 @@ const MaterialShipperDropdown = ({
         'shipperId',
         'vehicleType', 'lineHaul', 'fsc', 'other', ...(loadType !== 'DRAYAGE' ? ['rateType'] : []),
         'bidDeadline',
-        'containerNo', 'poNumber', 'bolNumber'
+        'poNumber', 'bolNumber'
       ];
     } else if (loadType === 'DRAYAGE') {
       return [
@@ -1156,7 +1184,6 @@ const MaterialShipperDropdown = ({
           rate: totalRate, // Optional but calculating total
           ...(loadType !== 'DRAYAGE' ? { rateType: (loadForm.rateType || 'Flat Rate').trim() } : {}),
           bidDeadline: loadForm.bidDeadline,
-          containerNo: (loadForm.containerNo || "").trim(),
           poNumber: (loadForm.poNumber || "").trim(),
           bolNumber: (loadForm.bolNumber || "").trim(),
           origins: origins,
@@ -1721,9 +1748,9 @@ const MaterialShipperDropdown = ({
             truckerName,
             status,
             createdAt: load.pickupDate
-              ? new Date(load.pickupDate).toISOString().split('T')[0]
+              ? new Date(load.pickupDate).toISOString()
               : load.createdAt
-                ? new Date(load.createdAt).toISOString().split('T')[0]
+                ? new Date(load.createdAt).toISOString()
                 : 'N/A',
             createdBy: load.createdBySalesUser 
               ? `Sales: ${load.createdBySalesUser.empName} (${load.createdBySalesUser.empId})`
@@ -1975,7 +2002,7 @@ const MaterialShipperDropdown = ({
       // Prepare the data for API submission
       const submitData = {
         empId: "1234", // You can make this dynamic based on logged-in user
-        date: new Date().toISOString().split('T')[0], // Current date
+        date: new Date().toISOString(), // Current date-time
         shipmentNumber: formData.shipmentNumber,
         origin: formData.origin,
         destination: formData.destination,
@@ -2003,7 +2030,7 @@ const MaterialShipperDropdown = ({
           rate: response.data.data.rate,
           truckerName: response.data.data.truckerName,
           status: 'available',
-          createdAt: new Date(response.data.data.date).toISOString().split('T')[0],
+          createdAt: new Date(response.data.data.date).toISOString(),
           createdBy: `Employee ${response.data.data.empId}`,
           docUpload: response.data.data.supportingDocs || 'sample-doc.jpg',
           remarks: response.data.data.remarks
@@ -2209,15 +2236,15 @@ const MaterialShipperDropdown = ({
       fsc: String(fscValue),
       other: String(otherTotal),
       ...(loadType !== 'DRAYAGE' ? { rateType: load.rateType || 'Flat Rate' } : {}),
-      bidDeadline: load.bidDeadline ? formatDateForInput(load.bidDeadline) : '',
+      bidDeadline: load.bidDeadline ? formatDateTimeForInput(load.bidDeadline) : '',
       containerNo: load.containerNo || '',
       poNumber: load.poNumber || '',
       bolNumber: load.bolNumber || '',
       weight: load.weight || '',
       commodity: load.commodity || '',
-      pickupDate: load.pickupDate ? formatDateForInput(load.pickupDate) : '',
-      deliveryDate: load.deliveryDate ? formatDateForInput(load.deliveryDate) : '',
-      returnDate: load.returnDate ? formatDateForInput(load.returnDate) : '',
+      pickupDate: load.pickupDate ? formatDateTimeForInput(load.pickupDate) : '',
+      deliveryDate: load.deliveryDate ? formatDateTimeForInput(load.deliveryDate) : '',
+      returnDate: load.returnDate ? formatDateTimeForInput(load.returnDate) : '',
       returnZip: load.returnZip || '',
       returnAddress: load.returnAddress || '',
       returnCity: load.returnCity || '',
@@ -2251,12 +2278,12 @@ const MaterialShipperDropdown = ({
         weight: origin.weight || '',
         commodity: origin.commodity || '',
         pickupDate: origin.pickupDate ? (() => {
-          const formatted = formatDateForInput(origin.pickupDate);
+          const formatted = formatDateTimeForInput(origin.pickupDate);
           console.log('📅 Formatting pickup date:', origin.pickupDate, '→', formatted);
           return formatted;
         })() : '',
         deliveryDate: origin.deliveryDate ? (() => {
-          const formatted = formatDateForInput(origin.deliveryDate);
+          const formatted = formatDateTimeForInput(origin.deliveryDate);
           console.log('📅 Formatting delivery date:', origin.deliveryDate, '→', formatted);
           return formatted;
         })() : ''
@@ -2272,7 +2299,7 @@ const MaterialShipperDropdown = ({
         weight: destination.weight || '',
         commodity: destination.commodity || '',
         deliveryDate: destination.deliveryDate ? (() => {
-          const formatted = formatDateForInput(destination.deliveryDate);
+          const formatted = formatDateTimeForInput(destination.deliveryDate);
           console.log('📅 Formatting destination delivery date:', destination.deliveryDate, '→', formatted);
           return formatted;
         })() : ''
@@ -2591,7 +2618,7 @@ const MaterialShipperDropdown = ({
               <div className="flex items-center gap-2 text-gray-700"><Truck size={16} /> <span className="font-medium">Origin:</span> {selectedLoad.origin}</div>
               <div className="flex items-center gap-2 text-gray-700"><DollarSign size={16} /> <span className="font-medium">Destination:</span> {selectedLoad.destination}</div>
               <div className="flex items-center gap-2 text-gray-700">
-                <Calendar size={16} /> <span className="font-medium">Created:</span> {toDMY(selectedLoad.createdAt)}
+                <Calendar size={16} /> <span className="font-medium">Created:</span> {formatDateTimeDisplay(selectedLoad.createdAt)}
               </div>
 
               {selectedLoad.remarks && (
@@ -3196,7 +3223,7 @@ const MaterialShipperDropdown = ({
                                       Pickup Date <span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                      type="date"
+                                      type="datetime-local"
                                       value={location.pickupDate}
                                       onChange={(e) => updatePickupLocation(location.id, 'pickupDate', e.target.value)}
                                       min={todayStr()}
@@ -3209,7 +3236,7 @@ const MaterialShipperDropdown = ({
                                       Delivery Date <span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                      type="date"
+                                      type="datetime-local"
                                       value={location.deliveryDate}
                                       onChange={(e) => updatePickupLocation(location.id, 'deliveryDate', e.target.value)}
                                       min={location.pickupDate || todayStr()}
@@ -3356,7 +3383,7 @@ const MaterialShipperDropdown = ({
                                       Delivery Date <span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                      type="date"
+                                      type="datetime-local"
                                       value={location.deliveryDate}
                                       onChange={(e) => updateDeliveryLocation(location.id, 'deliveryDate', e.target.value)}
                                       min={todayStr()}
@@ -3893,7 +3920,7 @@ const MaterialShipperDropdown = ({
                         </label>
                         <input
                           ref={(el) => (fieldRefs.current['pickupDate'] = el)}
-                          type="date"
+                          type="datetime-local"
                           name="pickupDate"
                           value={loadForm.pickupDate}
                           onChange={handleChange}
@@ -3917,7 +3944,7 @@ const MaterialShipperDropdown = ({
                         </label>
                         <input
                           ref={(el) => (fieldRefs.current['deliveryDate'] = el)}
-                          type="date"
+                          type="datetime-local"
                           name="deliveryDate"
                           value={loadForm.deliveryDate}
                           onChange={handleChange}
@@ -3940,7 +3967,7 @@ const MaterialShipperDropdown = ({
                             </label>
                             <input
                               ref={(el) => (fieldRefs.current['returnDate'] = el)}
-                              type="date"
+                              type="datetime-local"
                               name="returnDate"
                               value={loadForm.returnDate}
                               onChange={handleChange}
@@ -3964,7 +3991,7 @@ const MaterialShipperDropdown = ({
                         </label>
                         <input
                           ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
-                          type="date"
+                          type="datetime-local"
                           name="bidDeadline"
                           value={loadForm.bidDeadline}
                           onChange={handleChange}
@@ -3991,7 +4018,7 @@ const MaterialShipperDropdown = ({
                         </label>
                         <input
                           ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
-                          type="date"
+                          type="datetime-local"
                           name="bidDeadline"
                           value={loadForm.bidDeadline}
                           onChange={handleChange}
@@ -4022,6 +4049,7 @@ const MaterialShipperDropdown = ({
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {loadType === 'DRAYAGE' && (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Container No
@@ -4043,6 +4071,7 @@ const MaterialShipperDropdown = ({
                         </div>
                       )}
                     </div>
+                    )}
                     
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -4296,19 +4325,19 @@ const MaterialShipperDropdown = ({
                   {selectedLoadForAction.pickupDate && (
                     <div>
                       <span className="text-gray-600">Pickup Date:</span>
-                      <p className="font-medium">{toDMY(selectedLoadForAction.pickupDate)}</p>
+                      <p className="font-medium">{formatDateTimeDisplay(selectedLoadForAction.pickupDate)}</p>
                     </div>
                   )}
                   {selectedLoadForAction.deliveryDate && (
                     <div>
                       <span className="text-gray-600">Delivery Date:</span>
-                      <p className="font-medium">{toDMY(selectedLoadForAction.deliveryDate)}</p>
+                      <p className="font-medium">{formatDateTimeDisplay(selectedLoadForAction.deliveryDate)}</p>
                     </div>
                   )}
                   {selectedLoadForAction.bidDeadline && (
                     <div>
                       <span className="text-gray-600">Bid Deadline:</span>
-                      <p className="font-medium">{toDMY(selectedLoadForAction.bidDeadline)}</p>
+                      <p className="font-medium">{formatDateTimeDisplay(selectedLoadForAction.bidDeadline)}</p>
                     </div>
                   )}
                 </div>
@@ -4359,7 +4388,7 @@ const MaterialShipperDropdown = ({
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-600">Assigned At:</span>
-                              <span className="font-medium">{toDMY(cmtAssignment.cmtAssignment.assignedCMTUser.assignedAt)}</span>
+                              <span className="font-medium">{formatDateTimeDisplay(cmtAssignment.cmtAssignment.assignedCMTUser.assignedAt)}</span>
                             </div>
                           </div>
                         </div>
@@ -4458,7 +4487,7 @@ const MaterialShipperDropdown = ({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Created:</span>
-                    <span className="font-medium">{toDMY(selectedLoadForAction.createdAt)}</span>
+                    <span className="font-medium">{formatDateTimeDisplay(selectedLoadForAction.createdAt)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Created By:</span>
@@ -4739,7 +4768,7 @@ const MaterialShipperDropdown = ({
                                       Pickup Date <span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                      type="date"
+                                      type="datetime-local"
                                       value={location.pickupDate}
                                       onChange={(e) => updatePickupLocation(location.id, 'pickupDate', e.target.value)}
                                       min={todayStr()}
@@ -4752,7 +4781,7 @@ const MaterialShipperDropdown = ({
                                       Delivery Date <span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                      type="date"
+                                      type="datetime-local"
                                       value={location.deliveryDate}
                                       onChange={(e) => updatePickupLocation(location.id, 'deliveryDate', e.target.value)}
                                       min={location.pickupDate || todayStr()}
@@ -4886,7 +4915,7 @@ const MaterialShipperDropdown = ({
                                       Delivery Date <span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                      type="date"
+                                      type="datetime-local"
                                       value={location.deliveryDate}
                                       onChange={(e) => updateDeliveryLocation(location.id, 'deliveryDate', e.target.value)}
                                       min={todayStr()}
@@ -5421,7 +5450,7 @@ const MaterialShipperDropdown = ({
                         </label>
                         <input
                           ref={(el) => (fieldRefs.current['pickupDate'] = el)}
-                          type="date"
+                          type="datetime-local"
                           name="pickupDate"
                           value={loadForm.pickupDate}
                           onChange={handleChange}
@@ -5445,7 +5474,7 @@ const MaterialShipperDropdown = ({
                         </label>
                         <input
                           ref={(el) => (fieldRefs.current['deliveryDate'] = el)}
-                          type="date"
+                          type="datetime-local"
                           name="deliveryDate"
                           value={loadForm.deliveryDate}
                           onChange={handleChange}
@@ -5468,7 +5497,7 @@ const MaterialShipperDropdown = ({
                             </label>
                             <input
                               ref={(el) => (fieldRefs.current['returnDate'] = el)}
-                              type="date"
+                              type="datetime-local"
                               name="returnDate"
                               value={loadForm.returnDate}
                               onChange={handleChange}
@@ -5492,7 +5521,7 @@ const MaterialShipperDropdown = ({
                         </label>
                         <input
                           ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
-                          type="date"
+                          type="datetime-local"
                           name="bidDeadline"
                           value={loadForm.bidDeadline}
                           onChange={handleChange}
@@ -5519,7 +5548,7 @@ const MaterialShipperDropdown = ({
                         </label>
                         <input
                           ref={(el) => (fieldRefs.current['bidDeadline'] = el)}
-                          type="date"
+                          type="datetime-local"
                           name="bidDeadline"
                           value={loadForm.bidDeadline}
                           onChange={handleChange}
@@ -5550,6 +5579,7 @@ const MaterialShipperDropdown = ({
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {loadType === 'DRAYAGE' && (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Container No
@@ -5571,6 +5601,7 @@ const MaterialShipperDropdown = ({
                         </div>
                       )}
                     </div>
+                    )}
                     
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">

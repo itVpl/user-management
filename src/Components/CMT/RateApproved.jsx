@@ -1582,7 +1582,6 @@ export default function RateApproved() {
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CMT User</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                       <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                     </tr>
                   </thead>
@@ -1640,14 +1639,6 @@ export default function RateApproved() {
                             <p className="text-xs text-gray-500">
                               {rate.createdAt ? new Date(rate.createdAt).toLocaleTimeString() : 'N/A'}
                             </p>
-                          </div>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${statusColor(rate.status)}`}>
-                            {rate.status === 'approved' && <CheckCircle size={12} />}
-                            {rate.status === 'rejected' && <XCircle size={12} />}
-                            {rate.status === 'pending' && <Clock size={12} />}
-                            {rate.status || 'Pending'}
                           </div>
                         </td>
                         <td className="py-2 px-3">
