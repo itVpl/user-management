@@ -2,45 +2,28 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Logo from '../../assets/LogoFinal.png';
 import axios from "axios";
+import { Search, FileText, CheckCircle, XCircle, Clock, RefreshCw, Truck, Package, DollarSign, Calendar, Eye, Download, Receipt, User } from 'lucide-react';
 import {
   Box,
-  Container,
-  Card,
-  CardHeader,
-  CardContent,
-  Typography,
-  Stack,
-  Toolbar,
-  TextField,
-  InputAdornment,
-  IconButton,
-  Chip,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  TableContainer,
-  Paper,
-  LinearProgress,
-  Tooltip,
-  Divider,
-  Grid,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  Pagination,
-  Link as MuiLink,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  Typography,
+  Card,
+  CardContent,
+  Grid,
+  Chip,
   Button,
+  Divider,
+  LinearProgress,
+  IconButton,
+  Link as MuiLink,
+  Paper,
+  Stack,
+  TextField,
 } from "@mui/material";
 import {
-  Search as SearchIcon,
-  Refresh as RefreshIcon,
   Visibility as VisibilityIcon,
   AttachFile as AttachFileIcon,
   Image as ImageIcon,
@@ -52,9 +35,9 @@ import {
   Receipt as InvoiceIcon,
   Assignment as BolIcon,
   CheckCircle as RateIcon,
-  CheckCircle,
-  Cancel as XCircle,
 } from "@mui/icons-material";
+import alertify from 'alertifyjs';
+import 'alertifyjs/build/css/alertify.css';
 
 /* ================= Config ================ */
 const API_CONFIG = {
@@ -76,42 +59,41 @@ const getStored = (k) => {
 };
 
 const EmptyState = ({ title = "No data", subtitle = "Try adjusting filters or search." }) => (
-  <Paper elevation={0} sx={{ p: 4, textAlign: "center", border: "1px dashed #ddd" }}>
-    <Typography variant="h6" gutterBottom>{title}</Typography>
-    <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
-  </Paper>
+  <div className="p-8 text-center border-2 border-dashed border-gray-300 rounded-xl bg-white">
+    <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+    <h3 className="text-lg font-semibold text-gray-700 mb-2">{title}</h3>
+    <p className="text-sm text-gray-500">{subtitle}</p>
+  </div>
 );
 
 const DetailsRow = ({ label, value }) => (
-  <Stack direction="row" justifyContent="space-between" gap={2} sx={{ py: 0.5 }}>
-    <Typography variant="body2" color="text.secondary">{label}</Typography>
-    <Typography variant="body2" fontWeight={600}>
+  <div className="flex justify-between items-center py-2">
+    <p className="text-sm text-gray-600">{label}</p>
+    <p className="text-sm font-semibold text-gray-800">
       {typeof value === "string" || typeof value === "number" ? value : value || "—"}
-    </Typography>
-  </Stack>
+    </p>
+  </div>
 );
 
 const ImageGrid = ({ title, images = [] }) => (
-  <Box sx={{ mb: 2 }}>
-    <Typography variant="body2" fontWeight={700} gutterBottom>{title}</Typography>
+  <div className="mb-4">
+    <p className="text-sm font-bold text-gray-800 mb-2">{title}</p>
     {images.length === 0 ? (
-      <Typography variant="caption" color="text.secondary">No images</Typography>
+      <p className="text-xs text-gray-500">No images</p>
     ) : (
-      <Grid container spacing={1}>
+      <div className="flex flex-wrap gap-2">
         {images.map((src, i) => (
-          <Grid item key={i}>
-            <a href={src} target="_blank" rel="noopener noreferrer">
-              <img
-                src={src}
-                alt={`${title}-${i}`}
-                style={{ width: 108, height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #eee" }}
-              />
-            </a>
-          </Grid>
+          <a key={i} href={src} target="_blank" rel="noopener noreferrer">
+            <img
+              src={src}
+              alt={`${title}-${i}`}
+              className="w-28 h-20 object-cover rounded-lg border border-gray-200 hover:border-blue-400 transition-colors"
+            />
+          </a>
         ))}
-      </Grid>
+      </div>
     )}
-  </Box>
+  </div>
 );
 
 /* =============== Component =============== */
@@ -1178,1353 +1160,964 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
     return { bill, carrier, net: bill - carrier };
   };
 
-  return (
-    <Container maxWidth="xl" sx={{ py: 3 }}>
-      {/* ===== Table Card ===== */}
-      <Card elevation={2}>
-        <CardHeader
-          title="Check Invoices (Sales • Accountant Approved)"
-          subheader={
-            salesUser ? (
-              <Typography variant="body2" color="text.secondary">
-                Logged as: <b>{salesUser.employeeName}</b> ({salesUser.empId}) — {salesUser.department}
-              </Typography>
-            ) : "—"
-          }
-          action={
-            <Tooltip title="Refresh">
-              <span>
-                <IconButton onClick={() => fetchList(page)} disabled={loading}>
-                  <RefreshIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
-          }
-        />
-        <CardContent>
-          <Toolbar disableGutters sx={{ gap: 2, flexWrap: "wrap", pb: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel>Status</InputLabel>
-              <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <MenuItem value="accountant_approved">Accountant Approved</MenuItem>
-              </Select>
-            </FormControl>
+  // Pagination calculations
+  const itemsPerPage = pagination?.itemsPerPage || 50;
+  const totalPages = pagination?.totalPages || 1;
+  const currentPage = page;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentRows = filtered.slice(startIndex, endIndex);
 
-            <TextField
-              size="small"
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+    }
+  };
+
+  return (
+    <div className="p-6">
+      {/* Statistics Cards */}
+      <div className="flex items-center gap-6 mb-6">
+        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+              <CheckCircle className="text-green-600" size={20} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Total Approved</p>
+              <p className="text-xl font-bold text-gray-800">{rows.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <Package className="text-blue-600" size={20} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Filtered</p>
+              <p className="text-xl font-bold text-blue-600">{filtered.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+              <Calendar className="text-purple-600" size={20} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Today</p>
+              <p className="text-xl font-bold text-purple-600">
+                {filtered.filter(r => {
+                  const date = r?.accountantApproval?.approvedAt;
+                  if (!date) return false;
+                  return new Date(date).toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                }).length}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1"></div>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
               placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID / Shipment#)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              sx={{ flex: 1, minWidth: 320 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-                endAdornment: search ? (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setSearch("")}>×</IconButton>
-                  </InputAdornment>
-                ) : null,
-              }}
+              className="w-96 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => fetchList(page)}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>Loading...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={16} />
+                <span>Refresh</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
 
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Chip size="small" label={`Total: ${rows.length}`} variant="outlined" />
-              <Chip size="small" label={`Filtered: ${filtered.length}`} variant="outlined" color="primary" />
-            </Stack>
-          </Toolbar>
-
-          {loading && <LinearProgress sx={{ mb: 2 }} />}
-
-          {!loading && filtered.length === 0 ? (
-            <EmptyState title="No records" subtitle={serverError || "Try different search."} />
-          ) : (
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>DO ID</TableCell>
-                    <TableCell>Shipment #</TableCell>
-                    <TableCell>Load No</TableCell>
-                    <TableCell>Bill To</TableCell>
-                    <TableCell>Carrier</TableCell>
-                    <TableCell align="right">Bill</TableCell>
-                    <TableCell align="right">Carrier</TableCell>
-                    <TableCell>Approved At</TableCell>
-                    <TableCell align="center">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filtered.map((r) => {
+      {/* Table */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <p className="text-gray-500 text-lg">Loading invoices...</p>
+            <p className="text-gray-400 text-sm">Please wait while we fetch the data</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState title="No records" subtitle={serverError || "Try different search."} />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                  <tr>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment #</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                    <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill</th>
+                    <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved At</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentRows.map((r, index) => {
                     const cust = r?.customers?.[0] || {};
                     const t = computeTotals(r);
                     return (
-                      <TableRow key={r?._id}>
-                        <TableCell><Tooltip title={r?._id || ""}><span>{shortId(r?._id)}</span></Tooltip></TableCell>
-                        <TableCell>{r?.loadReference?.shipmentNumber || "—"}</TableCell>
-                        <TableCell>{cust?.loadNo || "—"}</TableCell>
-                        <TableCell>{cust?.billTo || "—"}</TableCell>
-                        <TableCell>{r?.carrier?.carrierName || "—"}</TableCell>
-                        <TableCell align="right">${fmtMoney(t.bill)}</TableCell>
-                        <TableCell align="right">${fmtMoney(t.carrier)}</TableCell>
-                        <TableCell>{fmtDateTime(r?.accountantApproval?.approvedAt)}</TableCell>
-                        <TableCell align="center">
-                          <Tooltip title="View Details">
-                            <IconButton size="small" onClick={() => openDetails(r)}>
-                              <VisibilityIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
+                      <tr key={r?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700" title={r?._id || ""}>{shortId(r?._id)}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{r?.loadReference?.shipmentNumber || "—"}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{cust?.billTo || "—"}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{r?.carrier?.carrierName || "—"}</span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className="font-bold text-green-600">${fmtMoney(t.bill)}</span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className="font-bold text-blue-600">${fmtMoney(t.carrier)}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{fmtDateTime(r?.accountantApproval?.approvedAt)}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <button
+                            onClick={() => openDetails(r)}
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:from-blue-600 hover:to-indigo-700 hover:shadow-xl"
+                          >
+                            <Eye size={12} />
+                            <span>View</span>
+                          </button>
+                        </td>
+                      </tr>
                     );
                   })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
 
-          {pagination?.totalPages > 1 && (
-            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-              <Pagination count={pagination.totalPages} page={page} onChange={(_, v) => setPage(v)} color="primary" />
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
+      {/* Enhanced Pagination */}
+      {totalPages > 1 && filtered.length > 0 && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="text-sm text-gray-600">
+            Showing {startIndex + 1} to {Math.min(endIndex, filtered.length)} of {filtered.length} invoices
+            {search && ` (filtered from ${rows.length} total)`}
+          </div>
+
+          <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+            {/* Previous Button */}
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </button>
+
+            {/* Page Numbers */}
+            <div className="flex items-center gap-1">
+              {/* First Page */}
+              {currentPage > 3 && (
+                <>
+                  <button
+                    onClick={() => handlePageChange(1)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                  >
+                    1
+                  </button>
+                  {currentPage > 4 && (
+                    <span className="px-2 text-gray-400">...</span>
+                  )}
+                </>
+              )}
+
+              {/* Current Page Range */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(page => {
+                  if (totalPages <= 7) return true;
+                  if (currentPage <= 4) return page <= 5;
+                  if (currentPage >= totalPages - 3) return page >= totalPages - 4;
+                  return page >= currentPage - 2 && page <= currentPage + 2;
+                })
+                .map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    onClick={() => handlePageChange(pageNum)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                      currentPage === pageNum
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+
+              {/* Last Page */}
+              {currentPage < totalPages - 2 && totalPages > 7 && (
+                <>
+                  {currentPage < totalPages - 3 && (
+                    <span className="px-2 text-gray-400">...</span>
+                  )}
+                  <button
+                    onClick={() => handlePageChange(totalPages)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                  >
+                    {totalPages}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Next Button */}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              Next
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ===== Details Dialog ===== */}
-      <Dialog
-        open={detailsOpen}
-        onClose={() => setDetailsOpen(false)}
-        maxWidth="lg"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
-            maxHeight: '90vh'
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          position: 'relative',
-          pb: 3
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <VisibilityIcon sx={{ fontSize: 28 }} />
-            <Box>
-              <Typography variant="h5" fontWeight={600}>
-                Delivery Order Details
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Sales Department View
-              </Typography>
-            </Box>
-          </Box>
-          <IconButton
-            onClick={() => setDetailsOpen(false)}
-            sx={{ 
-              position: "absolute", 
-              right: 16, 
-              top: 16,
-              color: 'white',
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              '&:hover': {
-                backgroundColor: 'rgba(255,255,255,0.2)'
-              }
-            }}
+      {detailsOpen && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
-            ✕
-          </IconButton>
-        </DialogTitle>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <Truck className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Delivery Order Details</h2>
+                    <p className="text-blue-100">Sales Department View</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetailsOpen(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
 
-        <DialogContent dividers sx={{ p: 0, backgroundColor: '#f8f9fa' }}>
-          {!selected ? (
-            <EmptyState title="No record selected" />
-          ) : (
-            <React.Fragment>
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {!selected ? (
+                <EmptyState title="No record selected" />
+              ) : (
+                <React.Fragment>
             
 
-            <Box sx={{ p: 3 }}>
-            {/* Basic Information Section */}
-            <Box sx={{ mb: 4 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                mb: 2,
-                p: 2,
-                background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
-                borderRadius: 2,
-                border: '1px solid #bbdefb'
-              }}>
-                <DescriptionIcon sx={{ color: '#1976d2', fontSize: 24 }} />
-                <Typography variant="h6" fontWeight={600} color="#1565c0">
-                  Basic Information & Approval Status
-                </Typography>
-              </Box>
-              
-              <Card sx={{ 
-                border: '2px solid #bbdefb',
-                borderRadius: 2,
-                background: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          DO ID
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600} sx={{ 
-                          fontFamily: 'monospace',
-                          backgroundColor: '#f5f5f5',
-                          p: 1,
-                          borderRadius: 1,
-                          border: '1px solid #e0e0e0'
-                        }}>
-                          {selected?._id || "—"}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Assignment Status
-                        </Typography>
-                        <Chip 
-                          label={selected?.assignmentStatus || "—"} 
-                          color="primary" 
-                          variant="outlined"
-                          size="small"
-                        />
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          DO Status
-                        </Typography>
-                        <Chip 
-                          label={selected?.doStatus || "—"} 
-                          color="secondary" 
-                          variant="outlined"
-                          size="small"
-                        />
-                      </Box>
-                      <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Updated At
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600}>
-                          {fmtDateTime(selected?.updatedAt)}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Approved By
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600}>
-                          {selected?.accountantApproval?.approvedBy?.employeeName || "—"}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Approved At
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600}>
-                          {fmtDateTime(selected?.accountantApproval?.approvedAt)}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Approval Status
-                        </Typography>
-                        <Chip 
-                          label={selected?.accountantApproval?.status || "—"} 
-                          color="success" 
-                          variant="filled"
-                          size="small"
-                        />
-                      </Box>
-                      <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Email To Shipper
-                        </Typography>
-                        <Chip 
-                          label={selected?.emailNotification?.sentToShipper ? "Yes" : "No"} 
-                          color={selected?.emailNotification?.sentToShipper ? "success" : "default"} 
-                          variant="outlined"
-                          size="small"
-                        />
-                      </Box>
-                    </Grid>
-                  </Grid>
-                  
-                  {selected?.accountantApproval?.remarks && (
-                    <>
-                      <Divider sx={{ my: 2 }} />
-                      <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                          Remarks
-                        </Typography>
-                        <Box sx={{ 
-                          p: 2, 
-                          backgroundColor: '#f8f9fa', 
-                          borderRadius: 1,
-                          border: '1px solid #e9ecef'
-                        }}>
-                          <Typography variant="body2">
-                            {selected?.accountantApproval?.remarks}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </>
+                  {/* Customer Information */}
+                  {selected?.customers?.length > 0 && (
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <User className="text-green-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
+                      </div>
+
+                      <div className="space-y-4">
+                        {selected.customers.map((customer, index) => (
+                          <div key={customer?._id || index} className="bg-white rounded-xl p-4 border border-green-200">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                                <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                              </div>
+                              <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-600">Bill To</p>
+                                <p className="font-medium text-gray-800">{customer?.billTo || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Dispatcher Name</p>
+                                <p className="font-medium text-gray-800">{selected?.salesUser?.employeeName || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Work Order No</p>
+                                <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Line Haul</p>
+                                <p className="font-medium text-gray-800">${fmtMoney(customer?.lineHaul || 0)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">FSC</p>
+                                <p className="font-medium text-gray-800">${fmtMoney(customer?.fsc || 0)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Other</p>
+                                <p className="font-medium text-gray-800">${fmtMoney(customer?.other || 0)}</p>
+                              </div>
+                              <div className="col-span-2">
+                                <p className="text-sm text-gray-600">Total Amount</p>
+                                <p className="font-bold text-lg text-green-600">${fmtMoney(customer?.calculatedTotal ?? customer?.totalAmount ?? 0)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </CardContent>
-              </Card>
-            </Box>
 
-            {/* Customer Information Card */}
-            <Box sx={{ mb: 3 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                mb: 2,
-                p: 2,
-                background: 'linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%)',
-                borderRadius: 2,
-                border: '1px solid #c8e6c9'
-              }}>
-                <PersonIcon sx={{ color: '#4caf50', fontSize: 24 }} />
-                <Typography variant="h6" fontWeight={600} color="#2e7d32">
-                  Customer Information
-                </Typography>
-              </Box>
-              
-              <Card sx={{ 
-                border: '2px solid #c8e6c9',
-                borderRadius: 2,
-                background: '#fafafa'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  {(selected?.customers || []).map((c, index) => (
-                    <Box key={c?._id}>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: 1, 
-                        mb: 2 
-                      }}>
-                        <Box sx={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: '50%',
-                          backgroundColor: '#4caf50',
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '12px',
-                          fontWeight: 'bold'
-                        }}>
-                          {index + 1}
-                        </Box>
-                        <Typography variant="h6" fontWeight={600} color="#2e7d32">
-                          Customer {index + 1}
-                        </Typography>
-                      </Box>
-                      
-                      <Grid container spacing={3}>
-                        <Grid item xs={12} md={6}>
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                              Bill To
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600}>
-                              {c?.billTo || "—"}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                              Work Order No
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600}>
-                              {c?.workOrderNo || "—"}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                              FSC
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600}>
-                              ${fmtMoney(c?.fsc || 0)}
-                            </Typography>
-                          </Box>
-                          <Box>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                              Total Amount
-                            </Typography>
-                            <Typography variant="h6" fontWeight={700} color="#4caf50">
-                              ${fmtMoney(c?.calculatedTotal ?? c?.totalAmount ?? 0)}
-                            </Typography>
-                          </Box>
-                        </Grid>
-                        
-                        <Grid item xs={12} md={6}>
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                              Dispatcher Name
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600}>
-                              {selected?.salesUser?.employeeName || "—"}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                              Line Haul
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600}>
-                              ${fmtMoney(c?.lineHaul || 0)}
-                            </Typography>
-                          </Box>
-                          <Box>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                              Other
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600}>
-                              ${fmtMoney(c?.other || 0)}
-                            </Typography>
-                          </Box>
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  ))}
-                </CardContent>
-              </Card>
-            </Box>
+                  {/* Carrier Information */}
+                  {selected?.carrier && (
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Truck className="text-purple-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Carrier Information</h3>
+                      </div>
 
-            {/* Carrier Information Card */}
-            <Box sx={{ mb: 3 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                mb: 2,
-                p: 2,
-                background: 'linear-gradient(135deg, #f3e5f5 0%, #fce4ec 100%)',
-                borderRadius: 2,
-                border: '1px solid #e1bee7'
-              }}>
-                <TruckIcon sx={{ color: '#9c27b0', fontSize: 24 }} />
-                <Typography variant="h6" fontWeight={600} color="#7b1fa2">
-                  Carrier Information
-                </Typography>
-              </Box>
-              
-              <Card sx={{ 
-                border: '2px solid #e1bee7',
-                borderRadius: 2,
-                background: '#fafafa'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ mb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                          <TruckIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
-                          <Typography variant="body2" color="text.secondary">
-                            Carrier Name
-                          </Typography>
-                        </Box>
-                        <Typography variant="body1" fontWeight={600}>
-                          {selected?.carrier?.carrierName || "—"}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                          <MoneyIcon sx={{ color: '#4caf50', fontSize: 20 }} />
-                          <Typography variant="body2" color="text.secondary">
-                            Total Carrier Fees
-                          </Typography>
-                        </Box>
-                        <Typography variant="h6" fontWeight={700} color="#4caf50">
-                          ${fmtMoney(selected?.carrier?.totalCarrierFees || 0)}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                          <TruckIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
-                          <Typography variant="body2" color="text.secondary">
-                            Equipment Type
-                          </Typography>
-                        </Box>
-                        <Typography variant="body1" fontWeight={600}>
-                          {selected?.carrier?.equipmentType || "—"}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                  
-                  {/* Carrier Charges Section */}
-                  <Box sx={{ mt: 3 }}>
-                    <Typography variant="body1" fontWeight={600} sx={{ mb: 2 }}>
-                      Carrier Charges
-                    </Typography>
-                    <Box sx={{ 
-                      p: 2, 
-                      backgroundColor: '#f3e5f5', 
-                      borderRadius: 1,
-                      border: '1px solid #e1bee7'
-                    }}>
-                      {(selected?.carrier?.carrierFees || []).map((f) => (
-                        <Box key={f?._id} sx={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          alignItems: 'center',
-                          mb: 1
-                        }}>
-                          <Box>
-                            <Typography variant="body2" fontWeight={600}>
-                              {f?.name || "—"}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Quantity: {f?.quantity || 1} × Amount: ${fmtMoney(f?.total || 0)}
-                            </Typography>
-                          </Box>
-                          <Typography variant="body1" fontWeight={700} color="#4caf50">
-                            ${fmtMoney(f?.total || 0)}
-                          </Typography>
-                        </Box>
-                      ))}
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Box>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                            <Truck className="text-purple-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Carrier Name</p>
+                            <p className="font-semibold text-gray-800">{selected.carrier?.carrierName || 'N/A'}</p>
+                          </div>
+                        </div>
 
-            {/* Shipper & Locations Section */}
-            <Box sx={{ mb: 4 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                mb: 2,
-                p: 2,
-                background: 'linear-gradient(135deg, #fff3e0 0%, #fce4ec 100%)',
-                borderRadius: 2,
-                border: '1px solid #ffcc02'
-              }}>
-                <TruckIcon sx={{ color: '#ff9800', fontSize: 24 }} />
-                <Typography variant="h6" fontWeight={600} color="#f57c00">
-                  Shipper & Locations
-                </Typography>
-              </Box>
-              
-              <Card sx={{ 
-                border: '2px solid #ffcc02',
-                borderRadius: 2,
-                background: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                      Shipper Name
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} color="#f57c00">
-                      {selected?.shipper?.name || "—"}
-                    </Typography>
-                  </Box>
-                  
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ 
-                        p: 2, 
-                        backgroundColor: '#fff8e1', 
-                        borderRadius: 2,
-                        border: '1px solid #ffcc02'
-                      }}>
-                        <Typography variant="h6" fontWeight={600} color="#f57c00" sx={{ mb: 2 }}>
-                          📍 Pickup Locations
-                        </Typography>
-                        {(selected?.shipper?.pickUpLocations || []).length === 0 ? (
-                          <Typography variant="body2" color="text.secondary">
-                            No pickup locations
-                          </Typography>
-                        ) : (
-                          (selected?.shipper?.pickUpLocations || []).map((p, i) => (
-                            <Box key={p?._id || i} sx={{ mb: 2, p: 2, backgroundColor: 'white', borderRadius: 1, border: '1px solid #e0e0e0' }}>
-                              <Typography variant="body1" fontWeight={600} sx={{ mb: 1 }}>
-                                {p?.name || `Pickup ${i + 1}`}
-                              </Typography>
-                              <Typography variant="body2" sx={{ mb: 1 }}>
-                                📍 {p?.address}, {p?.city}, {p?.state} {p?.zipCode}
-                              </Typography>
-                              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                <Chip size="small" label={`Weight: ${p?.weight || "—"}`} variant="outlined" />
-                                <Chip size="small" label={`Pickup: ${fmtDateTime(p?.pickUpDate)}`} variant="outlined" />
-                              </Box>
-                              {p?.remarks && (
-                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                                  Notes: {p?.remarks}
-                                </Typography>
-                              )}
-                            </Box>
-                          ))
-                        )}
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ 
-                        p: 2, 
-                        backgroundColor: '#f3e5f5', 
-                        borderRadius: 2,
-                        border: '1px solid #e1bee7'
-                      }}>
-                        <Typography variant="h6" fontWeight={600} color="#7b1fa2" sx={{ mb: 2 }}>
-                          🎯 Drop Locations
-                        </Typography>
-                        {(selected?.shipper?.dropLocations || []).length === 0 ? (
-                          <Typography variant="body2" color="text.secondary">
-                            No drop locations
-                          </Typography>
-                        ) : (
-                          (selected?.shipper?.dropLocations || []).map((d, i) => (
-                            <Box key={d?._id || i} sx={{ mb: 2, p: 2, backgroundColor: 'white', borderRadius: 1, border: '1px solid #e0e0e0' }}>
-                              <Typography variant="body1" fontWeight={600} sx={{ mb: 1 }}>
-                                {d?.name || `Drop ${i + 1}`}
-                              </Typography>
-                              <Typography variant="body2" sx={{ mb: 1 }}>
-                                📍 {d?.address}, {d?.city}, {d?.state} {d?.zipCode}
-                              </Typography>
-                              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                <Chip size="small" label={`Weight: ${d?.weight || "—"}`} variant="outlined" />
-                                <Chip size="small" label={`Drop: ${fmtDateTime(d?.dropDate)}`} variant="outlined" />
-                              </Box>
-                              {d?.remarks && (
-                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                                  Notes: {d?.remarks}
-                                </Typography>
-                              )}
-                            </Box>
-                          ))
-                        )}
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Box>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                            <Truck className="text-pink-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Equipment Type</p>
+                            <p className="font-semibold text-gray-800">{selected.carrier?.equipmentType || 'N/A'}</p>
+                          </div>
+                        </div>
 
-            {/* Load Reference Section */}
-            <Box sx={{ mb: 4 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                mb: 2,
-                p: 2,
-                background: 'linear-gradient(135deg, #e8f5e8 0%, #e3f2fd 100%)',
-                borderRadius: 2,
-                border: '1px solid #4caf50'
-              }}>
-                <DescriptionIcon sx={{ color: '#4caf50', fontSize: 24 }} />
-                <Typography variant="h6" fontWeight={600} color="#2e7d32">
-                  Load Reference & Tracking
-                </Typography>
-              </Box>
-              
-              <Card sx={{ 
-                border: '2px solid #4caf50',
-                borderRadius: 2,
-                background: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Shipment #
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600} sx={{ 
-                          fontFamily: 'monospace',
-                          backgroundColor: '#f5f5f5',
-                          p: 1,
-                          borderRadius: 1,
-                          border: '1px solid #e0e0e0'
-                        }}>
-                          {selected?.loadReference?.shipmentNumber || "—"}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          PO #
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600}>
-                          {selected?.loadReference?.poNumber || "—"}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          BOL #
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600}>
-                          {selected?.loadReference?.bolNumber || "—"}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Load Type
-                        </Typography>
-                        <Chip 
-                          label={selected?.loadReference?.loadType || "—"} 
-                          color="primary" 
-                          variant="outlined"
-                          size="small"
-                        />
-                      </Box>
-                      <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Vehicle Type
-                        </Typography>
-                        <Chip 
-                          label={selected?.loadReference?.vehicleType || "—"} 
-                          color="secondary" 
-                          variant="outlined"
-                          size="small"
-                        />
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Pickup Date
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600}>
-                          {fmtDateTime(selected?.loadReference?.pickupDate)}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Delivery Date
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600}>
-                          {fmtDateTime(selected?.loadReference?.deliveryDate)}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Rate (Type)
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600} color="#4caf50">
-                          ${fmtMoney(selected?.loadReference?.rate)} ({selected?.loadReference?.rateType})
-                        </Typography>
-                      </Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Status
-                        </Typography>
-                        <Chip 
-                          label={selected?.loadReference?.status || "—"} 
-                          color="success" 
-                          variant="filled"
-                          size="small"
-                        />
-                      </Box>
-                      <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                          Delivery Approved
-                        </Typography>
-                        <Chip 
-                          label={selected?.loadReference?.deliveryApproval ? "Yes" : "No"} 
-                          color={selected?.loadReference?.deliveryApproval ? "success" : "default"} 
-                          variant="outlined"
-                          size="small"
-                        />
-                      </Box>
-                    </Grid>
-                  </Grid>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <DollarSign className="text-green-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Total Carrier Fees</p>
+                            <p className="font-semibold text-gray-800">${fmtMoney(selected.carrier?.totalCarrierFees || 0)}</p>
+                          </div>
+                        </div>
+                      </div>
 
-                  <Divider sx={{ my: 3 }} />
-                  
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ 
-                        p: 2, 
-                        backgroundColor: '#e8f5e8', 
-                        borderRadius: 2,
-                        border: '1px solid #4caf50'
-                      }}>
-                        <Typography variant="h6" fontWeight={600} color="#2e7d32" sx={{ mb: 2 }}>
-                          🚚 Origin
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600} sx={{ mb: 1 }}>
-                          {selected?.loadReference?.origin?.city}, {selected?.loadReference?.origin?.state}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Arrived: {fmtDateTime(selected?.loadReference?.originPlace?.arrivedAt)}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ 
-                        p: 2, 
-                        backgroundColor: '#e3f2fd', 
-                        borderRadius: 2,
-                        border: '1px solid #2196f3'
-                      }}>
-                        <Typography variant="h6" fontWeight={600} color="#1565c0" sx={{ mb: 2 }}>
-                          🎯 Destination
-                        </Typography>
-                        <Typography variant="body1" fontWeight={600} sx={{ mb: 1 }}>
-                          {selected?.loadReference?.destination?.city}, {selected?.loadReference?.destination?.state}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Arrived: {fmtDateTime(selected?.loadReference?.destinationPlace?.arrivedAt)}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Box>
+                      {selected.carrier?.carrierFees?.length > 0 && (
+                        <div className="mt-4">
+                          <h4 className="font-semibold text-gray-800 mb-3">Carrier Charges</h4>
+                          <div className="space-y-2">
+                            {selected.carrier.carrierFees.map((charge, i) => (
+                              <div key={charge?._id || i} className="bg-white rounded-lg p-3 border border-purple-200">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium text-gray-800">{charge?.name}</span>
+                                  <span className="font-bold text-green-600">${fmtMoney(charge?.total || 0)}</span>
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  Quantity: {charge?.quantity || 0} × Amount: ${fmtMoney(charge?.amount || 0)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-            {/* Shipment Images Section */}
-            <Box sx={{ mb: 4 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                mb: 2,
-                p: 2,
-                background: 'linear-gradient(135deg, #f3e5f5 0%, #e8f5e8 100%)',
-                borderRadius: 2,
-                border: '1px solid #9c27b0'
-              }}>
-                <ImageIcon sx={{ color: '#9c27b0', fontSize: 24 }} />
-                <Typography variant="h6" fontWeight={600} color="#7b1fa2">
-                  Shipment Images & Status
-                </Typography>
-              </Box>
-              
-              <Card sx={{ 
-                border: '2px solid #9c27b0',
-                borderRadius: 2,
-                background: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-              }}>
-                <CardContent sx={{ p: 3 }}>
+                  {/* BOL Information */}
+                  {(() => {
+                    const bols = selected?.loadReference?.bolNumber ? [selected.loadReference.bolNumber] : [];
+                    const additionalBols = selected?.additionalDocuments?.filter(doc => doc?.documentType === 'BOL') || [];
+                    const allBols = [...bols, ...additionalBols.map(doc => doc?.fileName || doc?.documentUrl)].filter(Boolean);
+                    return allBols.length > 0 ? (
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <h3 className="text-lg font-semibold text-blue-800 mb-2">BOL Information</h3>
+                        <ul className="list-disc pl-5 text-gray-800">
+                          {allBols.map((b, i) => (
+                            <li key={i} className="break-all">{b}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Shipper Information */}
+                  {selected?.shipper && (
+                    <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Truck className="text-orange-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Shipper Information</h3>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                            <User className="text-orange-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Shipper Name</p>
+                            <p className="font-semibold text-gray-800">{selected.shipper?.name || 'N/A'}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <FileText className="text-blue-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Container No</p>
+                            <p className="font-semibold text-gray-800">{selected.shipper?.containerNo || 'N/A'}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <Truck className="text-green-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Container Type</p>
+                            <p className="font-semibold text-gray-800">{selected.shipper?.containerType || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Pickup Locations */}
+                      {((selected.shipper?.pickUpLocations || []).length > 0) && (
+                        <div className="mt-4">
+                          <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
+                          <div className="space-y-3">
+                            {(selected.shipper?.pickUpLocations || []).map((location, index) => (
+                              <div key={location?._id || index} className="bg-white rounded-lg p-3 border border-orange-200">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p className="text-sm text-gray-600">Name</p>
+                                    <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Address</p>
+                                    <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">City</p>
+                                    <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">State</p>
+                                    <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Zip Code</p>
+                                    <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Weight (lbs)</p>
+                                    <p className="font-medium text-gray-800">
+                                      {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                        ? location.weight
+                                        : 'N/A'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Pickup Date</p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.pickUpDate ? fmtDateTime(location.pickUpDate) : 'N/A'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Drop Locations */}
+                      {((selected.shipper?.dropLocations || []).length > 0) && (
+                        <div className="mt-4">
+                          <h4 className="font-semibold text-gray-800 mb-3">Drop Locations</h4>
+                          <div className="space-y-3">
+                            {(selected.shipper?.dropLocations || []).map((location, index) => (
+                              <div key={location?._id || index} className="bg-white rounded-lg p-3 border border-yellow-200">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p className="text-sm text-gray-600">Name</p>
+                                    <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Address</p>
+                                    <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">City</p>
+                                    <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">State</p>
+                                    <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Zip Code</p>
+                                    <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Weight (lbs)</p>
+                                    <p className="font-medium text-gray-800">
+                                      {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                        ? location.weight
+                                        : 'N/A'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Drop Date</p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.dropDate ? fmtDateTime(location.dropDate) : 'N/A'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+
+                  {/* Shipment Images Section */}
                   {shipImgsLoading && (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                      <LinearProgress sx={{ mb: 2 }} />
-                      <Typography variant="body2">Loading shipment images…</Typography>
-                    </Box>
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="text-purple-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Shipment Images</h3>
+                      </div>
+                      <div className="text-center py-8">
+                        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-gray-600">Loading shipment images...</p>
+                      </div>
+                    </div>
                   )}
+
                   {shipImgsErr && (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                      <Typography variant="body2" color="error">{shipImgsErr}</Typography>
-                    </Box>
+                    <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <XCircle className="text-red-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Shipment Images</h3>
+                      </div>
+                      <p className="text-red-600">{shipImgsErr}</p>
+                    </div>
                   )}
-                  {!shipImgsLoading && shipImgs?.images && (
-                    <Box>
-                      {/* Pickup Images Row */}
-                      <Typography variant="h6" fontWeight={600} color="#7b1fa2" sx={{ mb: 3 }}>
-                        📸 Pickup Images
-                      </Typography>
-                      <Box sx={{ 
-                        p: 3, 
-                        backgroundColor: '#f3e5f5', 
-                        borderRadius: 2,
-                        border: '1px solid #9c27b0',
-                        mb: 4
-                      }}>
-                        <Grid container spacing={2}>
-                          <Grid item xs={12} sm={6} md={4}>
+
+                  {!shipImgsLoading && !shipImgsErr && shipImgs?.images && (
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="text-purple-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Shipment Images</h3>
+                      </div>
+
+                      {/* Pickup Images */}
+                      <div className="mb-6">
+                        <h4 className="font-semibold text-gray-800 mb-3">Pickup Images</h4>
+                        <div className="bg-white rounded-lg p-4 border border-purple-200">
+                          <div className="flex flex-wrap gap-4">
                             <ImageGrid title="Empty Truck" images={shipImgs.images.emptyTruckImages || []} />
-                          </Grid>
-                          <Grid item xs={12} sm={6} md={4}>
                             <ImageGrid title="Loaded Truck" images={shipImgs.images.loadedTruckImages || []} />
-                          </Grid>
-                          <Grid item xs={12} sm={6} md={4}>
                             <ImageGrid title="POD" images={shipImgs.images.podImages || []} />
-                          </Grid>
-                          <Grid item xs={12} sm={6} md={4}>
                             <ImageGrid title="EIR Tickets" images={shipImgs.images.eirTickets || []} />
-                          </Grid>
-                          <Grid item xs={12} sm={6} md={4}>
                             <ImageGrid title="Container Images" images={shipImgs.images.containerImages || []} />
-                          </Grid>
-                          <Grid item xs={12} sm={6} md={4}>
                             <ImageGrid title="Seal Images" images={shipImgs.images.sealImages || []} />
-                          </Grid>
-                        </Grid>
-                      </Box>
+                          </div>
+                        </div>
+                      </div>
 
-                      {/* Drop Images Row */}
-                      <Typography variant="h6" fontWeight={600} color="#7b1fa2" sx={{ mb: 3 }}>
-                        🎯 Drop Location Images
-                      </Typography>
-                      <Box sx={{ 
-                        p: 3, 
-                        backgroundColor: '#e8f5e8', 
-                        borderRadius: 2,
-                        border: '1px solid #4caf50',
-                        mb: 4
-                      }}>
-                        <Grid container spacing={2}>
-                          <Grid item xs={12} sm={6} md={3}>
-                            <ImageGrid title="Drop – POD" images={shipImgs.images.dropLocationImages?.podImages || []} />
-                          </Grid>
-                          <Grid item xs={12} sm={6} md={3}>
-                            <ImageGrid title="Drop – Loaded Truck" images={shipImgs.images.dropLocationImages?.loadedTruckImages || []} />
-                          </Grid>
-                          <Grid item xs={12} sm={6} md={3}>
-                            <ImageGrid title="Drop – Site Images" images={shipImgs.images.dropLocationImages?.dropLocationImages || []} />
-                          </Grid>
-                          <Grid item xs={12} sm={6} md={3}>
-                            <ImageGrid title="Drop – Empty Truck" images={shipImgs.images.dropLocationImages?.emptyTruckImages || []} />
-                          </Grid>
-                        </Grid>
-                      </Box>
+                      {/* Drop Location Images */}
+                      {shipImgs.images.dropLocationImages && (
+                        <div className="mb-6">
+                          <h4 className="font-semibold text-gray-800 mb-3">Drop Location Images</h4>
+                          <div className="bg-white rounded-lg p-4 border border-purple-200">
+                            <div className="flex flex-wrap gap-4">
+                              <ImageGrid title="Drop – POD" images={shipImgs.images.dropLocationImages?.podImages || []} />
+                              <ImageGrid title="Drop – Loaded Truck" images={shipImgs.images.dropLocationImages?.loadedTruckImages || []} />
+                              <ImageGrid title="Drop – Site Images" images={shipImgs.images.dropLocationImages?.dropLocationImages || []} />
+                              <ImageGrid title="Drop – Empty Truck" images={shipImgs.images.dropLocationImages?.emptyTruckImages || []} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
-                      <Divider sx={{ my: 3 }} />
-                      <Grid container spacing={3}>
-                        <Grid item xs={12} md={4}>
-                          <Box sx={{ 
-                            p: 2, 
-                            backgroundColor: '#e8f5e8', 
-                            borderRadius: 2,
-                            border: '1px solid #4caf50'
-                          }}>
-                            <Typography variant="h6" fontWeight={600} color="#2e7d32" sx={{ mb: 1 }}>
-                              🚚 Origin
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600} sx={{ mb: 1 }}>
-                              {shipImgs.images.originPlace?.location || "—"}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Arrived: {fmtDateTime(shipImgs.images.originPlace?.arrivedAt)}
-                            </Typography>
-                          </Box>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
-                          <Box sx={{ 
-                            p: 2, 
-                            backgroundColor: '#e3f2fd', 
-                            borderRadius: 2,
-                            border: '1px solid #2196f3'
-                          }}>
-                            <Typography variant="h6" fontWeight={600} color="#1565c0" sx={{ mb: 1 }}>
-                              🎯 Destination
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600} sx={{ mb: 1 }}>
-                              {shipImgs.images.destinationPlace?.location || "—"}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Arrived: {fmtDateTime(shipImgs.images.destinationPlace?.arrivedAt)}
-                            </Typography>
-                          </Box>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
-                          <Box sx={{ 
-                            p: 2, 
-                            backgroundColor: '#f3e5f5', 
-                            borderRadius: 2,
-                            border: '1px solid #9c27b0'
-                          }}>
-                            <Typography variant="h6" fontWeight={600} color="#7b1fa2" sx={{ mb: 1 }}>
-                              ✅ Drop Status
-                            </Typography>
-                            <Typography variant="body1" fontWeight={600} sx={{ mb: 1 }}>
-                              Completed: {shipImgs.images.dropLocationCompleted ? "Yes" : "No"}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Drop Arrived: {fmtDateTime(shipImgs.images.dropLocationArrivalTime)}
-                            </Typography>
-                          </Box>
-                        </Grid>
-                      </Grid>
-                    </Box>
+                      {/* Origin & Destination */}
+                      {(shipImgs.images.originPlace || shipImgs.images.destinationPlace || shipImgs.images.dropLocationCompleted !== undefined) && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {shipImgs.images.originPlace && (
+                            <div className="bg-white rounded-lg p-4 border border-green-200">
+                              <h5 className="font-semibold text-gray-800 mb-2">🚚 Origin</h5>
+                              <p className="font-medium text-gray-800 mb-1">{shipImgs.images.originPlace?.location || 'N/A'}</p>
+                              <p className="text-sm text-gray-500">
+                                Arrived: {shipImgs.images.originPlace?.arrivedAt ? fmtDateTime(shipImgs.images.originPlace.arrivedAt) : 'N/A'}
+                              </p>
+                            </div>
+                          )}
+                          {shipImgs.images.destinationPlace && (
+                            <div className="bg-white rounded-lg p-4 border border-blue-200">
+                              <h5 className="font-semibold text-gray-800 mb-2">🎯 Destination</h5>
+                              <p className="font-medium text-gray-800 mb-1">{shipImgs.images.destinationPlace?.location || 'N/A'}</p>
+                              <p className="text-sm text-gray-500">
+                                Arrived: {shipImgs.images.destinationPlace?.arrivedAt ? fmtDateTime(shipImgs.images.destinationPlace.arrivedAt) : 'N/A'}
+                              </p>
+                            </div>
+                          )}
+                          {shipImgs.images.dropLocationCompleted !== undefined && (
+                            <div className="bg-white rounded-lg p-4 border border-purple-200">
+                              <h5 className="font-semibold text-gray-800 mb-2">✅ Drop Status</h5>
+                              <p className="font-medium text-gray-800 mb-1">
+                                Completed: {shipImgs.images.dropLocationCompleted ? 'Yes' : 'No'}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Drop Arrived: {shipImgs.images.dropLocationArrivalTime ? fmtDateTime(shipImgs.images.dropLocationArrivalTime) : 'N/A'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
-                  
-                </CardContent>
-              </Card>
-            </Box>
 
-            {/* Additional Documents Section */}
-            <Box sx={{ mb: 4 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                mb: 2,
-                p: 2,
-                background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
-                borderRadius: 2,
-                border: '1px solid #2196f3'
-              }}>
-                <AttachFileIcon sx={{ color: '#2196f3', fontSize: 24 }} />
-                <Typography variant="h6" fontWeight={600} color="#1565c0">
-                  Additional Documents
-                </Typography>
-              </Box>
-              
-              <Card sx={{ 
-                border: '2px solid #2196f3',
-                borderRadius: 2,
-                background: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  {(selected?.additionalDocuments || []).length === 0 ? (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                      <AttachFileIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                      <Typography variant="body2" color="text.secondary">
-                        No additional documents uploaded
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Grid container spacing={3}>
-                      {selected.additionalDocuments.map((doc) => {
-                        const url = doc?.documentUrl || "";
-                        const isImg = isImageUrl(url);
-                        const isPdf = isPdfUrl(url);
-                        return (
-                          <Grid item xs={12} sm={6} md={4} key={doc?._id}>
-                            <Paper 
-                              variant="outlined" 
-                              sx={{ 
-                                p: 2, 
-                                borderRadius: 2,
-                                border: '2px solid #e3f2fd',
-                                '&:hover': {
-                                  border: '2px solid #2196f3',
-                                  boxShadow: '0 4px 12px rgba(33, 150, 243, 0.15)'
-                                }
-                              }}
-                            >
-                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                                {isImg ? <ImageIcon fontSize="small" color="primary" /> : <DescriptionIcon fontSize="small" color="primary" />}
-                                <MuiLink href={url} target="_blank" rel="noopener" underline="hover" sx={{ fontWeight: 600 }}>
-                                  {isPdf ? "PDF Document" : (isImg ? "Image" : "File")}
-                                </MuiLink>
-                                <Chip 
-                                  size="small" 
-                                  variant="outlined" 
-                                  label={isPdf ? "PDF" : isImg ? "Image" : "File"} 
-                                  color="primary"
-                                  sx={{ ml: "auto" }} 
-                                />
-                              </Stack>
-                              {isImg && (
-                                <a href={url} target="_blank" rel="noopener noreferrer">
-                                  <img 
-                                    src={url} 
-                                    alt="additional" 
-                                    style={{ 
-                                      width: "100%", 
-                                      height: 140, 
-                                      objectFit: "cover", 
-                                      borderRadius: 8, 
-                                      border: "2px solid #e3f2fd",
-                                      cursor: 'pointer'
-                                    }} 
-                                  />
-                                </a>
-                              )}
-                              <Divider sx={{ my: 2 }} />
-                              <Box>
-                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                  <strong>Uploaded by:</strong> {doc?.uploadedBy?.employeeName || "—"} ({doc?.uploadedBy?.empId || "—"})
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                  <strong>Department:</strong> {doc?.uploadedBy?.department || "—"}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                  <strong>Uploaded at:</strong> {fmtDateTime(doc?.uploadedAt)}
-                                </Typography>
-                              </Box>
-                            </Paper>
-                          </Grid>
-                        );
-                      })}
-                    </Grid>
+                  {/* Additional Documents Section */}
+                  {selected?.additionalDocuments?.length > 0 && (
+                    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="text-indigo-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Additional Documents</h3>
+                      </div>
+                      
+                      {/* Images in a row */}
+                      <div className="mb-4">
+                        <h4 className="font-semibold text-gray-800 mb-3">Images</h4>
+                        <div className="flex flex-wrap gap-4">
+                          {selected.additionalDocuments
+                            .filter(doc => isImageUrl(doc?.documentUrl || ""))
+                            .map((doc) => {
+                              const url = doc?.documentUrl || "";
+                              return (
+                                <div key={doc?._id} className="bg-white rounded-lg p-3 border border-indigo-200">
+                                  <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+                                    <img
+                                      src={url}
+                                      alt="document"
+                                      className="w-32 h-32 object-cover rounded-lg border border-gray-200 hover:border-indigo-400 transition-colors"
+                                    />
+                                  </a>
+                                  <p className="text-xs text-gray-600 mt-2 text-center truncate max-w-[128px]">
+                                    {doc?.fileName || 'Image'}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+
+                      {/* Documents in grid */}
+                      {selected.additionalDocuments.filter(doc => !isImageUrl(doc?.documentUrl || "")).length > 0 && (
+                        <div>
+                          <h4 className="font-semibold text-gray-800 mb-3">Documents</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {selected.additionalDocuments
+                              .filter(doc => !isImageUrl(doc?.documentUrl || ""))
+                              .map((doc) => {
+                                const url = doc?.documentUrl || "";
+                                const isPdf = isPdfUrl(url);
+                                return (
+                                  <div key={doc?._id} className="bg-white rounded-lg p-4 border border-indigo-200 hover:border-indigo-400 transition-colors">
+                                    <div className="flex items-center gap-3 mb-3">
+                                      <FileText className="text-indigo-600" size={16} />
+                                      <a
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 font-medium text-gray-800 hover:text-indigo-600 truncate"
+                                      >
+                                        {isPdf ? "PDF Document" : doc?.fileName || "File"}
+                                      </a>
+                                    </div>
+                                    <div className="space-y-1 text-sm text-gray-600">
+                                      <p><strong>Uploaded by:</strong> {doc?.uploadedBy?.employeeName || 'N/A'} ({doc?.uploadedBy?.empId || 'N/A'})</p>
+                                      <p><strong>Department:</strong> {doc?.uploadedBy?.department || 'N/A'}</p>
+                                      <p><strong>Uploaded at:</strong> {doc?.uploadedAt ? fmtDateTime(doc.uploadedAt) : 'N/A'}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
-                </CardContent>
-              </Card>
-            </Box>
 
-            {/* Uploaded Files Section */}
-            <Box sx={{ mb: 4 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                mb: 2,
-                p: 2,
-                background: 'linear-gradient(135deg, #fff3e0 0%, #e8f5e8 100%)',
-                borderRadius: 2,
-                border: '1px solid #ff9800'
-              }}>
-                <AttachFileIcon sx={{ color: '#ff9800', fontSize: 24 }} />
-                <Typography variant="h6" fontWeight={600} color="#f57c00">
-                  Uploaded Files
-                </Typography>
-              </Box>
-              
-              <Card sx={{ 
-                border: '2px solid #ff9800',
-                borderRadius: 2,
-                background: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  {(selected?.uploadedFiles || []).length === 0 ? (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                      <AttachFileIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                      <Typography variant="body2" color="text.secondary">
-                        No files uploaded
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Stack spacing={2}>
-                      {selected.uploadedFiles.map((f) => (
-                        <Paper 
-                          key={f?._id} 
-                          variant="outlined" 
-                          sx={{ 
-                            p: 2, 
-                            borderRadius: 2,
-                            border: '2px solid #fff3e0',
-                            '&:hover': {
-                              border: '2px solid #ff9800',
-                              boxShadow: '0 4px 12px rgba(255, 152, 0, 0.15)'
-                            }
-                          }}
-                        >
-                          <Stack direction="row" spacing={2} alignItems="center">
-                            <AttachFileIcon fontSize="small" color="warning" />
-                            <MuiLink 
-                              href={f?.fileUrl} 
-                              target="_blank" 
-                              rel="noopener"
-                              sx={{ fontWeight: 600, flex: 1 }}
-                            >
-                              {f?.fileName}
-                            </MuiLink>
-                            <Chip 
-                              size="small" 
-                              label={f?.fileType} 
-                              color="warning" 
-                              variant="outlined"
-                            />
-                            <Typography variant="caption" color="text.secondary">
-                              {fmtDateTime(f?.uploadDate)}
-                            </Typography>
-                          </Stack>
-                        </Paper>
-                      ))}
-                    </Stack>
+                  {/* Load Reference Information */}
+                  {selected?.loadReference && (
+                    <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-2xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="text-cyan-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Load Reference & Tracking</h3>
+                      </div>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <p className="text-sm text-gray-600">Shipment #</p>
+                          <p className="font-semibold text-gray-800 font-mono">{selected.loadReference?.shipmentNumber || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">PO #</p>
+                          <p className="font-semibold text-gray-800">{selected.loadReference?.poNumber || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">BOL #</p>
+                          <p className="font-semibold text-gray-800">{selected.loadReference?.bolNumber || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Load Type</p>
+                          <p className="font-semibold text-gray-800">{selected.loadReference?.loadType || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Vehicle Type</p>
+                          <p className="font-semibold text-gray-800">{selected.loadReference?.vehicleType || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Rate (Type)</p>
+                          <p className="font-semibold text-green-600">
+                            ${fmtMoney(selected.loadReference?.rate || 0)} ({selected.loadReference?.rateType || 'N/A'})
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Pickup Date</p>
+                          <p className="font-semibold text-gray-800">
+                            {selected.loadReference?.pickupDate ? fmtDateTime(selected.loadReference.pickupDate) : 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Delivery Date</p>
+                          <p className="font-semibold text-gray-800">
+                            {selected.loadReference?.deliveryDate ? fmtDateTime(selected.loadReference.deliveryDate) : 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Status</p>
+                          <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                            selected.loadReference?.status === 'completed' 
+                              ? 'bg-green-100 text-green-800' 
+                              : selected.loadReference?.status === 'in-progress'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {selected.loadReference?.status || 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Delivery Approved</p>
+                          <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                            selected.loadReference?.deliveryApproval 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {selected.loadReference?.deliveryApproval ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Origin & Destination */}
+                      {(selected.loadReference?.origin || selected.loadReference?.destination) && (
+                        <div className="mt-6 grid grid-cols-2 gap-4">
+                          {selected.loadReference?.origin && (
+                            <div className="bg-white rounded-lg p-4 border border-green-200">
+                              <h5 className="font-semibold text-gray-800 mb-2">🚚 Origin</h5>
+                              <p className="font-medium text-gray-800 mb-1">
+                                {selected.loadReference.origin?.city || 'N/A'}, {selected.loadReference.origin?.state || 'N/A'}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Arrived: {selected.loadReference?.originPlace?.arrivedAt ? fmtDateTime(selected.loadReference.originPlace.arrivedAt) : 'N/A'}
+                              </p>
+                            </div>
+                          )}
+                          {selected.loadReference?.destination && (
+                            <div className="bg-white rounded-lg p-4 border border-blue-200">
+                              <h5 className="font-semibold text-gray-800 mb-2">🎯 Destination</h5>
+                              <p className="font-medium text-gray-800 mb-1">
+                                {selected.loadReference.destination?.city || 'N/A'}, {selected.loadReference.destination?.state || 'N/A'}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Arrived: {selected.loadReference?.destinationPlace?.arrivedAt ? fmtDateTime(selected.loadReference.destinationPlace.arrivedAt) : 'N/A'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
-                  
-                </CardContent>
-              </Card>
-              {/* Sales Person Approval Buttons */}
-            <Box sx={{ 
-              p: 3, 
-              backgroundColor: 'white',
-              borderBottom: '1px solid #e0e0e0'
-            }}>
-              <Typography variant="h6" fontWeight={600} color="#1565c0" sx={{ mb: 2 }}>
-                🎯 Sales Person Approval
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={<CheckCircle />}
-                    onClick={() => openApprovalModal('approve')}
-                    sx={{
-                      background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
-                      color: 'white',
-                      py: 1.5,
-                      borderRadius: 2,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #45a049 0%, #3d8b40 100%)',
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(76, 175, 80, 0.4)'
-                      }
-                    }}
-                  >
-                    Approve
-                  </Button>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={<XCircle />}
-                    onClick={() => openApprovalModal('reject')}
-                    sx={{
-                      background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
-                      color: 'white',
-                      py: 1.5,
-                      borderRadius: 2,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #d32f2f 0%, #c62828 100%)',
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(244, 67, 54, 0.4)'
-                      }
-                    }}
-                  >
-                    Reject
-                  </Button>
-                </Grid>
-              </Grid>
-            </Box>
 
-              {/* PDF Generation Buttons */}
-            <Box sx={{ 
-              p: 3, 
-              backgroundColor: 'white',
-              borderBottom: '1px solid #e0e0e0'
-            }}>
-              <Typography variant="h6" fontWeight={600} color="#1565c0" sx={{ mb: 2 }}>
-                📄 Generate Documents
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={pdfLoading.invoice ? <LinearProgress size={20} /> : <InvoiceIcon />}
-                    onClick={() => generatePDF('invoice')}
-                    disabled={pdfLoading.invoice}
-                    sx={{
-                      background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
-                      color: 'white',
-                      py: 1.5,
-                      borderRadius: 2,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #45a049 0%, #3d8b40 100%)',
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(76, 175, 80, 0.4)'
-                      },
-                      '&:disabled': {
-                        background: '#cccccc',
-                        color: '#666666'
-                      }
-                    }}
-                  >
-                    {pdfLoading.invoice ? 'Generating...' : 'Invoice PDF'}
-                  </Button>
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={pdfLoading.rate ? <LinearProgress size={20} /> : <RateIcon />}
-                    onClick={() => generatePDF('rate')}
-                    disabled={pdfLoading.rate}
-                    sx={{
-                      background: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)',
-                      color: 'white',
-                      py: 1.5,
-                      borderRadius: 2,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(33, 150, 243, 0.4)'
-                      },
-                      '&:disabled': {
-                        background: '#cccccc',
-                        color: '#666666'
-                      }
-                    }}
-                  >
-                    {pdfLoading.rate ? 'Generating...' : 'Rate Confirmation PDF'}
-                  </Button>
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={pdfLoading.bol ? <LinearProgress size={20} /> : <BolIcon />}
-                    onClick={() => generatePDF('bol')}
-                    disabled={pdfLoading.bol}
-                    sx={{
-                      background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-                      color: 'white',
-                      py: 1.5,
-                      borderRadius: 2,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #f57c00 0%, #ef6c00 100%)',
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(255, 152, 0, 0.4)'
-                      },
-                      '&:disabled': {
-                        background: '#cccccc',
-                        color: '#666666'
-                      }
-                    }}
-                  >
-                    {pdfLoading.bol ? 'Generating...' : 'BOL PDF'}
-                  </Button>
-                </Grid>
-              </Grid>
-            </Box>
-            </Box>
-            </Box>
-            </React.Fragment>
-          )}
-        </DialogContent>
+                  {/* Basic Information & Approval Status */}
+                  <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <FileText className="text-gray-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Basic Information & Approval Status</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <p className="text-sm text-gray-600">DO ID</p>
+                        <p className="font-semibold text-gray-800 font-mono text-sm">{selected?._id || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Assignment Status</p>
+                        <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                          selected?.assignmentStatus === 'assigned' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {selected?.assignmentStatus || 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">DO Status</p>
+                        <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                          selected?.doStatus === 'approved' 
+                            ? 'bg-green-100 text-green-800' 
+                            : selected?.doStatus === 'rejected'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {selected?.doStatus || 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Updated At</p>
+                        <p className="font-semibold text-gray-800">{selected?.updatedAt ? fmtDateTime(selected.updatedAt) : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Approved By</p>
+                        <p className="font-semibold text-gray-800">
+                          {selected?.accountantApproval?.approvedBy?.employeeName || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Approved At</p>
+                        <p className="font-semibold text-gray-800">
+                          {selected?.accountantApproval?.approvedAt ? fmtDateTime(selected.accountantApproval.approvedAt) : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Approval Status</p>
+                        <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                          selected?.accountantApproval?.status === 'approved' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {selected?.accountantApproval?.status || 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Email To Shipper</p>
+                        <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                          selected?.emailNotification?.sentToShipper 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {selected?.emailNotification?.sentToShipper ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                    </div>
+                    {selected?.accountantApproval?.remarks && (
+                      <div className="mt-4">
+                        <p className="text-sm text-gray-600 mb-2">Remarks</p>
+                        <div className="bg-white rounded-lg p-3 border border-gray-200">
+                          <p className="text-sm text-gray-800">{selected.accountantApproval.remarks}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-        <DialogActions sx={{ 
-          p: 3, 
-          backgroundColor: '#f8f9fa',
-          borderTop: '1px solid #e0e0e0'
-        }}>
-          <Button 
-            onClick={() => setDetailsOpen(false)} 
-            variant="contained"
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
-              textTransform: 'none',
-              fontWeight: 600,
-              '&:hover': {
-                background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
-                transform: 'translateY(-1px)',
-                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
-              }
-            }}
-          >
-            Close Details
-          </Button>
-        </DialogActions>
-      </Dialog>
+                  {/* Approval Section */}
+                  <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100 shadow-lg">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+                          <CheckCircle className="text-white" size={20} />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-800">Approval</h3>
+                          <p className="text-sm text-gray-500">Review and approve or reject this delivery order</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-row gap-3 justify-start">
+                      <button
+                        onClick={() => openApprovalModal('approve')}
+                        className="w-1/2 max-w-[200px] bg-gradient-to-r from-green-500 via-green-600 to-emerald-600 hover:from-green-600 hover:via-green-700 hover:to-emerald-700 text-white px-4 py-2.5 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 font-semibold text-sm shadow-md hover:shadow-lg transform hover:-translate-y-0.5 hover:scale-[1.01] active:scale-[0.99]"
+                      >
+                        <CheckCircle size={18} />
+                        <span>Approve</span>
+                      </button>
+                      <button
+                        onClick={() => openApprovalModal('reject')}
+                        className="w-1/2 max-w-[200px] bg-gradient-to-r from-red-500 via-red-600 to-rose-600 hover:from-red-600 hover:via-red-700 hover:to-rose-700 text-white px-4 py-2.5 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 font-semibold text-sm shadow-md hover:shadow-lg transform hover:-translate-y-0.5 hover:scale-[1.01] active:scale-[0.99]"
+                      >
+                        <XCircle size={18} />
+                        <span>Reject</span>
+                      </button>
+                    </div>
+                  </div>
+                </React.Fragment>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sales Person Approval Modal */}
       <Dialog
@@ -2555,7 +2148,7 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
             )}
             <Box>
               <Typography variant="h5" fontWeight={600}>
-                {approvalAction === 'approve' ? 'Approve Sales Person' : 'Reject Sales Person'}
+                {approvalAction === 'approve' ? 'Approve' : 'Reject'}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
                 {approvalAction === 'approve' 
@@ -2571,13 +2164,18 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
               right: 16, 
               top: 16,
               color: 'white',
-              backgroundColor: 'rgba(255,255,255,0.1)',
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              borderRadius: '50%',
+              width: 36,
+              height: 36,
+              transition: 'all 0.2s ease',
               '&:hover': {
-                backgroundColor: 'rgba(255,255,255,0.2)'
+                backgroundColor: 'rgba(255,255,255,0.25)',
+                transform: 'rotate(90deg) scale(1.1)',
               }
             }}
           >
-            ✕
+            ×
           </IconButton>
         </DialogTitle>
 
@@ -2585,7 +2183,7 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
           {selected && (
             <Box sx={{ mb: 3 }}>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Delivery Order ID
+                Load No
               </Typography>
               <Typography variant="body1" fontWeight={600} sx={{ 
                 fontFamily: 'monospace',
@@ -2594,19 +2192,10 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
                 borderRadius: 1,
                 border: '1px solid #e0e0e0'
               }}>
-                {selected._id}
+                {selected?.customers?.[0]?.loadNo || selected?._id || 'N/A'}
               </Typography>
             </Box>
           )}
-
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Sales Employee ID
-            </Typography>
-            <Typography variant="body1" fontWeight={600}>
-              {salesEmpId}
-            </Typography>
-          </Box>
 
           <Box sx={{ mb: 3 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -2703,6 +2292,6 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </div>
   );
 }

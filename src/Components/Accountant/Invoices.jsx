@@ -3,6 +3,7 @@ import axios from "axios";
 import { Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import Logo from '../../assets/LogoFinal.png';
+import { Search, CheckCircle, XCircle, Clock, FileText, RefreshCw, Eye, Edit, Download, User, Truck, DollarSign, MapPin, Calendar, Send } from 'lucide-react';
 
 import {
   Box,
@@ -215,7 +216,7 @@ function TabPanel({ value, index, children }) {
 }
 
 // Edit Form Component
-function EditForm({ data, onSubmit, loading }) {
+function EditForm({ data, onSubmit, loading, onClose }) {
   // Initialize form data with calculated totals
   const initializeFormData = (data) => {
     const customers = (data?.customers || []).map(customer => ({
@@ -299,168 +300,175 @@ function EditForm({ data, onSubmit, loading }) {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <Stack spacing={3}>
-        {/* Customer Details */}
-        <Card>
-          <CardHeader title="Customer Details" />
-          <CardContent>
-            <Stack spacing={2}>
-              {formData.customers.map((customer, index) => (
-                <Grid container spacing={2} key={index}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Load No"
-                      value={customer.loadNo || ""}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                      sx={{
-                        '& .MuiInputBase-input': {
-                          backgroundColor: '#f5f5f5'
-                        }
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Bill To"
-                      value={customer.billTo || ""}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                      sx={{
-                        '& .MuiInputBase-input': {
-                          backgroundColor: '#f5f5f5'
-                        }
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Dispatcher Name"
-                      value={customer.dispatcherName || ""}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                      sx={{
-                        '& .MuiInputBase-input': {
-                          backgroundColor: '#f5f5f5'
-                        }
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Work Order No"
-                      value={customer.workOrderNo || ""}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                      sx={{
-                        '& .MuiInputBase-input': {
-                          backgroundColor: '#f5f5f5'
-                        }
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      fullWidth
-                      label="Line Haul"
-                      type="number"
-                      value={customer.lineHaul || ""}
-                      onChange={(e) => handleCustomerChange(index, 'lineHaul', parseFloat(e.target.value) || 0)}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      fullWidth
-                      label="FSC"
-                      type="number"
-                      value={customer.fsc || ""}
-                      onChange={(e) => handleCustomerChange(index, 'fsc', parseFloat(e.target.value) || 0)}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      fullWidth
-                      label="Other"
-                      type="number"
-                      value={customer.other || ""}
-                      onChange={(e) => handleCustomerChange(index, 'other', parseFloat(e.target.value) || 0)}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      fullWidth
-                      label="Total Amount"
-                      type="number"
-                      value={customer.totalAmount || ""}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                      sx={{
-                        '& .MuiInputBase-input': {
-                          backgroundColor: '#f5f5f5',
-                          fontWeight: 'bold'
-                        }
-                      }}
-                    />
-                  </Grid>
-                </Grid>
-              ))}
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* Carrier Details */}
-        <Card>
-          <CardHeader title="Carrier Details" />
-          <CardContent>
-            <Stack spacing={2}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Customer Details */}
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+        <div className="flex items-center gap-2 mb-4">
+          <User className="text-green-600" size={20} />
+          <h3 className="text-lg font-bold text-gray-800">Customer Details</h3>
+        </div>
+        <div className="space-y-4">
+          {formData.customers.map((customer, index) => (
+            <div key={index} className="bg-white rounded-xl p-4 border border-green-200">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                </div>
+                <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <TextField
+                  fullWidth
+                  label="Load No"
+                  value={customer.loadNo || ""}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      backgroundColor: '#f5f5f5'
+                    }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  label="Bill To"
+                  value={customer.billTo || ""}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      backgroundColor: '#f5f5f5'
+                    }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  label="Dispatcher Name"
+                  value={customer.dispatcherName || ""}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      backgroundColor: '#f5f5f5'
+                    }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  label="Work Order No"
+                  value={customer.workOrderNo || ""}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      backgroundColor: '#f5f5f5'
+                    }
+                  }}
+                />
+                <div className="md:col-span-2">
                   <TextField
                     fullWidth
-                    label="Carrier Name"
-                    value={formData.carrier.carrierName || ""}
-                    InputProps={{
-                      readOnly: true,
-                    }}
-                    sx={{
-                      '& .MuiInputBase-input': {
-                        backgroundColor: '#f5f5f5'
-                      }
-                    }}
+                    label="Line Haul"
+                    type="number"
+                    value={customer.lineHaul || ""}
+                    onChange={(e) => handleCustomerChange(index, 'lineHaul', parseFloat(e.target.value) || 0)}
                   />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Equipment Type"
-                    value={formData.carrier.equipmentType || ""}
-                    InputProps={{
-                      readOnly: true,
-                    }}
-                    sx={{
-                      '& .MuiInputBase-input': {
-                        backgroundColor: '#f5f5f5'
-                      }
-                    }}
-                  />
-                </Grid>
-              </Grid>
+                </div>
+                <TextField
+                  fullWidth
+                  label="FSC"
+                  type="number"
+                  value={customer.fsc || ""}
+                  onChange={(e) => handleCustomerChange(index, 'fsc', parseFloat(e.target.value) || 0)}
+                />
+                <TextField
+                  fullWidth
+                  label="Other"
+                  type="number"
+                  value={customer.other || ""}
+                  onChange={(e) => handleCustomerChange(index, 'other', parseFloat(e.target.value) || 0)}
+                />
+                <TextField
+                  fullWidth
+                  label="Total Amount"
+                  type="number"
+                  value={customer.totalAmount || ""}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      backgroundColor: '#f5f5f5',
+                      fontWeight: 'bold'
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-              {/* Carrier Fees */}
-              <Typography variant="h6">Carrier Fees</Typography>
+      {/* Carrier Details */}
+      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
+        <div className="flex items-center gap-2 mb-4">
+          <Truck className="text-purple-600" size={20} />
+          <h3 className="text-lg font-bold text-gray-800">Carrier Details</h3>
+        </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <TextField
+              fullWidth
+              label="Carrier Name"
+              value={formData.carrier.carrierName || ""}
+              InputProps={{
+                readOnly: true,
+              }}
+              sx={{
+                '& .MuiInputBase-input': {
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Equipment Type"
+              value={formData.carrier.equipmentType || ""}
+              InputProps={{
+                readOnly: true,
+              }}
+              sx={{
+                '& .MuiInputBase-input': {
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+            />
+          </div>
+
+          {/* Carrier Fees */}
+          <div className="mt-4">
+            <h4 className="text-md font-semibold text-gray-800 mb-3">Carrier Fees</h4>
+            <div className="space-y-3">
               {(formData.carrier.carrierFees || []).map((fee, index) => (
-                <Grid container spacing={2} key={index}>
-                  <Grid item xs={12} sm={3}>
+                <div key={index} className="bg-white rounded-lg p-4 border border-purple-200">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <TextField
+                      fullWidth
+                      label="Name"
+                      value={fee.name || ""}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                      sx={{
+                        '& .MuiInputBase-input': {
+                          backgroundColor: '#f5f5f5'
+                        }
+                      }}
+                    />
                     <TextField
                       fullWidth
                       label="Quantity"
@@ -468,8 +476,6 @@ function EditForm({ data, onSubmit, loading }) {
                       value={fee.quantity || ""}
                       onChange={(e) => handleCarrierFeeChange(index, 'quantity', parseFloat(e.target.value) || 0)}
                     />
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
                     <TextField
                       fullWidth
                       label="Amount"
@@ -477,8 +483,6 @@ function EditForm({ data, onSubmit, loading }) {
                       value={fee.amount || ""}
                       onChange={(e) => handleCarrierFeeChange(index, 'amount', parseFloat(e.target.value) || 0)}
                     />
-                  </Grid>
-                  <Grid item xs={12} sm={2}>
                     <TextField
                       fullWidth
                       label="Total"
@@ -494,44 +498,60 @@ function EditForm({ data, onSubmit, loading }) {
                         }
                       }}
                     />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Total Carrier Fees"
-                  type="number"
-                  value={formData.carrier.totalCarrierFees || ""}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                  sx={{
-                    '& .MuiInputBase-input': {
-                      backgroundColor: '#f5f5f5',
-                      fontWeight: 'bold'
-                    }
-                  }}
-                />
-              </Grid>
-                </Grid>
+                  </div>
+                </div>
               ))}
+            </div>
+            <div className="mt-4">
+              <TextField
+                fullWidth
+                label="Total Carrier Fees"
+                type="number"
+                value={formData.carrier.totalCarrierFees || ""}
+                InputProps={{
+                  readOnly: true,
+                }}
+                sx={{
+                  '& .MuiInputBase-input': {
+                    backgroundColor: '#f5f5f5',
+                    fontWeight: 'bold'
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
-              
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* Submit Button */}
-        <DialogActions>
-          <Button 
-            type="submit" 
-            variant="contained" 
-            disabled={loading}
-            sx={{ minWidth: 120 }}
+      {/* Submit Button */}
+      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 max-w-[200px] px-6 py-3 h-12 bg-white border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200 flex items-center justify-center"
           >
-            {loading ? "Updating..." : "Update Details"}
-          </Button>
-        </DialogActions>
-      </Stack>
+            Cancel
+          </button>
+        )}
+        <button
+          type="submit"
+          disabled={loading}
+          className={`${onClose ? 'flex-1 max-w-[200px]' : ''} px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+        >
+          {loading ? (
+            <>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Updating...</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle size={18} />
+              <span>Update Details</span>
+            </>
+          )}
+        </button>
+      </div>
     </form>
   );
 }
@@ -1960,604 +1980,970 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     };
   };
 
+  // Status color helper
+  const statusColor = (status) => {
+    if (!status) return 'bg-yellow-100 text-yellow-700';
+    if (status === 'approved') return 'bg-green-100 text-green-700';
+    if (status === 'rejected') return 'bg-red-100 text-red-700';
+    if (status === 'pending') return 'bg-yellow-100 text-yellow-700';
+    return 'bg-blue-100 text-blue-700';
+  };
+
   return (
     <ThemeProvider theme={theme}>
-      <Container maxWidth="xl" sx={{ py: 3 }}>
-        <Card elevation={2}>
-          <CardHeader
-            title="Invoices"
-            subheader={
-              accountantUser ? (
-                <Typography variant="body2" color="text.secondary">
-                  Logged as: <b>{accountantUser.employeeName?.trim()}</b> ({accountantUser.empId}) — {accountantUser.department}
-                </Typography>
-              ) : (
-                "—"
-              )
-            }
-            action={
-              <Stack direction="row" spacing={1} sx={{ pr: 2 }}>
-                <Tooltip title="Refresh current tab">
-                  <span>
-                    <IconButton
-                      onClick={() => {
-                        if (activeTab === 0) fetchData(page);
-                        else if (activeTab === 1) fetchProcessed(processedPage);
-                        else fetchRejected(rejectedPage);
-                      }}
-                      disabled={activeTab === 0 ? loading : activeTab === 1 ? processedLoading : rejectedLoading}
+      <div className="p-6">
+        {/* Tabs */}
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={() => setActiveTab(0)}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 0
+            ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+        >
+          <div className="flex items-center gap-2">
+            <Clock size={18} />
+            <span>Assigned to Accountant</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab(1)}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 1
+            ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} />
+            <span>Accountant Approved</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab(2)}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 2
+            ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+        >
+          <div className="flex items-center gap-2">
+            <XCircle size={18} />
+            <span>Rejected by Sales</span>
+          </div>
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div>
+        {/* TAB 0: Assigned to Accountant */}
+        {activeTab === 0 && (
+          <div>
+            {/* Search and Stats */}
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-6">
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+                      <Clock className="text-yellow-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Invoices</p>
+                      <p className="text-xl font-bold text-gray-800">{rows.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <FileText className="text-blue-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Filtered</p>
+                      <p className="text-xl font-bold text-blue-600">{filtered.length}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
-                      <RefreshIcon />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </Stack>
-            }
-          />
-
-          {/* ===== Tabs ===== */}
-          <Tabs
-            value={activeTab}
-            onChange={(_, v) => setActiveTab(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ px: 2, borderBottom: "1px solid #eee" }}
-          >
-            <Tab label="Assigned to Accountant" />
-            <Tab label="Accountant Approved" />
-            <Tab label="Rejected by Sales" />
-          </Tabs>
-
-          <CardContent>
-            {/* ===== TAB 0: Assigned to Accountant ===== */}
-            <TabPanel value={activeTab} index={0}>
-              <Toolbar disableGutters sx={{ gap: 2, flexWrap: "wrap", pb: 2 }}>
-
-                <TextField
-                  size="small"
-                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  sx={{ flex: 1, minWidth: 280 }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: search ? (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setSearch("")}>
-                          ×
-                        </IconButton>
-                      </InputAdornment>
-                    ) : null,
-                  }}
-                />
-
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Chip size="small" label={`Total: ${rows.length}`} variant="outlined" />
-                  <Chip size="small" label={`Filtered: ${filtered.length}`} variant="outlined" color="primary" />
-                </Stack>
-              </Toolbar>
-
-              {loading && <LinearProgress sx={{ mb: 2 }} />}
-
-              {!loading && filtered.length === 0 ? (
-                <>
-                  <EmptyState title="No invoices found" subtitle="Try adjusting filters or search." />
-                  {serverError && (
-                    <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-                      {serverError}
-                    </Typography>
+                      ×
+                    </button>
                   )}
-                </>
-              ) : (
-                <>
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>DO ID</TableCell>
-                          <TableCell>Load No</TableCell>
-                          <TableCell>Bill To</TableCell>
-                          <TableCell>Carrier</TableCell>
-                          <TableCell align="right">Bill Amount</TableCell>
-                          <TableCell align="right">Carrier Fees</TableCell>
-                          
-                          <TableCell>Status</TableCell>
-                          <TableCell>Forwarded By</TableCell>
-                          <TableCell>Updated</TableCell>
-                          <TableCell align="center">Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {filtered.map((row) => {
+                </div>
+                <button
+                  onClick={() => fetchData(page)}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {loading && (
+              <div className="mb-4">
+                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            )}
+
+            {!loading && filtered.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No invoices found</h3>
+                <p className="text-sm text-gray-500">Try adjusting filters or search.</p>
+                {serverError && (
+                  <p className="text-sm text-red-600 mt-2">{serverError}</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                        <tr>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Forwarded By</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Updated</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map((row, index) => {
                           const cust = row?.customers?.[0] || {};
                           const totals = computeTotals(row);
                           const fwBy = row?.forwardedToAccountant?.forwardedBy?.employeeName || "—";
                           return (
-                            <TableRow key={row?._id}>
-                              <TableCell>
-                                <Tooltip title={row?._id || ""}>
-                                  <span>{shortId(row?._id)}</span>
-                                </Tooltip>
-                              </TableCell>
-                              <TableCell>{cust?.loadNo || "—"}</TableCell>
-                              <TableCell>{cust?.billTo || "—"}</TableCell>
-                              <TableCell>{row?.carrier?.carrierName || "—"}</TableCell>
-                              <TableCell align="right">${fmtMoney(totals.billTotal)}</TableCell>
-                              <TableCell align="right">${fmtMoney(totals.carrierTotal)}</TableCell>
-                              
-                              <TableCell>
-                                <StatusChip status={row?.accountantApproval?.status} />
-                              </TableCell>
-                              <TableCell>{fwBy}</TableCell>
-                              <TableCell>{fmtDateTime(row?.updatedAt)}</TableCell>
-                              <TableCell align="center">
-                                <Stack direction="row" spacing={1} justifyContent="center">
-                                  <Tooltip title="View Details">
-                                    <IconButton onClick={() => openDetails(row)} size="small">
-                                      <VisibilityIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Edit Details">
-                                    <IconButton onClick={() => openEditModal(row)} size="small">
-                                      <EditIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Stack>
-                              </TableCell>
-                            </TableRow>
+                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{cust?.billTo || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className="font-bold text-blue-600">${fmtMoney(totals.carrierTotal)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${statusColor(row?.accountantApproval?.status)}`}>
+                                  {row?.accountantApproval?.status === 'approved' && <CheckCircle size={12} />}
+                                  {row?.accountantApproval?.status === 'rejected' && <XCircle size={12} />}
+                                  {(!row?.accountantApproval?.status || row?.accountantApproval?.status === 'pending') && <Clock size={12} />}
+                                  {row?.accountantApproval?.status || 'Pending'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{fwBy}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{fmtDateTime(row?.updatedAt)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => openDetails(row)}
+                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="View Details"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => openEditModal(row)}
+                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                    title="Edit Details"
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
                           );
                         })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-                  {!loading && pagination?.totalPages > 1 && (
-                    <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-                      <Pagination count={pagination.totalPages} page={page} onChange={(_, val) => setPage(val)} color="primary" />
-                    </Stack>
+                {!loading && pagination?.totalPages > 1 && (
+                  <div className="flex justify-end mt-4">
+                    <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+                      <button
+                        onClick={() => setPage(page - 1)}
+                        disabled={page === 1}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+                          .filter(p => {
+                            if (pagination.totalPages <= 7) return true;
+                            if (page <= 4) return p <= 5;
+                            if (page >= pagination.totalPages - 3) return p >= pagination.totalPages - 4;
+                            return p >= page - 2 && p <= page + 2;
+                          })
+                          .map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setPage(p)}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                page === p
+                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                      </div>
+                      <button
+                        onClick={() => setPage(page + 1)}
+                        disabled={page === pagination.totalPages}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        Next
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* TAB 1: Accountant Approved */}
+        {activeTab === 1 && (
+          <div>
+            {/* Search and Stats */}
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-6">
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                      <CheckCircle className="text-green-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Approved</p>
+                      <p className="text-xl font-bold text-gray-800">{processedRows.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <FileText className="text-blue-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Filtered</p>
+                      <p className="text-xl font-bold text-blue-600">{processedFiltered.length}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
+                    value={processedSearch}
+                    onChange={(e) => setProcessedSearch(e.target.value)}
+                    className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  {processedSearch && (
+                    <button
+                      onClick={() => setProcessedSearch("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ×
+                    </button>
                   )}
-                </>
-              )}
-            </TabPanel>
+                </div>
+                <button
+                  onClick={() => fetchProcessed(processedPage)}
+                  disabled={processedLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw size={18} className={processedLoading ? 'animate-spin' : ''} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
 
-            {/* ===== TAB 1: Accountant Approved ===== */}
-            <TabPanel value={activeTab} index={1}>
-              <Toolbar disableGutters sx={{ gap: 2, flexWrap: "wrap", pb: 2 }}>
-                <TextField
-                  size="small"
-                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
-                  value={processedSearch}
-                  onChange={(e) => setProcessedSearch(e.target.value)}
-                  sx={{ flex: 1, minWidth: 280 }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: processedSearch ? (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setProcessedSearch("")}>
-                          ×
-                        </IconButton>
-                      </InputAdornment>
-                    ) : null,
-                  }}
-                />
+            {processedLoading && (
+              <div className="mb-4">
+                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            )}
 
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Chip size="small" label={`Total: ${processedRows.length}`} variant="outlined" />
-                  <Chip size="small" label={`Filtered: ${processedFiltered.length}`} variant="outlined" color="primary" />
-                </Stack>
-              </Toolbar>
-
-              {/* Debug chips if needed */}
-              {/* <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-              <Chip size="small" label={`API: ${processedRows.length}`} />
-              <Chip size="small" color="primary" label={`UI: ${processedFiltered.length}`} />
-            </Stack> */}
-
-              {processedLoading && <LinearProgress sx={{ mb: 2 }} />}
-
-              {!processedLoading && processedFiltered.length === 0 ? (
-                <>
-                  <EmptyState title="No approved DOs" subtitle="Koi processed record nahi mila." />
-                  {processedError && (
-                    <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-                      {processedError}
-                    </Typography>
-                  )}
-                </>
-              ) : (
-                <>
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>DO ID</TableCell>
-                          <TableCell>Load No</TableCell>
-                          <TableCell>Bill To</TableCell>
-                          <TableCell>Carrier</TableCell>
-                          <TableCell align="right">Bill Amount</TableCell>
-                          <TableCell align="right">Carrier Fees</TableCell>
-                          
-                          <TableCell>Status</TableCell>
-                          <TableCell>Approved By</TableCell>
-                          <TableCell>Approved At</TableCell>
-                          <TableCell align="center">Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {processedFiltered.map((row) => {
+            {!processedLoading && processedFiltered.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No approved DOs</h3>
+                <p className="text-sm text-gray-500">Koi processed record nahi mila.</p>
+                {processedError && (
+                  <p className="text-sm text-red-600 mt-2">{processedError}</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                        <tr>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved By</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved At</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {processedFiltered.map((row, index) => {
                           const cust = row?.customers?.[0] || {};
                           const totals = computeTotals(row);
                           const apprBy = row?.accountantApproval?.approvedBy?.employeeName || "—";
                           const apprAt = row?.accountantApproval?.approvedAt || row?.updatedAt;
                           return (
-                            <TableRow key={row?._id}>
-                              <TableCell>
-                                <Tooltip title={row?._id || ""}>
-                                  <span>{shortId(row?._id)}</span>
-                                </Tooltip>
-                              </TableCell>
-                              <TableCell>{cust?.loadNo || "—"}</TableCell>
-                              <TableCell>{cust?.billTo || "—"}</TableCell>
-                              <TableCell>{row?.carrier?.carrierName || "—"}</TableCell>
-                              <TableCell align="right">${fmtMoney(totals.billTotal)}</TableCell>
-                              <TableCell align="right">${fmtMoney(totals.carrierTotal)}</TableCell>
-                             
-                              <TableCell>
-                                <StatusChip status={row?.accountantApproval?.status} />
-                              </TableCell>
-                              <TableCell>{apprBy}</TableCell>
-                              <TableCell>{fmtDateTime(apprAt)}</TableCell>
-                              <TableCell align="center">
-                                <Stack direction="row" spacing={1} justifyContent="center">
-                                  <Tooltip title="View Details">
-                                    <IconButton onClick={() => openDetails(row)} size="small">
-                                      <VisibilityIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Edit Details">
-                                    <IconButton onClick={() => openEditModal(row)} size="small">
-                                      <EditIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Stack>
-                              </TableCell>
-                            </TableRow>
+                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{cust?.billTo || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className="font-bold text-blue-600">${fmtMoney(totals.carrierTotal)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${statusColor(row?.accountantApproval?.status)}`}>
+                                  {row?.accountantApproval?.status === 'approved' && <CheckCircle size={12} />}
+                                  {row?.accountantApproval?.status === 'rejected' && <XCircle size={12} />}
+                                  {(!row?.accountantApproval?.status || row?.accountantApproval?.status === 'pending') && <Clock size={12} />}
+                                  {row?.accountantApproval?.status || 'Pending'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{apprBy}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{fmtDateTime(apprAt)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => openDetails(row)}
+                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="View Details"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => openEditModal(row)}
+                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                    title="Edit Details"
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
                           );
                         })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-                  {!processedLoading && processedPagination?.totalPages > 1 && (
-                    <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-                      <Pagination
-                        count={processedPagination.totalPages}
-                        page={processedPage}
-                        onChange={(_, val) => setProcessedPage(val)}
-                        color="primary"
-                      />
-                    </Stack>
+                {!processedLoading && processedPagination?.totalPages > 1 && (
+                  <div className="flex justify-end mt-4">
+                    <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+                      <button
+                        onClick={() => setProcessedPage(processedPage - 1)}
+                        disabled={processedPage === 1}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: processedPagination.totalPages }, (_, i) => i + 1)
+                          .filter(p => {
+                            if (processedPagination.totalPages <= 7) return true;
+                            if (processedPage <= 4) return p <= 5;
+                            if (processedPage >= processedPagination.totalPages - 3) return p >= processedPagination.totalPages - 4;
+                            return p >= processedPage - 2 && p <= processedPage + 2;
+                          })
+                          .map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setProcessedPage(p)}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                processedPage === p
+                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                      </div>
+                      <button
+                        onClick={() => setProcessedPage(processedPage + 1)}
+                        disabled={processedPage === processedPagination.totalPages}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        Next
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: Rejected by Sales */}
+        {activeTab === 2 && (
+          <div>
+            {/* Search and Stats */}
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-6">
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                      <XCircle className="text-red-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Rejected</p>
+                      <p className="text-xl font-bold text-gray-800">{rejectedRows.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <FileText className="text-blue-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Filtered</p>
+                      <p className="text-xl font-bold text-blue-600">{rejectedFiltered.length}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
+                    value={rejectedSearch}
+                    onChange={(e) => setRejectedSearch(e.target.value)}
+                    className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  {rejectedSearch && (
+                    <button
+                      onClick={() => setRejectedSearch("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ×
+                    </button>
                   )}
-                </>
-              )}
-            </TabPanel>
+                </div>
+                <button
+                  onClick={() => fetchRejected(rejectedPage)}
+                  disabled={rejectedLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw size={18} className={rejectedLoading ? 'animate-spin' : ''} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
 
-            {/* ===== TAB 2: Rejected by Sales ===== */}
-            <TabPanel value={activeTab} index={2}>
-              <Toolbar disableGutters sx={{ gap: 2, flexWrap: "wrap", pb: 2 }}>
-                <TextField
-                  size="small"
-                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
-                  value={rejectedSearch}
-                  onChange={(e) => setRejectedSearch(e.target.value)}
-                  sx={{ flex: 1, minWidth: 280 }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: rejectedSearch ? (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setRejectedSearch("")}>
-                          ×
-                        </IconButton>
-                      </InputAdornment>
-                    ) : null,
-                  }}
-                />
+            {rejectedLoading && (
+              <div className="mb-4">
+                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            )}
 
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Chip size="small" label={`Total: ${rejectedRows.length}`} variant="outlined" />
-                  <Chip size="small" label={`Filtered: ${rejectedFiltered.length}`} variant="outlined" color="primary" />
-                </Stack>
-              </Toolbar>
-
-              {rejectedLoading && <LinearProgress sx={{ mb: 2 }} />}
-
-              {!rejectedLoading && rejectedFiltered.length === 0 ? (
-                <>
-                  <EmptyState title="No rejected DOs found" subtitle="No DOs have been rejected by sales." />
-                  {rejectedError && (
-                    <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-                      {rejectedError}
-                    </Typography>
-                  )}
-                </>
-              ) : (
-                <>
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>DO ID</TableCell>
-                          <TableCell>Load No</TableCell>
-                          <TableCell>Bill To</TableCell>
-                          <TableCell>Carrier</TableCell>
-                          <TableCell align="right">Bill Amount</TableCell>
-                          <TableCell align="right">Carrier Fees</TableCell>
-                          
-                          <TableCell>Status</TableCell>
-                          <TableCell>Rejected By</TableCell>
-                          <TableCell>Rejected At</TableCell>
-                          <TableCell align="center">Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {rejectedFiltered.map((row) => {
+            {!rejectedLoading && rejectedFiltered.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                <XCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No rejected DOs found</h3>
+                <p className="text-sm text-gray-500">No DOs have been rejected by sales.</p>
+                {rejectedError && (
+                  <p className="text-sm text-red-600 mt-2">{rejectedError}</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                        <tr>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rejected By</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rejected At</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rejectedFiltered.map((row, index) => {
                           const cust = row?.customers?.[0] || {};
                           const totals = computeTotals(row);
                           const rejectedBy = row?.salesApproval?.rejectedBy?.employeeName || "—";
                           const rejectedAt = row?.salesApproval?.rejectedAt || row?.updatedAt;
                           return (
-                            <TableRow key={row?._id}>
-                              <TableCell>
-                                <Tooltip title={row?._id || ""}>
-                                  <span>{shortId(row?._id)}</span>
-                                </Tooltip>
-                              </TableCell>
-                              <TableCell>{cust?.loadNo || "—"}</TableCell>
-                              <TableCell>{cust?.billTo || "—"}</TableCell>
-                              <TableCell>{row?.carrier?.carrierName || "—"}</TableCell>
-                              <TableCell align="right">${fmtMoney(totals.billTotal)}</TableCell>
-                              <TableCell align="right">${fmtMoney(totals.carrierTotal)}</TableCell>
-                             
-                              <TableCell>
-                                <StatusChip status={row?.salesApproval?.status} />
-                              </TableCell>
-                              <TableCell>{rejectedBy}</TableCell>
-                              <TableCell>{fmtDateTime(rejectedAt)}</TableCell>
-                              <TableCell align="center">
-                                <Stack direction="row" spacing={1} justifyContent="center">
-                                  <Tooltip title="View Details">
-                                    <IconButton onClick={() => openDetails(row)} size="small">
-                                      <VisibilityIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Edit Details">
-                                    <IconButton onClick={() => openEditModal(row)} size="small">
-                                      <EditIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Stack>
-                              </TableCell>
-                            </TableRow>
+                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{cust?.billTo || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className="font-bold text-blue-600">${fmtMoney(totals.carrierTotal)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${statusColor(row?.salesApproval?.status)}`}>
+                                  {row?.salesApproval?.status === 'approved' && <CheckCircle size={12} />}
+                                  {row?.salesApproval?.status === 'rejected' && <XCircle size={12} />}
+                                  {(!row?.salesApproval?.status || row?.salesApproval?.status === 'pending') && <Clock size={12} />}
+                                  {row?.salesApproval?.status || 'Pending'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{rejectedBy}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{fmtDateTime(rejectedAt)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => openDetails(row)}
+                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="View Details"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => openEditModal(row)}
+                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                    title="Edit Details"
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
                           );
                         })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-                  {!rejectedLoading && rejectedPagination?.totalPages > 1 && (
-                    <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-                      <Pagination
-                        count={rejectedPagination.totalPages}
-                        page={rejectedPage}
-                        onChange={(_, val) => setRejectedPage(val)}
-                        color="primary"
-                      />
-                    </Stack>
-                  )}
-                </>
-              )}
-            </TabPanel>
-          </CardContent>
-        </Card>
-
-        {/* Details Drawer */}
-        <Dialog
-          open={detailsOpen}
-          onClose={() => setDetailsOpen(false)}
-          maxWidth="lg"
-          fullWidth
-          PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}
-        >
-          {/* Header */}
-          <DialogTitle sx={{ p: 0 }}>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                px: 3,
-                py: 2,
-                background: "linear-gradient(90deg,#7c3aed,#06b6d4)",
-                color: "white",
-              }}
-            >
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 1.5,
-                    background: alpha("#fff", 0.12),
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <VisibilityIcon sx={{ color: "#fff" }} />
-                </Box>
-                <Box>
-                  <Typography variant="h6" fontWeight={800}>
-                    Employee DO Data
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.85 }}>
-                    Delivery Order Details
-                  </Typography>
-                </Box>
-              </Stack>
-              <IconButton
-                onClick={() => setDetailsOpen(false)}
-                size="small"
-                sx={{ color: "rgba(255,255,255,0.9)" }}
-              >
-                <CloseIcon />
-              </IconButton>
-            </Box>
-          </DialogTitle>
-
-          <DialogContent dividers sx={{ p: 3 }}>
-            {selected ? (
-              <Stack spacing={3}>
-                {/* Basic Info */}
-                <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#7c3aed", 0.05) }}>
-                    <Typography variant="subtitle1" fontWeight={700}>Basic Info</Typography>
-                  </Box>
-                  <CardContent>
-                    <DetailsRow label="DO ID" value={selected?._id} />
-                    <DetailsRow label="Assignment Status" value={selected?.assignmentStatus} />
-                    <DetailsRow label="DO Status" value={selected?.doStatus} />
-                    <DetailsRow label="Updated At" value={fmtDateTime(selected?.updatedAt)} />
-                    <DetailsRow label="Accountant Status" value={<StatusChip status={selected?.accountantApproval?.status} />} />
-                    <DetailsRow label="Remarks" value={selected?.accountantApproval?.remarks || "—"} />
-                  </CardContent>
-                </Card>
-
-                
-
-                {/* Customer (Billing) */}
-                <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#7c3aed", 0.05) }}>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      Customer (Billing)
-                    </Typography>
-                  </Box>
-                  <CardContent>
-                    {(selected?.customers || []).map((c) => (
-                      <Box key={c?._id} sx={{ mb: 2 }}>
-                        <Typography fontWeight={600}>{c?.billTo || "—"}</Typography>
-                        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
-                          <Chip size="small" label={`Load: ${c?.loadNo || "—"}`} />
-                          <Chip size="small" label={`WO#: ${c?.workOrderNo || "—"}`} />
-                          <Chip size="small" label={`LineHaul: $${fmtMoney(c?.lineHaul || 0)}`} />
-                          <Chip size="small" label={`FSC: $${fmtMoney(c?.fsc || 0)}`} />
-                          <Chip size="small" label={`Other: $${fmtMoney(c?.other || 0)}`} />
-                          <Chip
-                            size="small"
-                            color="primary"
-                            label={`Total: $${fmtMoney(c?.calculatedTotal ?? c?.totalAmount ?? 0)}`}
-                          />
-                        </Stack>
-                      </Box>
-                    ))}
-                  </CardContent>
-                </Card>
-
-                {/* Carrier */}
-                <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#06b6d4", 0.05) }}>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      Carrier
-                    </Typography>
-                  </Box>
-                  <CardContent>
-                    <DetailsRow label="Carrier Name" value={selected?.carrier?.carrierName} />
-                    <DetailsRow label="Equipment Type" value={selected?.carrier?.equipmentType} />
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
-                      Fees
-                    </Typography>
-                    {(selected?.carrier?.carrierFees || []).map((f) => (
-                      <Stack
-                        key={f?._id ?? `${f?.name}-${f?.quantity}`}
-                        direction="row"
-                        justifyContent="space-between"
-                        sx={{ mb: 0.5 }}
+                {!rejectedLoading && rejectedPagination?.totalPages > 1 && (
+                  <div className="flex justify-end mt-4">
+                    <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+                      <button
+                        onClick={() => setRejectedPage(rejectedPage - 1)}
+                        disabled={rejectedPage === 1}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                       >
-                        <Typography variant="body2">
-                          {f?.name} × {f?.quantity}
-                        </Typography>
-                        <Typography variant="body2">${fmtMoney(f?.total || 0)}</Typography>
-                      </Stack>
-                    ))}
-                    <Divider sx={{ my: 1 }} />
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography variant="body2" fontWeight={700}>
-                        Total Carrier Fees
-                      </Typography>
-                      <Typography variant="body2" fontWeight={700}>
-                        ${fmtMoney(selected?.carrier?.totalCarrierFees || 0)}
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: rejectedPagination.totalPages }, (_, i) => i + 1)
+                          .filter(p => {
+                            if (rejectedPagination.totalPages <= 7) return true;
+                            if (rejectedPage <= 4) return p <= 5;
+                            if (rejectedPage >= rejectedPagination.totalPages - 3) return p >= rejectedPagination.totalPages - 4;
+                            return p >= rejectedPage - 2 && p <= rejectedPage + 2;
+                          })
+                          .map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setRejectedPage(p)}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                rejectedPage === p
+                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                      </div>
+                      <button
+                        onClick={() => setRejectedPage(rejectedPage + 1)}
+                        disabled={rejectedPage === rejectedPagination.totalPages}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        Next
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
-                {/* Shipper & Locations */}
-                <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#34d399", 0.05) }}>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      Shipper & Locations
-                    </Typography>
-                  </Box>
-                  <CardContent>
-                    <DetailsRow label="Shipper" value={selected?.shipper?.name} />
-                    <Grid container spacing={2} sx={{ mt: 1 }}>
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="body2" fontWeight={700} gutterBottom>
-                          Pickups
-                        </Typography>
-                        {(selected?.shipper?.pickUpLocations || []).map((p, i) => (
-                          <Box key={p?._id || i} sx={{ mb: 1 }}>
-                            <Typography variant="body2">
-                              {p?.name} — {p?.address}, {p?.city}, {p?.state} {p?.zipCode}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Weight: {p?.weight} • Pickup: {fmtDateTime(p?.pickUpDate)} • Notes:{" "}
-                              {p?.remarks || "—"}
-                            </Typography>
-                          </Box>
+      {/* Employee DO Data Modal */}
+      {detailsOpen && selected && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <Truck className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Employee DO Data</h2>
+                    <p className="text-blue-100">Delivery Order Details</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetailsOpen(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Customer Information */}
+              {selected?.customers?.length > 0 && (
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <User className="text-green-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    {selected.customers.map((customer, index) => (
+                      <div key={customer?._id || index} className="bg-white rounded-xl p-4 border border-green-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                          </div>
+                          <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Bill To</p>
+                            <p className="font-medium text-gray-800">{customer?.billTo || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Dispatcher Name</p>
+                            <p className="font-medium text-gray-800">{customer?.dispatcherName || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Load No</p>
+                            <p className="font-medium text-gray-800">{customer?.loadNo || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Work Order No</p>
+                            <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Line Haul</p>
+                            <p className="font-medium text-gray-800">${fmtMoney(customer?.lineHaul || 0)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">FSC</p>
+                            <p className="font-medium text-gray-800">${fmtMoney(customer?.fsc || 0)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Other</p>
+                            <p className="font-medium text-gray-800">${fmtMoney(customer?.other || 0)}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600">Total Amount</p>
+                            <p className="font-bold text-lg text-green-600">${fmtMoney(customer?.calculatedTotal ?? customer?.totalAmount ?? 0)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Carrier Information */}
+              {selected?.carrier && (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Truck className="text-purple-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Carrier Information</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <Truck className="text-purple-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Carrier Name</p>
+                        <p className="font-semibold text-gray-800">{selected.carrier?.carrierName || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                        <Truck className="text-pink-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Equipment Type</p>
+                        <p className="font-semibold text-gray-800">{selected.carrier?.equipmentType || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <DollarSign className="text-green-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Total Carrier Fees</p>
+                        <p className="font-semibold text-gray-800">${fmtMoney(selected.carrier?.totalCarrierFees || 0)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selected.carrier?.carrierFees?.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">Carrier Charges</h4>
+                      <div className="space-y-2">
+                        {selected.carrier.carrierFees.map((charge, i) => (
+                          <div key={i} className="bg-white rounded-lg p-3 border border-purple-200">
+                            <div className="flex justify-between items-center">
+                              <span className="font-medium text-gray-800">{charge?.name}</span>
+                              <span className="font-bold text-green-600">${fmtMoney(charge?.total || 0)}</span>
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Quantity: {charge?.quantity || 0} × Amount: ${fmtMoney(charge?.amount || 0)}
+                            </div>
+                          </div>
                         ))}
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="body2" fontWeight={700} gutterBottom>
-                          Drops
-                        </Typography>
-                        {(selected?.shipper?.dropLocations || []).map((d, i) => (
-                          <Box key={d?._id || i} sx={{ mb: 1 }}>
-                            <Typography variant="body2">
-                              {d?.name} — {d?.address}, {d?.city}, {d?.state} {d?.zipCode}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Weight: {d?.weight} • Drop: {fmtDateTime(d?.dropDate)} • Notes:{" "}
-                              {d?.remarks || "—"}
-                            </Typography>
-                          </Box>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Shipper Information */}
+              {selected?.shipper && (
+                <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Truck className="text-orange-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Shipper Information</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6 mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                        <User className="text-orange-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Shipper Name</p>
+                        <p className="font-semibold text-gray-800">{selected.shipper?.name || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pickup Locations */}
+                  {((selected.shipper?.pickUpLocations || []).length > 0) && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
+                      <div className="space-y-3">
+                        {(selected.shipper?.pickUpLocations || []).map((location, index) => (
+                          <div key={location?._id || index} className="bg-white rounded-lg p-3 border border-orange-200">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-600">Name</p>
+                                <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Address</p>
+                                <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">City</p>
+                                <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">State</p>
+                                <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Zip Code</p>
+                                <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Weight (lbs)</p>
+                                <p className="font-medium text-gray-800">
+                                  {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                    ? location.weight
+                                    : 'N/A'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Pickup Date</p>
+                                <p className="font-medium text-gray-800">
+                                  {location?.pickUpDate ? fmtDateTime(location.pickUpDate) : 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         ))}
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Drop Locations */}
+                  {((selected.shipper?.dropLocations || []).length > 0) && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">Drop Locations</h4>
+                      <div className="space-y-3">
+                        {(selected.shipper?.dropLocations || []).map((location, index) => (
+                          <div key={location?._id || index} className="bg-white rounded-lg p-3 border border-yellow-200">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-600">Name</p>
+                                <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Address</p>
+                                <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">City</p>
+                                <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">State</p>
+                                <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Zip Code</p>
+                                <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Weight (lbs)</p>
+                                <p className="font-medium text-gray-800">
+                                  {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                    ? location.weight
+                                    : 'N/A'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Drop Date</p>
+                                <p className="font-medium text-gray-800">
+                                  {location?.dropDate ? fmtDateTime(location.dropDate) : 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
                 {/* Load Reference */}
                 <Card variant="outlined">
@@ -2797,113 +3183,139 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     )}
                   </CardContent>
                 </Card>
-                {/* Final Approval - Only show for non-rejected DOs */}
-                {activeTab !== 2 && (
-                  <Card variant="outlined">
-                    <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#f97316", 0.05) }}>
-                      <Typography variant="subtitle1" fontWeight={700}>
-                        Final Approval
-                      </Typography>
-                    </Box>
-                    <CardContent>
-                      {/* Remarks */}
-                      <TextField
-                        label="Remarks"
-                        placeholder={approvalAction === "approve" ? "All charges verified and approved" : "Reason for rejection"}
-                        fullWidth
-                        multiline
-                        minRows={6}   // large textarea
-                        maxRows={12}
-                        value={approvalRemarks}
-                        onChange={(e) => setApprovalRemarks(e.target.value)}
-                        required={approvalAction === "reject"}
-                        sx={{ mb: 2 }}
-                      />
+              {/* Final Approval - Only show for non-rejected DOs */}
+              {activeTab !== 2 && (
+                <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
+                  <div className="flex items-center gap-2 mb-6">
+                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                      <CheckCircle className="text-orange-600" size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-800">Final Approval</h3>
+                      <p className="text-sm text-gray-600">Review and approve or reject this delivery order</p>
+                    </div>
+                  </div>
 
-                      {/* Action + Buttons */}
-                      <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} sm={4}>
-                          <FormControl fullWidth>
-                            <InputLabel id="approval-action-label">Action</InputLabel>
-                            <Select
-                              labelId="approval-action-label"
-                              value={approvalAction}
-                              onChange={(e) => setApprovalAction(e.target.value)}
-                            >
-                              <MenuItem value="" disabled>Select Action</MenuItem>
-                              <MenuItem value="approve">Approve</MenuItem>
-                              <MenuItem value="reject">Reject</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
+                  {/* Remarks */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Remarks {approvalAction === "reject" && <span className="text-red-600">*</span>}
+                    </label>
+                    <textarea
+                      placeholder={approvalAction === "approve" ? "All charges verified and approved" : "Reason for rejection"}
+                      value={approvalRemarks}
+                      onChange={(e) => setApprovalRemarks(e.target.value)}
+                      required={approvalAction === "reject"}
+                      rows={6}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                    />
+                  </div>
 
-                        <Grid item xs={12} sm={8} sx={{ display: "flex", gap: 2 }}>
-                          <Button
-                            variant="contained"
-                            color="success"
-                            startIcon={<SendIcon />}
-                            onClick={postAccountantApproval}
-                            disabled={posting || !approvalAction}
-                          >
-                            Send to Sales
-                          </Button>
-                          <Button
-                            variant="outlined"
-                            color="error"
-                            onClick={() => setApprovalAction("reject")}
-                          >
-                            Mark as Reject
-                          </Button>
-                        </Grid>
-                      </Grid>
+                  {/* Action Selection and Buttons */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-1">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Action</label>
+                        <select
+                          value={approvalAction}
+                          onChange={(e) => setApprovalAction(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                        >
+                          <option value="" disabled>Select Action</option>
+                          <option value="approve">Approve</option>
+                          <option value="reject">Reject</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2 flex items-stretch gap-3">
+                        <button
+                          onClick={postAccountantApproval}
+                          disabled={posting || !approvalAction}
+                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {posting ? (
+                            <>
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Sending...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send size={18} />
+                              <span>Send to Sales</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setApprovalAction("reject")}
+                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 h-12 bg-white border-2 border-red-500 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition-all duration-200"
+                        >
+                          Mark as Reject
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
-                        {/* This will call <code>/api/v1/do/accountant-approval</code>. */}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* PDF Generation Buttons */}
-                <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#7c3aed", 0.05) }}>
-                    <Typography variant="subtitle1" fontWeight={700}>Generate PDFs</Typography>
-                  </Box>
-                  <CardContent>
-                    <Stack direction="row" spacing={2} flexWrap="wrap">
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<PrintIcon />}
-                        onClick={() => generatePDF('invoice')}
-                        disabled={pdfLoading.invoice}
-                        sx={{ minWidth: 160 }}
-                      >
-                        {pdfLoading.invoice ? 'Generating...' : 'Invoice PDF'}
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="secondary"
-                        startIcon={<PrintIcon />}
-                        onClick={() => generatePDF('rate')}
-                        disabled={pdfLoading.rate}
-                        sx={{ minWidth: 160 }}
-                      >
-                        {pdfLoading.rate ? 'Generating...' : 'Rate Confirmation PDF'}
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        startIcon={<PrintIcon />}
-                        onClick={() => generatePDF('bol')}
-                        disabled={pdfLoading.bol}
-                        sx={{ minWidth: 160 }}
-                      >
-                        {pdfLoading.bol ? 'Generating...' : 'BOL PDF'}
-                      </Button>
-                    </Stack>
-                  </CardContent>
-                </Card>
+              {/* Generate PDFs */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <FileText className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Generate PDFs</h3>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => generatePDF('invoice')}
+                    disabled={pdfLoading.invoice}
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {pdfLoading.invoice ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download size={16} />
+                        <span>Invoice PDF</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => generatePDF('rate')}
+                    disabled={pdfLoading.rate}
+                    className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {pdfLoading.rate ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download size={16} />
+                        <span>Rate Confirmation PDF</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => generatePDF('bol')}
+                    disabled={pdfLoading.bol}
+                    className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {pdfLoading.bol ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download size={16} />
+                        <span>BOL PDF</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
 
                 {/* Resubmit to Sales - Only show for rejected DOs */}
                 {activeTab === 2 && (
@@ -2959,64 +3371,60 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </CardContent>
                   </Card>
                 )}
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* Edit DO Details Modal */}
+      {editOpen && (
+        <>
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
+          <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <Edit className="text-white" size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">Edit DO Details</h2>
+                      <p className="text-green-100">Update delivery order details</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEditOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
 
-              </Stack>
-            ) : (
-              <EmptyState title="No record selected" />
-            )}
-          </DialogContent>
-
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setDetailsOpen(false)}>Close</Button>
-
-          </DialogActions>
-        </Dialog>
-
-        {/* Edit DO Details Dialog */}
-        <Dialog
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
-          maxWidth="md"
-          fullWidth
-          PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}
-        >
-          <DialogTitle sx={{ p: 0 }}>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                p: 2,
-                backgroundColor: BRAND,
-                color: "white",
-              }}
-            >
-              <Typography variant="h6" fontWeight={700}>
-                Edit DO Details
-              </Typography>
-              <IconButton
-                onClick={() => setEditOpen(false)}
-                sx={{ color: "white" }}
-                size="small"
-              >
-                <CloseIcon />
-              </IconButton>
-            </Box>
-          </DialogTitle>
-
-          <DialogContent dividers sx={{ p: 3 }}>
-            {editData ? (
-              <EditForm 
-                data={editData} 
-                onSubmit={editDODetails}
-                loading={editLoading}
-              />
-            ) : (
-              <Typography>No data available for editing.</Typography>
-            )}
-          </DialogContent>
-        </Dialog>
+              {/* Form Content */}
+              <div className="p-6">
+                {editData ? (
+                  <EditForm 
+                    data={editData} 
+                    onSubmit={editDODetails}
+                    loading={editLoading}
+                    onClose={() => setEditOpen(false)}
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600">No data available for editing.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
 
 
@@ -3038,7 +3446,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             {toast.msg}
           </Alert>
         </Snackbar>
-      </Container>
+      </div>
     </ThemeProvider>
   );
 }

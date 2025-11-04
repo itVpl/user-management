@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { FaBox, FaSearch, FaFilePdf, FaEye, FaTimes, FaTrash, FaUpload } from 'react-icons/fa';
 import { FaDownload } from 'react-icons/fa';
+import { Search, FileText, CheckCircle, XCircle, Clock, RefreshCw, Truck, Package, DollarSign, Calendar, User } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -1410,140 +1411,283 @@ const generateDoc = async (type) => {
             scrollbar-color: rgba(156, 163, 175, 0.2) transparent;
           }
         `}</style>
-        {/* Header (Gradient theme only) - Sticky */}
-        <div className={`${SOFT.header} p-5 flex-shrink-0`}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold">DO Details — {order.doId}</h2>
-              <p className="text-xs/5 opacity-90 mt-1">
-                Created: {fmtDate(order.createdAt)}{order.updatedAt ? ` • Updated: ${fmtDate(order.updatedAt)}` : ''}
-              </p>
-              {shipmentNumber ? (
-                <p className="text-[11px] opacity-90 mt-1">
-                  Shipment #: <span className="font-semibold">{shipmentNumber}</span>
-                  {loadStatus ? <> • Load Status: <span className="font-semibold">{loadStatus}</span></> : null}
-                </p>
-              ) : (
-                <p className="text-[11px] opacity-75 mt-1">No shipment number</p>
-              )}
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                <Truck className="text-white" size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">DO Details — {order.doId}</h2>
+                <p className="text-blue-100">Delivery Order Details</p>
+              </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white/15">
-                {raw.doStatus || order.status}
-              </span>
-
-              <input
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Remarks"
-                className="hidden md:block text-sm px-3 py-2 rounded-lg focus:outline-none bg-white/10 placeholder-white/70 border border-white/20"
-                style={{ maxWidth: 260 }}
-              />
-
-
-
-              <button onClick={onClose} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25">
-                <FaTimes /> Close
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:text-gray-200 text-2xl font-bold"
+            >
+              ×
+            </button>
           </div>
         </div>
-        
-        {/* Scrollable Content */}
-        <div className="modal-content overflow-y-auto flex-1 p-6">
-        {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Customer */}
-          <section className={SOFT.cardMint}>
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Customer Information</h3>
-            <div className={`${SOFT.insetWhite} grid grid-cols-2 gap-3 text-sm`}>
-              <div><div className="text-gray-500">Load No</div><div className="font-medium">{cust0.loadNo || 'N/A'}</div></div>
-              <div><div className="text-gray-500">Bill To</div><div className="font-medium">{cust0.billTo || 'N/A'}</div></div>
-              <div><div className="text-gray-500">Dispatcher</div><div className="font-medium">{cust0.dispatcherName || 'N/A'}</div></div>
-              <div><div className="text-gray-500">Work Order #</div><div className="font-medium">{cust0.workOrderNo || 'N/A'}</div></div>
-              <div><div className="text-gray-500">Line Haul</div><div className="font-medium">{fmtCurrency(cust0.lineHaul)}</div></div>
-              <div><div className="text-gray-500">FSC</div><div className="font-medium">{fmtCurrency(cust0.fsc)}</div></div>
-              <div><div className="text-gray-500">Other</div><div className="font-medium">{fmtCurrency(cust0.other)}</div></div>
-              <div><div className="text-gray-500">Total</div><div className="font-medium">{fmtCurrency(cust0.totalAmount || cust0.calculatedTotal)}</div></div>
-            </div>
-          </section>
 
-          {/* Carrier */}
-          <section className={SOFT.cardPink}>
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Carrier Information</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><div className="text-gray-500">Name</div><div className="font-medium">{carrier.carrierName || 'N/A'}</div></div>
-              <div><div className="text-gray-500">Equipment</div><div className="font-medium">{carrier.equipmentType || 'N/A'}</div></div>
-              <div className="col-span-2"><div className="text-gray-500">Total Carrier Fees</div><div className="font-medium">{fmtCurrency(carrier.totalCarrierFees)}</div></div>
-            </div>
-            {Array.isArray(carrier.carrierFees) && carrier.carrierFees.length > 0 && (
-              <div className={`${SOFT.insetWhite} mt-3`}>
-                <div className="text-gray-500 text-sm mb-1">Carrier Charges</div>
-                <ul className="text-sm list-disc list-inside space-y-1">
-                  {carrier.carrierFees.map((f, i) => (
-                    <li key={i}><span className="font-medium">{f.name}</span> — Qty {f.quantity || 1} × {fmtCurrency(f.amount)} = {fmtCurrency(f.total)}</li>
-                  ))}
-                </ul>
+        {/* Content */}
+        <div className="modal-content overflow-y-auto flex-1 p-6 space-y-6">
+          {/* Customer Information */}
+          {customers.length > 0 && (
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <User className="text-green-600" size={20} />
+                <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
               </div>
-            )}
-          </section>
 
-          {/* Shipper & Locations */}
-          <section className={`${SOFT.cardButter} md:col-span-2`}>
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Shipper Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-gray-500 text-sm">Shipper</div>
-                <div className="font-medium">{shipper.name || 'N/A'}</div>
-                {shipper.containerNo && (
-                  <div className="text-sm mt-1">Container: <span className="font-medium">{shipper.containerNo}</span> ({shipper.containerType || '—'})</div>
-                )}
-              </div>
-            </div>
-
-            {/* Pickups */}
-            <div className="mt-4">
-              <div className="text-gray-700 font-semibold mb-2">Pickup Locations</div>
-              {pickUps.length ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {pickUps.map((p, i) => (
-                    <div key={i} className={SOFT.insetWhite}>
-                      <div className="text-sm font-medium">{p.name || '—'}</div>
-                      <div className="text-xs text-gray-600">{p.address || '—'}</div>
-                      <div className="text-xs text-gray-600">{[p.city, p.state, p.zipCode].filter(Boolean).join(', ')}</div>
-                      <div className="text-xs mt-1">Pickup: <span className="font-semibold">{fmtDate(p.pickUpDate)}</span></div>
-                      {p.weight ? <div className="text-xs">Weight: <span className="font-semibold">{p.weight}</span></div> : null}
-                      {p.remarks ? <div className="text-xs text-gray-500">{p.remarks}</div> : null}
+              <div className="space-y-4">
+                {customers.map((customer, index) => (
+                  <div key={index} className="bg-white rounded-xl p-4 border border-green-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                        <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                      </div>
+                      <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
                     </div>
-                  ))}
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Bill To</p>
+                        <p className="font-medium text-gray-800">{customer?.billTo || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Dispatcher Name</p>
+                        <p className="font-medium text-gray-800">{customer?.dispatcherName || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Work Order No</p>
+                        <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Load No</p>
+                        <p className="font-medium text-gray-800">{customer?.loadNo || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Line Haul</p>
+                        <p className="font-medium text-gray-800">{fmtCurrency(customer?.lineHaul || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">FSC</p>
+                        <p className="font-medium text-gray-800">{fmtCurrency(customer?.fsc || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Other</p>
+                        <p className="font-medium text-gray-800">{fmtCurrency(customer?.other || 0)}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-sm text-gray-600">Total Amount</p>
+                        <p className="font-bold text-lg text-green-600">{fmtCurrency(customer?.totalAmount || customer?.calculatedTotal || 0)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Carrier Information */}
+          {Object.keys(carrier).length > 0 && (
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Truck className="text-purple-600" size={20} />
+                <h3 className="text-lg font-bold text-gray-800">Carrier Information</h3>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                    <Truck className="text-purple-600" size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Carrier Name</p>
+                    <p className="font-semibold text-gray-800">{carrier?.carrierName || 'N/A'}</p>
+                  </div>
                 </div>
-              ) : (
-                <div className="text-sm text-gray-500">No pickup locations</div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                    <Truck className="text-pink-600" size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Equipment Type</p>
+                    <p className="font-semibold text-gray-800">{carrier?.equipmentType || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <DollarSign className="text-green-600" size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Carrier Fees</p>
+                    <p className="font-semibold text-gray-800">{fmtCurrency(carrier?.totalCarrierFees || 0)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {Array.isArray(carrier.carrierFees) && carrier.carrierFees.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-gray-800 mb-3">Carrier Charges</h4>
+                  <div className="space-y-2">
+                    {carrier.carrierFees.map((charge, i) => (
+                      <div key={i} className="bg-white rounded-lg p-3 border border-purple-200">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-800">{charge?.name || 'N/A'}</span>
+                          <span className="font-bold text-green-600">{fmtCurrency(charge?.total || 0)}</span>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          Quantity: {charge?.quantity || 0} × Amount: {fmtCurrency(charge?.amount || 0)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
+          )}
 
-            {/* Drops */}
-            <div className="mt-4">
-              <div className="text-gray-700 font-semibold mb-2">Drop Locations</div>
-              {drops.length ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {drops.map((d, i) => (
-                    <div key={i} className={SOFT.insetWhite}>
-                      <div className="text-sm font-medium">{d.name || '—'}</div>
-                      <div className="text-xs text-gray-600">{d.address || '—'}</div>
-                      <div className="text-xs text-gray-600">{[d.city, d.state, d.zipCode].filter(Boolean).join(', ')}</div>
-                      <div className="text-xs mt-1">Drop: <span className="font-semibold">{fmtDate(d.dropDate)}</span></div>
-                      {d.weight ? <div className="text-xs">Weight: <span className="font-semibold">{d.weight}</span></div> : null}
-                      {d.remarks ? <div className="text-xs text-gray-500">{d.remarks}</div> : null}
-                    </div>
-                  ))}
+          {/* Shipper Information */}
+          {Object.keys(shipper).length > 0 && (
+            <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Truck className="text-orange-600" size={20} />
+                <h3 className="text-lg font-bold text-gray-800">Shipper Information</h3>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                    <User className="text-orange-600" size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Shipper Name</p>
+                    <p className="font-semibold text-gray-800">{shipper?.name || 'N/A'}</p>
+                  </div>
                 </div>
-              ) : (
-                <div className="text-sm text-gray-500">No drop locations</div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <FileText className="text-blue-600" size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Container No</p>
+                    <p className="font-semibold text-gray-800">{shipper?.containerNo || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <Truck className="text-green-600" size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Container Type</p>
+                    <p className="font-semibold text-gray-800">{shipper?.containerType || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pickup Locations */}
+              {pickUps.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
+                  <div className="space-y-3">
+                    {pickUps.map((location, index) => (
+                      <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Name</p>
+                            <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Address</p>
+                            <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">City</p>
+                            <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">State</p>
+                            <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Zip Code</p>
+                            <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Weight (lbs)</p>
+                            <p className="font-medium text-gray-800">
+                              {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                ? location.weight
+                                : 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Pickup Date</p>
+                            <p className="font-medium text-gray-800">{fmtDate(location?.pickUpDate) || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Drop Locations */}
+              {drops.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-gray-800 mb-3">Drop Locations</h4>
+                  <div className="space-y-3">
+                    {drops.map((location, index) => (
+                      <div key={index} className="bg-white rounded-lg p-3 border border-yellow-200">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Name</p>
+                            <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Address</p>
+                            <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">City</p>
+                            <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">State</p>
+                            <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Zip Code</p>
+                            <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Weight (lbs)</p>
+                            <p className="font-medium text-gray-800">
+                              {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
+                                ? location.weight
+                                : 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Drop Date</p>
+                            <p className="font-medium text-gray-800">{fmtDate(location?.dropDate) || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
-          </section>
+          )}
 
           {/* Assignment */}
           <section className={SOFT.cardBlue}>
@@ -1612,24 +1756,57 @@ const generateDoc = async (type) => {
           </section>
 
 
-          {/* Files */}
-          <section className={`${SOFT.cardBlue} md:col-span-2`}>
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Uploaded Documents</h3>
-            {files?.length ? (
-              <div className={`${SOFT.insetWhite}`}>
-                <div className="flex flex-wrap gap-2">
-                  {files.map((f, i) => (
-                    <a key={i} href={f.fileUrl || '#'} target={f.fileUrl ? '_blank' : '_self'} rel="noreferrer" className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-md border hover:bg-gray-50" title={f.fileName}>
-                      <FaFilePdf className="opacity-80" />
-                      <span className="truncate max-w-[200px]">{f.fileName}</span>
-                    </a>
-                  ))}
-                </div>
+          {/* Document Display */}
+          {files?.length > 0 && (
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="text-blue-600" size={20} />
+                <h3 className="text-lg font-bold text-gray-800">Uploaded Documents</h3>
               </div>
-            ) : (
-              <div className="text-sm text-gray-500">No files uploaded</div>
-            )}
-          </section>
+
+              {/* Multiple Documents */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {files.map((file, index) => (
+                  <div key={index} className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <FileText className="text-blue-600" size={16} />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-800 truncate">{file.fileName || 'Document'}</div>
+                        <div className="text-xs text-gray-500">{file.fileType || 'PDF'}</div>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      {file.uploadDate && (
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <Calendar size={12} />
+                          <span>Uploaded: {new Date(file.uploadDate).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <a
+                          href={file.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 bg-blue-500 text-white text-center py-2 px-3 rounded-lg hover:bg-blue-600 transition text-xs font-medium"
+                        >
+                          View File
+                        </a>
+                        <a
+                          href={file.fileUrl}
+                          download={file.fileName}
+                          className="bg-green-500 text-white py-2 px-3 rounded-lg hover:bg-green-600 transition text-xs font-medium"
+                        >
+                          Download
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Driver Images */}
 
@@ -2032,85 +2209,132 @@ const generateDoc = async (type) => {
             </div>
           </section>
 
-          {/* Remarks & Forward — looks like other sections */}
-          <section className={`${SOFT.cardBlue} md:col-span-2`}>
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Remarks</h3>
-            <div className={`${SOFT.insetWhite}`}>
-              <label className="text-xs text-gray-500">Message to Accountant</label>
+          {/* Remarks & Forward */}
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">Forward to Accountant</h3>
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <label className="text-sm text-gray-600 mb-2 block">Message to Accountant</label>
               <textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                rows={2}
-                className={`mt-1 w-full text-sm px-3 py-2 border rounded-lg focus:outline-none ${MS.ring} resize-none`}
+                rows={3}
+                className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 placeholder="Add remarks for accountant"
               />
-              <div className="mt-2 flex justify-end">
+              <div className="mt-4 flex justify-end">
                 <button
                   onClick={forwardToAccountant}
                   disabled={fwLoading || alreadyForwarded}
-                  className={`px-3 py-2 rounded-lg transition-all ${
+                  className={`px-6 py-3 rounded-lg transition-all font-semibold ${
                     alreadyForwarded 
                       ? 'bg-gray-400 text-white cursor-not-allowed opacity-60' 
                       : fwLoading 
                         ? 'bg-blue-300 text-white cursor-not-allowed' 
-                        : MS.primaryBtn
+                        : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-lg hover:shadow-xl'
                   }`}
                   title={alreadyForwarded ? 'This DO has already been forwarded to accountant' : 'Forward this DO to accountant'}
                 >
-                  {alreadyForwarded ? '✅ Already Forwarded' : (fwLoading ? '⏳ Forwarding...' : '📤 Forward to Accountant')}
+                  {alreadyForwarded ? (
+                    <>
+                      <CheckCircle size={18} className="inline mr-2" />
+                      Already Forwarded
+                    </>
+                  ) : fwLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2"></div>
+                      Forwarding...
+                    </>
+                  ) : (
+                    <>
+                      <FileText size={18} className="inline mr-2" />
+                      Forward to Accountant
+                    </>
+                  )}
                 </button>
               </div>
             </div>
-          </section>
-<section className="md:col-span-2">
-  <div className="rounded-2xl border bg-gradient-to-r from-purple-50 to-rose-50 p-4">
-    <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
-      <FaDownload className="text-purple-500" />
-      Generate Documents
-    </div>
+          </div>
 
-    <div className="flex flex-wrap gap-2">
-      {/* Invoice */}
-      <button
-        onClick={() => generateDoc('invoice')}
-        disabled={genLoading === 'invoice'}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-white 
-          ${genLoading === 'invoice' ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600'}`}
-        title="Generate Invoice PDF"
-      >
-        <FaDownload />
-        {genLoading === 'invoice' ? 'Generating…' : 'Invoice PDF'}
-      </button>
+          {/* Generate Documents */}
+          <div className="bg-gradient-to-br from-purple-50 to-rose-50 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <FaDownload className="text-purple-500" size={20} />
+              <h3 className="text-lg font-bold text-gray-800">Generate Documents</h3>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {/* Invoice */}
+              <button
+                onClick={() => generateDoc('invoice')}
+                disabled={genLoading === 'invoice'}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  genLoading === 'invoice' 
+                    ? 'bg-emerald-300 text-white cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 shadow-lg hover:shadow-xl'
+                }`}
+                title="Generate Invoice PDF"
+              >
+                {genLoading === 'invoice' ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaDownload size={16} />
+                    <span>Invoice PDF</span>
+                  </>
+                )}
+              </button>
 
-      {/* Rate Confirmation */}
-      <button
-        onClick={() => generateDoc('rate')}
-        disabled={genLoading === 'rate'}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-white 
-          ${genLoading === 'rate' ? 'bg-indigo-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-        title="Generate Rate Confirmation PDF"
-      >
-        <FaDownload />
-        {genLoading === 'rate' ? 'Generating…' : 'Rate Confirmation PDF'}
-      </button>
+              {/* Rate Confirmation */}
+              <button
+                onClick={() => generateDoc('rate')}
+                disabled={genLoading === 'rate'}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  genLoading === 'rate' 
+                    ? 'bg-indigo-300 text-white cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-indigo-600 to-purple-700 text-white hover:from-indigo-700 hover:to-purple-800 shadow-lg hover:shadow-xl'
+                }`}
+                title="Generate Rate Confirmation PDF"
+              >
+                {genLoading === 'rate' ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaDownload size={16} />
+                    <span>Rate Confirmation PDF</span>
+                  </>
+                )}
+              </button>
 
-      {/* BOL */}
-      <button
-        onClick={() => generateDoc('bol')}
-        disabled={genLoading === 'bol'}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-white 
-          ${genLoading === 'bol' ? 'bg-orange-300 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'}`}
-        title="Generate BOL PDF"
-      >
-        <FaDownload />
-        {genLoading === 'bol' ? 'Generating…' : 'BOL PDF'}
-      </button>
-    </div>
-  </div>
-</section>
-
-
-        </div>
+              {/* BOL */}
+              <button
+                onClick={() => generateDoc('bol')}
+                disabled={genLoading === 'bol'}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  genLoading === 'bol' 
+                    ? 'bg-orange-300 text-white cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-orange-500 to-amber-600 text-white hover:from-orange-600 hover:to-amber-700 shadow-lg hover:shadow-xl'
+                }`}
+                title="Generate BOL PDF"
+              >
+                {genLoading === 'bol' ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaDownload size={16} />
+                    <span>BOL PDF</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2461,68 +2685,152 @@ export default function DODetails({ overrideEmpId }) {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Delivery Orders – CMT Dashboard</h1>
-        </div>
-
-        <div className="relative">
-          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search DO / Load / Carrier / Shipper..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={`w-72 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none ${MS.ring} focus:border-transparent`}
-          />
-        </div>
-      </div>
-
+    <div className="p-6">
       {/* Tabs */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between bg-white rounded-lg p-1 shadow-sm border border-gray-200">
-          <div className="flex space-x-1 flex-1">
-            <button
-              onClick={() => handleTabChange('assign-do')}
-              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'assign-do'
-                  ? 'bg-[#0078D4] text-white shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-              }`}
-            >
-              Assign DO ({filteredOrders.length})
-            </button>
-            <button
-              onClick={() => handleTabChange('rejected')}
-              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'rejected'
-                  ? 'bg-[#0078D4] text-white shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-              }`}
-            >
-              Rejected by Accountant ({filteredRejectedDOs.length})
-            </button>
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={() => handleTabChange('assign-do')}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+            activeTab === 'assign-do'
+              ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Package size={18} />
+            <span>Assign DO ({filteredOrders.length})</span>
           </div>
-          
-          {/* Refresh button for rejected tab */}
-          {activeTab === 'rejected' && (
-            <button
-              onClick={fetchRejectedDOs}
-              disabled={rejectedLoading}
-              className={`ml-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                rejectedLoading 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                  : 'bg-green-500 text-white hover:bg-green-600'
-              }`}
-              title="Refresh rejected DOs"
-            >
-              {rejectedLoading ? 'Loading...' : '🔄 Refresh'}
-            </button>
-          )}
-        </div>
+        </button>
+        <button
+          onClick={() => handleTabChange('rejected')}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+            activeTab === 'rejected'
+              ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg'
+              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <XCircle size={18} />
+            <span>Rejected by Accountant ({filteredRejectedDOs.length})</span>
+          </div>
+        </button>
       </div>
+
+      {/* Tab Content */}
+      {activeTab === 'assign-do' && (
+        <div>
+          {/* Statistics Cards */}
+          <div className="flex items-center gap-6 mb-6">
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Package className="text-blue-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Assigned DOs</p>
+                  <p className="text-xl font-bold text-gray-800">{filteredOrders.length}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                  <CheckCircle className="text-green-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Verified</p>
+                  <p className="text-xl font-bold text-green-600">{filteredOrders.filter(o => o.assignmentStatus === 'cmt_verified').length}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <Calendar className="text-purple-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Today</p>
+                  <p className="text-xl font-bold text-purple-600">{filteredOrders.filter(o => o.createdAt?.split('T')[0] === new Date().toISOString().split('T')[0]).length}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1"></div>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search DO / Load / Carrier / Shipper..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'rejected' && (
+        <div>
+          {/* Statistics Cards */}
+          <div className="flex items-center gap-6 mb-6">
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                  <XCircle className="text-red-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Rejected</p>
+                  <p className="text-xl font-bold text-gray-800">{filteredRejectedDOs.length}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                  <Calendar className="text-orange-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Today</p>
+                  <p className="text-xl font-bold text-orange-600">{filteredRejectedDOs.filter(o => o.createdAt?.split('T')[0] === new Date().toISOString().split('T')[0]).length}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1"></div>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search rejected DOs..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={fetchRejectedDOs}
+                disabled={rejectedLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh rejected DOs"
+              >
+                {rejectedLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={16} />
+                    <span>Refresh</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       
 
@@ -2530,7 +2838,7 @@ export default function DODetails({ overrideEmpId }) {
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
         {(loading || (activeTab === 'rejected' && rejectedLoading)) ? (
           <div className="text-center py-12">
-            <div className={`animate-spin rounded-full h-12 w-12 ${MS.spinner} mx-auto mb-4`}></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-500 text-lg">
               {activeTab === 'assign-do' ? 'Loading Assigned DOs...' : 'Loading Rejected DOs...'}
             </p>
@@ -2550,7 +2858,6 @@ export default function DODetails({ overrideEmpId }) {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Amount</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Files</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
                   </tr>
@@ -2566,20 +2873,6 @@ export default function DODetails({ overrideEmpId }) {
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.carrierName}</span></td>
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{fmtCurrency(order.totalAmount)}</span></td>
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{fmtCurrency(order.carrierFees)}</span></td>
-                      <td className="py-2 px-3">
-                        {order.uploadedFiles?.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {order.uploadedFiles.map((f, i) => (
-                              <a key={i} href={f.fileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm px-2 py-1 rounded-md border hover:bg-gray-50" title={f.fileName}>
-                                <FaFilePdf className="opacity-80" />
-                                <span className="truncate max-w-[120px]">{f.fileName}</span>
-                              </a>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 text-sm">—</span>
-                        )}
-                      </td>
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-2">
                           <span
@@ -2602,19 +2895,21 @@ export default function DODetails({ overrideEmpId }) {
                               console.log('Opening modal for order:', order.doId, 'Active Tab:', activeTab, 'Assignment Status:', order.assignmentStatus, 'Raw Assignment Status:', order.raw?.assignmentStatus, 'Forwarded:', !!order.raw?.forwardedToAccountant);
                               setViewingOrder(order);
                             }}
-                            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg ${MS.primaryBtn}`}
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:from-blue-600 hover:to-indigo-700 hover:shadow-xl"
                           >
-                            <FaEye /> View
+                            <FaEye size={12} />
+                            <span>View</span>
                           </button>
                           
                           {/* Resubmit button for rejected DOs */}
                           {activeTab === 'rejected' && (
                             <button
                               onClick={() => openResubmitModal(order)}
-                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white"
+                              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700 hover:shadow-xl"
                               title="Resubmit this DO with corrections"
                             >
-                              🔄 Resubmit
+                              <RefreshCw size={12} />
+                              <span>Resubmit</span>
                             </button>
                           )}
                         </div>
@@ -2627,7 +2922,7 @@ export default function DODetails({ overrideEmpId }) {
 
             {currentData.length === 0 && (
               <div className="text-center py-12">
-                <FaBox className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500 text-lg">
                   {searchTerm 
                     ? 'No DOs found matching your search' 
@@ -2650,36 +2945,92 @@ export default function DODetails({ overrideEmpId }) {
         )}
       </div>
 
-      {/* Pagination */}
-      {currentData.length > 0 && (
+      {/* Enhanced Pagination */}
+      {totalPages > 1 && currentData.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} DOs
             {searchTerm && ` (filtered from ${activeTab === 'assign-do' ? orders.length : rejectedDOs.length} total)`}
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+            {/* Previous Button */}
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className={`px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors`}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
               Previous
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page ? 'bg-[#0078D4] text-white border-[#0078D4]' : 'border-gray-300 hover:bg-gray-50'}`}
-              >
-                {page}
-              </button>
-            ))}
+
+            {/* Page Numbers */}
+            <div className="flex items-center gap-1">
+              {/* First Page */}
+              {currentPage > 3 && (
+                <>
+                  <button
+                    onClick={() => handlePageChange(1)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                  >
+                    1
+                  </button>
+                  {currentPage > 4 && (
+                    <span className="px-2 text-gray-400">...</span>
+                  )}
+                </>
+              )}
+
+              {/* Current Page Range */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(page => {
+                  if (totalPages <= 7) return true;
+                  if (currentPage <= 4) return page <= 5;
+                  if (currentPage >= totalPages - 3) return page >= totalPages - 4;
+                  return page >= currentPage - 2 && page <= currentPage + 2;
+                })
+                .map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                      currentPage === page
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+
+              {/* Last Page */}
+              {currentPage < totalPages - 2 && totalPages > 7 && (
+                <>
+                  {currentPage < totalPages - 3 && (
+                    <span className="px-2 text-gray-400">...</span>
+                  )}
+                  <button
+                    onClick={() => handlePageChange(totalPages)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                  >
+                    {totalPages}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Next Button */}
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               Next
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           </div>
         </div>
@@ -2763,16 +3114,26 @@ export default function DODetails({ overrideEmpId }) {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setResubmitModal({ open: false, order: null })}
-                className={`px-4 py-2 rounded-lg ${MS.subtleBtn}`}
+                className="px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={handleResubmitDO}
                 disabled={resubmitLoading}
-                className={`px-4 py-2 rounded-lg ${resubmitLoading ? MS.disabledBtn : 'bg-orange-500 hover:bg-orange-600 text-white'}`}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {resubmitLoading ? 'Resubmitting...' : '🔄 Resubmit DO'}
+                {resubmitLoading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Resubmitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={18} />
+                    <span>Resubmit DO</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
