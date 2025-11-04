@@ -910,31 +910,75 @@ export default function DeliveryOrder() {
             carrierName: loadData.assignedTo?.compName || prev.carrierName,
             equipmentType: loadData.commodity || prev.equipmentType,
             
-            // Auto-fill pickup locations (zipCode and name should remain empty per requirement)
+            // Auto-fill pickup locations
             pickupLocations: loadData.origins && loadData.origins.length > 0 ? 
-              loadData.origins.map((origin, index) => ({
-                name: '',
-                address: origin.addressLine1 || '',
-                city: origin.city || '',
-                state: origin.state || '',
-                zipCode: '',
-                weight: origin.weight || '',
-                pickUpDate: origin.pickupDate ? new Date(origin.pickupDate).toISOString().split('T')[0] : '',
-                remarks: ''
-              })) : prev.pickupLocations,
+              loadData.origins.map((origin, index) => {
+                // Format pickupDate for datetime-local input (YYYY-MM-DDTHH:mm)
+                // Try origin.pickupDate first, then fallback to loadData.pickupDate
+                let formattedPickupDate = '';
+                const dateSource = origin.pickupDate || loadData.pickupDate;
+                if (dateSource) {
+                  try {
+                    const date = new Date(dateSource);
+                    if (!isNaN(date.getTime())) {
+                      const year = date.getFullYear();
+                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                      const day = String(date.getDate()).padStart(2, '0');
+                      const hours = String(date.getHours()).padStart(2, '0');
+                      const minutes = String(date.getMinutes()).padStart(2, '0');
+                      formattedPickupDate = `${year}-${month}-${day}T${hours}:${minutes}`;
+                    }
+                  } catch (e) {
+                    console.error('Error formatting pickup date:', e);
+                  }
+                }
+                
+                return {
+                  name: origin.addressLine1 || '', // addressLine1 goes to Location field
+                  address: origin.addressLine1 || '', // addressLine1 also goes to Address field
+                  city: origin.city || '',
+                  state: origin.state || '',
+                  zipCode: origin.zip || '', // zipCode from origins
+                  weight: origin.weight || '',
+                  pickUpDate: formattedPickupDate, // properly formatted datetime
+                  remarks: ''
+                };
+              }) : prev.pickupLocations,
             
-            // Auto-fill drop locations (zipCode and name should remain empty per requirement)
+            // Auto-fill drop locations
             dropLocations: loadData.destinations && loadData.destinations.length > 0 ? 
-              loadData.destinations.map((destination, index) => ({
-                name: '',
-                address: destination.addressLine1 || '',
-                city: destination.city || '',
-                state: destination.state || '',
-                zipCode: '',
-                weight: destination.weight || '',
-                dropDate: destination.deliveryDate ? new Date(destination.deliveryDate).toISOString().split('T')[0] : '',
-                remarks: ''
-              })) : prev.dropLocations,
+              loadData.destinations.map((destination, index) => {
+                // Format deliveryDate for datetime-local input (YYYY-MM-DDTHH:mm)
+                // Try destination.deliveryDate first, then fallback to loadData.deliveryDate
+                let formattedDeliveryDate = '';
+                const dateSource = destination.deliveryDate || loadData.deliveryDate;
+                if (dateSource) {
+                  try {
+                    const date = new Date(dateSource);
+                    if (!isNaN(date.getTime())) {
+                      const year = date.getFullYear();
+                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                      const day = String(date.getDate()).padStart(2, '0');
+                      const hours = String(date.getHours()).padStart(2, '0');
+                      const minutes = String(date.getMinutes()).padStart(2, '0');
+                      formattedDeliveryDate = `${year}-${month}-${day}T${hours}:${minutes}`;
+                    }
+                  } catch (e) {
+                    console.error('Error formatting delivery date:', e);
+                  }
+                }
+                
+                return {
+                  name: destination.addressLine1 || '', // addressLine1 goes to Location field
+                  address: destination.addressLine1 || '', // addressLine1 also goes to Address field
+                  city: destination.city || '',
+                  state: destination.state || '',
+                  zipCode: destination.zip || '', // zipCode from destinations
+                  weight: destination.weight || '',
+                  dropDate: formattedDeliveryDate, // properly formatted datetime
+                  remarks: ''
+                };
+              }) : prev.dropLocations,
             
             // Auto-fill customer information with load details
             customers: [{
@@ -4038,8 +4082,8 @@ export default function DeliveryOrder() {
                       </div>
                     )}
 
-                    {/* Selected Load Data Display */}
-                    {selectedLoadData && (
+                    {/* Selected Load Data Display - Hidden per user request */}
+                    {false && selectedLoadData && (
                       <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                         <h4 className="text-sm font-semibold text-green-800 mb-3">Selected Load Information</h4>
                         
@@ -6267,8 +6311,8 @@ export default function DeliveryOrder() {
                       </div>
                     )}
 
-                    {/* Selected Load Data Display */}
-                    {selectedLoadData && (
+                    {/* Selected Load Data Display - Hidden per user request */}
+                    {false && selectedLoadData && (
                       <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                         <h4 className="text-sm font-semibold text-green-800 mb-3">Selected Load Information</h4>
                         

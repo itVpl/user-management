@@ -152,6 +152,14 @@ export default function ConsignmentTracker() {
 
   // Function to fetch route from OSRM
   const fetchRoute = async (origin, destination) => {
+    // Validate origin and destination have valid coordinates
+    if (!origin || !destination ||
+        origin.lat == null || origin.lon == null ||
+        destination.lat == null || destination.lon == null) {
+      console.warn("Invalid coordinates for route fetching");
+      return;
+    }
+
     try {
       const response = await axios.get(
         `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson`
@@ -163,17 +171,26 @@ export default function ConsignmentTracker() {
       }
     } catch (error) {
       console.error("Error fetching route:", error);
-      // Fallback to straight line if routing fails
-      setRouteCoordinates([
-        [origin.lat, origin.lon],
-        [destination.lat, destination.lon]
-      ]);
+      // Fallback to straight line if routing fails (only if coordinates are valid)
+      if (origin.lat != null && origin.lon != null &&
+          destination.lat != null && destination.lon != null) {
+        setRouteCoordinates([
+          [origin.lat, origin.lon],
+          [destination.lat, destination.lon]
+        ]);
+      }
     }
   };
 
   // Function to fetch route from current location to nearest point on main route
   const fetchCurrentLocationRoute = async (currentLocation, routeCoords) => {
-    if (!currentLocation || routeCoords.length === 0) return;
+    // Validate current location has valid coordinates
+    if (!currentLocation || 
+        currentLocation.lat == null || 
+        currentLocation.lon == null || 
+        routeCoords.length === 0) {
+      return;
+    }
 
     try {
       // Find the nearest point on the route to current location
@@ -181,15 +198,23 @@ export default function ConsignmentTracker() {
       let minDistance = Infinity;
 
       routeCoords.forEach(point => {
-        const distance = Math.sqrt(
-          Math.pow(currentLocation.lat - point[0], 2) +
-          Math.pow(currentLocation.lon - point[1], 2)
-        );
-        if (distance < minDistance) {
-          minDistance = distance;
-          nearestPoint = point;
+        if (point && point.length === 2 && point[0] != null && point[1] != null) {
+          const distance = Math.sqrt(
+            Math.pow(currentLocation.lat - point[0], 2) +
+            Math.pow(currentLocation.lon - point[1], 2)
+          );
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestPoint = point;
+          }
         }
       });
+
+      // Validate nearest point before making API call
+      if (!nearestPoint || nearestPoint.length !== 2 || 
+          nearestPoint[0] == null || nearestPoint[1] == null) {
+        return;
+      }
 
       // Fetch route from current location to nearest point
       const response = await axios.get(
@@ -202,8 +227,12 @@ export default function ConsignmentTracker() {
       }
     } catch (error) {
       console.error("Error fetching current location route:", error);
-      // Fallback to straight line
-      if (routeCoords.length > 0) {
+      // Fallback to straight line only if coordinates are valid
+      if (routeCoords.length > 0 && 
+          currentLocation.lat != null && 
+          currentLocation.lon != null &&
+          routeCoords[0] && 
+          routeCoords[0].length === 2) {
         setCurrentLocationRoute([
           [currentLocation.lat, currentLocation.lon],
           routeCoords[0]
@@ -216,31 +245,69 @@ export default function ConsignmentTracker() {
     try {
       let res;
 
+      // Get auth token for API call
+      const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       if (searchTerm.trim()) {
-        res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${searchTerm}`);
+        res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${searchTerm}`, {
+          headers: headers
+        });
       } else {
-        res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/`);
+        res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/`, {
+          headers: headers
+        });
+      }
+
+      // Check if response is successful
+      if (!res.data || !res.data.success) {
+        console.error("API Error: Response not successful", res.data);
+        setConsignments([]);
+        setTrackingData(null);
+        return;
       }
 
       const track = res.data?.tracking;
 
       if (track) {
-        // Extract location data from the new API structure
-        const originData = track.load?.origins?.[0];
-        const destinationData = track.load?.destinations?.[0];
+        // Extract location data from the API structure
+        // origins and destinations are directly on tracking, not on track.load
+        const originData = track.origins?.[0];
+        const destinationData = track.destinations?.[0];
         
         // Create proper location names
-        const originName = originData ? `${originData.city}, ${originData.state}` : "Origin Location";
-        const destinationName = destinationData ? `${destinationData.city}, ${destinationData.state}` : "Destination Location";
+        const originName = originData ? `${originData.city}, ${originData.state}` : (track.originName || "Origin Location");
+        const destinationName = destinationData ? `${destinationData.city}, ${destinationData.state}` : (track.destinationName || "Destination Location");
+        
+        // Extract coordinates from origins/destinations array or use existing originLatLng/destinationLatLng
+        let originLatLng = null;
+        let destinationLatLng = null;
+        
+        if (originData && originData.lat && originData.lon) {
+          originLatLng = { lat: originData.lat, lon: originData.lon };
+        } else if (track.originLatLng && track.originLatLng.lat !== 0) {
+          originLatLng = track.originLatLng;
+        }
+        
+        if (destinationData && destinationData.lat && destinationData.lon) {
+          destinationLatLng = { lat: destinationData.lat, lon: destinationData.lon };
+        } else if (track.destinationLatLng && track.destinationLatLng.lat !== 0) {
+          destinationLatLng = track.destinationLatLng;
+        }
         
         // Create enhanced tracking data with proper location info
         const enhancedTrack = {
           ...track,
           originName,
           destinationName,
-          // Use fallback coordinates if originLatLng/destinationLatLng are invalid
-          originLatLng: track.originLatLng?.lat !== 0 ? track.originLatLng : null,
-          destinationLatLng: track.destinationLatLng?.lat !== 0 ? track.destinationLatLng : null,
+          originLatLng,
+          destinationLatLng,
           // Use proper driver name
           driverName: track.driverName && track.driverName !== "na" ? track.driverName : "Driver Not Assigned",
           // Use proper vehicle number
@@ -264,7 +331,9 @@ export default function ConsignmentTracker() {
         }
 
         // Fetch current location route after main route is loaded
-        if (enhancedTrack.currentLocation) {
+        if (enhancedTrack.currentLocation && 
+            enhancedTrack.currentLocation.lat != null && 
+            enhancedTrack.currentLocation.lon != null) {
           // Wait a bit for main route to load, then fetch current location route
           setTimeout(() => {
             if (routeCoordinates.length > 0) {
@@ -318,6 +387,12 @@ export default function ConsignmentTracker() {
       }
     } catch (err) {
       console.error("Error fetching shipment", err);
+      console.error("Error details:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        config: err.config
+      });
       setConsignments([]);
       setTrackingData(null);
       setRouteCoordinates([]);
@@ -335,10 +410,10 @@ export default function ConsignmentTracker() {
   function RecenterMap({ lat, lng }) {
     const map = useMap();
     useEffect(() => {
-      if (lat && lng) {
+      if (lat != null && lng != null && typeof lat === 'number' && typeof lng === 'number') {
         map.setView([lat, lng], 7);
       }
-    }, [lat, lng]);
+    }, [lat, lng, map]);
     return null;
   }
 
@@ -350,33 +425,45 @@ export default function ConsignmentTracker() {
       if (trackingData && (routeCoordinates.length > 0 || currentLocationRoute.length > 0)) {
         const bounds = L.latLngBounds();
 
-        // Add origin and destination
-        if (trackingData.originLatLng) {
+        // Add origin and destination with validation
+        if (trackingData.originLatLng && 
+            trackingData.originLatLng.lat != null && 
+            trackingData.originLatLng.lon != null) {
           bounds.extend([trackingData.originLatLng.lat, trackingData.originLatLng.lon]);
         }
-        if (trackingData.destinationLatLng) {
+        if (trackingData.destinationLatLng && 
+            trackingData.destinationLatLng.lat != null && 
+            trackingData.destinationLatLng.lon != null) {
           bounds.extend([trackingData.destinationLatLng.lat, trackingData.destinationLatLng.lon]);
         }
 
-        // Add current location
-        if (trackingData.currentLocation) {
+        // Add current location with validation
+        if (trackingData.currentLocation && 
+            trackingData.currentLocation.lat != null && 
+            trackingData.currentLocation.lon != null) {
           bounds.extend([trackingData.currentLocation.lat, trackingData.currentLocation.lon]);
         }
 
         // Add route coordinates
         routeCoordinates.forEach(coord => {
-          bounds.extend(coord);
+          if (coord && coord.length === 2 && coord[0] != null && coord[1] != null) {
+            bounds.extend(coord);
+          }
         });
 
         // Add current location route coordinates
         currentLocationRoute.forEach(coord => {
-          bounds.extend(coord);
+          if (coord && coord.length === 2 && coord[0] != null && coord[1] != null) {
+            bounds.extend(coord);
+          }
         });
 
-        // Fit map to show all markers with some padding
-        map.fitBounds(bounds, { padding: [50, 50] });
+        // Only fit bounds if we have valid coordinates
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        }
       }
-    }, [trackingData, routeCoordinates, currentLocationRoute]);
+    }, [trackingData, routeCoordinates, currentLocationRoute, map]);
 
     return null;
   }
@@ -625,7 +712,9 @@ export default function ConsignmentTracker() {
           />
 
           {/* Origin Marker */}
-          {trackingData?.originLatLng && (
+          {trackingData?.originLatLng && 
+           trackingData.originLatLng.lat != null && 
+           trackingData.originLatLng.lon != null && (
             <Marker
               position={[trackingData.originLatLng.lat, trackingData.originLatLng.lon]}
               icon={originIcon}
@@ -633,7 +722,9 @@ export default function ConsignmentTracker() {
           )}
 
           {/* Destination Marker */}
-          {trackingData?.destinationLatLng && (
+          {trackingData?.destinationLatLng && 
+           trackingData.destinationLatLng.lat != null && 
+           trackingData.destinationLatLng.lon != null && (
             <Marker
               position={[trackingData.destinationLatLng.lat, trackingData.destinationLatLng.lon]}
               icon={destinationIcon}
@@ -641,7 +732,9 @@ export default function ConsignmentTracker() {
           )}
 
           {/* Current Location Truck Marker */}
-          {trackingData?.currentLocation && (
+          {trackingData?.currentLocation && 
+           trackingData.currentLocation.lat != null && 
+           trackingData.currentLocation.lon != null && (
             <Marker
               position={[trackingData.currentLocation.lat, trackingData.currentLocation.lon]}
               icon={createCustomTruckIcon()}

@@ -295,7 +295,7 @@ const autoAcceptingRef = useRef(new Set());
             loadType: null,
             pickupDate: null,
             deliveryDate: null,
-            status: approval.overallStatus || 'approved',
+            //status: approval.overallStatus === 'approved' ? 'Assigned' : (approval.overallStatus || 'Assigned'),
             shipper: approval.shipper || { compName: 'N/A', email: 'N/A' },
             cmtApprovals: approval.cmtApprovals || [],
             createdAt: approval.createdAt,
@@ -360,7 +360,7 @@ const autoAcceptingRef = useRef(new Set());
           loadType: approval.loadId.loadType,
           pickupDate: approval.loadId.pickupDate,
           deliveryDate: approval.loadId.deliveryDate,
-          status: approval.overallStatus || 'approved',
+          status: approval.overallStatus === 'approved' ? 'Assigned' : (approval.overallStatus || 'Assigned'),
           shipper: approval.shipper || { compName: 'N/A', email: 'N/A' },
           cmtApprovals: approval.cmtApprovals || [],
           createdAt: approval.createdAt,
@@ -1525,8 +1525,7 @@ useEffect(() => {
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Details</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1587,15 +1586,6 @@ useEffect(() => {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`text-white text-xs px-3 py-1 rounded-full font-bold ${
-                            statusColors[item.status] || 'bg-gray-500'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
                         <div className="flex gap-2">
                           {item.status !== 'approved' ? (
                             <div className="flex items-center gap-2">
@@ -1629,7 +1619,7 @@ useEffect(() => {
                   ))}
                   {filteredRequests.length === 0 && (
                     <tr>
-                      <td colSpan="11" className="text-center py-12">
+                      <td colSpan="10" className="text-center py-12">
                         <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">
                           {search ? 'No pending requests found matching your search' : 'No pending requests found'}
@@ -1735,9 +1725,9 @@ useEffect(() => {
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                    {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th> */}
                     {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Time</th> */}
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Details</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1794,7 +1784,7 @@ useEffect(() => {
                           ${item.rate?.toLocaleString() || '0'}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      {/* <td className="px-4 py-3">
                         <span
                           className={`text-white text-xs px-3 py-1 rounded-full font-bold ${
                             statusColors[item.status] || 'bg-gray-500'
@@ -1802,7 +1792,7 @@ useEffect(() => {
                         >
                           {item.status || '—'}
                         </span>
-                      </td>
+                      </td> */}
                       {/* <td className="px-4 py-3">{renderTimerChip(item.loadId)}</td> */}
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
@@ -1818,7 +1808,7 @@ useEffect(() => {
                   ))}
                   {filteredRequests.length === 0 && (
                     <tr>
-                      <td colSpan="10" className="text-center py-12">
+                      <td colSpan="9" className="text-center py-12">
                         <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">
                           {search ? 'No requests found matching your search' : 'No requests found'}

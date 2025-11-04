@@ -37,6 +37,30 @@ export default function RateApproved() {
     visible: false,
     rate: null
   });
+
+  // Negotiate Bid Modal State
+  const [negotiateBidModal, setNegotiateBidModal] = useState({
+    visible: false,
+    rate: null
+  });
+
+  // Negotiate Bid Form Data
+  const [negotiateBidForm, setNegotiateBidForm] = useState({
+    inhouseCounterRate: '',
+    message: ''
+  });
+
+  // Negotiate form state
+  const [negotiateSubmitting, setNegotiateSubmitting] = useState(false);
+  const [negotiateErrors, setNegotiateErrors] = useState({
+    inhouseCounterRate: '',
+    message: ''
+  });
+
+  // Negotiation history state
+  const [negotiationHistory, setNegotiationHistory] = useState([]);
+  const [negotiationHistoryLoading, setNegotiationHistoryLoading] = useState(false);
+  const [chatContainerRef, setChatContainerRef] = useState(null);
   const setFormFieldSanitized = (field, value, mode) => {
     const cleaned = mode === 'alnum' ? sanitizeAlphaNum(value) : sanitizeAlpha(value);
     setAcceptBidForm(prev => ({ ...prev, [field]: cleaned }));
@@ -246,29 +270,88 @@ export default function RateApproved() {
 
       if (response.data && response.data.success) {
         // Transform API data to match our component structure
-        const transformedBids = response.data.bids.map(bid => ({
+        const transformedBids = response.data.bids.map(bid => {
+          // Helper function to extract origin with fallback logic
+          const getOrigin = () => {
+            // First try direct bid.origins (at bid level)
+            if (bid.origins && Array.isArray(bid.origins) && bid.origins.length > 0) {
+              const firstOrigin = bid.origins[0];
+              const city = firstOrigin.city || firstOrigin.extractedCity || firstOrigin.addressLine1 || '';
+              const state = firstOrigin.state || '';
+              if (city || state) {
+                return `${city || 'N/A'}, ${state || 'N/A'}`;
+              }
+            }
+            
+            // Then try bid.load
+            if (bid.load) {
+              // Try origin object first
+              if (bid.load.origin) {
+                const city = bid.load.origin.city || bid.load.origin.extractedCity || bid.load.origin.addressLine1 || '';
+                const state = bid.load.origin.state || '';
+                if (city || state) {
+                  return `${city || 'N/A'}, ${state || 'N/A'}`;
+                }
+              }
+              
+              // Try origins array
+              if (bid.load.origins && Array.isArray(bid.load.origins) && bid.load.origins.length > 0) {
+                const firstOrigin = bid.load.origins[0];
+                const city = firstOrigin.city || firstOrigin.extractedCity || firstOrigin.addressLine1 || '';
+                const state = firstOrigin.state || '';
+                if (city || state) {
+                  return `${city || 'N/A'}, ${state || 'N/A'}`;
+                }
+              }
+            }
+            
+            return 'N/A, N/A';
+          };
+          
+          // Helper function to extract destination with fallback logic
+          const getDestination = () => {
+            // First try direct bid.destinations (at bid level)
+            if (bid.destinations && Array.isArray(bid.destinations) && bid.destinations.length > 0) {
+              const firstDestination = bid.destinations[0];
+              const city = firstDestination.city || firstDestination.extractedCity || firstDestination.addressLine1 || '';
+              const state = firstDestination.state || '';
+              if (city || state) {
+                return `${city || 'N/A'}, ${state || 'N/A'}`;
+              }
+            }
+            
+            // Then try bid.load
+            if (bid.load) {
+              // Try destination object first
+              if (bid.load.destination) {
+                const city = bid.load.destination.city || bid.load.destination.extractedCity || bid.load.destination.addressLine1 || '';
+                const state = bid.load.destination.state || '';
+                if (city || state) {
+                  return `${city || 'N/A'}, ${state || 'N/A'}`;
+                }
+              }
+              
+              // Try destinations array
+              if (bid.load.destinations && Array.isArray(bid.load.destinations) && bid.load.destinations.length > 0) {
+                const firstDestination = bid.load.destinations[0];
+                const city = firstDestination.city || firstDestination.extractedCity || firstDestination.addressLine1 || '';
+                const state = firstDestination.state || '';
+                if (city || state) {
+                  return `${city || 'N/A'}, ${state || 'N/A'}`;
+                }
+              }
+            }
+            
+            return 'N/A, N/A';
+          };
+          
+          return {
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
-          origin: bid.load ? (() => {
-            if (bid.load.origin && bid.load.origin.city) {
-              return `${bid.load.origin.city}, ${bid.load.origin.state || 'N/A'}`;
-            }
-            if (bid.load.origins && bid.load.origins.length > 0) {
-              return `${bid.load.origins[0].city}, ${bid.load.origins[0].state || 'N/A'}`;
-            }
-            return 'N/A, N/A';
-          })() : 'N/A, N/A',
-          destination: bid.load ? (() => {
-            if (bid.load.destination && bid.load.destination.city) {
-              return `${bid.load.destination.city}, ${bid.load.destination.state || 'N/A'}`;
-            }
-            if (bid.load.destinations && bid.load.destinations.length > 0) {
-              return `${bid.load.destinations[0].city}, ${bid.load.destinations[0].state || 'N/A'}`;
-            }
-            return 'N/A, N/A';
-          })() : 'N/A, N/A',
+          origin: getOrigin(),
+          destination: getDestination(),
           originalRate: bid.originalRate || bid.load?.rate || 0,
           intermediateRate: bid.intermediateRate || 0,
           rate: bid.intermediateRate || bid.originalRate || 0,
@@ -309,7 +392,8 @@ export default function RateApproved() {
             vehicleNumber: bid.vehicleNumber || 'N/A',
             vehicleType: bid.vehicleType || 'N/A'
           }
-        }));
+          };
+        });
 
         console.log('Transformed accepted bids:', transformedBids);
         console.log('Setting approvedRates with length:', transformedBids.length);
@@ -363,7 +447,7 @@ export default function RateApproved() {
     }
   }, []);
 
-  useEffect(() => {
+  useEffect(() => { 
     fetchApprovedRates();
   }, []);
 
@@ -617,7 +701,12 @@ export default function RateApproved() {
 
       if (response.data.success) {
         alertify.success('✅ Bid approved successfully with custom rate!');
-        await fetchAllData(); // Refresh the data
+        // Refresh data based on active tab
+        if (activeTab === 'pending') {
+          await fetchAllData();
+        } else if (activeTab === 'completed') {
+          await fetchCompletedRates();
+        }
       } else {
         alertify.error(response.data.message || 'Failed to approve bid');
       }
@@ -645,7 +734,12 @@ export default function RateApproved() {
 
       if (response.data.success) {
         alertify.success('Bid auto-approved successfully');
-        await fetchAllData(); // Now this will work
+        // Refresh data based on active tab
+        if (activeTab === 'pending') {
+          await fetchAllData();
+        } else if (activeTab === 'completed') {
+          await fetchCompletedRates();
+        }
       } else {
         alertify.error(response.data.message || 'Failed to auto-approve bid');
       }
@@ -758,6 +852,16 @@ export default function RateApproved() {
       fetchAcceptedBids();
     }
   }, [activeTab]);
+
+  // Auto-scroll to bottom when negotiation history updates
+  useEffect(() => {
+    if (chatContainerRef && negotiationHistory.length > 0) {
+      setTimeout(() => {
+        chatContainerRef.scrollTop = chatContainerRef.scrollHeight;
+      }, 100);
+    }
+  }, [negotiationHistory, chatContainerRef]);
+
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -1034,6 +1138,110 @@ export default function RateApproved() {
     } catch (error) {
       console.error('Error opening accept bid modal:', error);
       alertify.error('Error opening accept bid form. Please try again.');
+    }
+  };
+
+  // Fetch negotiation history
+  const fetchNegotiationHistory = async (bidId) => {
+    try {
+      setNegotiationHistoryLoading(true);
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/bid/${bidId}/internal-negotiation-thread`,
+        {
+          headers: API_CONFIG.getAuthHeaders(),
+          timeout: 10000
+        }
+      );
+
+      if (response.data && response.data.success) {
+        const history = response.data.data?.internalNegotiation?.history || [];
+        setNegotiationHistory(history);
+      } else {
+        setNegotiationHistory([]);
+      }
+    } catch (error) {
+      console.error('Error fetching negotiation history:', error);
+      setNegotiationHistory([]);
+    } finally {
+      setNegotiationHistoryLoading(false);
+    }
+  };
+
+  // Handle negotiate bid
+  const handleNegotiateBid = async (rate) => {
+    try {
+      setNegotiateBidModal({ visible: true, rate });
+      
+      // Pre-fill form with current rate
+      setNegotiateBidForm({
+        inhouseCounterRate: rate.intermediateRate || rate.rate || '',
+        message: ''
+      });
+      
+      setNegotiateErrors({ inhouseCounterRate: '', message: '' });
+      
+      // Fetch negotiation history
+      await fetchNegotiationHistory(rate.rateNum);
+    } catch (error) {
+      console.error('Error opening negotiate bid modal:', error);
+      alertify.error('Error opening negotiate form. Please try again.');
+    }
+  };
+
+  // Handle negotiate bid form submission
+  const handleNegotiateBidSubmit = async (e) => {
+    e.preventDefault();
+
+    // Front-end validation
+    const errs = {};
+    if (!negotiateBidForm.inhouseCounterRate || parseFloat(negotiateBidForm.inhouseCounterRate) <= 0) {
+      errs.inhouseCounterRate = 'Please enter a valid counter rate greater than 0.';
+    }
+    
+    if (!negotiateBidForm.message || negotiateBidForm.message.trim() === '') {
+      errs.message = 'Please enter a negotiation message.';
+    }
+
+    setNegotiateErrors(errs);
+    if (Object.keys(errs).length) {
+      alertify.error(Object.values(errs)[0]);
+      return;
+    }
+
+    try {
+      setNegotiateSubmitting(true);
+
+      const submitData = {
+        inhouseCounterRate: parseFloat(negotiateBidForm.inhouseCounterRate),
+        message: negotiateBidForm.message.trim()
+      };
+
+      const response = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/bid/${negotiateBidModal.rate.rateNum}/inhouse-internal-negotiate`,
+        submitData,
+        { headers: API_CONFIG.getAuthHeaders(), timeout: 10000 }
+      );
+
+      if (response.data && response.data.success) {
+        alertify.success('Negotiation sent successfully!');
+        setNegotiateBidForm({
+          inhouseCounterRate: '',
+          message: ''
+        });
+        
+        // Refresh negotiation history
+        await fetchNegotiationHistory(negotiateBidModal.rate.rateNum);
+        
+        // Refresh table
+        await fetchCompletedRates();
+      } else {
+        alertify.error(response.data?.message || 'Failed to send negotiation. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error submitting negotiate bid:', error);
+      alertify.error(error.response?.data?.message || 'Error sending negotiation. Please try again.');
+    } finally {
+      setNegotiateSubmitting(false);
     }
   };
 
@@ -1356,6 +1564,198 @@ export default function RateApproved() {
 
             </div>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Negotiate Bid Modal - WhatsApp Style
+  if (negotiateBidModal.visible) {
+    return (
+      <div className="fixed inset-0 backdrop-blur-sm bg-black/50 z-50 flex justify-center items-center p-4">
+        <style>{`
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          .animate-fadeIn {
+            animation: fadeIn 0.3s ease-out;
+          }
+        `}</style>
+        <div className="bg-gray-100 rounded-xl shadow-2xl max-w-2xl w-full h-[85vh] flex flex-col overflow-hidden">
+          {/* Header - WhatsApp Style */}
+          <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-base font-semibold">Negotiation - {negotiateBidModal.rate?.id || 'N/A'}</h2>
+                <p className="text-xs text-green-100">{negotiateBidModal.rate?.origin} → {negotiateBidModal.rate?.destination}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setNegotiateBidModal({ visible: false, rate: null });
+                setNegotiationHistory([]);
+              }}
+              className="text-white hover:text-gray-200 text-xl font-bold w-7 h-7 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Chat Messages Area */}
+          <div
+            ref={(el) => setChatContainerRef(el)}
+            className="flex-1 overflow-y-auto bg-gray-50 p-3 space-y-2"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e5e7eb' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+            }}
+          >
+            {negotiationHistoryLoading ? (
+              <div className="flex justify-center items-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-2"></div>
+                  <p className="text-gray-500 text-sm">Loading messages...</p>
+                </div>
+              </div>
+            ) : negotiationHistory.length === 0 ? (
+              <div className="flex justify-center items-center h-full">
+                <div className="text-center">
+                  <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                  <p className="text-gray-400 text-sm">No negotiation history yet</p>
+                  <p className="text-gray-300 text-xs mt-1">Start a negotiation below</p>
+                </div>
+              </div>
+            ) : (
+              negotiationHistory.map((msg, index) => {
+                const isInhouse = msg.by === 'inhouse';
+                const messageTime = new Date(msg.at).toLocaleTimeString('en-US', { 
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  hour12: true 
+                });
+
+                return (
+                  <div
+                    key={msg._id || index}
+                    className={`flex flex-col ${isInhouse ? 'items-end' : 'items-start'} animate-fadeIn`}
+                  >
+                    {/* Sender Name */}
+                    <p className={`text-xs mb-0.5 px-1.5 ${isInhouse ? 'text-gray-600' : 'text-gray-600'}`}>
+                      {isInhouse 
+                        ? 'You' 
+                        : (negotiateBidModal.rate?.shipperName || 
+                           negotiateBidModal.rate?.shipperInfo?.compName || 
+                           'Shipper')}
+                    </p>
+                    
+                    <div
+                      className={`max-w-[80%] rounded-lg px-3 py-2 shadow-sm ${
+                        isInhouse
+                          ? 'bg-green-500 text-white rounded-br-none'
+                          : 'bg-white text-gray-800 rounded-bl-none border border-gray-200'
+                      }`}
+                      style={{
+                        borderRadius: isInhouse ? '18px 18px 4px 18px' : '18px 18px 18px 4px'
+                      }}
+                    >
+                      {/* Rate Badge */}
+                      {msg.rate && (
+                        <div className={`mb-1.5 inline-block px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+                          isInhouse 
+                            ? 'bg-green-600 text-white' 
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          ${msg.rate.toLocaleString()}
+                        </div>
+                      )}
+                      
+                      {/* Message */}
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                      
+                      {/* Timestamp */}
+                      <p className={`text-xs mt-0.5 ${isInhouse ? 'text-green-100' : 'text-gray-400'}`}>
+                        {messageTime}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Input Area - WhatsApp Style */}
+          <div className="bg-white border-t border-gray-200 p-3">
+            <form noValidate onSubmit={handleNegotiateBidSubmit} className="space-y-2">
+              {/* Counter Rate Input */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 relative">
+                  <span className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium text-sm">$</span>
+                  <input
+                    type="number"
+                    name="inhouseCounterRate"
+                    value={negotiateBidForm.inhouseCounterRate}
+                    onChange={(e) => {
+                      setNegotiateBidForm(prev => ({ ...prev, inhouseCounterRate: e.target.value }));
+                      setNegotiateErrors(prev => ({ ...prev, inhouseCounterRate: '' }));
+                    }}
+                    required
+                    min="0"
+                    step="0.01"
+                    placeholder="Counter rate"
+                    className="w-full pl-7 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={negotiateSubmitting || !negotiateBidForm.inhouseCounterRate || !negotiateBidForm.message}
+                  className="bg-green-500 hover:bg-green-600 text-white rounded-full p-2.5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                >
+                  {negotiateSubmitting ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              
+              {/* Message Input */}
+              <div>
+                <textarea
+                  name="message"
+                  value={negotiateBidForm.message}
+                  onChange={(e) => {
+                    setNegotiateBidForm(prev => ({ ...prev, message: e.target.value }));
+                    setNegotiateErrors(prev => ({ ...prev, message: '' }));
+                  }}
+                  required
+                  rows={2}
+                  placeholder="Type your message..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                />
+                {negotiateErrors.message && (
+                  <p className="mt-1 text-xs text-red-600">{negotiateErrors.message}</p>
+                )}
+                {negotiateErrors.inhouseCounterRate && (
+                  <p className="mt-1 text-xs text-red-600">{negotiateErrors.inhouseCounterRate}</p>
+                )}
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     );
@@ -1910,12 +2310,45 @@ export default function RateApproved() {
                       <td className="py-2 px-3">
                         <div className="flex gap-2">
                           <button
+                            onClick={() => {
+                              console.log('Add Margin button clicked for rate:', rate);
+                              setApprovalModal({ visible: true, type: 'manual', rate });
+                            }}
+                            disabled={actionLoading[rate.rateNum]}
+                            className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum] === 'manual'
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                              : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
+                              }`}
+                          >
+                            {actionLoading[rate.rateNum] === 'manual' ? (
+                              <span className="flex items-center gap-2">
+                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <span>Approving...</span>
+                              </span>
+                            ) : (
+                              <>
+                                <CheckCircle size={12} className="animate-pulse" />
+                                <span>Add Margin</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleNegotiateBid(rate)}
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700 hover:shadow-xl"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+                            <span>Negotiate</span>
+                          </button>
+                          {/* Accept Bid button commented out for Approved Rates tab */}
+                          {/* <button
                             onClick={() => handleAcceptBid(rate)}
                             className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl"
                           >
                             <CheckCircle size={12} />
                             <span>Accept Bid</span>
-                          </button>
+                          </button> */}
                         </div>
                       </td>
                     </tr>
@@ -2006,7 +2439,6 @@ export default function RateApproved() {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Accepted By</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2067,13 +2499,6 @@ export default function RateApproved() {
                           </p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
-                        <div>
-                          <p className="font-medium text-gray-700">{rate.createdBy}</p>
-                          <p className="text-xs text-gray-500">{rate.acceptedAt || rate.createdAt}</p>
-                        </div>
-                      </td>
-
                     </tr>
                   ))}
                 </tbody>

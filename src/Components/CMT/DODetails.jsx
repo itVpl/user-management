@@ -136,6 +136,44 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   const [addDocsLoading, setAddDocsLoading] = useState(false);
   const [addDocsError, setAddDocsError] = useState('');
   const [additionalDocs, setAdditionalDocs] = useState([]); // array of {documentUrl, uploadedBy, uploadedAt, _id}
+
+  // Important Dates state
+  const getDateValue = (date) => {
+    if (!date) return '';
+    try {
+      return new Date(date).toISOString();
+    } catch {
+      return '';
+    }
+  };
+
+  const [importantDates, setImportantDates] = useState({
+    vesselETA: getDateValue(raw.vesselETA || raw.loadReference?.vesselETA || raw.importantDates?.vesselETA),
+    latfreeDate: getDateValue(raw.latfreeDate || raw.loadReference?.latfreeDate || raw.importantDates?.latfreeDate),
+    dischargeDate: getDateValue(raw.dischargeDate || raw.loadReference?.dischargeDate || raw.importantDates?.dischargeDate),
+    outgateDate: getDateValue(raw.outgateDate || raw.loadReference?.outgateDate || raw.importantDates?.outgateDate),
+    emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || raw.importantDates?.emptyDate),
+    perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || raw.importantDates?.perDiemFreeDay),
+    ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || raw.importantDates?.ingateDate),
+    readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || raw.importantDates?.readyToReturnDate)
+  });
+  const [updatingDates, setUpdatingDates] = useState(false);
+
+  // Update important dates when modal opens or order changes
+  useEffect(() => {
+    if (open && order) {
+      setImportantDates({
+        vesselETA: getDateValue(raw.vesselETA || raw.loadReference?.vesselETA || raw.importantDates?.vesselETA),
+        latfreeDate: getDateValue(raw.latfreeDate || raw.loadReference?.latfreeDate || raw.importantDates?.latfreeDate),
+        dischargeDate: getDateValue(raw.dischargeDate || raw.loadReference?.dischargeDate || raw.importantDates?.dischargeDate),
+        outgateDate: getDateValue(raw.outgateDate || raw.loadReference?.outgateDate || raw.importantDates?.outgateDate),
+        emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || raw.importantDates?.emptyDate),
+        perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || raw.importantDates?.perDiemFreeDay),
+        ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || raw.importantDates?.ingateDate),
+        readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || raw.importantDates?.readyToReturnDate)
+      });
+    }
+  }, [open, order]); // eslint-disable-line
 // PDF generate/download loading state
 const [genLoading, setGenLoading] = useState(null); // 'invoice' | 'rate' | 'bol' | null
 
@@ -1175,6 +1213,108 @@ const generateDoc = async (type) => {
     if (open) fetchAdditionalDocs();
   }, [open, doMongoId]); // eslint-disable-line
 
+  /* ---------------- Important Dates: UPDATE ---------------- */
+  const updateImportantDates = async () => {
+    try {
+      // Get loadId from loadReference
+      const loadId = loadRef._id || loadRef.loadId || loadRef.id;
+      
+      if (!loadId) {
+        return alertify.error('Missing Load ID. Please ensure load reference is available.');
+      }
+      
+      if (!cmtEmpId) return alertify.error('Missing CMT EmpId');
+
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) return alertify.error('Authentication required');
+
+      setUpdatingDates(true);
+
+      const url = `${API_CONFIG.BASE_URL}/api/v1/load/cmt/load/${encodeURIComponent(loadId)}`;
+
+      // Helper function to format date properly for API
+      const formatDateForAPI = (dateValue) => {
+        if (!dateValue || dateValue === '' || dateValue === null || dateValue === undefined) {
+          return null;
+        }
+        try {
+          // If it's already a valid ISO string, return as is
+          if (typeof dateValue === 'string' && dateValue.includes('T')) {
+            const date = new Date(dateValue);
+            if (!isNaN(date.getTime())) {
+              return date.toISOString();
+            }
+          }
+          // If it's a Date object
+          if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+            return dateValue.toISOString();
+          }
+        } catch (error) {
+          console.error('Error formatting date:', error, dateValue);
+          return null;
+        }
+        return null;
+      };
+
+      // Wrap dates in importantDates object as required by API
+      // Format each date properly - only include valid dates
+      const importantDatesPayload = {};
+      
+      // Process each date field
+      const dateFields = [
+        'vesselETA',
+        'latfreeDate',
+        'dischargeDate',
+        'outgateDate',
+        'emptyDate',
+        'perDiemFreeDay',
+        'ingateDate',
+        'readyToReturnDate'
+      ];
+
+      dateFields.forEach(field => {
+        const dateValue = importantDates[field];
+        // Only process if value exists and is not empty string
+        if (dateValue && dateValue !== '' && dateValue !== null && dateValue !== undefined) {
+          const formatted = formatDateForAPI(dateValue);
+          // Only add if formatting was successful
+          if (formatted && formatted !== null && formatted !== '') {
+            importantDatesPayload[field] = formatted;
+          }
+        }
+      });
+
+      // Log payload for debugging
+      console.log('Important Dates State:', importantDates);
+      console.log('Important Dates Payload:', importantDatesPayload);
+
+      // Send ONLY importantDates object (without empId) 
+      // This ensures API recognizes it as importantDates-only update which is allowed in any status
+      const response = await axios.put(
+        url,
+        {
+          importantDates: importantDatesPayload
+        },
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response?.data?.success) {
+        alertify.success(response?.data?.message || 'Important dates updated successfully');
+      } else {
+        alertify.error(response?.data?.message || 'Update failed');
+      }
+    } catch (e) {
+      alertify.error(e?.response?.data?.message || e.message || 'Update failed');
+    } finally {
+      setUpdatingDates(false);
+    }
+  };
+
   /* ---------------- Additional Docs: UPLOAD ---------------- */
   const MAX_SIZE_MB = 10;
   const allowed = [
@@ -1239,12 +1379,39 @@ const generateDoc = async (type) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
-
-        {/* Header (Gradient theme only) */}
-        <div className={`${SOFT.header} mb-5`}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" onClick={onClose} />
+      <div className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden flex flex-col transform transition-all duration-300 scale-100">
+        {/* Custom scrollbar styling - subtle scrollbar that appears on hover */}
+        <style jsx>{`
+          .modal-content {
+            scroll-behavior: smooth;
+          }
+          .modal-content::-webkit-scrollbar {
+            width: 6px;
+          }
+          .modal-content::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .modal-content::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.2);
+            border-radius: 3px;
+            transition: background 0.2s;
+          }
+          .modal-content:hover::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.4);
+          }
+          .modal-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.6);
+          }
+          /* Firefox */
+          .modal-content {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(156, 163, 175, 0.2) transparent;
+          }
+        `}</style>
+        {/* Header (Gradient theme only) - Sticky */}
+        <div className={`${SOFT.header} p-5 flex-shrink-0`}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-bold">DO Details — {order.doId}</h2>
@@ -1282,7 +1449,9 @@ const generateDoc = async (type) => {
             </div>
           </div>
         </div>
-
+        
+        {/* Scrollable Content */}
+        <div className="modal-content overflow-y-auto flex-1 p-6">
         {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Customer */}
@@ -1330,11 +1499,6 @@ const generateDoc = async (type) => {
                 {shipper.containerNo && (
                   <div className="text-sm mt-1">Container: <span className="font-medium">{shipper.containerNo}</span> ({shipper.containerType || '—'})</div>
                 )}
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">Pickup / Drop Dates</div>
-                <div className="text-sm">Pickup: <span className="font-medium">{fmtDate(shipper.pickUpDate)}</span></div>
-                <div className="text-sm">Drop: <span className="font-medium">{fmtDate(shipper.dropDate)}</span></div>
               </div>
             </div>
 
@@ -1436,8 +1600,6 @@ const generateDoc = async (type) => {
                 <div><div className="text-gray-500">Shipment #</div><div className="font-medium">{loadRef.shipmentNumber || extractShipmentNumber(order) || '—'}</div></div>
                 <div><div className="text-gray-500">Load Type</div><div className="font-medium">{loadRef.loadType || '—'}</div></div>
                 <div><div className="text-gray-500">Vehicle</div><div className="font-medium">{loadRef.vehicleType || '—'}</div></div>
-                <div><div className="text-gray-500">Origin</div><div className="font-medium">{[loadRef.origin?.city, loadRef.origin?.state].filter(Boolean).join(', ') || '—'}</div></div>
-                <div><div className="text-gray-500">Destination</div><div className="font-medium">{[loadRef.destination?.city, loadRef.destination?.state].filter(Boolean).join(', ') || '—'}</div></div>
                 <div><div className="text-gray-500">Weight</div><div className="font-medium">{loadRef.weight || '—'}</div></div>
                 <div><div className="text-gray-500">Commodity</div><div className="font-medium">{loadRef.commodity || '—'}</div></div>
                 <div><div className="text-gray-500">Rate</div><div className="font-medium">{fmtCurrency(loadRef.rate)} ({loadRef.rateType || '—'})</div></div>
@@ -1448,6 +1610,7 @@ const generateDoc = async (type) => {
               <div className="text-sm text-gray-500">No load reference</div>
             )}
           </section>
+
 
           {/* Files */}
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
@@ -1677,6 +1840,198 @@ const generateDoc = async (type) => {
               </div>
             </div>
           </section>
+
+          {/* Important Dates */}
+          <section className="p-4 rounded-2xl border bg-[#F8FAFF] border-[#E0E7FF] md:col-span-2">
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Dates</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Row 1 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Vessel ETA</label>
+                  <input
+                    type="datetime-local"
+                    value={importantDates.vesselETA ? (() => { try { return new Date(importantDates.vesselETA).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        // Convert datetime-local format to ISO string
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                          setImportantDates(prev => ({ ...prev, vesselETA: date.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, vesselETA: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Lastfree Date</label>
+                  <input
+                    type="datetime-local"
+                    value={importantDates.latfreeDate ? (() => { try { return new Date(importantDates.latfreeDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                          setImportantDates(prev => ({ ...prev, latfreeDate: date.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, latfreeDate: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Discharge Date</label>
+                  <input
+                    type="datetime-local"
+                    value={importantDates.dischargeDate ? (() => { try { return new Date(importantDates.dischargeDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                          setImportantDates(prev => ({ ...prev, dischargeDate: date.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, dischargeDate: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Outgate Date</label>
+                  <input
+                    type="datetime-local"
+                    value={importantDates.outgateDate ? (() => { try { return new Date(importantDates.outgateDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                          setImportantDates(prev => ({ ...prev, outgateDate: date.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, outgateDate: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Empty Date</label>
+                  <input
+                    type="datetime-local"
+                    value={importantDates.emptyDate ? (() => { try { return new Date(importantDates.emptyDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                          setImportantDates(prev => ({ ...prev, emptyDate: date.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, emptyDate: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Per Diem Free Day</label>
+                  <input
+                    type="datetime-local"
+                    value={importantDates.perDiemFreeDay ? (() => { try { return new Date(importantDates.perDiemFreeDay).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                          setImportantDates(prev => ({ ...prev, perDiemFreeDay: date.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, perDiemFreeDay: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Row 4 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Ingate Date</label>
+                  <input
+                    type="datetime-local"
+                    value={importantDates.ingateDate ? (() => { try { return new Date(importantDates.ingateDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                          setImportantDates(prev => ({ ...prev, ingateDate: date.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, ingateDate: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Ready To Return Date</label>
+                  <input
+                    type="datetime-local"
+                    value={importantDates.readyToReturnDate ? (() => { try { return new Date(importantDates.readyToReturnDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        const date = new Date(value);
+                        if (!isNaN(date.getTime())) {
+                          setImportantDates(prev => ({ ...prev, readyToReturnDate: date.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, readyToReturnDate: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={updateImportantDates}
+                disabled={updatingDates}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${updatingDates ? MS.disabledBtn : MS.primaryBtn}`}
+              >
+                {updatingDates ? (
+                  <>
+                    <div className={`animate-spin rounded-full h-4 w-4 ${MS.spinner} border-2`}></div>
+                    Updating...
+                  </>
+                ) : (
+                  'Update'
+                )}
+              </button>
+            </div>
+          </section>
+
           {/* Remarks & Forward — looks like other sections */}
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Remarks</h3>
@@ -1755,6 +2110,7 @@ const generateDoc = async (type) => {
 </section>
 
 
+        </div>
         </div>
       </div>
     </div>

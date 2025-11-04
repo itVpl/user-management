@@ -52,6 +52,26 @@ const Dashboard = () => {
 
   const [pendingLoads, setPendingLoads] = useState([]);
 
+  const totalTalkMS = Number(callStats.totalDuration || 0);
+  const totalTalkSecondsRaw = totalTalkMS / 1000;
+  const totalTalkSeconds = Math.floor(totalTalkSecondsRaw);
+  const totalTalkMinutes = totalTalkMS / 60000;
+  const averageCallMinutes = callStats.total > 0 ? totalTalkMinutes / callStats.total : 0;
+
+  const CMT_TARGET_MINUTES = 90;
+  const cmtTargetRemainingMinutes = Math.max(CMT_TARGET_MINUTES - totalTalkMinutes, 0);
+  const cmtTargetProgress = CMT_TARGET_MINUTES > 0
+    ? Math.min(100, Math.round((totalTalkMinutes / CMT_TARGET_MINUTES) * 100))
+    : 0;
+  const cmtTargetColor = cmtTargetProgress >= 100 ? "green" : "blue";
+
+  const SALES_TARGET_SECONDS = 3 * 60 * 60;
+  const salesTargetRemainingSeconds = Math.max(SALES_TARGET_SECONDS - totalTalkSeconds, 0);
+  const salesTargetProgress = SALES_TARGET_SECONDS > 0
+    ? Math.min(100, Math.round((totalTalkSecondsRaw / SALES_TARGET_SECONDS) * 100))
+    : 0;
+  const salesTargetColor = salesTargetProgress >= 100 ? "green" : "blue";
+
   useEffect(() => {
     const fetchMonthlyPresentCount = async () => {
       try {
@@ -492,7 +512,7 @@ const Dashboard = () => {
                   <h3 className="text-xl font-bold text-gray-800">Daily Call Target</h3>
                 </div>
                 <div className="text-sm text-gray-500 font-medium">
-                  Target: 1.5 Hours
+                  Target: {(CMT_TARGET_MINUTES / 60).toFixed(1)} Hours
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -500,27 +520,27 @@ const Dashboard = () => {
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
                     <span className="text-gray-600">Today's Total</span>
-                    <span className="font-bold text-emerald-600">{((callStats.totalDuration / 1000) / 60).toFixed(2)}m</span>
+                    <span className="font-bold text-emerald-600">{totalTalkMinutes.toFixed(2)}m</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                     <span className="text-gray-600">Target Remaining</span>
                     <span className="font-bold text-blue-600">
-                      {Math.max(0, (90 - (callStats.totalDuration / 1000 / 60))).toFixed(2)}m
+                      {cmtTargetRemainingMinutes.toFixed(2)}m
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
                     <span className="text-gray-600">Average per Call</span>
                     <span className="font-bold text-purple-600">
-                      {callStats.total > 0 ? ((callStats.totalDuration / 1000) / callStats.total / 60).toFixed(2) : 0}m
+                      {averageCallMinutes.toFixed(2)}m
                     </span>
                   </div>
                 </div>
                 <div className="ml-6">
                   <CircularProgress 
-                    percentage={Math.min(100, Math.round(((callStats.totalDuration / 1000) / 60 / 90) * 100)) || 0} 
-                    color={((callStats.totalDuration / 1000) / 60 / 90) >= 1 ? "green" : "blue"}
+                    percentage={cmtTargetProgress}
+                    color={cmtTargetColor}
                   />
                   {/* <div className="text-center mt-2">
                     <p className="text-xs text-gray-600">Target Progress</p>
@@ -722,7 +742,7 @@ const Dashboard = () => {
                   <h3 className="text-xl font-bold text-gray-800">Daily Call Target</h3>
                 </div>
                 <div className="text-sm text-gray-500 font-medium">
-                  Target: 3.0 Hours
+                  Target: {(SALES_TARGET_SECONDS / 3600).toFixed(1)} Hours
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -730,27 +750,27 @@ const Dashboard = () => {
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
                     <span className="text-gray-600">Today's Total</span>
-                    <span className="font-bold text-emerald-600">{formatSeconds(callStats.totalDuration)}</span>
+                    <span className="font-bold text-emerald-600">{formatSeconds(totalTalkSeconds)}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                     <span className="text-gray-600">Target Remaining</span>
                     <span className="font-bold text-blue-600">
-                      {formatSeconds(Math.max(10800 - callStats.totalDuration, 0))}
+                      {formatSeconds(salesTargetRemainingSeconds)}
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
                     <span className="text-gray-600">Average per Call</span>
                     <span className="font-bold text-purple-600">
-                      {callStats.total > 0 ? ((callStats.totalDuration / 1000) / callStats.total / 60).toFixed(2) : 0}m
+                      {averageCallMinutes.toFixed(2)}m
                     </span>
                   </div>
                 </div>
                 <div className="ml-6">
                   <CircularProgress 
-                    percentage={Math.min(100, Math.round((callStats.totalDuration / 10800) * 100)) || 0} 
-                    color={(callStats.totalDuration / 10800) >= 1 ? "green" : "blue"}
+                    percentage={salesTargetProgress}
+                    color={salesTargetColor}
                   />
                   {/* <div className="text-center mt-2">
                     <p className="text-xs text-gray-600">Target Progress</p>

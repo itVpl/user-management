@@ -53,40 +53,72 @@ export default function Consignment() {
         console.log('Assigned Loads:', assignedLoads); // Debug assigned loads
         
         if (Array.isArray(assignedLoads)) {
-          const transformedData = assignedLoads.map((assignedLoad, index) => {
-            const load = assignedLoad.load;
-            const acceptedTrucker = load.truckers?.find(trucker => trucker.status === 'Accepted') || load.truckers?.[0];
-            
-            return {
-              id: assignedLoad._id || index,
-              sNo: index + 1,
-              shipmentNo: load.shipmentNumber || 'N/A',
-              shipperName: load.shipper?.compName || 'N/A',
-              truckerName: acceptedTrucker?.carrier?.compName || load.carrier?.compName || 'N/A',
-              driverName: acceptedTrucker?.driverName || 'N/A',
-              vehicleNo: acceptedTrucker?.vehicleNumber || 'N/A',
-              status: load.status || assignedLoad.overallStatus || 'N/A',
-              pickupAddress: load.origin?.city || 'N/A',
-              deliveryAddress: load.destination?.city || 'N/A',
-              dropLocationImages: {},
-              containerImages: [],
-              eirTickets: [],
-              emptyTruckImages: [],
-              createdAt: assignedLoad.createdAt || new Date().toISOString().split('T')[0],
-              // Additional data for detailed view
-              loadDetails: {
-                weight: load.weight,
-                commodity: load.commodity,
-                vehicleType: load.vehicleType,
-                pickupDate: load.pickupDate,
-                deliveryDate: load.deliveryDate,
-                rate: load.rate,
-                truckers: load.truckers || []
+          // Filter out entries where load is null and transform the rest
+          const transformedData = assignedLoads
+            .filter((assignedLoad) => assignedLoad.load !== null && assignedLoad.load !== undefined)
+            .map((assignedLoad, index) => {
+              const load = assignedLoad.load;
+              
+              // Find accepted trucker or fallback to first trucker
+              const acceptedTrucker = load.truckers?.find(trucker => trucker.status === 'Accepted') || load.truckers?.[0];
+              
+              // Build origin address
+              let originAddress = 'N/A';
+              if (load.origin) {
+                if (load.origin.addressLine1) {
+                  originAddress = `${load.origin.addressLine1}, ${load.origin.city || ''}, ${load.origin.state || ''}`.trim().replace(/^,\s*|,\s*$/g, '');
+                } else if (load.origin.city) {
+                  originAddress = `${load.origin.city}, ${load.origin.state || ''}`.trim().replace(/^,\s*|,\s*$/g, '');
+                }
               }
-            };
-          });
+              
+              // Build destination address
+              let destinationAddress = 'N/A';
+              if (load.destination) {
+                if (load.destination.addressLine1) {
+                  destinationAddress = `${load.destination.addressLine1}, ${load.destination.city || ''}, ${load.destination.state || ''}`.trim().replace(/^,\s*|,\s*$/g, '');
+                } else if (load.destination.city) {
+                  destinationAddress = `${load.destination.city}, ${load.destination.state || ''}`.trim().replace(/^,\s*|,\s*$/g, '');
+                }
+              }
+              
+              return {
+                id: assignedLoad._id || `load-${index}`,
+                sNo: index + 1, // Index is already sequential after filter
+                shipmentNo: load.shipmentNumber || 'N/A',
+                shipperName: load.shipper?.compName || 'N/A',
+                truckerName: acceptedTrucker?.carrier?.compName || load.carrier?.compName || load.assignedTo?.compName || 'N/A',
+                driverName: acceptedTrucker?.driverName || 'N/A',
+                vehicleNo: acceptedTrucker?.vehicleNumber || 'N/A',
+                status: load.status || assignedLoad.overallStatus || 'N/A',
+                pickupAddress: originAddress,
+                deliveryAddress: destinationAddress,
+                dropLocationImages: {},
+                containerImages: [],
+                eirTickets: [],
+                emptyTruckImages: [],
+                createdAt: assignedLoad.createdAt || assignedLoad.assignedAt || new Date().toISOString().split('T')[0],
+                // Additional data for detailed view
+                loadDetails: {
+                  weight: load.weight,
+                  commodity: load.commodity,
+                  vehicleType: load.vehicleType,
+                  pickupDate: load.pickupDate,
+                  deliveryDate: load.deliveryDate,
+                  rate: load.rate,
+                  truckers: load.truckers || []
+                }
+              };
+            });
 
           console.log('Transformed Data:', transformedData); // Debug transformed data
+          console.log('Transformed Data Count:', transformedData.length); // Debug count
+          
+          if (transformedData.length === 0) {
+            console.warn('No valid loads found after filtering null loads');
+            alertify.warning('No consignments with valid load data found');
+          }
+          
           setConsignments(transformedData);
         } else {
           console.log('Assigned Loads is not an array:', assignedLoads);

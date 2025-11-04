@@ -37,6 +37,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     { name: 'password', placeholder: 'Create Password', required: true, label: 'Password', type: 'password', icon: '🔒' },
     { name: 'confirmPassword', placeholder: 'Confirm Password', required: true, label: 'Confirm Password', type: 'password', icon: '🔒' },
     { name: 'employeeName', placeholder: 'Enter Name', required: true, label: 'Full Name', icon: '👨‍💼' },
+    { name: 'aliasName', placeholder: 'Enter Alias Name', label: 'Alias Name', icon: '🏷️' },
     { name: 'sex', placeholder: 'Sex', required: true, label: 'Gender', icon: '⚧' },
     { name: 'email', placeholder: 'Enter E-mail', required: true, label: 'Email Address', type: 'email', icon: '📧' },
     { name: 'mobileNo', placeholder: 'Mobile no.', required: true, label: 'Mobile Number', icon: '📱' },
@@ -92,7 +93,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     let { value } = e.target;
 
     // Name: only letters + single spaces
-    if (name === 'accountHolderName' || name === 'employeeName' || name === 'department' || name === 'designation') {
+    if (name === 'accountHolderName' || name === 'employeeName' || name === 'aliasName' || name === 'department' || name === 'designation') {
       value = value.replace(/[^A-Za-z\s]/g, '').replace(/\s{2,}/g, ' ').slice(0, 50);
     }
 
