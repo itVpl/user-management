@@ -1025,8 +1025,29 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   };
 
   // Generate Invoice PDF function
-  const generateInvoicePDF = (order) => {
+  const generateInvoicePDF = async (order) => {
     try {
+      // Fetch shipment images and additional documents
+      let shipmentImages = null;
+      let additionalDocs = [];
+      
+      try {
+        const shipmentNo = order?.loadReference?.shipmentNumber;
+        if (shipmentNo) {
+          const imgResp = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${shipmentNo}/images`, { headers });
+          shipmentImages = imgResp?.data || null;
+        }
+      } catch (e) {
+        console.warn('Could not fetch shipment images:', e);
+      }
+
+      try {
+        const docResp = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/${order._id}/additional-documents`, { headers });
+        additionalDocs = docResp?.data?.data?.documents || docResp?.data?.additionalDocuments || [];
+      } catch (e) {
+        console.warn('Could not fetch additional documents:', e);
+      }
+
       const printWindow = window.open('', '_blank');
 
       // ---- Bill To + Address (from shippers list if available) ----
@@ -1091,6 +1112,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   .amount{text-align:right;font-weight:bold}
   .total-row{background:#fff;color:#000;font-weight:bold;font-size:14px}
   .total-row td{border-top:2px solid #000;padding:12px}
+  .images-section{margin-top: 20px; padding: 15px 10px; background: #fafafa; page-break-inside: avoid; page-break-after: avoid;}
+  .images-main-title{text-align: center; margin-bottom: 20px; font-size: 18px; font-weight: bold; color: #1a1a1a; border-bottom: 2px solid #333; padding-bottom: 10px; letter-spacing: 0.5px;}
+  .image-section-container{margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); page-break-inside: avoid;}
+  .image-grid{display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 12px;}
+  .image-item{border: 1.5px solid #e0e0e0; padding: 8px; border-radius: 6px; text-align: center; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); page-break-inside: avoid;}
+  .image-item img{width: 100%; height: 90px; object-fit: cover; border-radius: 4px; margin-bottom: 5px; border: 1px solid #e8e8e8;}
+  .image-item p{font-size: 9px; color: #555; margin: 0; font-weight: 500; padding-top: 3px;}
+  .section-title{font-size: 15px; font-weight: bold; margin-bottom: 12px; color: #1a1a1a; border-left: 4px solid #4caf50; padding: 8px 10px; background: linear-gradient(to right, rgba(76, 175, 80, 0.08), transparent); border-radius: 4px;}
+  .section-title.drop{border-left-color: #2196f3; background: linear-gradient(to right, rgba(33, 150, 243, 0.08), transparent);}
+  .section-title.additional{border-left-color: #ff9800; background: linear-gradient(to right, rgba(255, 152, 0, 0.08), transparent);}
+  .no-images-msg{text-align: center; color: #888; margin: 15px 0; font-style: italic; padding: 12px; background: #f5f5f5; border-radius: 6px;}
   @media print{@page{margin:0;size:A4}}
 </style>
 </head>
@@ -1207,6 +1239,107 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     </div>
 
     <div class="section">Thank you for your business!</div>
+  </div>
+
+  <!-- Images Section - New Page -->
+  <div class="images-section">
+    <h2 class="images-main-title">SHIPMENT IMAGES</h2>
+    
+    ${(() => {
+      const images = shipmentImages?.images;
+      if (!images) return '<p class="no-images-msg">No shipment images available</p>';
+      
+      // Pickup Images
+      const pickupImages = [
+        ...(images.emptyTruckImages || []),
+        ...(images.loadedTruckImages || []),
+        ...(images.podImages || []),
+        ...(images.eirTickets || []),
+        ...(images.containerImages || []),
+        ...(images.sealImages || []),
+      ];
+
+      // Drop Images
+      const dropImages = [
+        ...(images.dropLocationImages?.podImages || []),
+        ...(images.dropLocationImages?.loadedTruckImages || []),
+        ...(images.dropLocationImages?.dropLocationImages || []),
+        ...(images.dropLocationImages?.emptyTruckImages || []),
+      ];
+
+      // Additional Images (from additionalDocuments)
+      const additionalImages = (additionalDocs || [])
+        .filter(doc => {
+          const url = doc?.documentUrl || '';
+          return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url);
+        })
+        .map(doc => doc.documentUrl);
+
+      let htmlSection = '';
+
+      // Pickup Images Section
+      if (pickupImages.length > 0) {
+        htmlSection += `
+          <div class="image-section-container">
+            <h3 class="section-title">1. Pickup Images</h3>
+            <div class="image-grid">
+              ${pickupImages.map((img, idx) => `
+                <div class="image-item">
+                  <img src="${img}" alt="Pickup Image ${idx + 1}" 
+                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                  <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
+                  <p>Image ${idx + 1}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // Drop Images Section
+      if (dropImages.length > 0) {
+        htmlSection += `
+          <div class="image-section-container">
+            <h3 class="section-title drop">2. Drop Images</h3>
+            <div class="image-grid">
+              ${dropImages.map((img, idx) => `
+                <div class="image-item">
+                  <img src="${img}" alt="Drop Image ${idx + 1}" 
+                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                  <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
+                  <p>Image ${idx + 1}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // Additional Images Section
+      if (additionalImages.length > 0) {
+        htmlSection += `
+          <div class="image-section-container">
+            <h3 class="section-title additional">3. Additional Images</h3>
+            <div class="image-grid">
+              ${additionalImages.map((img, idx) => `
+                <div class="image-item">
+                  <img src="${img}" alt="Additional Image ${idx + 1}" 
+                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                  <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
+                  <p>Image ${idx + 1}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      if (!pickupImages.length && !dropImages.length && !additionalImages.length) {
+        htmlSection = '<p class="no-images-msg">No images available for this shipment</p>';
+      }
+
+      return htmlSection;
+    })()}
   </div>
 </body>
 </html>
