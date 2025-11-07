@@ -31,6 +31,7 @@ export default function RateApproved() {
     type: null, // 'manual' or 'auto'
     rate: null, // the selected rate object
   });
+  const [marginAmount, setMarginAmount] = useState(0);
 
   // Accept Bid Modal State
   const [acceptBidModal, setAcceptBidModal] = useState({
@@ -191,6 +192,11 @@ export default function RateApproved() {
             }
             return 'N/A, N/A';
           })() : 'N/A, N/A',
+          // Add return address fields
+          returnAddress: bid.load?.returnAddress || bid.returnAddress || null,
+          returnCity: bid.load?.returnCity || bid.returnCity || null,
+          returnState: bid.load?.returnState || bid.returnState || null,
+          returnZip: bid.load?.returnZip || bid.returnZip || null,
           originalRate: bid.originalRate || bid.load?.rate || 0,
           intermediateRate: bid.intermediateRate || 0,
           rate: bid.intermediateRate || bid.originalRate || 0,
@@ -352,6 +358,11 @@ export default function RateApproved() {
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: getOrigin(),
           destination: getDestination(),
+          // Add return address fields
+          returnAddress: bid.load?.returnAddress || bid.returnAddress || null,
+          returnCity: bid.load?.returnCity || bid.returnCity || null,
+          returnState: bid.load?.returnState || bid.returnState || null,
+          returnZip: bid.load?.returnZip || bid.returnZip || null,
           originalRate: bid.originalRate || bid.load?.rate || 0,
           intermediateRate: bid.intermediateRate || 0,
           rate: bid.intermediateRate || bid.originalRate || 0,
@@ -544,7 +555,14 @@ export default function RateApproved() {
             }
             return 'N/A, N/A';
           })() : 'N/A, N/A',
+          // Add return address fields
+          returnAddress: bid.load?.returnAddress || bid.returnAddress || null,
+          returnCity: bid.load?.returnCity || bid.returnCity || null,
+          returnState: bid.load?.returnState || bid.returnState || null,
+          returnZip: bid.load?.returnZip || bid.returnZip || null,
           rate: bid.rate,
+          rates: bid.rates || null, // Add rates array
+          totalrates: bid.totalrates || null, // Add totalrates
           truckerName: bid.carrier?.compName || 'N/A',
           status: 'pending',
           createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
@@ -605,6 +623,13 @@ export default function RateApproved() {
             return 'N/A, N/A';
           })() : 'N/A, N/A',
           rate: bid.rate,
+          rates: bid.rates || null, // Add rates array
+          totalrates: bid.totalrates || null, // Add totalrates
+          // Add return address fields
+          returnAddress: bid.load?.returnAddress || bid.returnAddress || null,
+          returnCity: bid.load?.returnCity || bid.returnCity || null,
+          returnState: bid.load?.returnState || bid.returnState || null,
+          returnZip: bid.load?.returnZip || bid.returnZip || null,
           truckerName: bid.carrier?.compName || 'N/A',
           status: 'pending',
           createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
@@ -2047,6 +2072,9 @@ export default function RateApproved() {
                             <button
                               onClick={() => {
                                 console.log('Approve button clicked for rate:', rate);
+                                console.log('Rate rates array:', rate.rates);
+                                console.log('Rate totalrates:', rate.totalrates);
+                                setMarginAmount(0); // Reset margin when opening modal
                                 setApprovalModal({ visible: true, type: 'manual', rate });
                               }}
                               disabled={actionLoading[rate.rateNum]}
@@ -2312,6 +2340,7 @@ export default function RateApproved() {
                           <button
                             onClick={() => {
                               console.log('Add Margin button clicked for rate:', rate);
+                              setMarginAmount(0); // Reset margin when opening modal
                               setApprovalModal({ visible: true, type: 'manual', rate });
                             }}
                             disabled={actionLoading[rate.rateNum]}
@@ -2790,10 +2819,25 @@ export default function RateApproved() {
       )}
 
       {/* Approval Modal - Moved to root level */}
-      {console.log('Modal state:', approvalModal)}
+      {approvalModal.visible && (
+        <>
+          {console.log('Modal rate data:', approvalModal.rate)}
+          {console.log('Rates array:', approvalModal.rate?.rates)}
+          {console.log('Totalrates:', approvalModal.rate?.totalrates)}
+        </>
+      )}
       {approvalModal.visible && (
         <div className="fixed inset-0 z-[9999] backdrop-blur-sm bg-black/30 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
+          <style>{`
+            .approval-modal-scroll::-webkit-scrollbar {
+              display: none;
+            }
+            .approval-modal-scroll {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+            }
+          `}</style>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto approval-modal-scroll">
             {/* Header with gradient */}
             <div className={`p-6 text-white ${approvalModal.type === 'manual' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-purple-600'}`}>
               <div className="flex justify-between items-center">
@@ -2858,6 +2902,28 @@ export default function RateApproved() {
                   </div>
                   <p className="text-sm font-medium text-gray-800">{approvalModal.rate.destination}</p>
                 </div>
+
+                {/* Return Address Card - Show only if return data exists */}
+                {(approvalModal.rate.returnAddress || approvalModal.rate.returnCity || approvalModal.rate.returnState || approvalModal.rate.returnZip) && (
+                  <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-xl p-4 border border-teal-100 col-span-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
+                      <span className="text-xs font-semibold text-teal-700 uppercase tracking-wide">Return</span>
+                    </div>
+                    <div className="space-y-1">
+                      {approvalModal.rate.returnAddress && (
+                        <p className="text-sm font-medium text-gray-800">{approvalModal.rate.returnAddress}</p>
+                      )}
+                      <p className="text-sm text-gray-700">
+                        {[
+                          approvalModal.rate.returnCity,
+                          approvalModal.rate.returnState,
+                          approvalModal.rate.returnZip
+                        ].filter(Boolean).join(', ') || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Attachment Section */}
@@ -2912,56 +2978,159 @@ export default function RateApproved() {
                 </div>
               )}
 
+              {/* Rates Array Display Section */}
+              {approvalModal.rate && approvalModal.rate.rates && Array.isArray(approvalModal.rate.rates) && approvalModal.rate.rates.length > 0 ? (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="text-blue-600" size={18} />
+                    <label className="text-sm font-semibold text-gray-700">Rate Breakdown</label>
+                  </div>
+                  <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-blue-100">
+                        <tr>
+                          <th className="text-left py-2 px-3 text-blue-800 font-semibold">Charge Name</th>
+                          <th className="text-center py-2 px-3 text-blue-800 font-semibold">Quantity</th>
+                          <th className="text-right py-2 px-3 text-blue-800 font-semibold">Amount</th>
+                          <th className="text-right py-2 px-3 text-blue-800 font-semibold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {approvalModal.rate.rates.map((rateItem, index) => (
+                          <tr key={rateItem._id || index} className={`border-b border-blue-50 ${index % 2 === 0 ? 'bg-white' : 'bg-blue-50/30'}`}>
+                            <td className="py-2 px-3 text-gray-800 font-medium">{rateItem.name || 'N/A'}</td>
+                            <td className="py-2 px-3 text-center text-gray-700">{rateItem.quantity || 0}</td>
+                            <td className="py-2 px-3 text-right text-gray-700">${(rateItem.amount || 0).toLocaleString()}</td>
+                            <td className="py-2 px-3 text-right text-green-700 font-semibold">${((rateItem.total || rateItem.amount * rateItem.quantity) || 0).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-green-50 border-t-2 border-green-200">
+                        <tr>
+                          <td colSpan="3" className="py-3 px-3 text-right font-bold text-gray-800">Total Rate:</td>
+                          <td className="py-3 px-3 text-right font-bold text-green-700 text-lg">
+                            ${(approvalModal.rate.totalrates || approvalModal.rate.rate || 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              ) : approvalModal.rate?.totalrates ? (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <DollarSign className="text-blue-600" size={18} />
+                    <label className="text-sm font-semibold text-gray-700">Total Rate</label>
+                  </div>
+                  <div className="bg-white rounded-lg border border-blue-100 p-4">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-green-700">
+                        ${(approvalModal.rate.totalrates || 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Total rate amount</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {/* Rate Input Section */}
-              <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <DollarSign className="text-green-600" size={18} />
-                  <label className="text-sm font-semibold text-gray-700">
-                    {approvalModal.type === 'manual'
-                      ? 'Custom Rate Amount *'         // <- star added
-                      : 'Original Rate Amount'}
-                  </label>
+              {approvalModal.type === 'manual' ? (
+                <div className="space-y-4">
+                  {/* Base Rate Display (Readonly) */}
+                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <DollarSign className="text-blue-600" size={18} />
+                      <label className="text-sm font-semibold text-gray-700">
+                        {approvalModal.rate?.totalrates 
+                          ? 'Total Rate Amount'
+                          : 'Original Rate Amount'}
+                      </label>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                      <input
+                        type="number"
+                        readOnly
+                        className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-lg text-lg font-semibold bg-gray-50 text-gray-700"
+                        value={approvalModal.rate?.totalrates || approvalModal.rate?.rate || 0}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Add Margin Input */}
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <PlusCircle className="text-green-600" size={18} />
+                      <label className="text-sm font-semibold text-gray-700">
+                        Add Margin Amount *
+                      </label>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        step="0.01"
+                        className="w-full pl-8 pr-4 py-3 border-2 border-green-300 rounded-lg text-lg font-semibold transition-all duration-200 focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                        value={marginAmount || ''}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? 0 : Number(e.target.value);
+                          setMarginAmount(v);
+                          setApprovalError('');
+                        }}
+                        placeholder="Enter margin amount"
+                      />
+                    </div>
+                    {approvalError && (
+                      <p className="mt-2 text-xs font-medium text-red-600">{approvalError}</p>
+                    )}
+                  </div>
+
+                  {/* Total Amount (Readonly) */}
+                  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <DollarSign className="text-purple-600" size={18} />
+                      <label className="text-sm font-semibold text-gray-700">
+                        Total (Rate + Margin) *
+                      </label>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                      <input
+                        type="text"
+                        readOnly
+                        className="w-full pl-8 pr-4 py-3 border-2 border-purple-300 rounded-lg text-lg font-bold bg-purple-50 text-purple-700"
+                        value={((Number(approvalModal.rate?.totalrates || approvalModal.rate?.rate || 0)) + (Number(marginAmount || 0))).toFixed(2)}
+                      />
+                    </div>
+                  </div>
                 </div>
-
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
-                  <input
-                    type="number"
-                    required={approvalModal.type === 'manual'}  // <- required
-                    min={1}                                     // <- client-side guard
-                    step="1"
-                    className={`w-full pl-8 pr-4 py-3 border-2 rounded-lg text-lg font-semibold transition-all duration-200 ${approvalModal.type === 'manual'
-                      ? 'border-green-300 focus:border-green-500 focus:ring-2 focus:ring-green-100'
-                      : 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-gray-50'
-                      }`}
-                    value={approvalModal.rate.rate ?? ''}       // safe value
-                    readOnly={approvalModal.type === 'auto'}
-                    onChange={(e) => {
-                      if (approvalModal.type === 'manual') {
-                        const v = e.target.value === '' ? '' : Number(e.target.value);
-                        setApprovalModal(prev => ({
-                          ...prev,
-                          rate: { ...prev.rate, rate: v }
-                        }));
-                        setApprovalError('');                   // clear error on typing
-                      }
-                    }}
-                    placeholder="Enter rate amount"
-                  />
-                </div>
-
-                {/* helper error line */}
-                {approvalError && (
-                  <p className="mt-2 text-xs font-medium text-red-600">{approvalError}</p>
-                )}
-
-                {approvalModal.type === 'auto' && (
+              ) : (
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <DollarSign className="text-green-600" size={18} />
+                    <label className="text-sm font-semibold text-gray-700">
+                      {approvalModal.rate?.totalrates 
+                        ? 'Total Rate Amount'
+                        : 'Original Rate Amount'}
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                    <input
+                      type="number"
+                      readOnly
+                      className="w-full pl-8 pr-4 py-3 border-2 border-blue-300 rounded-lg text-lg font-semibold bg-gray-50 text-gray-700"
+                      value={approvalModal.rate?.totalrates || approvalModal.rate?.rate || ''}
+                    />
+                  </div>
                   <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                     <Clock size={12} />
-                    Auto-approval uses the original bid rate
+                    Auto-approval uses the {approvalModal.rate?.totalrates ? 'total' : 'original'} bid rate
                   </p>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Message Display Section */}
               {approvalModal.rate.remarks && (
@@ -2983,7 +3152,10 @@ export default function RateApproved() {
               {/* Action Buttons */}
               <div className="flex gap-3 pt-4">
                 <button
-                  onClick={() => setApprovalModal({ visible: false, type: null, rate: null })}
+                  onClick={() => {
+                    setApprovalModal({ visible: false, type: null, rate: null });
+                    setMarginAmount(0); // Reset margin when modal closes
+                  }}
                   className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all duration-200 hover:border-gray-400"
                 >
                   Cancel
@@ -2991,17 +3163,29 @@ export default function RateApproved() {
                 <button
                   onClick={async () => {
                     if (approvalModal.type === 'manual') {
-                      const val = Number(approvalModal.rate?.rate);
-                      if (!Number.isFinite(val) || val <= 0) {
-                        setApprovalError('Please enter the Custom Rate Amount more than 0.');
-                        alertify.error('Please enter the Custom Rate Amount more than 0.');
-                        return;                                   // block submit
+                      const baseRate = Number(approvalModal.rate?.totalrates || approvalModal.rate?.rate || 0);
+                      const margin = Number(marginAmount || 0);
+                      const total = baseRate + margin;
+                      
+                      if (!Number.isFinite(total) || total <= 0) {
+                        setApprovalError('Please enter a valid margin amount. Total must be greater than 0.');
+                        alertify.error('Please enter a valid margin amount. Total must be greater than 0.');
+                        return;
                       }
-                      await handleManualApprove(approvalModal.rate.rateNum, val);
+                      
+                      if (margin < 0) {
+                        setApprovalError('Margin amount cannot be negative.');
+                        alertify.error('Margin amount cannot be negative.');
+                        return;
+                      }
+                      
+                      await handleManualApprove(approvalModal.rate.rateNum, total);
+                      setMarginAmount(0); // Reset margin after submission
                     } else {
                       await handleAutoApprove(approvalModal.rate.rateNum);
                     }
                     setApprovalModal({ visible: false, type: null, rate: null });
+                    setMarginAmount(0); // Reset margin when modal closes
                   }}
                   className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${approvalModal.type === 'manual'
                     ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'

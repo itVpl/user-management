@@ -8915,15 +8915,22 @@ const MaterialShipperDropdown = ({
                       )}
 
                       {selectedLoadForAction.rateDetails.fsc !== undefined && selectedLoadForAction.rateDetails.fsc !== null && (
-
+                        
                         <div className="bg-white rounded-lg p-3 border border-gray-200">
-
-                          <span className="text-gray-600 text-sm">FSC:</span>
-
-                          <p className="font-bold text-green-600 text-lg">${parseFloat(selectedLoadForAction.rateDetails.fsc || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-
+                        
+                          <span className="text-gray-600 text-sm">FSC ({selectedLoadForAction.rateDetails.fsc}%):</span>
+                        
+                          <p className="font-bold text-green-600 text-lg">
+                            ${(() => {
+                              const lineHaul = parseFloat(selectedLoadForAction.rateDetails.lineHaul || 0);
+                              const fscPercentage = parseFloat(selectedLoadForAction.rateDetails.fsc || 0);
+                              const fscAmount = lineHaul * (fscPercentage / 100);
+                              return fscAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            })()}
+                          </p>
+                        
                         </div>
-
+                        
                       )}
 
                     </div>
@@ -8972,25 +8979,24 @@ const MaterialShipperDropdown = ({
 
 
 
-                    {selectedLoadForAction.rateDetails.totalRates !== undefined && selectedLoadForAction.rateDetails.totalRates !== null && (
-
-                      <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 border-2 border-green-400">
-
-                        <div className="flex justify-between items-center">
-
-                          <span className="text-white font-semibold text-lg">Total Rates:</span>
-
-                          <span className="font-bold text-white text-2xl">
-
-                            ${parseFloat(selectedLoadForAction.rateDetails.totalRates || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-
-                          </span>
-
-                        </div>
-
+                    {/* Total Rate Display - Calculate from Line Haul + FSC + Other */}
+                    <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 border-2 border-green-400">
+                      <div className="flex justify-between items-center">
+                        <span className="text-white font-semibold text-lg">Total Rate:</span>
+                        <span className="font-bold text-white text-2xl">
+                          ${(() => {
+                            const lineHaul = parseFloat(selectedLoadForAction.rateDetails.lineHaul || 0);
+                            const fscPercentage = parseFloat(selectedLoadForAction.rateDetails.fsc || 0);
+                            const fscAmount = lineHaul * (fscPercentage / 100);
+                            const otherTotal = selectedLoadForAction.rateDetails.other && Array.isArray(selectedLoadForAction.rateDetails.other) 
+                              ? selectedLoadForAction.rateDetails.other.reduce((sum, charge) => sum + (parseFloat(charge.total || (charge.quantity * charge.amount) || 0)), 0)
+                              : 0;
+                            const total = lineHaul + fscAmount + otherTotal;
+                            return total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                          })()}
+                        </span>
                       </div>
-
-                    )}
+                    </div>
 
                   </div>
 

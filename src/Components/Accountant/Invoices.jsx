@@ -1112,14 +1112,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   .amount{text-align:right;font-weight:bold}
   .total-row{background:#fff;color:#000;font-weight:bold;font-size:14px}
   .total-row td{border-top:2px solid #000;padding:12px}
-  .images-section{margin-top: 20px; padding: 15px 10px; background: #fafafa; page-break-inside: avoid; page-break-after: avoid;}
-  .images-main-title{text-align: center; margin-bottom: 20px; font-size: 18px; font-weight: bold; color: #1a1a1a; border-bottom: 2px solid #333; padding-bottom: 10px; letter-spacing: 0.5px;}
-  .image-section-container{margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); page-break-inside: avoid;}
-  .image-grid{display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 12px;}
-  .image-item{border: 1.5px solid #e0e0e0; padding: 8px; border-radius: 6px; text-align: center; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); page-break-inside: avoid;}
-  .image-item img{width: 100%; height: 90px; object-fit: cover; border-radius: 4px; margin-bottom: 5px; border: 1px solid #e8e8e8;}
-  .image-item p{font-size: 9px; color: #555; margin: 0; font-weight: 500; padding-top: 3px;}
-  .section-title{font-size: 15px; font-weight: bold; margin-bottom: 12px; color: #1a1a1a; border-left: 4px solid #4caf50; padding: 8px 10px; background: linear-gradient(to right, rgba(76, 175, 80, 0.08), transparent); border-radius: 4px;}
+  .images-section{page-break-before: always; margin-top: 20px; padding: 15px 10px; background: #fafafa;}
+  .images-main-title{text-align: center; margin-bottom: 20px; font-size: 18px; font-weight: bold; color: #1a1a1a; border-bottom: 2px solid #333; padding-bottom: 10px; letter-spacing: 0.5px; page-break-after: avoid;}
+  .image-section-container{margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);}
+  .image-grid{display: flex; flex-direction: column; gap: 20px; margin-top: 12px;}
+  .image-item{page-break-inside: avoid; page-break-after: avoid; border: 1.5px solid #e0e0e0; padding: 20px; border-radius: 6px; text-align: center; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); margin-bottom: 20px; width: 100%;}
+  .image-item img{width: 100%; max-width: 600px; height: auto; max-height: 700px; object-fit: contain; border-radius: 4px; margin-bottom: 10px; border: 1px solid #e8e8e8; display: block; margin-left: auto; margin-right: auto;}
+  .image-item p{font-size: 12px; color: #555; margin: 0; font-weight: 500; padding-top: 8px;}
+  .section-title{page-break-after: avoid; font-size: 15px; font-weight: bold; margin-bottom: 12px; color: #1a1a1a; border-left: 4px solid #4caf50; padding: 8px 10px; background: linear-gradient(to right, rgba(76, 175, 80, 0.08), transparent); border-radius: 4px;}
   .section-title.drop{border-left-color: #2196f3; background: linear-gradient(to right, rgba(33, 150, 243, 0.08), transparent);}
   .section-title.additional{border-left-color: #ff9800; background: linear-gradient(to right, rgba(255, 152, 0, 0.08), transparent);}
   .no-images-msg{text-align: center; color: #888; margin: 15px 0; font-style: italic; padding: 12px; background: #f5f5f5; border-radius: 6px;}
@@ -1276,66 +1276,60 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         .map(doc => doc.documentUrl);
 
       let htmlSection = '';
+      let totalImageIndex = 0;
 
-      // Pickup Images Section
+      // Pickup Images Section - Each image on separate page
       if (pickupImages.length > 0) {
-        htmlSection += `
-          <div class="image-section-container">
-            <h3 class="section-title">1. Pickup Images</h3>
-            <div class="image-grid">
-              ${pickupImages.map((img, idx) => `
-                <div class="image-item">
-                  <img src="${img}" alt="Pickup Image ${idx + 1}" 
-                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                  <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
-                  <p>Image ${idx + 1}</p>
-                </div>
-              `).join('')}
+        htmlSection += pickupImages.map((img, idx) => {
+          const isFirst = idx === 0;
+          return `
+            <div class="image-item" style="${isFirst ? '' : 'page-break-before: always;'}">
+              ${isFirst ? '<h3 class="section-title" style="page-break-after: avoid; margin-bottom: 15px;">Pickup Images</h3>' : ''}
+              <img src="${img}" alt="Pickup Image ${idx + 1}" 
+                   onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+              <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
+              <p>Pickup Image ${idx + 1}</p>
             </div>
-          </div>
-        `;
+          `;
+        }).join('');
+        totalImageIndex += pickupImages.length;
       }
 
-      // Drop Images Section
+      // Drop Images Section - Each image on separate page
       if (dropImages.length > 0) {
-        htmlSection += `
-          <div class="image-section-container">
-            <h3 class="section-title drop">2. Drop Images</h3>
-            <div class="image-grid">
-              ${dropImages.map((img, idx) => `
-                <div class="image-item">
-                  <img src="${img}" alt="Drop Image ${idx + 1}" 
-                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                  <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
-                  <p>Image ${idx + 1}</p>
-                </div>
-              `).join('')}
+        htmlSection += dropImages.map((img, idx) => {
+          const isFirstInSection = idx === 0;
+          return `
+            <div class="image-item" style="page-break-before: always;">
+              ${isFirstInSection ? '<h3 class="section-title drop" style="page-break-after: avoid; margin-bottom: 15px;">Drop Images</h3>' : ''}
+              <img src="${img}" alt="Drop Image ${idx + 1}" 
+                   onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+              <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
+              <p>Drop Image ${idx + 1}</p>
             </div>
-          </div>
-        `;
+          `;
+        }).join('');
+        totalImageIndex += dropImages.length;
       }
 
-      // Additional Images Section
+      // Additional Images Section - Each image on separate page
       if (additionalImages.length > 0) {
-        htmlSection += `
-          <div class="image-section-container">
-            <h3 class="section-title additional">3. Additional Images</h3>
-            <div class="image-grid">
-              ${additionalImages.map((img, idx) => `
-                <div class="image-item">
-                  <img src="${img}" alt="Additional Image ${idx + 1}" 
-                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                  <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
-                  <p>Image ${idx + 1}</p>
-                </div>
-              `).join('')}
+        htmlSection += additionalImages.map((img, idx) => {
+          const isFirstInSection = idx === 0;
+          return `
+            <div class="image-item" style="page-break-before: always;">
+              ${isFirstInSection ? '<h3 class="section-title additional" style="page-break-after: avoid; margin-bottom: 15px;">Additional Documents</h3>' : ''}
+              <img src="${img}" alt="Additional Image ${idx + 1}" 
+                   onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+              <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
+              <p>Additional Image ${idx + 1}</p>
             </div>
-          </div>
-        `;
+          `;
+        }).join('');
       }
 
       if (!pickupImages.length && !dropImages.length && !additionalImages.length) {
-        htmlSection = '<p class="no-images-msg">No images available for this shipment</p>';
+        return '<p class="no-images-msg">No images available for this shipment</p>';
       }
 
       return htmlSection;

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign, BarChart3 } from 'lucide-react';
+import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign, BarChart3, FileText, PlusCircle } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
  const getAuthToken = () =>
    localStorage.getItem('authToken') ||
@@ -83,6 +83,15 @@ const RateRequest = () => {
   const [loadTimers, setLoadTimers] = useState({});
   const [uploadedFile, setUploadedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  
+  // Charges Calculator popup state
+  const [showChargesPopup, setShowChargesPopup] = useState(false);
+  const [charges, setCharges] = useState([
+    { name: '', quantity: '', amt: '', total: 0 }
+  ]);
+  const [chargeErrors, setChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
+  const [chargesPopupError, setChargesPopupError] = useState('');
+  const [ratesArray, setRatesArray] = useState([]); // Store charges array for API
 
   // timers
   const [timerStartMap, setTimerStartMap] = useState(() => readLS(LS_START_KEY));
@@ -263,7 +272,12 @@ const autoAcceptingRef = useRef(new Set());
           expiresAt: approval.expiresAt,
           userApprovalStatus: approval.userApprovalStatus,
           userAction: approval.userAction,
-          userActionAt: approval.userActionAt
+          userActionAt: approval.userActionAt,
+          // Add return address fields
+          returnAddress: approval.loadId?.returnAddress || null,
+          returnCity: approval.loadId?.returnCity || null,
+          returnState: approval.loadId?.returnState || null,
+          returnZip: approval.loadId?.returnZip || approval.loadId?.returnZipCode || null
         };
       });
 
@@ -367,7 +381,12 @@ const autoAcceptingRef = useRef(new Set());
           expiresAt: approval.expiresAt,
           userApprovalStatus: approval.userApprovalStatus,
           userAction: approval.userAction,
-          userActionAt: approval.userActionAt
+          userActionAt: approval.userActionAt,
+          // Add return address fields
+          returnAddress: approval.loadId?.returnAddress || null,
+          returnCity: approval.loadId?.returnCity || null,
+          returnState: approval.loadId?.returnState || null,
+          returnZip: approval.loadId?.returnZip || approval.loadId?.returnZipCode || null
         };
       });
 // ---- broadcast new pending approvals (cross-tab + same tab) ----
@@ -710,6 +729,8 @@ useEffect(() => {
     setTouchedFields({});
     setUploadedFile(null);
     setFilePreview(null);
+    setRatesArray([]); // Clear rates array
+    setCharges([{ name: '', quantity: '', amt: '', total: 0 }]); // Reset charges
   };
 
   // approval modal
@@ -1000,7 +1021,22 @@ useEffect(() => {
     formData.append('loadId', actualLoadId);
     formData.append('truckerId', selectedTrucker);
     formData.append('empId', empId);
-    formData.append('rate', parseInt(rate, 10));
+    
+    // Append rates array if charges were added via Charges Calculator
+    if (ratesArray && ratesArray.length > 0) {
+      // Send rates array as indexed format (most backends parse this correctly)
+      ratesArray.forEach((rateItem, index) => {
+        formData.append(`rates[${index}][name]`, rateItem.name);
+        formData.append(`rates[${index}][quantity]`, rateItem.quantity.toString());
+        formData.append(`rates[${index}][amount]`, rateItem.amount.toString());
+      });
+    } else {
+      // Fallback: if no rates array, send single rate value
+      if (rate && rate.trim() !== '') {
+        formData.append('rate', parseInt(rate, 10));
+      }
+    }
+    
     formData.append('message', message);
     formData.append('estimatedPickupDate', pickupDate);
     formData.append('estimatedDeliveryDate', deliveryDate);
@@ -1018,6 +1054,8 @@ useEffect(() => {
     for (let [key, value] of formData.entries()) {
       console.log(key, value);
     }
+    console.log('Rates Array:', ratesArray);
+    console.log('Rate value:', rate);
 
     try {
       setSubmitting(true);
@@ -1369,6 +1407,143 @@ useEffect(() => {
       default:
         break;
     }
+  };
+
+  // Charges Calculator functions
+  useEffect(() => {
+    setChargeErrors(prev =>
+      (charges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
+    );
+  }, [charges]);
+
+  const onlyAlpha = (s = '') => s.replace(/[^A-Za-z ]/g, '');
+  const clampPosInt = (s = '') => s.replace(/[^\d]/g, '');
+  const blockIntNoSign = (e) => {
+    if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+  };
+
+  const handleChargesClick = () => {
+    console.log('Charges popup opened, current charges state:', charges);
+    setShowChargesPopup(true);
+  };
+
+  const handleChargeChange = (index, field, value) => {
+    const updated = [...charges];
+
+    if (field === 'name') value = onlyAlpha(value);
+    if (field === 'quantity') value = clampPosInt(value);
+    if (field === 'amt') {
+      value = value.replace(/[^\d.]/g, '');
+      const parts = value.split('.');
+      if (parts.length > 2) {
+        value = parts[0] + '.' + parts.slice(1).join('');
+      }
+      if (parts[1] && parts[1].length > 2) {
+        value = parts[0] + '.' + parts[1].substring(0, 2);
+      }
+    }
+
+    updated[index] = { ...updated[index], [field]: value };
+
+    const q = parseInt(updated[index].quantity, 10) || 0;
+    const a = parseFloat(updated[index].amt) || 0;
+    updated[index].total = q * a;
+
+    setCharges(updated);
+
+    setChargeErrors(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index] };
+      if (field === 'name') next[index].name = '';
+      if (field === 'quantity') next[index].quantity = '';
+      if (field === 'amt') next[index].amt = '';
+      return next;
+    });
+    setChargesPopupError('');
+  };
+
+  const addCharge = () => {
+    setCharges(prev => [...prev, { name: '', quantity: '', amt: '', total: 0 }]);
+    setChargeErrors(prev => [...prev, { name: '', quantity: '', amt: '' }]);
+  };
+
+  const removeCharge = (index) => {
+    if (charges.length > 1) {
+      setCharges(prev => prev.filter((_, i) => i !== index));
+      setChargeErrors(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const applyCharges = async () => {
+    const allEmpty = (charges || []).every(
+      ch => !(ch?.name?.trim()) &&
+        !(String(ch?.quantity ?? '') !== '') &&
+        !(String(ch?.amt ?? '') !== '')
+    );
+
+    if (allEmpty) {
+      const errs = (charges || []).map((_, i) =>
+        i === 0
+          ? {
+            name: 'Please enter the charge name',
+            quantity: 'Please enter the Quantity',
+            amt: 'Please enter the amount',
+          }
+          : { name: '', quantity: '', amt: '' }
+      );
+      setChargeErrors(errs);
+      setChargesPopupError('Please add charges.');
+      return;
+    }
+
+    const nextErrs = (charges || []).map((ch) => {
+      const row = { name: '', quantity: '', amt: '' };
+      const hasAny = (ch?.name || ch?.quantity || ch?.amt);
+
+      if (hasAny) {
+        const nm = (ch?.name || '').trim();
+        if (!nm) row.name = 'Please enter the charge name';
+        else if (!/^[A-Za-z ]+$/.test(nm)) row.name = 'Name should contain only alphabets';
+
+        const qRaw = String(ch?.quantity ?? '');
+        if (qRaw === '') row.quantity = 'Please enter the Quantity';
+        else if (!/^[1-9]\d*$/.test(qRaw)) row.quantity = 'Quantity must be a positive integer';
+
+        const aRaw = String(ch?.amt ?? '');
+        if (aRaw === '') row.amt = 'Please enter the amount';
+        else if (!/^\d+(\.\d{1,2})?$/.test(aRaw)) row.amt = 'Amount must be a positive number (max 2 decimal places)';
+      }
+      return row;
+    });
+
+    const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
+    setChargeErrors(nextErrs);
+
+    if (hasErrors) {
+      setChargesPopupError('Please correct the charge rows (Name*, Quantity*, Amount*).');
+      return;
+    }
+
+    const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
+    setRate(String(totalCharges));
+
+    // Format charges array for API (rates array)
+    const formattedRates = (charges || [])
+      .filter(ch => ch?.name?.trim() && ch?.quantity && ch?.amt) // Only include valid charges
+      .map(ch => ({
+        name: (ch.name || '').trim(),
+        quantity: parseInt(ch.quantity, 10) || 1,
+        amount: parseFloat(ch.amt) || 0
+      }));
+    
+    setRatesArray(formattedRates);
+
+    setChargesPopupError('');
+    setShowChargesPopup(false);
+  };
+
+  const closeChargesPopup = () => {
+    setShowChargesPopup(false);
   };
 
   const validateForm = () => {
@@ -1885,6 +2060,24 @@ useEffect(() => {
                       <div className="text-xs text-gray-500">{selectedRequest?.destination?.state || ''}</div>
                       <div className="text-xs text-gray-400">ZIP: {selectedRequest?.destination?.zipcode || 'N/A'}</div>
                     </div>
+                    {/* Return Location - Show only if return data exists */}
+                    {(selectedRequest?.returnAddress || selectedRequest?.returnCity || selectedRequest?.returnState || selectedRequest?.returnZip) && (
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Return Location</div>
+                        {selectedRequest?.returnAddress && (
+                          <div className="text-sm font-semibold text-gray-800">{selectedRequest.returnAddress}</div>
+                        )}
+                        {selectedRequest?.returnCity && (
+                          <div className="text-sm font-semibold text-gray-800">{selectedRequest.returnCity}</div>
+                        )}
+                        {selectedRequest?.returnState && (
+                          <div className="text-xs text-gray-500">{selectedRequest.returnState}</div>
+                        )}
+                        {selectedRequest?.returnZip && (
+                          <div className="text-xs text-gray-400">ZIP: {selectedRequest.returnZip}</div>
+                        )}
+                      </div>
+                    )}
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weight</div>
                       <div className="text-sm font-semibold text-gray-800">{selectedRequest?.weight} lbs</div>
@@ -2138,19 +2331,17 @@ useEffect(() => {
                       )}
                     </div>
 
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
                         Bid Rate ($) <span className="text-red-500">*</span>
                       </label>
                       <input
-                        type="number"
+                        type="text"
                         value={rate}
-                        onChange={(e) => handleFieldChange('rate', e.target.value)}
-                        onBlur={() => handleFieldBlur('rate')}
-                        placeholder="Enter your bid amount"
-                        min="1"
-                        max="1000000"
-                        className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
+                        onClick={handleChargesClick}
+                        readOnly
+                        placeholder="Click to add charges"
+                        className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 cursor-pointer ${
                           touchedFields.rate && formErrors.rate
                             ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
                             : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
@@ -2708,6 +2899,241 @@ useEffect(() => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Accessorial charges Popup */}
+      {showChargesPopup && (
+        <div className="fixed inset-0 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
+
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 -m-8 mb-6 p-6 rounded-t-xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                    <DollarSign className="w-6 h-6 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-white">Accessorial charges</h2>
+                </div>
+                <button
+                  onClick={closeChargesPopup}
+                  className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Table header */}
+              <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  <span>Name <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">#</span>
+                  <span>Quantity <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  <span>Amount <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold">$</span>
+                  <span>Total</span>
+                </div>
+                <div className="text-center">Action</div>
+              </div>
+
+              {/* Rows */}
+              {charges.map((charge, index) => (
+                <div key={index} className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  {/* Name */}
+                  <div>
+                    <input
+                      type="text"
+                      value={charge.name}
+                      onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
+                      onKeyDown={(e) => {
+                        const ctrl = e.ctrlKey || e.metaKey;
+                        const allow = ['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+                        if (allow.includes(e.key) || (ctrl && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) return;
+                        if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
+                      }}
+                      onBlur={() => {
+                        setChargeErrors((prev) => {
+                          const next = [...prev];
+                          const v = (charge.name || '').trim();
+                          next[index] = { ...(next[index] || {}) };
+                          if (!v) next[index].name = 'Please enter the charge name';
+                          else if (!/^[A-Za-z ]+$/.test(v)) next[index].name = 'Name should contain only alphabets';
+                          else next[index].name = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(chargeErrors[index]?.name)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.name
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="Enter charge name"
+                    />
+
+                    {chargeErrors[index]?.name && (
+                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].name}</p>
+                    )}
+                  </div>
+
+                  {/* Quantity */}
+                  <div>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      onKeyDown={blockIntNoSign}
+                      value={charge.quantity}
+                      onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
+                      onBlur={() => {
+                        setChargeErrors((prev) => {
+                          const next = [...prev];
+                          const raw = String(charge.quantity ?? '');
+                          next[index] = { ...(next[index] || {}) };
+                          if (raw === '') next[index].quantity = 'Please enter the Quantity';
+                          else if (!/^[1-9]\d*$/.test(raw)) next[index].quantity = 'Quantity must be a positive integer';
+                          else next[index].quantity = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(chargeErrors[index]?.quantity)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.quantity
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="0"
+                    />
+
+                    {chargeErrors[index]?.quantity && (
+                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].quantity}</p>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      onKeyDown={(e) => {
+                        if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                      }}
+                      value={charge.amt}
+                      onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
+                      onBlur={() => {
+                        setChargeErrors((prev) => {
+                          const next = [...prev];
+                          const raw = String(charge.amt ?? '');
+                          next[index] = { ...(next[index] || {}) };
+                          if (raw === '') next[index].amt = 'Please enter the amount';
+                          else if (!/^\d+(\.\d{1,2})?$/.test(raw)) next[index].amt = 'Amount must be a positive number (max 2 decimal places)';
+                          else next[index].amt = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(chargeErrors[index]?.amt)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.amt
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="0.00"
+                    />
+
+                    {chargeErrors[index]?.amt && (
+                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].amt}</p>
+                    )}
+                  </div>
+
+                  {/* Row total */}
+                  <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg font-semibold text-gray-800 border border-green-200">
+                    ${Number(charge.total || 0).toFixed(2)}
+                  </div>
+
+                  {/* Delete */}
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => removeCharge(index)}
+                      disabled={charges.length === 1}
+                      className={`p-2 rounded-full transition-all ${charges.length === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
+                        }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add row */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={addCharge}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                  <span className="font-semibold">Add New Charge</span>
+                </button>
+              </div>
+
+              {/* Total & Apply */}
+              <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-xl border border-gray-200">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-green-500 p-3 rounded-lg">
+                      <DollarSign className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 font-medium">Total Charges</div>
+                      <div className="text-2xl font-bold text-gray-800">
+                        ${(charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={closeChargesPopup}
+                      className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyCharges}
+                      className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      Apply to Bid Rate
+                    </button>
+                  </div>
+                </div>
+                {chargesPopupError && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-600">{chargesPopupError}</p>
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
         </div>
       )}
