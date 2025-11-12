@@ -114,7 +114,6 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   const shipper = raw.shipper || {};
   const pickUps = shipper.pickUpLocations || [];
   const drops = shipper.dropLocations || [];
-  const files = raw.uploadedFiles || order.uploadedFiles || [];
   const assign = raw.assignedToCMT || order.assignedToCMT || null;
   const createdBy = raw.createdBySalesUser || {};
   const loadRef = raw.loadReference || {};
@@ -148,30 +147,34 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     }
   };
 
+  // API uses different field names, so we need to map them
+  const apiImportantDates = raw.importantDates || raw.loadReference?.importantDates || {};
   const [importantDates, setImportantDates] = useState({
-    vesselETA: getDateValue(raw.vesselETA || raw.loadReference?.vesselETA || raw.importantDates?.vesselETA),
-    latfreeDate: getDateValue(raw.latfreeDate || raw.loadReference?.latfreeDate || raw.importantDates?.latfreeDate),
-    dischargeDate: getDateValue(raw.dischargeDate || raw.loadReference?.dischargeDate || raw.importantDates?.dischargeDate),
-    outgateDate: getDateValue(raw.outgateDate || raw.loadReference?.outgateDate || raw.importantDates?.outgateDate),
-    emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || raw.importantDates?.emptyDate),
-    perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || raw.importantDates?.perDiemFreeDay),
-    ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || raw.importantDates?.ingateDate),
-    readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || raw.importantDates?.readyToReturnDate)
+    vesselETA: getDateValue(raw.vesselETA || raw.loadReference?.vesselETA || apiImportantDates.vesselDate || apiImportantDates.vesselETA),
+    latfreeDate: getDateValue(raw.latfreeDate || raw.loadReference?.latfreeDate || apiImportantDates.lastFreeDate || apiImportantDates.latfreeDate),
+    dischargeDate: getDateValue(raw.dischargeDate || raw.loadReference?.dischargeDate || apiImportantDates.dischargeDate),
+    outgateDate: getDateValue(raw.outgateDate || raw.loadReference?.outgateDate || apiImportantDates.outgateDate),
+    emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || apiImportantDates.emptyDate),
+    perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay),
+    ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || apiImportantDates.ingateDate),
+    readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate)
   });
   const [updatingDates, setUpdatingDates] = useState(false);
 
   // Update important dates when modal opens or order changes
   useEffect(() => {
     if (open && order) {
+      // API uses different field names, so we need to map them
+      const apiImportantDates = raw.importantDates || raw.loadReference?.importantDates || {};
       setImportantDates({
-        vesselETA: getDateValue(raw.vesselETA || raw.loadReference?.vesselETA || raw.importantDates?.vesselETA),
-        latfreeDate: getDateValue(raw.latfreeDate || raw.loadReference?.latfreeDate || raw.importantDates?.latfreeDate),
-        dischargeDate: getDateValue(raw.dischargeDate || raw.loadReference?.dischargeDate || raw.importantDates?.dischargeDate),
-        outgateDate: getDateValue(raw.outgateDate || raw.loadReference?.outgateDate || raw.importantDates?.outgateDate),
-        emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || raw.importantDates?.emptyDate),
-        perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || raw.importantDates?.perDiemFreeDay),
-        ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || raw.importantDates?.ingateDate),
-        readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || raw.importantDates?.readyToReturnDate)
+        vesselETA: getDateValue(raw.vesselETA || raw.loadReference?.vesselETA || apiImportantDates.vesselDate || apiImportantDates.vesselETA),
+        latfreeDate: getDateValue(raw.latfreeDate || raw.loadReference?.latfreeDate || apiImportantDates.lastFreeDate || apiImportantDates.latfreeDate),
+        dischargeDate: getDateValue(raw.dischargeDate || raw.loadReference?.dischargeDate || apiImportantDates.dischargeDate),
+        outgateDate: getDateValue(raw.outgateDate || raw.loadReference?.outgateDate || apiImportantDates.outgateDate),
+        emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || apiImportantDates.emptyDate),
+        perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay),
+        ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || apiImportantDates.ingateDate),
+        readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate)
       });
     }
   }, [open, order]); // eslint-disable-line
@@ -1259,28 +1262,29 @@ const generateDoc = async (type) => {
 
       // Wrap dates in importantDates object as required by API
       // Format each date properly - only include valid dates
+      // Map frontend field names to API field names
+      const fieldMapping = {
+        'vesselETA': 'vesselDate',           // Frontend: vesselETA -> API: vesselDate
+        'latfreeDate': 'lastFreeDate',       // Frontend: latfreeDate -> API: lastFreeDate
+        'dischargeDate': 'dischargeDate',    // Same
+        'outgateDate': 'outgateDate',        // Same
+        'emptyDate': 'emptyDate',            // Same
+        'perDiemFreeDay': 'perDiemFreeDate', // Frontend: perDiemFreeDay -> API: perDiemFreeDate
+        'ingateDate': 'ingateDate',          // Same
+        'readyToReturnDate': 'readyToReturnDate' // Same
+      };
+
       const importantDatesPayload = {};
       
-      // Process each date field
-      const dateFields = [
-        'vesselETA',
-        'latfreeDate',
-        'dischargeDate',
-        'outgateDate',
-        'emptyDate',
-        'perDiemFreeDay',
-        'ingateDate',
-        'readyToReturnDate'
-      ];
-
-      dateFields.forEach(field => {
-        const dateValue = importantDates[field];
+      // Process each date field with proper mapping
+      Object.entries(fieldMapping).forEach(([frontendField, apiField]) => {
+        const dateValue = importantDates[frontendField];
         // Only process if value exists and is not empty string
         if (dateValue && dateValue !== '' && dateValue !== null && dateValue !== undefined) {
           const formatted = formatDateForAPI(dateValue);
           // Only add if formatting was successful
           if (formatted && formatted !== null && formatted !== '') {
-            importantDatesPayload[field] = formatted;
+            importantDatesPayload[apiField] = formatted;
           }
         }
       });
@@ -1757,57 +1761,6 @@ const generateDoc = async (type) => {
 
 
           {/* Document Display */}
-          {files?.length > 0 && (
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="text-blue-600" size={20} />
-                <h3 className="text-lg font-bold text-gray-800">Uploaded Documents</h3>
-              </div>
-
-              {/* Multiple Documents */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {files.map((file, index) => (
-                  <div key={index} className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <FileText className="text-blue-600" size={16} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-800 truncate">{file.fileName || 'Document'}</div>
-                        <div className="text-xs text-gray-500">{file.fileType || 'PDF'}</div>
-                      </div>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      {file.uploadDate && (
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Calendar size={12} />
-                          <span>Uploaded: {new Date(file.uploadDate).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <a
-                          href={file.fileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex-1 bg-blue-500 text-white text-center py-2 px-3 rounded-lg hover:bg-blue-600 transition text-xs font-medium"
-                        >
-                          View File
-                        </a>
-                        <a
-                          href={file.fileUrl}
-                          download={file.fileName}
-                          className="bg-green-500 text-white py-2 px-3 rounded-lg hover:bg-green-600 transition text-xs font-medium"
-                        >
-                          Download
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Driver Images */}
 
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
@@ -2192,20 +2145,27 @@ const generateDoc = async (type) => {
               </div>
             </div>
             <div className="mt-4 flex justify-end">
-              <button
-                onClick={updateImportantDates}
-                disabled={updatingDates}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${updatingDates ? MS.disabledBtn : MS.primaryBtn}`}
-              >
-                {updatingDates ? (
-                  <>
-                    <div className={`animate-spin rounded-full h-4 w-4 ${MS.spinner} border-2`}></div>
-                    Updating...
-                  </>
-                ) : (
-                  'Update'
-                )}
-              </button>
+              {(() => {
+                const isDelivered = loadRef.status && loadRef.status.toLowerCase() === 'delivered';
+                const isDisabled = updatingDates || isDelivered;
+                return (
+                  <button
+                    onClick={updateImportantDates}
+                    disabled={isDisabled}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${isDisabled ? MS.disabledBtn : MS.primaryBtn}`}
+                    title={isDelivered ? 'Cannot update dates for delivered loads' : 'Update important dates'}
+                  >
+                    {updatingDates ? (
+                      <>
+                        <div className={`animate-spin rounded-full h-4 w-4 ${MS.spinner} border-2`}></div>
+                        Updating...
+                      </>
+                    ) : (
+                      'Update'
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           </section>
 

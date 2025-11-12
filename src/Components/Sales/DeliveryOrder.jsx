@@ -468,6 +468,7 @@ export default function DeliveryOrder() {
     carrierName: '',
     equipmentType: '',
     carrierFees: '',
+    totalRates: '',
     bolInformation: '',
 
     // Shipper Information
@@ -1045,6 +1046,31 @@ export default function DeliveryOrder() {
             city: loadData.origins?.[0]?.city,
             state: loadData.origins?.[0]?.state
           });
+          
+          // If acceptedBid has rates array, populate charges (but don't open calculator automatically)
+          if (loadData.acceptedBid?.rates && Array.isArray(loadData.acceptedBid.rates) && loadData.acceptedBid.rates.length > 0) {
+            // Map the rates to the format expected by Charges Calculator
+            const mappedCharges = loadData.acceptedBid.rates.map(rate => ({
+              name: rate.name || '',
+              quantity: rate.quantity || '',
+              amt: rate.amount || rate.amt || '', // Support both 'amount' and 'amt'
+              total: rate.total || 0
+            }));
+            
+            // Set charges (calculator will open only when user clicks on Carrier Fees field)
+            setCharges(mappedCharges);
+            
+            // Set totalRates (will be displayed in carrierFees field)
+            const totalRatesValue = loadData.acceptedBid?.totalrates || loadData.acceptedBid?.totalRates || '';
+            setFormData(prev => ({
+              ...prev,
+              totalRates: totalRatesValue
+            }));
+            
+            console.log('Charges populated from acceptedBid:', mappedCharges);
+            console.log('Total Rates:', totalRatesValue);
+          }
+          
           alertify.success('Load data loaded and form fields auto-filled!');
         } else {
           console.error('No load data in response:', response);
@@ -1403,7 +1429,11 @@ export default function DeliveryOrder() {
 
     // 3) valid -> totals apply
     const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
-    setFormData(prev => ({ ...prev, carrierFees: String(totalCharges) }));
+    setFormData(prev => ({ 
+      ...prev, 
+      carrierFees: `$${totalCharges.toFixed(2)}`,
+      totalRates: String(totalCharges)
+    }));
 
     if (editingOrder && editingOrder._id) {
       const carrierFeesData = (charges || []).map(ch => ({
@@ -1905,6 +1935,7 @@ export default function DeliveryOrder() {
       carrierName: '',
       equipmentType: '',
       carrierFees: '',
+      totalRates: '',
 
       // Shipper Information
       shipperName: '',
@@ -2027,6 +2058,7 @@ export default function DeliveryOrder() {
           carrierName: fullOrderData.carrier?.carrierName || '',
           equipmentType: fullOrderData.carrier?.equipmentType || '',
           carrierFees: fullOrderData.carrier?.totalCarrierFees || '',
+          totalRates: fullOrderData.carrier?.totalRates || fullOrderData.carrier?.totalrates || '',
           shipperName: fullOrderData.shipper?.name || '',
           containerNo: fullOrderData.shipper?.containerNo || '',
           containerType: fullOrderData.shipper?.containerType || '',
@@ -4708,12 +4740,12 @@ export default function DeliveryOrder() {
                     {errors.carrier?.equipmentType && <p className="text-red-600 text-xs mt-1">{errors.carrier.equipmentType}</p>}
                   </div>
 
-                  {/* Carrier Fees is calculated from charges; click to open charges popup */}
+                  {/* Carrier Fees - shows total rates and opens charges calculator on click */}
                   <div>
                     <input
                       type="text"
                       name="carrierFees"
-                      value={formData.carrierFees}
+                      value={formData.totalRates ? `$${formData.totalRates}` : formData.carrierFees}
                       onClick={handleChargesClick}
                       readOnly
                       className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer ${errors.carrier?.fees ? 'border-red-400' : 'border-gray-300'}`}
@@ -6246,12 +6278,12 @@ export default function DeliveryOrder() {
                     )}
                   </div>
 
-                  {/* Carrier Fees (opens popup) */}
+                  {/* Carrier Fees - shows total rates and opens charges calculator on click */}
                   <div>
                     <input
                       type="text"
                       name="carrierFees"
-                      value={formData.carrierFees}
+                      value={formData.totalRates ? `$${formData.totalRates}` : formData.carrierFees}
                       onClick={handleChargesClick}
                       readOnly
                       className={`${errCls(!!errors.carrier?.fees)} cursor-pointer`}
