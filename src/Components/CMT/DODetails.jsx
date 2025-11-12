@@ -178,111 +178,111 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       });
     }
   }, [open, order]); // eslint-disable-line
-// PDF generate/download loading state
-const [genLoading, setGenLoading] = useState(null); // 'invoice' | 'rate' | 'bol' | null
+  // PDF generate/download loading state
+  const [genLoading, setGenLoading] = useState(null); // 'invoice' | 'rate' | 'bol' | null
 
-// Logo source for PDF generation - using your actual logo
-const logoSrc = Logo;
+  // Logo source for PDF generation - using your actual logo
+  const logoSrc = Logo;
 
-// Generate Rate Load Confirmation PDF function
-const generateRateLoadConfirmationPDF = async (order) => {
-  try {
-    // 1) Dispatcher info
-    let dispatcherPhone = 'N/A';
-    let dispatcherEmail = 'N/A';
+  // Generate Rate Load Confirmation PDF function
+  const generateRateLoadConfirmationPDF = async (order) => {
     try {
-      const cmtUsers = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/cmt/users`, {
-        headers: { Authorization: `Bearer ${sessionStorage.getItem('token') || localStorage.getItem('token')}` }
-      });
-      const dispatcher = cmtUsers.data?.data?.find(
-        (user) => user.aliasName === ((order.customers && order.customers[0] && order.customers[0].dispatcherName) || '')
-      );
-      if (dispatcher) {
-        dispatcherPhone = dispatcher.mobileNo || 'N/A';
-        dispatcherEmail = dispatcher.email || 'N/A';
+      // 1) Dispatcher info
+      let dispatcherPhone = 'N/A';
+      let dispatcherEmail = 'N/A';
+      try {
+        const cmtUsers = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/cmt/users`, {
+          headers: { Authorization: `Bearer ${sessionStorage.getItem('token') || localStorage.getItem('token')}` }
+        });
+        const dispatcher = cmtUsers.data?.data?.find(
+          (user) => user.aliasName === ((order.customers && order.customers[0] && order.customers[0].dispatcherName) || '')
+        );
+        if (dispatcher) {
+          dispatcherPhone = dispatcher.mobileNo || 'N/A';
+          dispatcherEmail = dispatcher.email || 'N/A';
+        }
+      } catch (err) {
+        console.error('Error fetching dispatcher info:', err);
       }
-    } catch (err) {
-      console.error('Error fetching dispatcher info:', err);
-    }
 
-    // 2) Helpers (NO nullish + logical mixing)
-    const toNum = (v) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : 0;
-    };
-    const currency = (n) =>
-      Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      // 2) Helpers (NO nullish + logical mixing)
+      const toNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const currency = (n) =>
+        Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    const formatDateStr = (d) => {
-      if (!d) return 'N/A';
-      try { return new Date(d).toLocaleDateString(); } catch { return 'N/A'; }
-    };
-    const formatDateStrUS = (d) => {
-      if (!d) return 'N/A';
-      try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return 'N/A'; }
-    };
-    const formatAddr = (l) => {
-      if (!l) return 'N/A';
-      const parts = [l.address, l.city, l.state, l.zipCode].filter(Boolean);
-      return parts.length ? parts.join(', ') : 'N/A';
-    };
-    // NEW: name + address line
-    const formatLocLine = (l) => {
-      if (!l) return 'N/A';
-      const name = (l.name || '').trim();
-      const addr = formatAddr(l);
-      return name ? `${name} — ${addr}` : addr;
-    };
+      const formatDateStr = (d) => {
+        if (!d) return 'N/A';
+        try { return new Date(d).toLocaleDateString(); } catch { return 'N/A'; }
+      };
+      const formatDateStrUS = (d) => {
+        if (!d) return 'N/A';
+        try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return 'N/A'; }
+      };
+      const formatAddr = (l) => {
+        if (!l) return 'N/A';
+        const parts = [l.address, l.city, l.state, l.zipCode].filter(Boolean);
+        return parts.length ? parts.join(', ') : 'N/A';
+      };
+      // NEW: name + address line
+      const formatLocLine = (l) => {
+        if (!l) return 'N/A';
+        const name = (l.name || '').trim();
+        const addr = formatAddr(l);
+        return name ? `${name} — ${addr}` : addr;
+      };
 
-    // 3) Carrier fees (names + qty + rate + total)
-    const rawFees = (order.carrier && Array.isArray(order.carrier.carrierFees)) ? order.carrier.carrierFees : [];
-    const feeEntries = rawFees.map((ch, idx) => {
-      let qtyRaw;
-      if (ch && ch.qty !== undefined && ch.qty !== null) qtyRaw = ch.qty;
-      else if (ch && ch.quantity !== undefined && ch.quantity !== null) qtyRaw = ch.quantity;
-      else qtyRaw = 1;
-      const qty = toNum(qtyRaw) || 1;
+      // 3) Carrier fees (names + qty + rate + total)
+      const rawFees = (order.carrier && Array.isArray(order.carrier.carrierFees)) ? order.carrier.carrierFees : [];
+      const feeEntries = rawFees.map((ch, idx) => {
+        let qtyRaw;
+        if (ch && ch.qty !== undefined && ch.qty !== null) qtyRaw = ch.qty;
+        else if (ch && ch.quantity !== undefined && ch.quantity !== null) qtyRaw = ch.quantity;
+        else qtyRaw = 1;
+        const qty = toNum(qtyRaw) || 1;
 
-      let rateRaw = (ch && ch.rate !== undefined && ch.rate !== null) ? ch.rate : 0;
-      const rate = toNum(rateRaw);
+        let rateRaw = (ch && ch.rate !== undefined && ch.rate !== null) ? ch.rate : 0;
+        const rate = toNum(rateRaw);
 
-      let totalRaw = null;
-      if (ch && ch.total !== undefined && ch.total !== null) totalRaw = ch.total;
-      else if (ch && ch.amount !== undefined && ch.amount !== null) totalRaw = ch.amount;
-      const total = totalRaw !== null ? toNum(totalRaw) : (rate * qty);
+        let totalRaw = null;
+        if (ch && ch.total !== undefined && ch.total !== null) totalRaw = ch.total;
+        else if (ch && ch.amount !== undefined && ch.amount !== null) totalRaw = ch.amount;
+        const total = totalRaw !== null ? toNum(totalRaw) : (rate * qty);
 
-      let desc = 'Charge ' + (idx + 1);
-      if (ch && ch.description) desc = ch.description;
-      else if (ch && ch.name) desc = ch.name;
-      else if (ch && ch.type) desc = ch.type;
+        let desc = 'Charge ' + (idx + 1);
+        if (ch && ch.description) desc = ch.description;
+        else if (ch && ch.name) desc = ch.name;
+        else if (ch && ch.type) desc = ch.type;
 
-      return { desc, qty, rate, total };
-    });
-    const totalCarrierFees = feeEntries.reduce((s, it) => s + toNum(it.total), 0);
+        return { desc, qty, rate, total };
+      });
+      const totalCarrierFees = feeEntries.reduce((s, it) => s + toNum(it.total), 0);
 
-    // Carrier Charges list (under Carrier Info)
-    const chargesListItemsHTML = feeEntries.length
-      ? feeEntries.map((it) =>
-        '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #ececec;border-radius:8px;padding:8px 10px;margin:6px 0;">' +
-        `<div><div style="font-weight:700;">${it.desc}</div><div style="font-size:11px;color:#555;">Quantity: ${it.qty} × Amount: $${currency(it.rate)}</div></div>` +
-        `<div style="font-weight:700;">$ ${currency(it.total)}</div>` +
-        '</div>'
-      ).join('')
-      : '<div style="color:#777;border:1px dashed #ccc;border-radius:8px;padding:8px 10px;">No carrier charges</div>';
+      // Carrier Charges list (under Carrier Info)
+      const chargesListItemsHTML = feeEntries.length
+        ? feeEntries.map((it) =>
+          '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #ececec;border-radius:8px;padding:8px 10px;margin:6px 0;">' +
+          `<div><div style="font-weight:700;">${it.desc}</div><div style="font-size:11px;color:#555;">Quantity: ${it.qty} × Amount: $${currency(it.rate)}</div></div>` +
+          `<div style="font-weight:700;">$ ${currency(it.total)}</div>` +
+          '</div>'
+        ).join('')
+        : '<div style="color:#777;border:1px dashed #ccc;border-radius:8px;padding:8px 10px;">No carrier charges</div>';
 
-    const chargesListHTML =
-      '<div style="margin:-6px 0 10px 0;padding:10px;border:1px solid #f0e8ff;background:#fbf7ff;border-radius:10px;">' +
-      '<h4 style="font-size:12px;margin:0 0 8px 0;color:#2c3e50;">Carrier Charges</h4>' +
-      chargesListItemsHTML +
-      '</div>';
+      const chargesListHTML =
+        '<div style="margin:-6px 0 10px 0;padding:10px;border:1px solid #f0e8ff;background:#fbf7ff;border-radius:10px;">' +
+        '<h4 style="font-size:12px;margin:0 0 8px 0;color:#2c3e50;">Carrier Charges</h4>' +
+        chargesListItemsHTML +
+        '</div>';
 
-    // 4) Pickup/Drop sections (EACH location separately)
-    const ship = order.shipper || {};
-    const pickUps = Array.isArray(ship.pickUpLocations) ? ship.pickUpLocations : [];
-    const drops  = Array.isArray(ship.dropLocations) ? ship.dropLocations : [];
+      // 4) Pickup/Drop sections (EACH location separately)
+      const ship = order.shipper || {};
+      const pickUps = Array.isArray(ship.pickUpLocations) ? ship.pickUpLocations : [];
+      const drops = Array.isArray(ship.dropLocations) ? ship.dropLocations : [];
 
-    const pickupSectionsHTML = pickUps.length
-      ? pickUps.map((l, i) => {
+      const pickupSectionsHTML = pickUps.length
+        ? pickUps.map((l, i) => {
           const addrLine = formatLocLine(l); // << name + address
           const dateStr = formatDateStr(l && l.pickUpDate);
           const hoursLabel = 'Shipping Hours';
@@ -312,15 +312,15 @@ const generateRateLoadConfirmationPDF = async (order) => {
             '</table>'
           );
         }).join('')
-      : (
-        '<table class="rates-table">' +
-        '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location</th></tr></thead>' +
-        '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
-        '</table>'
-      );
+        : (
+          '<table class="rates-table">' +
+          '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location</th></tr></thead>' +
+          '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
+          '</table>'
+        );
 
-    const dropSectionsHTML = drops.length
-      ? drops.map((l, i) => {
+      const dropSectionsHTML = drops.length
+        ? drops.map((l, i) => {
           const addrLine = formatLocLine(l); // << name + address
           const dateStr = formatDateStr(l && l.dropDate);
           const hoursLabel = 'Receiving Hours';
@@ -350,40 +350,40 @@ const generateRateLoadConfirmationPDF = async (order) => {
             '</table>'
           );
         }).join('')
-      : (
-        '<table class="rates-table">' +
-        '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location</th></tr></thead>' +
-        '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
-        '</table>'
-      );
+        : (
+          '<table class="rates-table">' +
+          '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location</th></tr></thead>' +
+          '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
+          '</table>'
+        );
 
-    // 5) Bottom: total with signature
-    const amountBottomBlockHTML =
-      '<div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">' +
-      '<h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #2c3e50;">Total Carrier Fees</h3>' +
-      '<p style="text-align:center; font-size: 16px; font-weight: 700; margin: 0 0 14px 0;">$ ' + currency(totalCarrierFees) + '</p>' +
-      '<div style="margin-top: 10px; font-size: 12px; line-height: 1.6;">' +
-      '<p style="margin-bottom: 10px; text-align: center;">' +
-      'Accepted By _________________________ Date ________________ Signature ____________________' +
-      '</p>' +
-      '<p style="text-align: center;">' +
-      'Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________' +
-      '</p>' +
-      '</div>' +
-      '</div>';
+      // 5) Bottom: total with signature
+      const amountBottomBlockHTML =
+        '<div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">' +
+        '<h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #2c3e50;">Total Carrier Fees</h3>' +
+        '<p style="text-align:center; font-size: 16px; font-weight: 700; margin: 0 0 14px 0;">$ ' + currency(totalCarrierFees) + '</p>' +
+        '<div style="margin-top: 10px; font-size: 12px; line-height: 1.6;">' +
+        '<p style="margin-bottom: 10px; text-align: center;">' +
+        'Accepted By _________________________ Date ________________ Signature ____________________' +
+        '</p>' +
+        '<p style="text-align: center;">' +
+        'Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________' +
+        '</p>' +
+        '</div>' +
+        '</div>';
 
-    // 6) Dates for header
-    const todayUS = formatDateStrUS(new Date());
-    const shipDateUS = formatDateStrUS(order.shipper && order.shipper.pickUpDate);
+      // 6) Dates for header
+      const todayUS = formatDateStrUS(new Date());
+      const shipDateUS = formatDateStrUS(order.shipper && order.shipper.pickUpDate);
 
-    // 7) Build HTML
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alertify.error('Popup blocked. Please allow popups and try again.');
-      return;
-    }
+      // 7) Build HTML
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alertify.error('Popup blocked. Please allow popups and try again.');
+        return;
+      }
 
-    const confirmationHTML = `
+      const confirmationHTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -548,64 +548,64 @@ const generateRateLoadConfirmationPDF = async (order) => {
 </html>
     `;
 
-    printWindow.document.write(confirmationHTML);
-    printWindow.document.close();
-    printWindow.onload = function () {
-      printWindow.print();
-      printWindow.close();
-    };
-    alertify.success('Rate and Load Confirmation PDF generated successfully!');
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    alertify.error('Failed to generate PDF. Please try again.');
-  }
-};
+      printWindow.document.write(confirmationHTML);
+      printWindow.document.close();
+      printWindow.onload = function () {
+        printWindow.print();
+        printWindow.close();
+      };
+      alertify.success('Rate and Load Confirmation PDF generated successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alertify.error('Failed to generate PDF. Please try again.');
+    }
+  };
 
-// Generate Invoice PDF function
-const generateInvoicePDF = (order) => {
-  try {
-    const printWindow = window.open('', '_blank');
+  // Generate Invoice PDF function
+  const generateInvoicePDF = (order) => {
+    try {
+      const printWindow = window.open('', '_blank');
 
-    // ---- Bill To + Address (from shippers list if available) ----
-    const cust = order?.customers?.[0] || {};
-    const companyName = (cust.billTo || '').trim();
-    const billToDisplay = [companyName || 'N/A'].filter(Boolean).join('<br>');
-    const workOrderNo = cust.workOrderNo || 'N/A';
-    const invoiceNo = order.doNum || cust.loadNo || 'N/A';
-    const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      // ---- Bill To + Address (from shippers list if available) ----
+      const cust = order?.customers?.[0] || {};
+      const companyName = (cust.billTo || '').trim();
+      const billToDisplay = [companyName || 'N/A'].filter(Boolean).join('<br>');
+      const workOrderNo = cust.workOrderNo || 'N/A';
+      const invoiceNo = order.doNum || cust.loadNo || 'N/A';
+      const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
-    // ---- ONLY customer rates ----
-    const LH = Number(cust.lineHaul) || 0;
-    const FSC = Number(cust.fsc) || 0;
-    const OTH = Number(cust.other) || 0;
-    const CUSTOMER_TOTAL = LH + FSC + OTH;
+      // ---- ONLY customer rates ----
+      const LH = Number(cust.lineHaul) || 0;
+      const FSC = Number(cust.fsc) || 0;
+      const OTH = Number(cust.other) || 0;
+      const CUSTOMER_TOTAL = LH + FSC + OTH;
 
-    // helpers
-    const fmtDate = (d) => {
-      if (!d) return 'N/A';
-      try {
-        const dt = new Date(d);
-        if (Number.isNaN(dt.getTime())) return 'Invalid Date';
-        // Sirf date; UTC use kiya to avoid timezone issues
-        return dt.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          timeZone: 'UTC'
-        });
-      } catch (error) {
-        console.error('Error formatting date:', error, d);
-        return 'Invalid Date';
-      }
-    };
+      // helpers
+      const fmtDate = (d) => {
+        if (!d) return 'N/A';
+        try {
+          const dt = new Date(d);
+          if (Number.isNaN(dt.getTime())) return 'Invalid Date';
+          // Sirf date; UTC use kiya to avoid timezone issues
+          return dt.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            timeZone: 'UTC'
+          });
+        } catch (error) {
+          console.error('Error formatting date:', error, d);
+          return 'Invalid Date';
+        }
+      };
 
-    const fullAddr = (loc) =>
-      [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
+      const fullAddr = (loc) =>
+        [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
 
-    const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
-    const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
+      const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
+      const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
 
-    const html = `
+      const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -749,100 +749,100 @@ const generateInvoicePDF = (order) => {
 </html>
     `;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.onload = function () {
-      printWindow.print();
-      printWindow.close();
-    };
-    alertify.success('Invoice PDF generated successfully!');
-  } catch (err) {
-    console.error('Error generating PDF:', err);
-    alertify.error('Failed to generate PDF. Please try again.');
-  }
-};
-
-// Generate BOL PDF function
-const generateBolPDF = (orderInput) => {
-  // ---------- SAFE DEFAULTS ----------
-  const order = orderInput || {};
-  const shipper = order.shipper || {};
-  const pickupLocs = Array.isArray(shipper.pickUpLocations) ? shipper.pickUpLocations : [];
-  const dropLocs = Array.isArray(shipper.dropLocations) ? shipper.dropLocations : [];
-
-  // Multi-key Load Number (first available)
-  const getLoadNumber = () => {
-    // 1) customers[].loadNo (pehle non-empty lo)
-    const fromCustomers = Array.isArray(order?.customers)
-      ? (order.customers.map(c => (c?.loadNo || '').trim()).find(v => v))
-      : null;
-
-    // 2) table/list me aksar doNum me loadNo aa jata hai
-    const fromDoNum = (order?.doNum || '').trim();
-
-    // 3) legacy/other fields
-    const fromOrder =
-      (order?.loadNo || order?.loadNumber || order?.loadId || order?.referenceNo || '').trim();
-    const fromShipper =
-      (shipper?.loadNo || shipper?.loadNumber || '').trim();
-
-    // 4) (optional) last fallback: workOrderNo (agar chaho)
-    const fromWON =
-      Array.isArray(order?.customers)
-        ? (order.customers.map(c => (c?.workOrderNo || '').trim()).find(v => v) || '')
-        : '';
-
-    // priority: customers.loadNo → doNum → order.* → shipper.* → workOrderNo → 'N/A'
-    return fromCustomers || fromDoNum || fromOrder || fromShipper || fromWON || 'N/A';
-  };
-
-  // NEW: Collect BOL(s)
-  const bolLine = (() => {
-    const arr = [];
-    if (Array.isArray(order?.bols)) {
-      order.bols.forEach(b => {
-        const v = typeof b === 'string' ? b : (b?.bolNo || b?.number || '');
-        if (v && String(v).trim()) arr.push(String(v).trim());
-      });
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = function () {
+        printWindow.print();
+        printWindow.close();
+      };
+      alertify.success('Invoice PDF generated successfully!');
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alertify.error('Failed to generate PDF. Please try again.');
     }
-    if (!arr.length && order?.bolInformation) arr.push(String(order.bolInformation));
-    return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
-  })();
-
-  // Use your actual logo
-  const safeLogo = logoSrc;
-
-  // ---------- HELPERS ----------
-  const fmtDate = (d) => {
-    if (!d) return 'N/A';
-    const dt = new Date(d);
-    return isNaN(dt)
-      ? 'N/A'
-      : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
   };
 
-  const fmtTime = (d) => {
-    if (!d) return '';
-    const dt = new Date(d);
-    return isNaN(dt)
-      ? ''
-      : dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  };
+  // Generate BOL PDF function
+  const generateBolPDF = (orderInput) => {
+    // ---------- SAFE DEFAULTS ----------
+    const order = orderInput || {};
+    const shipper = order.shipper || {};
+    const pickupLocs = Array.isArray(shipper.pickUpLocations) ? shipper.pickUpLocations : [];
+    const dropLocs = Array.isArray(shipper.dropLocations) ? shipper.dropLocations : [];
 
-  const fmtAddr = (loc) => {
-    if (!loc || typeof loc !== 'object') return 'N/A';
-    const parts = [loc.name, loc.address, loc.city, loc.state, loc.zipCode].filter(Boolean);
-    return parts.length ? parts.join(', ') : 'N/A';
-  };
+    // Multi-key Load Number (first available)
+    const getLoadNumber = () => {
+      // 1) customers[].loadNo (pehle non-empty lo)
+      const fromCustomers = Array.isArray(order?.customers)
+        ? (order.customers.map(c => (c?.loadNo || '').trim()).find(v => v))
+        : null;
 
-  const rowsLen = Math.max(pickupLocs.length, dropLocs.length);
+      // 2) table/list me aksar doNum me loadNo aa jata hai
+      const fromDoNum = (order?.doNum || '').trim();
 
-  // Truck In/Out (blank lines if not present)
-  const truckIn = fmtTime(order.truckInTime);
-  const truckOut = fmtTime(order.truckOutTime);
+      // 3) legacy/other fields
+      const fromOrder =
+        (order?.loadNo || order?.loadNumber || order?.loadId || order?.referenceNo || '').trim();
+      const fromShipper =
+        (shipper?.loadNo || shipper?.loadNumber || '').trim();
 
-  // ---------- HTML ----------
-  const html = `
+      // 4) (optional) last fallback: workOrderNo (agar chaho)
+      const fromWON =
+        Array.isArray(order?.customers)
+          ? (order.customers.map(c => (c?.workOrderNo || '').trim()).find(v => v) || '')
+          : '';
+
+      // priority: customers.loadNo → doNum → order.* → shipper.* → workOrderNo → 'N/A'
+      return fromCustomers || fromDoNum || fromOrder || fromShipper || fromWON || 'N/A';
+    };
+
+    // NEW: Collect BOL(s)
+    const bolLine = (() => {
+      const arr = [];
+      if (Array.isArray(order?.bols)) {
+        order.bols.forEach(b => {
+          const v = typeof b === 'string' ? b : (b?.bolNo || b?.number || '');
+          if (v && String(v).trim()) arr.push(String(v).trim());
+        });
+      }
+      if (!arr.length && order?.bolInformation) arr.push(String(order.bolInformation));
+      return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
+    })();
+
+    // Use your actual logo
+    const safeLogo = logoSrc;
+
+    // ---------- HELPERS ----------
+    const fmtDate = (d) => {
+      if (!d) return 'N/A';
+      const dt = new Date(d);
+      return isNaN(dt)
+        ? 'N/A'
+        : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    };
+
+    const fmtTime = (d) => {
+      if (!d) return '';
+      const dt = new Date(d);
+      return isNaN(dt)
+        ? ''
+        : dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const fmtAddr = (loc) => {
+      if (!loc || typeof loc !== 'object') return 'N/A';
+      const parts = [loc.name, loc.address, loc.city, loc.state, loc.zipCode].filter(Boolean);
+      return parts.length ? parts.join(', ') : 'N/A';
+    };
+
+    const rowsLen = Math.max(pickupLocs.length, dropLocs.length);
+
+    // Truck In/Out (blank lines if not present)
+    const truckIn = fmtTime(order.truckInTime);
+    const truckOut = fmtTime(order.truckOutTime);
+
+    // ---------- HTML ----------
+    const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1022,73 +1022,73 @@ const generateBolPDF = (orderInput) => {
 </html>
   `;
 
-  // ---------- PRINT: popup first, then iframe fallback ----------
-  const openAndPrint = (docTarget) => {
-    docTarget.document.open();
-    docTarget.document.write(html);
-    docTarget.document.close();
-    
-    // Add a small delay to ensure content is loaded
-    setTimeout(() => {
-      docTarget.focus();
-      docTarget.print();
-      if (docTarget !== window && docTarget.close) {
-        setTimeout(() => docTarget.close(), 1000);
+    // ---------- PRINT: popup first, then iframe fallback ----------
+    const openAndPrint = (docTarget) => {
+      docTarget.document.open();
+      docTarget.document.write(html);
+      docTarget.document.close();
+
+      // Add a small delay to ensure content is loaded
+      setTimeout(() => {
+        docTarget.focus();
+        docTarget.print();
+        if (docTarget !== window && docTarget.close) {
+          setTimeout(() => docTarget.close(), 1000);
+        }
+        alertify.success('BOL PDF generated successfully!');
+      }, 500);
+    };
+
+    try {
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      if (printWindow && !printWindow.closed) {
+        openAndPrint(printWindow);
+      } else {
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+        openAndPrint(iframe.contentWindow);
+        setTimeout(() => iframe.remove(), 5000);
       }
-      alertify.success('BOL PDF generated successfully!');
-    }, 500);
+    } catch (err) {
+      console.error('Error generating BOL PDF:', err);
+      alertify.error('Failed to generate BOL PDF. Please try again.');
+    }
   };
 
-  try {
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
-    if (printWindow && !printWindow.closed) {
-      openAndPrint(printWindow);
-    } else {
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = '0';
-      document.body.appendChild(iframe);
-      openAndPrint(iframe.contentWindow);
-      setTimeout(() => iframe.remove(), 5000);
+  const generateDoc = async (type) => {
+    try {
+      setGenLoading(type);
+      switch (type) {
+        case 'invoice':
+          generateInvoicePDF(order.raw || order);
+          break;
+        case 'rate':
+          generateRateLoadConfirmationPDF(order.raw || order);
+          break;
+        case 'bol':
+          generateBolPDF(order.raw || order);
+          break;
+        default:
+          throw new Error('Invalid document type');
+      }
+    } catch (e) {
+      alertify.error(e?.response?.data?.message || e.message || 'PDF generation failed');
+    } finally {
+      setGenLoading(null);
     }
-  } catch (err) {
-    console.error('Error generating BOL PDF:', err);
-    alertify.error('Failed to generate BOL PDF. Please try again.');
-  }
-};
-
-const generateDoc = async (type) => {
-  try {
-    setGenLoading(type);
-    switch (type) {
-      case 'invoice':
-        generateInvoicePDF(order.raw || order);
-        break;
-      case 'rate':
-        generateRateLoadConfirmationPDF(order.raw || order);
-        break;
-      case 'bol':
-        generateBolPDF(order.raw || order);
-        break;
-      default:
-        throw new Error('Invalid document type');
-    }
-  } catch (e) {
-    alertify.error(e?.response?.data?.message || e.message || 'PDF generation failed');
-  } finally {
-    setGenLoading(null);
-  }
-};
+  };
 
   const doMongoId = order?.raw?._id || order?.id;
   const shipmentNumber = extractShipmentNumber(order);
   const alreadyForwarded =
     order?.raw?.assignmentStatus === 'cmt_verified' || !!order?.raw?.forwardedToAccountant;
-  
+
   // Debug logging
   console.log('DO Details Modal - Order:', order?.doId, 'Already Forwarded:', alreadyForwarded, 'Assignment Status:', order?.raw?.assignmentStatus, 'Forwarded To Accountant:', !!order?.raw?.forwardedToAccountant);
   function RowImages({ groups = {} }) {
@@ -1222,11 +1222,11 @@ const generateDoc = async (type) => {
     try {
       // Get loadId from loadReference
       const loadId = loadRef._id || loadRef.loadId || loadRef.id;
-      
+
       if (!loadId) {
         return alertify.error('Missing Load ID. Please ensure load reference is available.');
       }
-      
+
       if (!cmtEmpId) return alertify.error('Missing CMT EmpId');
 
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -1275,7 +1275,7 @@ const generateDoc = async (type) => {
       };
 
       const importantDatesPayload = {};
-      
+
       // Process each date field with proper mapping
       Object.entries(fieldMapping).forEach(([frontendField, apiField]) => {
         const dateValue = importantDates[frontendField];
@@ -1301,7 +1301,7 @@ const generateDoc = async (type) => {
           importantDates: importantDatesPayload
         },
         {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
@@ -2185,13 +2185,12 @@ const generateDoc = async (type) => {
                 <button
                   onClick={forwardToAccountant}
                   disabled={fwLoading || alreadyForwarded}
-                  className={`px-6 py-3 rounded-lg transition-all font-semibold ${
-                    alreadyForwarded 
-                      ? 'bg-gray-400 text-white cursor-not-allowed opacity-60' 
-                      : fwLoading 
-                        ? 'bg-blue-300 text-white cursor-not-allowed' 
+                  className={`px-6 py-3 rounded-lg transition-all font-semibold ${alreadyForwarded
+                      ? 'bg-gray-400 text-white cursor-not-allowed opacity-60'
+                      : fwLoading
+                        ? 'bg-blue-300 text-white cursor-not-allowed'
                         : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-lg hover:shadow-xl'
-                  }`}
+                    }`}
                   title={alreadyForwarded ? 'This DO has already been forwarded to accountant' : 'Forward this DO to accountant'}
                 >
                   {alreadyForwarded ? (
@@ -2226,11 +2225,10 @@ const generateDoc = async (type) => {
               <button
                 onClick={() => generateDoc('invoice')}
                 disabled={genLoading === 'invoice'}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                  genLoading === 'invoice' 
-                    ? 'bg-emerald-300 text-white cursor-not-allowed' 
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${genLoading === 'invoice'
+                    ? 'bg-emerald-300 text-white cursor-not-allowed'
                     : 'bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 shadow-lg hover:shadow-xl'
-                }`}
+                  }`}
                 title="Generate Invoice PDF"
               >
                 {genLoading === 'invoice' ? (
@@ -2250,11 +2248,10 @@ const generateDoc = async (type) => {
               <button
                 onClick={() => generateDoc('rate')}
                 disabled={genLoading === 'rate'}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                  genLoading === 'rate' 
-                    ? 'bg-indigo-300 text-white cursor-not-allowed' 
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${genLoading === 'rate'
+                    ? 'bg-indigo-300 text-white cursor-not-allowed'
                     : 'bg-gradient-to-r from-indigo-600 to-purple-700 text-white hover:from-indigo-700 hover:to-purple-800 shadow-lg hover:shadow-xl'
-                }`}
+                  }`}
                 title="Generate Rate Confirmation PDF"
               >
                 {genLoading === 'rate' ? (
@@ -2274,11 +2271,10 @@ const generateDoc = async (type) => {
               <button
                 onClick={() => generateDoc('bol')}
                 disabled={genLoading === 'bol'}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                  genLoading === 'bol' 
-                    ? 'bg-orange-300 text-white cursor-not-allowed' 
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${genLoading === 'bol'
+                    ? 'bg-orange-300 text-white cursor-not-allowed'
                     : 'bg-gradient-to-r from-orange-500 to-amber-600 text-white hover:from-orange-600 hover:to-amber-700 shadow-lg hover:shadow-xl'
-                }`}
+                  }`}
                 title="Generate BOL PDF"
               >
                 {genLoading === 'bol' ? (
@@ -2432,7 +2428,7 @@ export default function DODetails({ overrideEmpId }) {
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/cmt-user/rejected-dos?cmtEmpId=${encodeURIComponent(resolvedEmpId)}`;
       console.log('Fetching rejected DOs from:', url);
       console.log('CMT EmpId:', resolvedEmpId);
-      
+
       const response = await axios.get(url, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
       console.log('Rejected DOs API Response:', response.data);
 
@@ -2521,10 +2517,10 @@ export default function DODetails({ overrideEmpId }) {
     }
   };
 
-  useEffect(() => { 
-    fetchOrders(); 
+  useEffect(() => {
+    fetchOrders();
     fetchRejectedDOs();
-    /* eslint-disable-next-line */ 
+    /* eslint-disable-next-line */
   }, [resolvedEmpId]);
 
   const filteredOrders = useMemo(() => {
@@ -2568,7 +2564,7 @@ export default function DODetails({ overrideEmpId }) {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setCurrentPage(1);
-    
+
     // If switching to rejected tab and no data, fetch it
     if (tab === 'rejected' && rejectedDOs.length === 0 && !rejectedLoading) {
       fetchRejectedDOs();
@@ -2650,11 +2646,10 @@ export default function DODetails({ overrideEmpId }) {
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => handleTabChange('assign-do')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'assign-do'
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'assign-do'
               ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
               : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-2">
             <Package size={18} />
@@ -2663,11 +2658,10 @@ export default function DODetails({ overrideEmpId }) {
         </button>
         <button
           onClick={() => handleTabChange('rejected')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'rejected'
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'rejected'
               ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg'
               : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-2">
             <XCircle size={18} />
@@ -2792,7 +2786,7 @@ export default function DODetails({ overrideEmpId }) {
         </div>
       )}
 
-      
+
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -2860,7 +2854,7 @@ export default function DODetails({ overrideEmpId }) {
                             <FaEye size={12} />
                             <span>View</span>
                           </button>
-                          
+
                           {/* Resubmit button for rejected DOs */}
                           {activeTab === 'rejected' && (
                             <button
@@ -2884,16 +2878,16 @@ export default function DODetails({ overrideEmpId }) {
               <div className="text-center py-12">
                 <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500 text-lg">
-                  {searchTerm 
-                    ? 'No DOs found matching your search' 
-                    : activeTab === 'assign-do' 
-                      ? 'No DOs assigned' 
+                  {searchTerm
+                    ? 'No DOs found matching your search'
+                    : activeTab === 'assign-do'
+                      ? 'No DOs assigned'
                       : 'No rejected DOs'
                   }
                 </p>
                 <p className="text-gray-400 text-sm">
-                  {searchTerm 
-                    ? 'Try adjusting your search terms' 
+                  {searchTerm
+                    ? 'Try adjusting your search terms'
                     : activeTab === 'assign-do'
                       ? 'Currently no data for this CMT user'
                       : 'No DOs have been rejected by accountant yet'
@@ -2955,11 +2949,10 @@ export default function DODetails({ overrideEmpId }) {
                   <button
                     key={page}
                     onClick={() => handlePageChange(page)}
-                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                      currentPage === page
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
                         ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
                         : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
+                      }`}
                   >
                     {page}
                   </button>
@@ -3010,7 +3003,7 @@ export default function DODetails({ overrideEmpId }) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setResubmitModal({ open: false, order: null })} />
           <div className="relative w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
-            
+
             {/* Header */}
             <div className={`${SOFT.header} mb-5`}>
               <div className="flex items-start justify-between gap-3">
@@ -3020,7 +3013,7 @@ export default function DODetails({ overrideEmpId }) {
                     This DO was rejected by the accountant and needs corrections
                   </p>
                 </div>
-                <button 
+                <button
                   onClick={() => setResubmitModal({ open: false, order: null })}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25"
                 >

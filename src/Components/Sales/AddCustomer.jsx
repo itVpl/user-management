@@ -263,7 +263,7 @@ const AddCustomer = () => {
       if (!v.trim()) return 'Please enter the mobile number.';
       if (!/^[0-9]+$/.test(v)) return 'Please enter the valid mobile number.';
       if (!phoneRegex.test(v)) return 'Please enter the valid mobile number.';
-      if (!/^[6-9]/.test(v)) return 'Please enter the valid mobile number.';
+      if (!/^[1-9]/.test(v)) return 'Please enter the valid mobile number.';
       return '';
     },
     password: v => {
@@ -544,8 +544,8 @@ const AddCustomer = () => {
 
       {/* Add Modal */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/10 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+        <div className="fixed inset-0 z-50 flex items-start justify-center backdrop-blur-sm bg-black/10 p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl my-8 relative">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
