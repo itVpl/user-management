@@ -67,6 +67,7 @@ import CallingReport from "./Pages/IddCallingReport.jsx";
 import TermsAndConditions from "./Components/TermsAndConditions.jsx";
 
 import AddFleet from "./Components/CMT-Manager/addFleet.jsx";
+import GlobalAssignmentNotification from "./Components/CMT/GlobalAssignmentNotification.jsx";
 
 
 
@@ -252,6 +253,7 @@ function App() {
     <>
       {/* ✅ Routes ke bahar */}
       <GlobalRRListener />
+      <GlobalAssignmentNotification />
       <ToastContainer position="top-right" newestOnTop />
 
       <Routes>

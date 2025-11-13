@@ -66,85 +66,126 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
   }, [customers, page]);
 
   return (
-    <div className="bg-white shadow rounded-xl overflow-auto">
-      <table className="min-w-full text-sm text-gray-700">
-        <thead className="bg-gray-100 text-xs uppercase text-gray-600">
-          <tr>
-            <th className="px-4 py-3 text-left">Company Name</th>
-            <th className="px-4 py-3 text-left">MC/DOT</th>
-            <th className="px-4 py-3 text-left">Country</th>
-            <th className="px-4 py-3 text-left">State</th>
-            <th className="px-4 py-3 text-left">City</th>
-            <th className="px-4 py-3 text-left">Phone</th>
-            <th className="px-4 py-3 text-left">Email</th>
-            <th className="px-4 py-3 text-left">Status</th>
-            <th className="px-4 py-3 text-left">Added On</th>
-            <th className="px-4 py-3 text-left">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pageData.map((cust, index) => (
-            <tr key={index} className="hover:bg-gray-50 transition-all">
-              <td className="px-4 py-3 border-b border-gray-100">{cust.compName}</td>
-              <td className="px-4 py-3 border-b border-gray-100">{cust.mc_dot_no}</td>
-              <td className="px-4 py-3 border-b border-gray-100">{cust.country}</td>
-              <td className="px-4 py-3 border-b border-gray-100">{cust.state}</td>
-              <td className="px-4 py-3 border-b border-gray-100">{cust.city}</td>
-              <td className="px-4 py-3 border-b border-gray-100">{cust.phoneNo}</td>
-              <td className="px-4 py-3 border-b border-gray-100">{cust.email}</td>
-              <td className="px-4 py-3 border-b border-gray-100 capitalize">{cust.status}</td>
-              <td className="px-4 py-3 border-b border-gray-100">
-                {cust.addedAt ? new Date(cust.addedAt).toLocaleDateString() : 'N/A'}
-              </td>
-              <td className="px-4 py-3 border-b border-gray-100">
-                <button
-                  onClick={() => onAction?.(cust)}
-                  className={`px-3 py-1 rounded text-sm font-medium
-                    ${/blacklist/i.test(cust?.status)
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
-                >
-                  {/blacklist/i.test(cust?.status) ? 'Remove From Blacklist' : 'Blacklist'}
-                </button>
-              </td>
-            </tr>
-          ))}
-          {pageData.length === 0 && (
+    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm text-gray-700">
+          <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <td className="px-4 py-4 text-center text-gray-500" colSpan="10">
-                No customer data available
-              </td>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Company Name</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">MC/DOT</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Country</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">State</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">City</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Phone</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Added On</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pageData.map((cust, index) => (
+              <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                <td className="py-2 px-4">
+                  <span className="font-medium text-gray-700">{cust.compName}</span>
+                </td>
+                <td className="py-2 px-4">
+                  <span className="font-medium text-gray-700">{cust.mc_dot_no}</span>
+                </td>
+                <td className="py-2 px-4">
+                  <span className="font-medium text-gray-700">{cust.country}</span>
+                </td>
+                <td className="py-2 px-4">
+                  <span className="font-medium text-gray-700">{cust.state}</span>
+                </td>
+                <td className="py-2 px-4">
+                  <span className="font-medium text-gray-700">{cust.city}</span>
+                </td>
+                <td className="py-2 px-4">
+                  <span className="font-medium text-gray-700">{cust.phoneNo}</span>
+                </td>
+                <td className="py-2 px-4">
+                  <span className="font-medium text-gray-700">{cust.email}</span>
+                </td>
+                <td className="py-2 px-4">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
+                    /blacklist/i.test(cust?.status)
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {cust.status || 'Active'}
+                  </span>
+                </td>
+                <td className="py-2 px-4">
+                  <span className="font-medium text-gray-700">
+                    {cust.addedAt ? new Date(cust.addedAt).toLocaleDateString() : 'N/A'}
+                  </span>
+                </td>
+                <td className="py-2 px-4">
+                  <button
+                    onClick={() => onAction?.(cust)}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      /blacklist/i.test(cust?.status)
+                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                        : 'bg-red-500 hover:bg-red-600 text-white'
+                    }`}
+                  >
+                    {/blacklist/i.test(cust?.status) ? 'Remove From Blacklist' : 'Blacklist'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {pageData.length === 0 && (
+              <tr>
+                <td className="py-12 text-center text-gray-500" colSpan="10">
+                  <div className="flex flex-col items-center">
+                    <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">No customer data available</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between p-3">
-        <span className="text-xs text-gray-500">
-          Showing {customers.length ? (page - 1) * pageSize + 1 : 0}–
-          {Math.min(page * pageSize, customers.length)} of {customers.length}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className={`px-3 py-1 rounded border ${page === 1 ? 'text-gray-400 border-gray-200' : 'border-gray-300 hover:bg-gray-50'
-              }`}
-          >
-            Prev
-          </button>
-          <span className="text-sm">Page {page} / {totalPages}</span>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className={`px-3 py-1 rounded border ${page === totalPages ? 'text-gray-400 border-gray-200' : 'border-gray-300 hover:bg-gray-50'
-              }`}
-          >
-            Next
-          </button>
+      {totalPages > 1 && customers.length > 0 && (
+        <div className="flex items-center justify-between p-4 border-t border-gray-200 bg-gray-50">
+          <div className="text-sm text-gray-600">
+            Showing {customers.length ? (page - 1) * pageSize + 1 : 0} to {Math.min(page * pageSize, customers.length)} of {customers.length} customers
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+            >
+              Previous
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={`px-3 py-2 border rounded-lg transition-colors ${
+                  page === p
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 });
@@ -197,6 +238,8 @@ const AddCustomer = () => {
   // Search (debounced)
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterType, setFilterType] = useState('total'); // 'all' | 'total' | 'today'
+  
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 200);
     return () => clearTimeout(t);
@@ -404,10 +447,29 @@ const AddCustomer = () => {
   };
 
   const filteredCustomers = useMemo(() => {
+    let filtered = customers;
+    
+    // Apply filter type (total/today)
+    if (filterType === 'today') {
+      const today = new Date();
+      const y = today.getFullYear(), m = today.getMonth(), d = today.getDate();
+      filtered = customers.filter(c => {
+        if (!c.addedAt) return false;
+        const dt = new Date(c.addedAt);
+        return dt.getFullYear() === y && dt.getMonth() === m && dt.getDate() === d;
+      });
+    } else if (filterType === 'total') {
+      filtered = customers; // Show all
+    }
+    
+    // Apply search filter
     const q = debouncedSearch.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter(c => (c?.compName || '').toLowerCase().includes(q));
-  }, [customers, debouncedSearch]);
+    if (q) {
+      filtered = filtered.filter(c => (c?.compName || '').toLowerCase().includes(q));
+    }
+    
+    return filtered;
+  }, [customers, debouncedSearch, filterType]);
 
   /* ---------- BLACKLIST / REMOVE ACTION (Modal + API) ---------- */
   const [actionOpen, setActionOpen] = useState(false);
@@ -495,46 +557,59 @@ const AddCustomer = () => {
   return (
     <div className="p-6">
       {/* Stats + Search + Add */}
-      <div className="flex gap-4 mb-6 flex-wrap items-center justify-between">
-        <div className="flex gap-4 flex-wrap">
-          <div className="bg-white w-[250px] shadow-md rounded-2xl px-4 py-3 flex items-center space-x-4">
-            <div className="bg-green-100 p-2 rounded-lg">
-              <User className="w-6 h-6 text-green-600" />
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => setFilterType(filterType === 'total' ? 'all' : 'total')}
+            className={`bg-white rounded-2xl shadow-xl p-4 border transition-all cursor-pointer hover:shadow-2xl ${
+              filterType === 'total' ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                <User className="text-green-600" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Total Customers</p>
+                <p className="text-xl font-bold text-gray-800">{totalStats.totalCustomers || 0}</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-medium text-gray-600">Total Customers</h2>
-              <p className="text-xl font-bold text-green-600">{totalStats.totalCustomers || 0}</p>
-            </div>
-          </div>
+          </button>
 
-          <div className="bg-white w-[250px] shadow-md rounded-2xl px-4 py-3 flex items-center space-x-4">
-            <div className="bg-blue-100 p-2 rounded-lg">
-              <Building2 className="w-6 h-6 text-blue-600" />
+          <button
+            onClick={() => setFilterType(filterType === 'today' ? 'all' : 'today')}
+            className={`bg-white rounded-2xl shadow-xl p-4 border transition-all cursor-pointer hover:shadow-2xl ${
+              filterType === 'today' ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                <Building2 className="text-purple-600" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Today</p>
+                <p className="text-xl font-bold text-purple-600">{Math.max(todaysCountDisplay, 0)}</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-medium text-gray-600">Today's Customers</h2>
-              <p className="text-xl font-bold text-blue-600">{Math.max(todaysCountDisplay, 0)}</p>
-            </div>
-          </div>
+          </button>
         </div>
-
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-4">
           <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
+              type="text"
+              placeholder="Search by company name"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by company name"
-              className="w-64 px-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
-            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
           </div>
 
           <button
             onClick={handleOpen}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition flex items-center gap-2"
+            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
           >
-            <PlusCircle className="w-5 h-5" />
-            Add Customer
+            <PlusCircle size={20} /> Add Customer
           </button>
         </div>
       </div>
@@ -544,17 +619,21 @@ const AddCustomer = () => {
 
       {/* Add Modal */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center backdrop-blur-sm bg-black/10 p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl my-8 relative">
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
+          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
                     <User className="text-white" size={24} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold">Add New Customer</h2>
+                    <h2 className="text-xl font-bold">Add New Customer</h2>
                     <p className="text-blue-100">Enter customer information below</p>
                   </div>
                 </div>
@@ -568,14 +647,10 @@ const AddCustomer = () => {
             </div>
 
             {/* Form */}
-            <form className="p-8" onSubmit={handleSubmit}>
-              <div className="space-y-8">
-                {/* Company Information */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
-                    <Building2 className="text-blue-600" size={20} />
-                    Company Information
-                  </h3>
+            <form className="p-6 space-y-6" onSubmit={handleSubmit}>
+              {/* Company Information */}
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-orange-800 mb-4">Company Information</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input
@@ -622,16 +697,11 @@ const AddCustomer = () => {
                       inputRef={el => (fieldRefs.current.compAdd = el)}
                     />
                   </div>
-                </div>
+              </div>
 
-                {/* Contact Information */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    Contact Information
-                  </h3>
+              {/* Contact Information */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-blue-800 mb-4">Contact Information</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input
@@ -726,17 +796,11 @@ const AddCustomer = () => {
                       inputRef={el => (fieldRefs.current.confirmPassword = el)}
                     />
                   </div>
-                </div>
+              </div>
 
-                {/* Location Details */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 mb-4">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Location Details
-                  </h3>
+              {/* Location Details */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-green-800 mb-4">Location Details</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input
@@ -804,21 +868,20 @@ const AddCustomer = () => {
                       inputRef={el => (fieldRefs.current.zipcode = el)}
                     />
                   </div>
-                </div>
+              </div>
 
-                {/* Tip */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-sm font-medium text-blue-800">Form Validation</span>
-                  </div>
-                  <p className="text-xs text-blue-700">
-                    Required fields have (<span className="text-red-500">*</span>). Email without spaces. Mobile 10 digits starting 6–9.
-                    Password must be 8–14 characters (any characters allowed).
-                  </p>
+              {/* Tip */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm font-medium text-blue-800">Form Validation</span>
                 </div>
+                <p className="text-xs text-blue-700">
+                  Required fields have (<span className="text-red-500">*</span>). Email without spaces. Mobile 10 digits starting 6–9.
+                  Password must be 8–14 characters (any characters allowed).
+                </p>
               </div>
 
               {/* Actions */}

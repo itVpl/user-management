@@ -4,6 +4,7 @@ import apiService from '../../services/apiService.js';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
 import Logo from '../../assets/LogoFinal.png';
+import IdentificaLogo from '../../assets/identifica_logo.png';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -476,6 +477,7 @@ export default function DeliveryOrder() {
     containerNo: '',
     containerType: '',
     selectedLoad: '', // Load reference dropdown
+    company: '', // Company field
 
     // Pickup Locations - each has weight, individual date, and remarks (optional)
     pickupLocations: [
@@ -758,6 +760,7 @@ export default function DeliveryOrder() {
         containerNo: src.shipper?.containerNo || '',
         containerType: src.shipper?.containerType || '',
         selectedLoad: src.loadReference || '', // Load reference from database
+        company: src.company || src.addDispature || '', // Company from database (check both company and addDispature)
 
         pickupLocations: (src.shipper?.pickUpLocations || [{
           name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: ''
@@ -798,8 +801,6 @@ export default function DeliveryOrder() {
       setEditingOrder(null);
       setFormMode('duplicate');
       setShowAddOrderForm(true);
-
-      alertify.message('You are duplicating this order. Submitting will create a new order.');
     } catch (e) {
       console.error(e);
       alertify.error('Duplicate form open failed');
@@ -873,6 +874,14 @@ export default function DeliveryOrder() {
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }));
+  };
+
+  // Handle company selection
+  const handleCompanyChange = (value) => {
+    setFormData(prev => ({
+      ...prev,
+      company: value
     }));
   };
 
@@ -1590,6 +1599,8 @@ export default function DeliveryOrder() {
           .filter(b => (b.bolNo || '').trim())
           .map(b => ({ bolNo: b.bolNo.trim() })),
         ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadReference: formData.selectedLoad } : {}), // Only include loadReference if it has a value
+        ...(formData.company && formData.company.trim() ? { company: formData.company } : {}), // Only include company if it has a value
+        ...(formData.company && formData.company.trim() ? { addDispature: formData.company } : {}), // Only include addDispature if company has a value
         remarks: formData.remarks
       };
 
@@ -1654,6 +1665,20 @@ export default function DeliveryOrder() {
           console.log('Multipart form - adding loadReference:', formData.selectedLoad);
         } else {
           console.log('Multipart form - skipping loadReference (empty value)');
+        }
+        // Only add company if it has a value
+        if (formData.company && formData.company.trim()) {
+          fd.append('company', formData.company);
+          console.log('Multipart form - adding company:', formData.company);
+        } else {
+          console.log('Multipart form - skipping company (empty value)');
+        }
+        // Only add addDispature if company has a value
+        if (formData.company && formData.company.trim()) {
+          fd.append('addDispature', formData.company);
+          console.log('Multipart form - adding addDispature:', formData.company);
+        } else {
+          console.log('Multipart form - skipping addDispature (empty value)');
         }
         (formData.bols || []).forEach((b, i) => {
           const val = (b?.bolNo || '').trim();
@@ -2063,6 +2088,7 @@ export default function DeliveryOrder() {
           containerNo: fullOrderData.shipper?.containerNo || '',
           containerType: fullOrderData.shipper?.containerType || '',
           selectedLoad: fullOrderData.loadReference || '', // Load reference from database
+          company: fullOrderData.company || fullOrderData.addDispature || '', // Company from database (check both company and addDispature)
           pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
             ...l,
             pickUpDate: formatDateForInput(l?.pickUpDate || fullOrderData.shipper?.pickUpDate),
@@ -2473,6 +2499,8 @@ export default function DeliveryOrder() {
         carrier,
         shipper,
         ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadReference: formData.selectedLoad } : {}), // Only include loadReference if it has a value
+        ...(formData.company && formData.company.trim() ? { company: formData.company } : {}), // Only include company if it has a value
+        ...(formData.company && formData.company.trim() ? { addDispature: formData.company } : {}), // Only include addDispature if company has a value
         remarks: formData.remarks || '',
         bols: (formData.bols || []).map((b, i) => ({
           _id: editingOrder?.fullData?.bols?.[i]?._id, // preserve if exists
@@ -2693,6 +2721,10 @@ export default function DeliveryOrder() {
 
   const generateRateLoadConfirmationPDF = async (order) => {
   try {
+    // Determine logo based on company name
+    const companyName = order?.company || order?.addDispature || '';
+    const pdfLogo = (companyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+
     // 1) Dispatcher info
     let dispatcherPhone = 'N/A';
     let dispatcherEmail = 'N/A';
@@ -2912,7 +2944,7 @@ export default function DeliveryOrder() {
   <div class="confirmation-container">
     <!-- Header -->
     <div class="header">
-      <img src="${logoSrc}" alt="Company Logo" class="logo"/>
+      <img src="${pdfLogo}" alt="Company Logo" class="logo"/>
       <div class="bill-to">
         <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
           <tr>
@@ -3071,6 +3103,10 @@ export default function DeliveryOrder() {
     try {
       const printWindow = window.open('', '_blank');
 
+      // Determine logo based on company name
+      const orderCompanyName = order?.company || order?.addDispature || '';
+      const pdfLogo = (orderCompanyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
       const companyName = (cust.billTo || '').trim();
@@ -3149,7 +3185,7 @@ export default function DeliveryOrder() {
   <div class="invoice">
     <!-- HEADER: logo (left) + Bill To table (right) -->
     <div class="header">
-      <img src="${logoSrc}" alt="Company Logo" class="logo">
+      <img src="${pdfLogo}" alt="Company Logo" class="logo">
       <div class="header-right">
         <table class="billto">
           <tr><th>Bill To</th><td>${billToDisplay}</td></tr>
@@ -3319,8 +3355,12 @@ export default function DeliveryOrder() {
       return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
     })();
 
+    // Determine logo based on company name
+    const companyName = order?.company || order?.addDispature || '';
+    const pdfLogo = (companyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+    
     // Logo fallback (1x1 transparent if not provided)
-    const safeLogo = order.logoSrc || (typeof logoSrc !== 'undefined' ? logoSrc :
+    const safeLogo = order.logoSrc || pdfLogo || (typeof logoSrc !== 'undefined' ? logoSrc :
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGP4BwQACgAB/WHvJ2sAAAAASUVORK5CYII=');
 
     // ---------- HELPERS ----------
@@ -3526,9 +3566,6 @@ export default function DeliveryOrder() {
         docTarget.focus();
         docTarget.print();
         if (docTarget !== window && docTarget.close) docTarget.close();
-        if (typeof alertify !== 'undefined' && alertify?.success) {
-          alertify.success('BOL PDF generated successfully!');
-        }
       };
     };
 
@@ -3555,14 +3592,6 @@ export default function DeliveryOrder() {
       }
     }
   };
-
-
-
-
-
-
-
-
 
 
 
@@ -4545,6 +4574,25 @@ export default function DeliveryOrder() {
                 </div>
               </div>
 
+              {/* Company Section */}
+              <div className="bg-teal-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-teal-800 mb-4">Company</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <SearchableDropdown
+                      value={formData.company || ''}
+                      onChange={handleCompanyChange}
+                      options={[
+                        { value: 'V Power Logistics', label: 'V Power Logistics' },
+                        { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' }
+                      ]}
+                      placeholder="Select Company"
+                      searchPlaceholder="Search companies..."
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Customer Information Section */}
               {/* Customer Information Section */}
               <div className="bg-blue-50 p-4 rounded-lg">
@@ -5395,6 +5443,28 @@ export default function DeliveryOrder() {
                     </div>
                   );
                 })()}
+
+                {/* Company Information */}
+                {(selectedOrder?.company || selectedOrder?.addDispature) && (
+                  <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Building className="text-teal-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Company Information</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center">
+                          <Building className="text-teal-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Company Name</p>
+                          <p className="font-semibold text-gray-800">{selectedOrder.company || selectedOrder.addDispature || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Shipper Information (NO weight here) */}
                 {selectedOrder?.shipper && (
@@ -6770,6 +6840,25 @@ export default function DeliveryOrder() {
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Section */}
+              <div className="bg-teal-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-teal-800 mb-4">Company</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <SearchableDropdown
+                      value={formData.company || ''}
+                      onChange={handleCompanyChange}
+                      options={[
+                        { value: 'V Power Logistics', label: 'V Power Logistics' },
+                        { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' }
+                      ]}
+                      placeholder="Select Company"
+                      searchPlaceholder="Search companies..."
+                    />
                   </div>
                 </div>
               </div>

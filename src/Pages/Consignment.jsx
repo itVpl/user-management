@@ -20,6 +20,17 @@ export default function Consignment() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
+  // Listen for assignment accepted event to refresh data
+  useEffect(() => {
+    const handleAssignmentAccepted = () => {
+      fetchConsignments();
+    };
+    window.addEventListener('assignmentAccepted', handleAssignmentAccepted);
+    return () => {
+      window.removeEventListener('assignmentAccepted', handleAssignmentAccepted);
+    };
+  }, []);
+
   // Fetch consignments from API
   const fetchConsignments = async () => {
     try {
