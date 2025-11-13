@@ -2931,7 +2931,7 @@ export default function DeliveryOrder() {
   body { font-family: 'Arial', sans-serif; line-height: 1.4; color: #333; background: white; font-size: 12px; }
   .confirmation-container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; }
   .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 15px; gap: 20px; }
-  .logo { width: 120px; height: 90px; object-fit: contain; }
+  .logo { width: 180px; height: 120px; object-fit: contain; }
   .bill-to { text-align: right; }
   .rates-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
   .rates-table th, .rates-table td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
@@ -3107,6 +3107,17 @@ export default function DeliveryOrder() {
       const orderCompanyName = order?.company || order?.addDispature || '';
       const pdfLogo = (orderCompanyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
 
+      // ---- Company Name and Address based on selection ----
+      let companyDisplayName = '';
+      let companyDisplayAddress = '';
+      if (orderCompanyName === 'V Power Logistics') {
+        companyDisplayName = 'V Power Logistics';
+        companyDisplayAddress = '7945 14TH AVE SW SEATTLE, WA 98106';
+      } else if (orderCompanyName === 'IDENTIFICA LLC') {
+        companyDisplayName = 'IDENTIFICA LLC';
+        companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
+      }
+
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
       const companyName = (cust.billTo || '').trim();
@@ -3167,7 +3178,13 @@ export default function DeliveryOrder() {
   body{font-family:Arial,sans-serif;line-height:1.4;color:#333;background:#fff;font-size:12px}
   .invoice{max-width:800px;margin:0 auto;background:#fff;padding:20px}
   .header{display:flex;gap:16px;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px}
-  .logo{width:140px;height:90px;object-fit:contain;flex:0 0 auto}
+  .logo{width:280px;height:180px;object-fit:contain;flex:0 0 auto}
+  .logo-container{margin-bottom:12px;width:100%}
+  .company-table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}
+  .company-table th,.company-table td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
+  .company-table th{background:#f5f5f5;font-weight:bold}
+  .company-table th:first-child{width:20%}
+  .company-table th:last-child{width:80%}
   .header-right{flex:1 1 auto}
   .billto{border-collapse:collapse;width:65%;font-size:12px;margin-left:auto}
   .billto th,.billto td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
@@ -3185,9 +3202,16 @@ export default function DeliveryOrder() {
   <div class="invoice">
     <!-- HEADER: logo (left) + Bill To table (right) -->
     <div class="header">
-      <img src="${pdfLogo}" alt="Company Logo" class="logo">
+      <div>
+        <div class="logo-container">
+          <img src="${pdfLogo}" alt="Company Logo" class="logo" style="width:100%; max-width:300px; height:auto; object-fit:contain;" >
+        </div>
+        <table class="company-table">
+          <tr><th style="width: 25%;">Bill From</th><td>${companyDisplayName ? `${companyDisplayName}<br>${companyDisplayAddress}` : 'N/A'}</td></tr>
+        </table>
+      </div>
       <div class="header-right">
-        <table class="billto">
+        <table class="billto" style="width: 90%;">
           <tr><th>Bill To</th><td>${billToDisplay}</td></tr>
           <tr><th>W/O (Ref)</th><td>${workOrderNo}</td></tr>
           <tr><th>Invoice Date</th><td>${todayStr}</td></tr>
@@ -3405,7 +3429,7 @@ export default function DeliveryOrder() {
   body { font-family: Arial, sans-serif; line-height:1.4; color:#333; background:#fff; font-size:12px; }
   .container { max-width:800px; margin:0 auto; padding:20px; }
   .header { display:flex; justify-content:space-between; align-items:start; margin-bottom:20px; }
-  .logo { width:140px; height:90px; object-fit:contain; }
+  .logo { width:180px; height:120px; object-fit:contain; }
   .section { margin-bottom:20px; }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
   .box { border:1px solid #ccc; padding:15px; border-radius:8px; }
