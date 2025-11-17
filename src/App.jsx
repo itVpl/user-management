@@ -67,6 +67,10 @@ import CallingReport from "./Pages/IddCallingReport.jsx";
 import TermsAndConditions from "./Components/TermsAndConditions.jsx";
 
 import AddFleet from "./Components/CMT-Manager/addFleet.jsx";
+import OfficeExpenses from "./Components/HRDashboard/OfficeExpenses.jsx";
+import EmpLeaves from "./Components/HRDashboard/EmpLeaves.jsx"
+import AddTruckerDriver from "./Components/CMT/AddTruckerDriver.jsx"
+
 
 
 
@@ -322,7 +326,9 @@ function App() {
           <Route path="/finance-dashboard" element={<FinanceDashboard />} />
           <Route path="/CallingReport" element={<CallingReport />} />
           <Route path="/AddFleet" element={<AddFleet />} />
-
+          <Route path="/OfficeExpenses" element={<OfficeExpenses />} />
+          <Route path="/empleaves" element={<EmpLeaves />} />
+          <Route path="/addtruckerdriver" element={<AddTruckerDriver />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" />} />
