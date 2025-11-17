@@ -431,9 +431,6 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
     try {
       // Get token from session
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
-      if (!token) {
-        throw new Error("Authentication token missing. Please login again.");
-      }
 
       // Create FormData object for file uploads
       const submitData = new FormData();
