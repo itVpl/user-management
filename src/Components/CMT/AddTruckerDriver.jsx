@@ -58,9 +58,14 @@ const ViewDriverDetailsModal = ({ isOpen, onClose, driverData }) => {
           </button>
         </div>
         
-        {/* Form Body with Scroll */}
-        <div className="p-6 overflow-y-auto">
-          <div className="space-y-6">
+        {/* Form Body with Scroll - Hide Scrollbar */}
+        <div className="p-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [-webkit-overflow-scrolling:touch]">
+          <style jsx>{`
+            .hide-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+          <div className="hide-scrollbar space-y-6">
             {/* SECTION 1: Personal & Contact Information - Blue Background */}
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
               <h4 className={sectionHeaderClass + " bg-blue-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Personal & Contact Information</h4>
@@ -159,7 +164,7 @@ const ViewDriverDetailsModal = ({ isOpen, onClose, driverData }) => {
             {/* SECTION 3: Compliance & Documents - Purple Background */}
             <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
               <h4 className={sectionHeaderClass + " bg-purple-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Compliance & Documents</h4>
-              <div className="grid grid-cols-3 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* MC/DOT Number */}
                 <div>
                   <label className={labelClass}>MC/DOT Number</label>
@@ -431,6 +436,9 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
     try {
       // Get token from session
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+        throw new Error("Authentication token missing. Please login again.");
+      }
 
       // Create FormData object for file uploads
       const submitData = new FormData();
@@ -502,12 +510,12 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
   if (!isOpen) return null;
 
   return (
-<div
-  className="fixed inset-0 backdrop-blur-md bg-black/30 flex items-center justify-center z-50 p-4 "
-  onClick={resetFormAndClose}
->
+    <div
+      className="fixed inset-0 backdrop-blur-md bg-black/30 flex items-center justify-center z-50 p-4"
+      onClick={resetFormAndClose}
+    >
       <div 
-        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden transform transition-all duration-300 "
+        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden transform transition-all duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -524,327 +532,341 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
           </button>
         </div>
         
-        {/* Form Body with Scroll */}
-        <div className="p-6 overflow-y-auto">
-          {/* Custom Status Message Box */}
-          {statusMessage.text && (
-            <div className={`p-3 mb-4 rounded-lg text-sm font-medium ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300'}`}>
-              {statusMessage.text}
-            </div>
-          )}
+        {/* Form Body with Scroll - Hide Scrollbar */}
+        <div className="p-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [-webkit-overflow-scrolling:touch]">
+          <style jsx>{`
+            .hide-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+          <div className="hide-scrollbar">
+            {/* Custom Status Message Box */}
+            {statusMessage.text && (
+              <div className={`p-3 mb-4 rounded-lg text-sm font-medium ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300'}`}>
+                {statusMessage.text}
+              </div>
+            )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* SECTION 1: Personal & Contact Information - Blue Background */}
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <h4 className={sectionHeaderClass + " bg-blue-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Personal & Contact Information</h4>
-              <div className="grid grid-cols-2 md:grid-cols-2 gap-6">
-                
-                {/* Trucker ID/Name Dropdown (NEW) */}
-                <div className="relative">
-                  <label htmlFor="truckerIdSearch" className={labelClass}>Select Trucker/Carrier *</label>
-                  <input
-                    type="text"
-                    id="truckerIdSearch"
-                    name="truckerIdSearch"
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setIsDropdownOpen(true);
-                    }}
-                    onFocus={() => setIsDropdownOpen(true)}
-                    onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)} // Delay closing
-                    className={`${inputClass} ${formData.truckerId ? 'border-green-500' : ''}`}
-                    placeholder="Search by Company Name or ID"
-                    required
-                    disabled={loading}
-                  />
-                  {formData.truckerId && (
-                    <p className="text-xs text-green-600 mt-1">Selected ID: **{formData.truckerId}**</p>
-                  )}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* SECTION 1: Personal & Contact Information - Blue Background */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h4 className={sectionHeaderClass + " bg-blue-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Personal & Contact Information</h4>
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-6">
+                  
+                  {/* Trucker ID/Name Dropdown (NEW) */}
+                  <div className="relative">
+                    <label htmlFor="truckerIdSearch" className={labelClass}>Select Trucker/Carrier *</label>
+                    <input
+                      type="text"
+                      id="truckerIdSearch"
+                      name="truckerIdSearch"
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setIsDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)} // Delay closing
+                      className={`${inputClass} ${formData.truckerId ? 'border-green-500' : ''}`}
+                      placeholder="Search by Company Name or ID"
+                      required
+                      disabled={loading}
+                    />
+                    {formData.truckerId && (
+                      <p className="text-xs text-green-600 mt-1">Selected ID: **{formData.truckerId}**</p>
+                    )}
 
-                  {isDropdownOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
-                      {loading && (
-                        <div className="p-3 text-center text-sm text-blue-500">Loading truckers...</div>
-                      )}
-                      {filteredTruckers.length === 0 && !loading && (
-                        <div className="p-3 text-center text-sm text-gray-500">No truckers found.</div>
-                      )}
-                      {filteredTruckers.map((trucker) => (
-                        <div
-                          key={trucker._id}
-                          onMouseDown={(e) => { // Use onMouseDown to capture click before onBlur fires
-                            e.preventDefault(); 
-                            handleTruckerSelect(trucker._id, trucker.compName);
-                          }}
-                          className="p-3 hover:bg-blue-50 cursor-pointer transition duration-100 border-b border-gray-100 last:border-b-0"
-                        >
-                          <p className="text-sm font-semibold text-gray-800">{trucker.compName || 'N/A'}</p>
-                          <p className="text-xs text-gray-500">ID: {trucker._id}</p>
+                    {isDropdownOpen && (
+                      <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none]">
+                        <style jsx>{`
+                          .dropdown-scrollbar::-webkit-scrollbar {
+                            display: none;
+                          }
+                        `}</style>
+                        <div className="dropdown-scrollbar">
+                          {loading && (
+                            <div className="p-3 text-center text-sm text-blue-500">Loading truckers...</div>
+                          )}
+                          {filteredTruckers.length === 0 && !loading && (
+                            <div className="p-3 text-center text-sm text-gray-500">No truckers found.</div>
+                          )}
+                          {filteredTruckers.map((trucker) => (
+                            <div
+                              key={trucker._id}
+                              onMouseDown={(e) => { // Use onMouseDown to capture click before onBlur fires
+                                e.preventDefault(); 
+                                handleTruckerSelect(trucker._id, trucker.compName);
+                              }}
+                              className="p-3 hover:bg-blue-50 cursor-pointer transition duration-100 border-b border-gray-100 last:border-b-0"
+                            >
+                              <p className="text-sm font-semibold text-gray-800">{trucker.compName || 'N/A'}</p>
+                              <p className="text-xs text-gray-500">ID: {trucker._id}</p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  <input type="hidden" name="truckerId" value={formData.truckerId} />
-                </div>
+                      </div>
+                    )}
+                    <input type="hidden" name="truckerId" value={formData.truckerId} />
+                  </div>
 
-                {/* Full Name */}
-                <div>
-                  <label htmlFor="fullName" className={labelClass}>Full Name *</label>
-                  <input
-                    type="text"
-                    id="fullName"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="e.g., John Doe"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                  {/* Full Name */}
+                  <div>
+                    <label htmlFor="fullName" className={labelClass}>Full Name *</label>
+                    <input
+                      type="text"
+                      id="fullName"
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., John Doe"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
 
-                {/* Phone */}
-                <div>
-                  <label htmlFor="phone" className={labelClass}>Phone Number *</label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="e.g., 1234567890"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                  {/* Phone */}
+                  <div>
+                    <label htmlFor="phone" className={labelClass}>Phone Number *</label>
+                    <input
+                      type="tel"
+                      id="phone"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., 1234567890"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
 
-                {/* Email */}
-                <div>
-                  <label htmlFor="email" className={labelClass}>Email *</label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="e.g., driver@example.com"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                  {/* Email */}
+                  <div>
+                    <label htmlFor="email" className={labelClass}>Email *</label>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., driver@example.com"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
 
-                {/* Password */}
-                <div>
-                  <label htmlFor="password" className={labelClass}>Password *</label>
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="Enter secure password"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                  {/* Password */}
+                  <div>
+                    <label htmlFor="password" className={labelClass}>Password *</label>
+                    <input
+                      type="password"
+                      id="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="Enter secure password"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
 
-                {/* Driver License */}
-                <div>
-                  <label htmlFor="driverLicense" className={labelClass}>Driver License *</label>
-                  <input
-                    type="text"
-                    id="driverLicense"
-                    name="driverLicense"
-                    value={formData.driverLicense}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="e.g., DL123456"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                  {/* Driver License */}
+                  <div>
+                    <label htmlFor="driverLicense" className={labelClass}>Driver License *</label>
+                    <input
+                      type="text"
+                      id="driverLicense"
+                      name="driverLicense"
+                      value={formData.driverLicense}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., DL123456"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
 
-                {/* Gender */}
-                <div>
-                  <label htmlFor="gender" className={labelClass}>Gender *</label>
-                  <select
-                    id="gender"
-                    name="gender"
-                    value={formData.gender}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    required
-                    disabled={loading}
-                  >
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
+                  {/* Gender */}
+                  <div>
+                    <label htmlFor="gender" className={labelClass}>Gender *</label>
+                    <select
+                      id="gender"
+                      name="gender"
+                      value={formData.gender}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      required
+                      disabled={loading}
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* SECTION 2: Address Details - Green Background */}
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <h4 className={sectionHeaderClass + " bg-green-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Address Details</h4>
-              <div className="grid grid-cols-3 md:grid-cols-4 gap-6">
-                {/* Country */}
-                <div>
-                  <label htmlFor="country" className={labelClass}>Country *</label>
-                  <input
-                    type="text"
-                    id="country"
-                    name="country"
-                    value={formData.country}
+              {/* SECTION 2: Address Details - Green Background */}
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <h4 className={sectionHeaderClass + " bg-green-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Address Details</h4>
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-6">
+                  {/* Country */}
+                  <div>
+                    <label htmlFor="country" className={labelClass}>Country *</label>
+                    <input
+                      type="text"
+                      id="country"
+                      name="country"
+                      value={formData.country}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., USA"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+
+                  {/* State */}
+                  <div>
+                    <label htmlFor="state" className={labelClass}>State *</label>
+                    <input
+                      type="text"
+                      id="state"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., CA"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+
+                  {/* City */}
+                  <div>
+                    <label htmlFor="city" className={labelClass}>City *</label>
+                    <input
+                      type="text"
+                      id="city"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., Los Angeles"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+
+                  {/* Zip Code */}
+                  <div>
+                    <label htmlFor="zipCode" className={labelClass}>Zip Code *</label>
+                    <input
+                      type="text"
+                      id="zipCode"
+                      name="zipCode"
+                      value={formData.zipCode}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., 90001"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+                
+                {/* Full Address (Full Width) */}
+                <div className="mt-4">
+                  <label htmlFor="fullAddress" className={labelClass}>Full Address *</label>
+                  <textarea
+                    id="fullAddress"
+                    name="fullAddress"
+                    value={formData.fullAddress}
                     onChange={handleInputChange}
+                    rows="2"
                     className={inputClass}
-                    placeholder="e.g., USA"
+                    placeholder="e.g., 123 Main St, Los Angeles, CA 90001"
                     required
                     disabled={loading}
                   />
                 </div>
+              </div>
 
-                {/* State */}
-                <div>
-                  <label htmlFor="state" className={labelClass}>State *</label>
-                  <input
-                    type="text"
-                    id="state"
-                    name="state"
-                    value={formData.state}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="e.g., CA"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+              {/* SECTION 3: Compliance & Documents - Purple Background */}
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <h4 className={sectionHeaderClass + " bg-purple-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Compliance & Documents</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* MC/DOT Number (Now optional/moved) */}
+                  <div>
+                    <label htmlFor="mcDot" className={labelClass}>MC/DOT Number (Optional)</label>
+                    <input
+                      type="text"
+                      id="mcDot"
+                      name="mcDot"
+                      value={formData.mcDot}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      placeholder="e.g., MC123456"
+                      disabled={loading}
+                    />
+                  </div>
 
-                {/* City */}
-                <div>
-                  <label htmlFor="city" className={labelClass}>City *</label>
-                  <input
-                    type="text"
-                    id="city"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="e.g., Los Angeles"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                  {/* Driver Photo */}
+                
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-2 gap-6 mt-6">
+                            <div>
+                    <label htmlFor="driverPhoto" className={labelClass}>Driver Photo</label>
+                    <input
+                      type="file"
+                      id="driverPhoto"
+                      name="driverPhoto"
+                      onChange={handleInputChange}
+                      className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer mt-1 block w-full bg-white border border-gray-200 rounded-lg shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
+                      accept="image/*"
+                      disabled={loading}
+                    />
+                  </div>
 
-                {/* Zip Code */}
-                <div>
-                  <label htmlFor="zipCode" className={labelClass}>Zip Code *</label>
-                  <input
-                    type="text"
-                    id="zipCode"
-                    name="zipCode"
-                    value={formData.zipCode}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="e.g., 90001"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                  {/* CDL Document */}
+                  <div>
+                    <label htmlFor="cdlDocument" className={labelClass}>CDL Document</label>
+                    <input
+                      type="file"
+                      id="cdlDocument"
+                      name="cdlDocument"
+                      onChange={handleInputChange}
+                      className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer mt-1 block w-full bg-white border border-gray-200 rounded-lg shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
+                      accept=".pdf,.doc,.docx,image/*"
+                      disabled={loading}
+                    />
+                                </div>
+                                </div>
               </div>
               
-              {/* Full Address (Full Width) */}
-              <div className="mt-4">
-                <label htmlFor="fullAddress" className={labelClass}>Full Address *</label>
-                <textarea
-                  id="fullAddress"
-                  name="fullAddress"
-                  value={formData.fullAddress}
-                  onChange={handleInputChange}
-                  rows="2"
-                  className={inputClass}
-                  placeholder="e.g., 123 Main St, Los Angeles, CA 90001"
-                  required
+              {/* Submit/Cancel Buttons */}
+              <div className="pt-6 border-t border-gray-100 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={resetFormAndClose}
+                  className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150 disabled:opacity-50 shadow-sm"
                   disabled={loading}
-                />
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 shadow-md"
+                  disabled={loading || !formData.truckerId}
+                >
+                  {loading ? 'Adding...' : 'Add Driver'}
+                </button>
               </div>
-            </div>
-
-            {/* SECTION 3: Compliance & Documents - Purple Background */}
-            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-              <h4 className={sectionHeaderClass + " bg-purple-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Compliance & Documents</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* MC/DOT Number (Now optional/moved) */}
-                <div>
-                  <label htmlFor="mcDot" className={labelClass}>MC/DOT Number (Optional)</label>
-                  <input
-                    type="text"
-                    id="mcDot"
-                    name="mcDot"
-                    value={formData.mcDot}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    placeholder="e.g., MC123456"
-                    disabled={loading}
-                  />
-                </div>
-
-                {/* Driver Photo */}
-               
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-2 gap-6 mt-6">
-                           <div>
-                  <label htmlFor="driverPhoto" className={labelClass}>Driver Photo</label>
-                  <input
-                    type="file"
-                    id="driverPhoto"
-                    name="driverPhoto"
-                    onChange={handleInputChange}
-                    className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer mt-1 block w-full bg-white border border-gray-200 rounded-lg shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
-                    accept="image/*"
-                    disabled={loading}
-                  />
-                </div>
-
-                {/* CDL Document */}
-                <div>
-                  <label htmlFor="cdlDocument" className={labelClass}>CDL Document</label>
-                  <input
-                    type="file"
-                    id="cdlDocument"
-                    name="cdlDocument"
-                    onChange={handleInputChange}
-                    className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer mt-1 block w-full bg-white border border-gray-200 rounded-lg shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
-                    accept=".pdf,.doc,.docx,image/*"
-                    disabled={loading}
-                  />
-                              </div>
-                              </div>
-            </div>
-            
-            {/* Submit/Cancel Buttons */}
-            <div className="pt-6 border-t border-gray-100 flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={resetFormAndClose}
-                className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150 disabled:opacity-50 shadow-sm"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 shadow-md"
-                disabled={loading || !formData.truckerId}
-              >
-                {loading ? 'Adding...' : 'Add Driver'}
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -1000,7 +1022,17 @@ const AddTruckerDriver = () => {
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-sans">
       
-     
+      {/* Header and Action Bar */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Trucker Drivers Management</h1>
+          {userData && (
+            <p className="text-gray-600">
+              Welcome, {userData.employeeName} ({userData.department})
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* Stats Cards and Search Bar */}
       <div className="flex flex-wrap md:flex-nowrap justify-between items-center mb-8 gap-4">
@@ -1085,8 +1117,7 @@ const AddTruckerDriver = () => {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">S.NO</th>
-              {/* <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">DRIVER ID</th> */}
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">DRIVER NAME</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">FULL NAME</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">EMAIL</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">PHONE</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">TRUCKER</th>
@@ -1116,12 +1147,8 @@ const AddTruckerDriver = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {(currentPage - 1) * itemsPerPage + index + 1}
                   </td>
-                  {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-semibold cursor-pointer hover:underline">
-                    {driver.driverId}
-                  </td> */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     <div className="flex items-center">
-                    
                       {driver.fullName}
                     </div>
                   </td>
