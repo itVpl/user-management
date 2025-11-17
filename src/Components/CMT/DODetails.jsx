@@ -568,7 +568,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
-      const companyName = (cust.billTo || '').trim();
+      const companyName = (cust.billTo || order?.customerName || '').trim();
       const billToDisplay = [companyName || 'N/A'].filter(Boolean).join('<br>');
       const workOrderNo = cust.workOrderNo || 'N/A';
       const invoiceNo = order.doNum || cust.loadNo || 'N/A';
@@ -1459,7 +1459,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm text-gray-600">Bill To</p>
-                        <p className="font-medium text-gray-800">{customer?.billTo || 'N/A'}</p>
+                        <p className="font-medium text-gray-800">{customer?.billTo || raw.customerName || 'N/A'}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Dispatcher Name</p>
@@ -1690,6 +1690,41 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Return Location - Only for DRAYAGE */}
+          {raw.loadType === 'DRAYAGE' && raw.returnLocation && (
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Package className="text-indigo-600" size={20} />
+                <h3 className="text-lg font-bold text-gray-800">Return Location</h3>
+              </div>
+
+              <div className="bg-white rounded-lg p-4 border border-indigo-200">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-600">Return Full Address</p>
+                    <p className="font-medium text-gray-800">{raw.returnLocation?.returnFullAddress || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">City</p>
+                    <p className="font-medium text-gray-800">{raw.returnLocation?.city || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">State</p>
+                    <p className="font-medium text-gray-800">{raw.returnLocation?.state || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Zip Code</p>
+                    <p className="font-medium text-gray-800">{raw.returnLocation?.zipCode || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Return Date</p>
+                    <p className="font-medium text-gray-800">{fmtDate(raw.returnLocation?.returnDate) || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2369,7 +2404,7 @@ export default function DODetails({ overrideEmpId }) {
             sNo: index + 1,
             doId: `DO-${String(item.doId || item._id || '').slice(-6) || '—'}`,
             loadNo: cust0.loadNo || 'N/A',
-            billTo: cust0.billTo || 'N/A',
+            billTo: cust0.billTo || item.customerName || 'N/A',
             dispatcherName: cust0.dispatcherName || 'N/A',
             workOrderNo: cust0.workOrderNo || 'N/A',
             lineHaul: cust0.lineHaul || 0,
@@ -2464,7 +2499,7 @@ export default function DODetails({ overrideEmpId }) {
             sNo: index + 1,
             doId: `DO-${String(item.doId || item._id || '').slice(-6) || '—'}`,
             loadNo: cust0.loadNo || 'N/A',
-            billTo: cust0.billTo || 'N/A',
+            billTo: cust0.billTo || item.customerName || 'N/A',
             dispatcherName: cust0.dispatcherName || 'N/A',
             workOrderNo: cust0.workOrderNo || 'N/A',
             lineHaul: cust0.lineHaul || 0,

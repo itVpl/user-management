@@ -496,6 +496,7 @@ export default function DeliveryOrder() {
 
     // Carrier Information
     carrierName: '',
+    carrierId: '', // Store carrier ID for API
     equipmentType: '',
     carrierFees: '',
     totalRates: '',
@@ -503,6 +504,8 @@ export default function DeliveryOrder() {
 
     // Location Information (formerly Shipper Information)
     shipmentNo: '', // Changed from shipperName to shipmentNo
+    shipperName: '', // Keep for display
+    shipperId: '', // Store shipper ID for API
     containerNo: '',
     containerType: '',
     commodity: '', // Commodity field
@@ -513,7 +516,8 @@ export default function DeliveryOrder() {
       address: '',
       city: '',
       state: '',
-      zipCode: ''
+      zipCode: '',
+      returnDate: '' // Return date for DRAYAGE
     },
 
     // Pickup Locations - each has weight, individual date, and remarks (optional)
@@ -525,6 +529,7 @@ export default function DeliveryOrder() {
         state: '',
         zipCode: '',
         weight: '',
+        commodity: '', // Commodity field for API
         pickUpDate: '',
         remarks: '' // 👈 NEW
       }
@@ -539,6 +544,7 @@ export default function DeliveryOrder() {
         state: '',
         zipCode: '',
         weight: '',
+        commodity: '', // Commodity field for API
         dropDate: '',
         remarks: '' // 👈 NEW
       }
@@ -769,20 +775,35 @@ export default function DeliveryOrder() {
         return Number.isNaN(x.getTime()) ? '' : x.toISOString().slice(0, 16);
       };
 
+      // Handle customers - convert other array back to single value for form
       const prefCustomers = (src.customers || []).map(c => {
         const lh = Number(c.lineHaul) || 0;
         const fsc = Number(c.fsc) || 0;
-        const oth = Number(c.other) || 0;
+        // If other is an array, sum it up; otherwise use the value directly
+        const oth = Array.isArray(c.other) 
+          ? (c.otherTotal || c.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
+          : (Number(c.other) || 0);
         return {
           billTo: c.billTo || '',
           dispatcherName: c.dispatcherName || '',
           workOrderNo: c.workOrderNo || '',
-          lineHaul: lh,
-          fsc: fsc,
-          other: oth,
+          lineHaul: String(lh),
+          fsc: String(fsc),
+          other: String(oth),
           totalAmount: lh + fsc + oth,
+          // Store the original other array for charges popup
+          chargeRows: Array.isArray(c.other) ? c.other.map(item => ({
+            name: item?.name || '',
+            quantity: String(item?.quantity || 0),
+            amt: String(item?.amount || 0),
+            total: Number(item?.total || 0)
+          })) : []
         };
       });
+
+      // Get shipperId and carrierId
+      const shipperId = typeof src.shipperId === 'object' ? src.shipperId?._id : src.shipperId;
+      const carrierId = typeof src.carrierId === 'object' ? src.carrierId?._id : src.carrierId;
 
       const prefForm = {
         customers: prefCustomers.length ? prefCustomers : [{
@@ -790,32 +811,63 @@ export default function DeliveryOrder() {
           lineHaul: '', fsc: '', other: '', totalAmount: 0
         }],
 
-        carrierName: src.carrier?.carrierName || '',
+        carrierName: src.carrier?.carrierName || (typeof src.carrierId === 'object' ? src.carrierId?.compName : ''),
+        carrierId: carrierId || '',
         equipmentType: src.carrier?.equipmentType || '',
         carrierFees: src.carrier?.totalCarrierFees || '',
+        totalRates: src.carrier?.totalCarrierFees || '',
 
-        shipperName: src.shipper?.name || '',
+        shipperName: src.shipper?.name || (typeof src.shipperId === 'object' ? src.shipperId?.compName : ''),
+        shipperId: shipperId || '',
+        shipmentNo: src.shipper?.shipmentNo || '',
         containerNo: src.shipper?.containerNo || '',
         containerType: src.shipper?.containerType || '',
-        selectedLoad: src.loadReference || '', // Load reference from database
-        company: src.company || src.addDispature || '', // Company from database (check both company and addDispature)
+        commodity: src.shipper?.pickUpLocations?.[0]?.commodity || src.shipper?.dropLocations?.[0]?.commodity || '',
+        selectedLoad: src.loadReference || '',
+        company: src.company || src.addDispature || src.customerName || '',
+        loadType: src.loadType || 'OTR',
+
+        // Return location for DRAYAGE
+        returnLocation: src.loadType === 'DRAYAGE' && src.returnLocation ? {
+          address: src.returnLocation.returnFullAddress || '',
+          city: src.returnLocation.city || '',
+          state: src.returnLocation.state || '',
+          zipCode: src.returnLocation.zipCode || '',
+          returnDate: fmt(src.returnLocation.returnDate)
+        } : {
+          address: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          returnDate: ''
+        },
 
         pickupLocations: (src.shipper?.pickUpLocations || [{
-          name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: ''
+          name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: ''
         }]).map(l => ({
-          ...l,
-          pickUpDate: fmt(l?.pickUpDate || src.shipper?.pickUpDate),
+          name: l?.name || '',
+          address: l?.address || '',
+          city: l?.city || '',
+          state: l?.state || '',
+          zipCode: l?.zipCode || '',
           weight: l?.weight ?? '',
-          remarks: l?.remarks ?? '' // 👈 NEW
+          commodity: l?.commodity || '',
+          pickUpDate: fmt(l?.pickUpDate || src.shipper?.pickUpDate),
+          remarks: l?.remarks ?? ''
         })),
 
         dropLocations: (src.shipper?.dropLocations || [{
-          name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '', remarks: ''
+          name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', dropDate: '', remarks: ''
         }]).map(l => ({
-          ...l,
-          dropDate: fmt(l?.dropDate || src.shipper?.dropDate),
+          name: l?.name || '',
+          address: l?.address || '',
+          city: l?.city || '',
+          state: l?.state || '',
+          zipCode: l?.zipCode || '',
           weight: l?.weight ?? '',
-          remarks: l?.remarks ?? '' // 👈 NEW
+          commodity: l?.commodity || '',
+          dropDate: fmt(l?.dropDate || src.shipper?.dropDate),
+          remarks: l?.remarks ?? ''
         })),
 
         remarks: src.remarks || '',
@@ -835,6 +887,9 @@ export default function DeliveryOrder() {
 
       setFormData(prefForm);
       setCharges(fees.length ? fees : [{ name: '', quantity: '', amt: '', total: 0 }]);
+      
+      // Set load type for the form
+      setSelectedLoadType(src.loadType || 'OTR');
 
       setEditingOrder(null);
       setFormMode('duplicate');
@@ -951,11 +1006,13 @@ export default function DeliveryOrder() {
             
             // Auto-fill shipper information
             shipperName: loadData.shipper?.compName || prev.shipperName,
+            shipperId: loadData.shipper?._id || prev.shipperId,
             containerNo: loadData.containerNo || prev.containerNo,
             containerType: loadData.vehicleType || prev.containerType,
             
             // Auto-fill carrier information
             carrierName: loadData.assignedTo?.compName || prev.carrierName,
+            carrierId: loadData.assignedTo?._id || prev.carrierId,
             equipmentType: loadData.commodity || prev.equipmentType,
             
             // Auto-fill pickup locations
@@ -988,6 +1045,7 @@ export default function DeliveryOrder() {
                   state: origin.state || '',
                   zipCode: origin.zip || '', // zipCode from origins
                   weight: origin.weight || '',
+                  commodity: origin.commodity || loadData.commodity || '',
                   pickUpDate: formattedPickupDate, // properly formatted datetime
                   remarks: ''
                 };
@@ -1023,6 +1081,7 @@ export default function DeliveryOrder() {
                   state: destination.state || '',
                   zipCode: destination.zip || '', // zipCode from destinations
                   weight: destination.weight || '',
+                  commodity: destination.commodity || loadData.commodity || '',
                   dropDate: formattedDeliveryDate, // properly formatted datetime
                   remarks: ''
                 };
@@ -1268,7 +1327,7 @@ export default function DeliveryOrder() {
       ...prev,
       pickupLocations: [
         ...prev.pickupLocations,
-        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: '' } // 👈 remarks added
+        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' } // 👈 remarks and commodity added
       ]
     }));
   };
@@ -1289,7 +1348,7 @@ export default function DeliveryOrder() {
       ...prev,
       dropLocations: [
         ...prev.dropLocations,
-        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '', remarks: '' } // 👈 remarks added
+        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', dropDate: '', remarks: '' } // 👈 remarks and commodity added
       ]
     }));
   };
@@ -1598,27 +1657,82 @@ export default function DeliveryOrder() {
       const user = JSON.parse(userStr || '{}');
       const empId = user.empId || "EMP001";
 
-      // customers
+      // Get shipperId - try to find by name in shippers list, or use stored shipperId
+      let shipperId = formData.shipperId || '';
+      if (!shipperId && formData.shipperName) {
+        const foundShipper = shippers.find(s => s.compName === formData.shipperName);
+        shipperId = foundShipper?._id || '';
+      }
+      // If still no shipperId, try to find from customers' billTo
+      if (!shipperId && formData.customers?.[0]?.billTo) {
+        const foundShipper = shippers.find(s => s.compName === formData.customers[0].billTo);
+        shipperId = foundShipper?._id || '';
+      }
+
+      // Get carrierId - use stored carrierId or find by name
+      let carrierId = formData.carrierId || '';
+      if (!carrierId && formData.carrierName) {
+        const foundCarrier = truckers.find(t => t.compName === formData.carrierName);
+        carrierId = foundCarrier?._id || '';
+      }
+
+      // Helper function to convert datetime-local to ISO string
+      const formatDateToISO = (dateString) => {
+        if (!dateString) return '';
+        try {
+          // If it's already in ISO format, return as is
+          if (dateString.includes('T') && dateString.includes('Z')) return dateString;
+          // If it's in datetime-local format (YYYY-MM-DDTHH:mm), convert to ISO
+          if (dateString.includes('T')) {
+            const date = new Date(dateString);
+            if (!isNaN(date.getTime())) {
+              return date.toISOString();
+            }
+          }
+          // If it's just a date, add time
+          const date = new Date(dateString);
+          if (!isNaN(date.getTime())) {
+            return date.toISOString();
+          }
+        } catch (e) {
+          console.error('Error formatting date:', e);
+        }
+        return '';
+      };
+
+      // Helper function to format return location date
+      const formatReturnDateToISO = (dateString) => {
+        if (!dateString) return '';
+        return formatDateToISO(dateString);
+      };
+
+      // customers - convert other field to array format
       const customersWithTotals = formData.customers.map(c => {
         const lh = toNum2(c.lineHaul);
         const fsc = toNum2(c.fsc);
         const oth = toNum2(c.other);
+        
+        // Convert other (single value) to array format as required by API
+        const otherArray = oth > 0 ? [{
+          name: "Other Charges",
+          quantity: 1,
+          amount: oth,
+          total: oth
+        }] : [];
+        
         return {
-          billTo: c.billTo,
           dispatcherName: c.dispatcherName,
           workOrderNo: c.workOrderNo,
           lineHaul: lh,
           fsc: fsc,
-          other: oth,
+          other: otherArray,
+          otherTotal: oth,
           totalAmount: toNum2(lh + fsc + oth),
         };
       });
 
-
-
       // carrier (from charges)
       const carrierData = {
-        carrierName: formData.carrierName,
         equipmentType: formData.equipmentType,
         carrierFees: (charges || []).map(ch => ({
           name: ch.name,
@@ -1629,45 +1743,64 @@ export default function DeliveryOrder() {
         totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0)
       };
 
-      // plain JSON payload (remarks included)
+      // Format return location for DRAYAGE - only include if all required fields are present
+      const returnLocationData = (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && formData.returnLocation ? {
+        returnFullAddress: [
+          formData.returnLocation.address,
+          formData.returnLocation.city,
+          formData.returnLocation.state,
+          formData.returnLocation.zipCode
+        ].filter(Boolean).join(', ') || '',
+        city: formData.returnLocation.city || '',
+        state: formData.returnLocation.state || '',
+        zipCode: formData.returnLocation.zipCode || '',
+        returnDate: formatReturnDateToISO(formData.returnLocation.returnDate || '')
+      } : null;
+
+      // plain JSON payload (new API format)
       const submitData = {
         empId,
+        loadType: formData.loadType || selectedLoadType,
+        shipperId: shipperId || '',
+        carrierId: carrierId || '',
+        companyName: formData.company || formData.addDispature || '', // Company name for both DRAYAGE and OTR
         customers: customersWithTotals,
         carrier: carrierData,
         shipper: {
-          shipmentNo: formData.shipmentNo,
+          containerNo: formData.containerNo || '',
+          containerType: (formData.loadType || selectedLoadType) === 'DRAYAGE' 
+            ? ((formData.equipmentType || formData.containerType || '').trim()) 
+            : ((formData.containerType || '').trim()),
+          shipmentNo: formData.shipmentNo || '',
           pickUpLocations: formData.pickupLocations.map(l => ({
-            name: l.name,
-            address: l.address,
-            city: l.city,
-            state: l.state,
-            zipCode: l.zipCode,
+            name: l.name || '',
+            address: l.address || '',
+            city: l.city || '',
+            state: l.state || '',
+            zipCode: l.zipCode || '',
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            pickUpDate: l.pickUpDate || '',
-            remarks: l.remarks || '' // 👈
+            commodity: l.commodity || formData.commodity || '',
+            pickUpDate: formatDateToISO(l.pickUpDate),
+            remarks: l.remarks || ''
           })),
-          containerNo: formData.containerNo,
-          containerType: formData.containerType,
           dropLocations: formData.dropLocations.map(l => ({
-            name: l.name,
-            address: l.address,
-            city: l.city,
-            state: l.state,
-            zipCode: l.zipCode,
+            name: l.name || '',
+            address: l.address || '',
+            city: l.city || '',
+            state: l.state || '',
+            zipCode: l.zipCode || '',
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            dropDate: l.dropDate || '',
-            remarks: l.remarks || '' // 👈
+            commodity: l.commodity || formData.commodity || '',
+            dropDate: formatDateToISO(l.dropDate),
+            remarks: l.remarks || ''
           }))
         },
         bols: (formData.bols || [])
           .filter(b => (b.bolNo || '').trim())
           .map(b => ({ bolNo: b.bolNo.trim() })),
-        ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadReference: formData.selectedLoad } : {}), // Only include loadReference if it has a value
-        ...(formData.company && formData.company.trim() ? { company: formData.company } : {}), // Only include company if it has a value
-        ...(formData.company && formData.company.trim() ? { addDispature: formData.company } : {}), // Only include addDispature if company has a value
-        loadType: formData.loadType || selectedLoadType,
-        ...(formData.loadType === 'DRAYAGE' && formData.returnLocation ? { returnLocation: formData.returnLocation } : {}),
-        remarks: formData.remarks
+        ...(returnLocationData ? { returnLocation: returnLocationData } : {}),
+        loadReference: formData.selectedLoad && formData.selectedLoad.trim() ? formData.selectedLoad : '',
+        supportingDocs: formData.docs ? '' : '' // Will be handled in multipart
       };
 
       console.log('Submitting delivery order with loadReference:', formData.selectedLoad);
@@ -1679,13 +1812,18 @@ export default function DeliveryOrder() {
 
       let response;
 
-      // MULTIPART (file attached) — shipper/carrier strings me with remarks
+      // MULTIPART (file attached) — new API format
       if (formData.docs) {
         const fd = new FormData();
         fd.append('empId', empId);
+        fd.append('loadType', formData.loadType || selectedLoadType);
+        fd.append('shipperId', shipperId || '');
+        fd.append('carrierId', carrierId || '');
+        fd.append('companyName', formData.company || formData.addDispature || ''); // Company name for both DRAYAGE and OTR
+
+        fd.append('customers', JSON.stringify(customersWithTotals));
 
         const carrierJSON = {
-          carrierName: formData.carrierName,
           equipmentType: formData.equipmentType,
           carrierFees: (charges || []).map(ch => ({
             name: ch.name,
@@ -1695,66 +1833,59 @@ export default function DeliveryOrder() {
           })),
           totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0),
         };
+        fd.append('carrier', JSON.stringify(carrierJSON));
 
         const shipperJSON = {
-          shipmentNo: formData.shipmentNo,
-          containerNo: formData.containerNo,
-          containerType: formData.containerType,
+          containerNo: formData.containerNo || '',
+          containerType: (formData.loadType || selectedLoadType) === 'DRAYAGE' 
+            ? ((formData.equipmentType || formData.containerType || '').trim()) 
+            : ((formData.containerType || '').trim()),
+          shipmentNo: formData.shipmentNo || '',
           pickUpLocations: formData.pickupLocations.map(l => ({
-            name: l.name,
-            address: l.address,
-            city: l.city,
-            state: l.state,
-            zipCode: l.zipCode,
+            name: l.name || '',
+            address: l.address || '',
+            city: l.city || '',
+            state: l.state || '',
+            zipCode: l.zipCode || '',
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            pickUpDate: l.pickUpDate || '',
-            remarks: l.remarks || '' // 👈
+            commodity: l.commodity || formData.commodity || '',
+            pickUpDate: formatDateToISO(l.pickUpDate),
+            remarks: l.remarks || ''
           })),
           dropLocations: formData.dropLocations.map(l => ({
-            name: l.name,
-            address: l.address,
-            city: l.city,
-            state: l.state,
-            zipCode: l.zipCode,
+            name: l.name || '',
+            address: l.address || '',
+            city: l.city || '',
+            state: l.state || '',
+            zipCode: l.zipCode || '',
             weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            dropDate: l.dropDate || '',
-            remarks: l.remarks || '' // 👈
-          })),
+            commodity: l.commodity || formData.commodity || '',
+            dropDate: formatDateToISO(l.dropDate),
+            remarks: l.remarks || ''
+          }))
         };
-
-        fd.append('customers', JSON.stringify(customersWithTotals));
-        fd.append('carrier', JSON.stringify(carrierJSON));
         fd.append('shipper', JSON.stringify(shipperJSON));
-        // Only add loadReference if it has a value
-        if (formData.selectedLoad && formData.selectedLoad.trim()) {
-          fd.append('loadReference', formData.selectedLoad);
-          console.log('Multipart form - adding loadReference:', formData.selectedLoad);
-        } else {
-          console.log('Multipart form - skipping loadReference (empty value)');
-        }
-        // Only add company if it has a value
-        if (formData.company && formData.company.trim()) {
-          fd.append('company', formData.company);
-          console.log('Multipart form - adding company:', formData.company);
-        } else {
-          console.log('Multipart form - skipping company (empty value)');
-        }
-        // Only add addDispature if company has a value
-        if (formData.company && formData.company.trim()) {
-          fd.append('addDispature', formData.company);
-          console.log('Multipart form - adding addDispature:', formData.company);
-        } else {
-          console.log('Multipart form - skipping addDispature (empty value)');
-        }
+
+        // BOLs
         (formData.bols || []).forEach((b, i) => {
           const val = (b?.bolNo || '').trim();
-          if (val) fd.append(`bols[${i}][bolNo]`, val);   // 👈 nested fields, no JSON string
+          if (val) fd.append(`bols[${i}][bolNo]`, val);
         });
-        fd.append('remarks', formData.remarks || '');
-        fd.append('loadType', formData.loadType || selectedLoadType);
-        if (formData.loadType === 'DRAYAGE' && formData.returnLocation) {
-          fd.append('returnLocation', JSON.stringify(formData.returnLocation));
+
+        // Return location for DRAYAGE
+        if (returnLocationData) {
+          fd.append('returnLocation', JSON.stringify(returnLocationData));
         }
+
+        // Load reference
+        if (formData.selectedLoad && formData.selectedLoad.trim()) {
+          fd.append('loadReference', formData.selectedLoad);
+        } else {
+          fd.append('loadReference', '');
+        }
+
+        // Supporting docs
+        fd.append('supportingDocs', '');
         fd.append('document', formData.docs);
 
         response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, fd, {
@@ -1819,14 +1950,29 @@ export default function DeliveryOrder() {
             lineHaul: '', fsc: '', other: '', totalAmount: 0
           }],
           carrierName: '',
+          carrierId: '',
           equipmentType: '',
           carrierFees: '',
           shipperName: '',
+          shipperId: '',
+          shipmentNo: '',
           containerNo: '',
           containerType: '',
-          pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', pickUpDate: '', remarks: '' }],
-          dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', dropDate: '', remarks: '' }],
+          commodity: '',
+          selectedLoad: '',
+          company: '',
+          loadType: 'OTR',
+          returnLocation: {
+            address: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            returnDate: ''
+          },
+          pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' }],
+          dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', dropDate: '', remarks: '' }],
           remarks: '',
+          bols: [{ bolNo: '' }],
           docs: null
         });
         setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
@@ -1962,6 +2108,10 @@ export default function DeliveryOrder() {
       } else if (!isZip(formData.returnLocation.zipCode)) {
         next.returnLocation = next.returnLocation || {};
         next.returnLocation.zipCode = 'Enter a valid ZIP/Postal code.';
+      }
+      if (!formData.returnLocation?.returnDate?.trim()) {
+        next.returnLocation = next.returnLocation || {};
+        next.returnLocation.returnDate = 'Please enter the return date.';
       }
     }
 
@@ -2203,45 +2353,96 @@ export default function DeliveryOrder() {
           } catch { return ''; }
         };
 
-        const editFormData = {
-          customers: (fullOrderData.customers || []).map(c => ({
+        // Get shipperId and carrierId
+        const shipperId = typeof fullOrderData.shipperId === 'object' ? fullOrderData.shipperId?._id : fullOrderData.shipperId;
+        const carrierId = typeof fullOrderData.carrierId === 'object' ? fullOrderData.carrierId?._id : fullOrderData.carrierId;
+
+        // Handle customers - convert other array back to single value for form
+        const editCustomers = (fullOrderData.customers || []).map(c => {
+          const lh = Number(c.lineHaul) || 0;
+          const fsc = Number(c.fsc) || 0;
+          // If other is an array, sum it up; otherwise use the value directly
+          const oth = Array.isArray(c.other) 
+            ? (c.otherTotal || c.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
+            : (Number(c.other) || 0);
+          return {
             billTo: c.billTo || '',
             dispatcherName: c.dispatcherName || '',
             workOrderNo: c.workOrderNo || '',
-            lineHaul: ensureMoney2dp(String(c.lineHaul ?? '')),
-            fsc: ensureMoney2dp(String(c.fsc ?? '')),
-            other: ensureMoney2dp(String(c.other ?? '')),
+            lineHaul: ensureMoney2dp(String(lh)),
+            fsc: ensureMoney2dp(String(fsc)),
+            other: ensureMoney2dp(String(oth)),
+            totalAmount: lh + fsc + oth,
+            // Store the original other array for charges popup
+            chargeRows: Array.isArray(c.other) ? c.other.map(item => ({
+              name: item?.name || '',
+              quantity: String(item?.quantity || 0),
+              amt: String(item?.amount || 0),
+              total: Number(item?.total || 0)
+            })) : []
+          };
+        });
 
-            totalAmount: (Number(c.lineHaul) || 0) + (Number(c.fsc) || 0) + (Number(c.other) || 0)
-          })),
-          carrierName: fullOrderData.carrier?.carrierName || '',
+        const editFormData = {
+          customers: editCustomers.length ? editCustomers : [{
+            billTo: '', dispatcherName: '', workOrderNo: '',
+            lineHaul: '', fsc: '', other: '', totalAmount: 0
+          }],
+          carrierName: fullOrderData.carrier?.carrierName || (typeof fullOrderData.carrierId === 'object' ? fullOrderData.carrierId?.compName : ''),
+          carrierId: carrierId || '',
           equipmentType: fullOrderData.carrier?.equipmentType || '',
           carrierFees: fullOrderData.carrier?.totalCarrierFees || '',
-          totalRates: fullOrderData.carrier?.totalRates || fullOrderData.carrier?.totalrates || '',
-          shipmentNo: fullOrderData.shipper?.shipmentNo || fullOrderData.shipper?.name || '',
+          totalRates: fullOrderData.carrier?.totalCarrierFees || '',
+          shipperName: fullOrderData.shipper?.name || (typeof fullOrderData.shipperId === 'object' ? fullOrderData.shipperId?.compName : ''),
+          shipperId: shipperId || '',
+          shipmentNo: fullOrderData.shipper?.shipmentNo || '',
           containerNo: fullOrderData.shipper?.containerNo || '',
           containerType: fullOrderData.shipper?.containerType || '',
-          commodity: fullOrderData.shipper?.commodity || fullOrderData.commodity || '',
-          selectedLoad: fullOrderData.loadReference || '', // Load reference from database
-          company: fullOrderData.company || fullOrderData.addDispature || '', // Company from database (check both company and addDispature)
+          commodity: fullOrderData.shipper?.pickUpLocations?.[0]?.commodity || fullOrderData.shipper?.dropLocations?.[0]?.commodity || '',
+          selectedLoad: fullOrderData.loadReference || '',
+          company: fullOrderData.company || fullOrderData.addDispature || fullOrderData.customerName || '',
           loadType: fullOrderData.loadType || 'OTR',
-          returnLocation: fullOrderData.returnLocation || {
+          
+          // Return location for DRAYAGE
+          returnLocation: fullOrderData.loadType === 'DRAYAGE' && fullOrderData.returnLocation ? {
+            address: fullOrderData.returnLocation.returnFullAddress || '',
+            city: fullOrderData.returnLocation.city || '',
+            state: fullOrderData.returnLocation.state || '',
+            zipCode: fullOrderData.returnLocation.zipCode || '',
+            returnDate: formatDateForInput(fullOrderData.returnLocation.returnDate)
+          } : {
             address: '',
             city: '',
             state: '',
-            zipCode: ''
+            zipCode: '',
+            returnDate: ''
           },
-          pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
-            ...l,
+          
+          pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{
+            name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: ''
+          }]).map(l => ({
+            name: l?.name || '',
+            address: l?.address || '',
+            city: l?.city || '',
+            state: l?.state || '',
+            zipCode: l?.zipCode || '',
+            weight: l?.weight ?? '',
+            commodity: l?.commodity || '',
             pickUpDate: formatDateForInput(l?.pickUpDate || fullOrderData.shipper?.pickUpDate),
-            weight: l?.weight ?? '',
-            remarks: l?.remarks ?? '' // 👈
+            remarks: l?.remarks ?? ''
           })),
-          dropLocations: (fullOrderData.shipper?.dropLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
-            ...l,
-            dropDate: formatDateForInput(l?.dropDate || fullOrderData.shipper?.dropDate),
+          dropLocations: (fullOrderData.shipper?.dropLocations || [{
+            name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', dropDate: '', remarks: ''
+          }]).map(l => ({
+            name: l?.name || '',
+            address: l?.address || '',
+            city: l?.city || '',
+            state: l?.state || '',
+            zipCode: l?.zipCode || '',
             weight: l?.weight ?? '',
-            remarks: l?.remarks ?? '' // 👈
+            commodity: l?.commodity || '',
+            dropDate: formatDateForInput(l?.dropDate || fullOrderData.shipper?.dropDate),
+            remarks: l?.remarks ?? ''
           })),
           remarks: fullOrderData.remarks || '',
           bols: (Array.isArray(fullOrderData.bols) && fullOrderData.bols.length
@@ -4957,7 +5158,14 @@ export default function DeliveryOrder() {
                     {truckers.length > 0 ? (
                       <SearchableDropdown
                         value={formData.carrierName || ''}
-                        onChange={(value) => setFormData(prev => ({ ...prev, carrierName: value }))}
+                        onChange={(value) => {
+                          const selectedCarrier = truckers.find(t => t.compName === value);
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            carrierName: value,
+                            carrierId: selectedCarrier?._id || ''
+                          }));
+                        }}
                         options={truckers.map(t => ({ 
                           value: t.compName || '', 
                           label: `${t.compName || ''}${t.mc_dot_no ? ` (${t.mc_dot_no})` : ''}` 
@@ -5091,14 +5299,43 @@ export default function DeliveryOrder() {
                   </div>
 
                   <div>
-                    <input
-                      type="text"
-                      name="containerType"
-                      value={formData.containerType}
-                      onChange={handleInputChange}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.shipper?.containerType ? 'border-red-400' : 'border-gray-300'}`}
-                      placeholder="Container Type *"
-                    />
+                    {selectedLoadType === 'DRAYAGE' ? (
+                      <SearchableDropdown
+                        value={formData.containerType || formData.equipmentType || ''}
+                        onChange={(value) => {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            containerType: value,
+                            // Also update equipmentType for consistency
+                            equipmentType: value
+                          }));
+                        }}
+                        options={[
+                          { value: "20' Standard", label: "20' Standard" },
+                          { value: "40' Standard", label: "40' Standard" },
+                          { value: "45' Standard", label: "45' Standard" },
+                          { value: "20' Reefer", label: "20' Reefer" },
+                          { value: "40' Reefer", label: "40' Reefer" },
+                          { value: 'Open Top Container', label: 'Open Top Container' },
+                          { value: 'Flat Rack Container', label: 'Flat Rack Container' },
+                          { value: 'Tank Container', label: 'Tank Container' },
+                          { value: "40' High Cube", label: "40' High Cube" },
+                          { value: "45' High Cube", label: "45' High Cube" }
+                        ]}
+                        placeholder="Container Type *"
+                        searchPlaceholder="Search container type..."
+                        className={errors.shipper?.containerType ? errBox(true) : ''}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        name="containerType"
+                        value={formData.containerType}
+                        onChange={handleInputChange}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.shipper?.containerType ? 'border-red-400' : 'border-gray-300'}`}
+                        placeholder="Container Type *"
+                      />
+                    )}
                     {errors.shipper?.containerType && <p className="text-red-600 text-xs mt-1">{errors.shipper.containerType}</p>}
                   </div>
 
@@ -5480,6 +5717,27 @@ export default function DeliveryOrder() {
                         />
                         {errors.returnLocation?.zipCode && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.zipCode}</p>}
                       </div>
+                      <div className="col-span-2">
+                        <div
+                          onClick={(e) => {
+                            const input = e.currentTarget.querySelector('input');
+                            if (input?.showPicker) input.showPicker();
+                            else input?.focus();
+                          }}
+                        >
+                          <input
+                            type="datetime-local"
+                            value={formData.returnLocation?.returnDate || ''}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              returnLocation: { ...prev.returnLocation, returnDate: e.target.value }
+                            }))}
+                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.returnDate ? 'border-red-400' : 'border-gray-300'}`}
+                            placeholder="Return Date & Time *"
+                          />
+                        </div>
+                        {errors.returnLocation?.returnDate && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.returnDate}</p>}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -5649,13 +5907,37 @@ export default function DeliveryOrder() {
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">Other</p>
-                              <p className="font-medium text-gray-800">${customer?.other || 0}</p>
+                              <p className="font-medium text-gray-800">${
+                                Array.isArray(customer?.other) 
+                                  ? (customer?.otherTotal || customer?.other.reduce((sum, item) => sum + (item?.total || 0), 0) || 0)
+                                  : (customer?.other || 0)
+                              }</p>
                             </div>
                             <div className="col-span-2">
                               <p className="text-sm text-gray-600">Total Amount</p>
                               <p className="font-bold text-lg text-green-600">${customer?.totalAmount || 0}</p>
                             </div>
                           </div>
+
+                          {/* Other Charges Breakdown */}
+                          {Array.isArray(customer?.other) && customer.other.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-green-200">
+                              <h5 className="font-semibold text-gray-700 mb-2 text-sm">Other Charges Breakdown</h5>
+                              <div className="space-y-2">
+                                {customer.other.map((charge, i) => (
+                                  <div key={i} className="bg-gray-50 rounded-lg p-2 border border-green-100">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-sm font-medium text-gray-700">{charge?.name || 'N/A'}</span>
+                                      <span className="text-sm font-bold text-green-600">${charge?.total || 0}</span>
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      Quantity: {charge?.quantity || 0} × Amount: ${charge?.amount || 0}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -5947,6 +6229,64 @@ export default function DeliveryOrder() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Return Location - Only for DRAYAGE */}
+                {selectedOrder?.loadType === 'DRAYAGE' && selectedOrder?.returnLocation && (
+                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <MapPin className="text-indigo-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Return Location</h3>
+                    </div>
+
+                    <div className="bg-white rounded-lg p-4 border border-indigo-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-600">Return Full Address</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.returnFullAddress || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">City</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.city || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">State</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.state || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Zip Code</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.zipCode || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Return Date</p>
+                          <p className="font-medium text-gray-800">
+                            {selectedOrder.returnLocation?.returnDate
+                              ? (() => {
+                                  try {
+                                    const date = new Date(selectedOrder.returnLocation.returnDate);
+                                    if (isNaN(date.getTime())) {
+                                      return 'Invalid Date';
+                                    }
+                                    // Format as UTC to avoid timezone conversion issues
+                                    return date.toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: '2-digit',
+                                      day: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      timeZone: 'UTC'
+                                    });
+                                  } catch (error) {
+                                    console.error('Error formatting return date:', error, selectedOrder.returnLocation.returnDate);
+                                    return 'Invalid Date';
+                                  }
+                                })()
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
