@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -58,143 +58,210 @@ import AllLeads from "./Components/AllLeads.jsx";
 import TaskScheduling from "./Components/TaskScheduling/TaskScheduling.jsx";
 import CmtDeptReport from "./Components/CMT/cmtDeptReport.jsx";
 import SalesDeptReport from "./Components/Sales/salesDeptReport.jsx";
-import Invoices from "./Components/Accountant/Invoices.jsx"
-import CheckInvoice from "./Components/Sales/CheckInvoice.jsx"
+import Invoices from "./Components/Accountant/Invoices.jsx";
+import CheckInvoice from "./Components/Sales/CheckInvoice.jsx";
 import AssignLoad from "./Components/CMT-Manager/AssignLoad.jsx";
 import FinanceDashboard from "./Components/Finance/FinanceDashboard.jsx";
 import CallingReport from "./Pages/IddCallingReport.jsx";
-
 import TermsAndConditions from "./Components/TermsAndConditions.jsx";
-
 import AddFleet from "./Components/CMT-Manager/addFleet.jsx";
-import GlobalAssignmentNotification from "./Components/CMT/GlobalAssignmentNotification.jsx";
+import OfficeExpenses from "./Components/HRDashboard/OfficeExpenses.jsx";
+import EmpLeaves from "./Components/HRDashboard/EmpLeaves.jsx";
+import AddTruckerDriver from "./Components/CMT/AddTruckerDriver.jsx";
 
-
-
-
-
-function GlobalRRListener() {
+// Global Notification Component
+function GlobalAssignmentNotification() {
   const navigate = useNavigate();
   const prevIdsRef = useRef(new Set());
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // cross-tab listeners
+  // Handle online/offline status
   useEffect(() => {
-    let bc;
-    const onBC = (e) => {
-      const msg = e?.data;
-      if (msg?.type === "RR_NEW_ASSIGNMENT" && msg?.approval) {
-        showGlobalToast(msg.approval);
-      }
-    };
-    if ("BroadcastChannel" in window) {
-      bc = new BroadcastChannel("rr_events");
-      bc.addEventListener("message", onBC);
-    }
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
-    const onStorage = (e) => {
-      if (e.key === "rr_new_assignment" && e.newValue) {
-        try {
-          const approval = JSON.parse(e.newValue);
-          showGlobalToast(approval);
-        } catch {}
-      }
-    };
-    window.addEventListener("storage", onStorage);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
-      bc?.removeEventListener("message", onBC);
-      bc?.close?.();
-      window.removeEventListener("storage", onStorage);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
-  // global polling (20s) so popup appears on any tab
+  // Cross-tab communication
+  useEffect(() => {
+    let broadcastChannel;
+
+    const handleBroadcastMessage = (event) => {
+      const message = event?.data;
+      if (message?.type === "RR_NEW_ASSIGNMENT" && message?.approval) {
+        showGlobalToast(message.approval);
+      }
+    };
+
+    const handleStorageChange = (event) => {
+      if (event.key === "rr_new_assignment" && event.newValue) {
+        try {
+          const approval = JSON.parse(event.newValue);
+          showGlobalToast(approval);
+          // Clear the storage after reading
+          localStorage.removeItem("rr_new_assignment");
+        } catch (error) {
+          console.warn("Failed to parse storage notification:", error);
+        }
+      }
+    };
+
+    // Initialize BroadcastChannel if available
+    if ("BroadcastChannel" in window) {
+      try {
+        broadcastChannel = new BroadcastChannel("rr_events");
+        broadcastChannel.addEventListener("message", handleBroadcastMessage);
+      } catch (error) {
+        console.warn("BroadcastChannel not supported:", error);
+      }
+    }
+
+    // Listen for storage events
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      if (broadcastChannel) {
+        broadcastChannel.removeEventListener("message", handleBroadcastMessage);
+        broadcastChannel.close();
+      }
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, [navigate]);
+
+  // Polling for new assignments (commented out as per original)
   // useEffect(() => {
-  //   let id;
-  //   const poll = async () => {
+  //   if (!isOnline) return;
+
+  //   let pollInterval;
+
+  //   const pollForAssignments = async () => {
   //     try {
-  //       const token =
-  //         localStorage.getItem("authToken") ||
-  //         sessionStorage.getItem("authToken") ||
-  //         localStorage.getItem("token") ||
-  //         sessionStorage.getItem("token");
+  //       const token = getAuthToken();
   //       if (!token) return;
-        
-  //       const headers = { 
-  //         Authorization: `Bearer ${token}`,
-  //         'Content-Type': 'application/json'
-  //       };
-        
-  //       const res = await axios.get(
+
+  //       const response = await axios.get(
   //         `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending`,
-  //         { 
-  //           headers,
-  //           timeout: 10000 // 10 second timeout
+  //         {
+  //           headers: {
+  //             Authorization: `Bearer ${token}`,
+  //             'Content-Type': 'application/json'
+  //           },
+  //           timeout: 10000
   //         }
   //       );
-  //       const approvals = res?.data?.data?.approvals || [];
 
-  //       const current = new Set(
+  //       const approvals = response?.data?.data?.approvals || [];
+  //       const currentPendingIds = new Set(
   //         approvals
-  //           .filter(a => (a.overallStatus || a.status) === "pending")
-  //           .map(a => a._id)
+  //           .filter(approval => (approval.overallStatus || approval.status) === "pending")
+  //           .map(approval => approval._id)
   //       );
-  //       const prev = prevIdsRef.current || new Set();
-  //       const newbies = [...current].filter(id => !prev.has(id));
 
-  //       if (newbies.length) {
-  //         newbies.forEach(id => {
-  //           const approval = approvals.find(a => a._id === id);
-  //           if (approval) showGlobalToast(approval);
+  //       const previousIds = prevIdsRef.current;
+  //       const newAssignmentIds = [...currentPendingIds].filter(id => !previousIds.has(id));
+
+  //       if (newAssignmentIds.length > 0) {
+  //         newAssignmentIds.forEach(id => {
+  //           const newApproval = approvals.find(approval => approval._id === id);
+  //           if (newApproval) {
+  //             showGlobalToast(newApproval);
+  //           }
   //         });
   //       }
-  //       prevIdsRef.current = current;
-  //     } catch (e) {
-  //       // Only log errors that are not 403 Forbidden (permission issues)
-  //       if (e.response?.status !== 403) {
-  //         console.error("Polling error:", e);
+
+  //       prevIdsRef.current = currentPendingIds;
+  //     } catch (error) {
+  //       // Only log errors that are not permission-related
+  //       if (error.response?.status !== 403 && error.response?.status !== 401) {
+  //         console.error("Polling error:", error);
   //       }
-  //       // If it's a 403, the user might not have permission for this endpoint
-  //       // or the token might be invalid - we'll silently skip this polling
   //     }
   //   };
 
-  //   poll();
-  //   id = setInterval(poll, 20000);
-  //   return () => clearInterval(id);
-  // }, []);
+  //   // Initial poll
+  //   pollForAssignments();
+  
+  //   // Set up interval for polling
+  //   pollInterval = setInterval(pollForAssignments, 20000);
 
-  function showGlobalToast(approval) {
+  //   return () => {
+  //     if (pollInterval) clearInterval(pollInterval);
+  //   };
+  // }, [isOnline, navigate]);
+
+  const showGlobalToast = useCallback((approval) => {
+    if (!approval) return;
+
+    const originCity = approval?.loadId?.origin?.city ?? approval?.origin?.city ?? "—";
+    const destinationCity = approval?.loadId?.destination?.city ?? approval?.destination?.city ?? "—";
+    const rate = approval?.loadId?.rate ?? approval?.rate ?? 0;
+    const formattedRate = typeof rate === 'number' ? rate.toLocaleString() : "0";
+
     toast.info(
       ({ closeToast }) => (
-        <div className="space-y-1">
-          <div className="font-semibold">New load assigned</div>
-          <div className="text-sm text-gray-700">
-            {(approval?.loadId?.origin?.city ?? approval?.origin?.city ?? "—")}
-            {" → "}
-            {(approval?.loadId?.destination?.city ?? approval?.destination?.city ?? "—")}
-            {" · "}Rate $
-            {((approval?.loadId?.rate ?? approval?.rate) ?? 0).toLocaleString?.() ?? "0"}
+        <div className="space-y-2 p-2">
+          <div className="font-semibold text-gray-800">New Load Assigned</div>
+          <div className="text-sm text-gray-600">
+            {originCity} → {destinationCity}
           </div>
-          <div className="mt-2">
+          <div className="text-sm font-medium text-green-600">
+            Rate: ${formattedRate}
+          </div>
+          <div className="mt-2 flex justify-end">
             <button
               onClick={() => {
                 closeToast?.();
-                navigate("/RateRequest", { state: { openApprovalFromBroadcast: approval } });
+                navigate("/RateRequest", { 
+                  state: { openApprovalFromBroadcast: approval } 
+                });
               }}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm"
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors duration-200"
             >
               View & Accept
             </button>
           </div>
         </div>
       ),
-      { autoClose: 7000 }
+      { 
+        autoClose: 8000,
+        closeButton: true,
+        position: "top-right"
+      }
     );
-  }
+  }, [navigate]);
 
   return null;
 }
+
+// Utility function to get authentication token
+const getAuthToken = () => {
+  return (
+    localStorage.getItem("authToken") ||
+    sessionStorage.getItem("authToken") ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token")
+  );
+};
+
+// Utility function to get user data
+const getUserData = () => {
+  const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
+  if (!userString) return null;
+  
+  try {
+    return JSON.parse(userString);
+  } catch (error) {
+    console.error("Error parsing user data:", error);
+    return null;
+  }
+};
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -202,68 +269,111 @@ function App() {
   const [showTerms, setShowTerms] = useState(false);
   const [userData, setUserData] = useState(null);
 
+  // Check authentication and terms acceptance on mount
   useEffect(() => {
-    const token =
-      localStorage.getItem("authToken") || sessionStorage.getItem("authToken");
-    const user = localStorage.getItem("user") || sessionStorage.getItem("user");
-    
-    if (token && user) {
+    const checkAuthStatus = () => {
       try {
-        const userObj = JSON.parse(user);
-        // Check if terms are accepted
-        if (userObj.termsAccepted === false || userObj.termsAccepted === undefined) {
-          setShowTerms(true);
-          setUserData(userObj);
-          setIsAuthenticated(false); // Don't authenticate until terms are accepted
+        const token = getAuthToken();
+        const user = getUserData();
+
+        if (token && user) {
+          // Check if terms need to be accepted
+          if (user.termsAccepted === false || user.termsAccepted === undefined) {
+            setShowTerms(true);
+            setUserData(user);
+            setIsAuthenticated(false);
+          } else {
+            setIsAuthenticated(true);
+            setUserData(user);
+          }
         } else {
-          setIsAuthenticated(true);
+          setIsAuthenticated(false);
+          setUserData(null);
         }
       } catch (error) {
-        console.error('Error parsing user data:', error);
+        console.error("Error checking authentication status:", error);
         setIsAuthenticated(false);
+        setUserData(null);
+      } finally {
+        setLoading(false);
       }
-    } else {
-      setIsAuthenticated(false);
-    }
-    setLoading(false);
+    };
+
+    checkAuthStatus();
   }, []);
 
   // Handle terms acceptance
-  const handleTermsAccepted = (termsData) => {
-    setShowTerms(false);
-    setIsAuthenticated(true);
-    // Update user data in storage with terms acceptance
-    if (userData) {
-      const updatedUser = { ...userData, termsAccepted: true };
-      sessionStorage.setItem('user', JSON.stringify(updatedUser));
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+  const handleTermsAccepted = useCallback((termsData) => {
+    try {
+      setShowTerms(false);
+      setIsAuthenticated(true);
+      
+      // Update user data with terms acceptance
+      const currentUser = getUserData();
+      if (currentUser) {
+        const updatedUser = { 
+          ...currentUser, 
+          termsAccepted: true,
+          termsAcceptedAt: new Date().toISOString()
+        };
+        
+        // Update both storage locations
+        const userString = JSON.stringify(updatedUser);
+        sessionStorage.setItem('user', userString);
+        localStorage.setItem('user', userString);
+        
+        setUserData(updatedUser);
+      }
+    } catch (error) {
+      console.error("Error accepting terms:", error);
+      toast.error("Failed to accept terms and conditions. Please try again.");
     }
-  };
+  }, []);
 
+  // Show loading spinner
   if (loading) {
     return (
-      <div className="p-10">
-        Loading...
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-600 text-lg">Loading...</p>
       </div>
     );
   }
 
   return (
     <>
-      {/* ✅ Routes ke bahar */}
-      <GlobalRRListener />
+      {/* Global Components */}
       <GlobalAssignmentNotification />
-      <ToastContainer position="top-right" newestOnTop />
+      <ToastContainer 
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
 
+      {/* Routes */}
       <Routes>
-        {/* Public */}
-        <Route path="/" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
+        {/* Public Routes */}
+        <Route 
+          path="/" 
+          element={
+            <Login 
+              setIsAuthenticated={setIsAuthenticated} 
+              setUserData={setUserData}
+            />
+          } 
+        />
         <Route path="/signup" element={<Signup />} />
 
-        {/* Protected */}
+        {/* Protected Routes */}
         <Route
-          path="/"
+          path="/*"
           element={
             <PrivateRoute isAuthenticated={isAuthenticated}>
               <Layout />
@@ -276,58 +386,64 @@ function App() {
           <Route path="manage-users" element={<ManageUser />} />
           <Route path="load-board" element={<LoadBoard />} />
           <Route path="profile" element={<ProfilePage />} />
-          <Route path="/DailyTask" element={<CallDashboard />} />
-          <Route path="/call-dashboard" element={<UserCallDashboard />} />
-          <Route path="/Fleet" element={<FleetTable />} />
-          <Route path="/analytics" element={<AnalyticsReport />} />
-          <Route path="/Chat" element={<ChatPage />} />
-          <Route path="/Inbox" element={<Inbox />} />
-          <Route path="/AgentRevenueStatistics" element={<AgentRevenueStatistics />} />
-          <Route path="/EmployeeHygiene" element={<EmployeeHygiene />} />
-          <Route path="/ShippersLDocuments" element={<ShippersLDocuments />} />
-          <Route path="/PayrollPage" element={<PayrollPage />} />
-          <Route path="/ShiperLoadData" element={<ShiperLoadData />} />
-          <Route path="/HrDocumentsVerification" element={<HrDocumentsVerification />} />
-          <Route path="/Attendanceleave" element={<Attendanceleave />} />
-          <Route path="/TLTeams" element={<TLTeams />} />
-          <Route path="/TruckerDocuments" element={<TruckerDocuments />} />
-          <Route path="/HREmployeeHygine" element={<HREmployeeHygine />} />
-          <Route path="/ManagerShippersLDocuments" element={<ManagerShippersLDocuments />} />
-          <Route path="/TruckerLDocuments" element={<TruckerLDocuments />} />
-          <Route path="/RateRequest" element={<RateRequest />} />
-          <Route path="/RateApproved" element={<RateApproved />} />
-          <Route path="/Loads" element={<Loads />} />
-          <Route path="/CarrierApproval" element={<CarrierApproval />} />
-          <Route path="/HrCreateTask" element={<HrCreateTask />} />
-          <Route path="/LeaveApproval" element={<LeaveApproval />} />
+          <Route path="DailyTask" element={<CallDashboard />} />
+          <Route path="call-dashboard" element={<UserCallDashboard />} />
+          <Route path="Fleet" element={<FleetTable />} />
+          <Route path="analytics" element={<AnalyticsReport />} />
+          <Route path="Chat" element={<ChatPage />} />
+          <Route path="Inbox" element={<Inbox />} />
+          <Route path="AgentRevenueStatistics" element={<AgentRevenueStatistics />} />
+          <Route path="EmployeeHygiene" element={<EmployeeHygiene />} />
+          <Route path="ShippersLDocuments" element={<ShippersLDocuments />} />
+          <Route path="PayrollPage" element={<PayrollPage />} />
+          <Route path="ShiperLoadData" element={<ShiperLoadData />} />
+          <Route path="HrDocumentsVerification" element={<HrDocumentsVerification />} />
+          <Route path="Attendanceleave" element={<Attendanceleave />} />
+          <Route path="TLTeams" element={<TLTeams />} />
+          <Route path="TruckerDocuments" element={<TruckerDocuments />} />
+          <Route path="HREmployeeHygine" element={<HREmployeeHygine />} />
+          <Route path="ManagerShippersLDocuments" element={<ManagerShippersLDocuments />} />
+          <Route path="TruckerLDocuments" element={<TruckerLDocuments />} />
+          <Route path="RateRequest" element={<RateRequest />} />
+          <Route path="RateApproved" element={<RateApproved />} />
+          <Route path="Loads" element={<Loads />} />
+          <Route path="CarrierApproval" element={<CarrierApproval />} />
+          <Route path="HrCreateTask" element={<HrCreateTask />} />
+          <Route path="LeaveApproval" element={<LeaveApproval />} />
           <Route path="delivery-order" element={<DeliveryOrder />} />
-          <Route path="/daily-follow-up" element={<DailyFollowUp />} />
-          <Route path="/AddCustomer" element={<AddCustomer />} />
-          <Route path="/AssignAgent" element={<AssignAgent />} />
-          <Route path="/CarrierDocs" element={<CarrierDocs />} />
-          <Route path="/DODetails" element={<DoDetails />} />
-          <Route path="/candidate-shortlist" element={<CandidateShortlist />} />
-          <Route path="/target-reports" element={<TargetReports />} />
-          <Route path="/Consignment" element={<Consignment />} />
-          <Route path="/CustomerLoads" element={<CustomerLoads />} />
-          <Route path="/DailyRateRequest" element={<DailyRateRequest />} />
-          <Route path="/OfficeInventory" element={<OfficeInventory />} />
-          <Route path="/dinner-status" element={<DinnerStatus />} />
-          <Route path="/TruckerReport" element={<TruckerReport />} />
-          <Route path="/AllLeads" element={<AllLeads />} />
-          <Route path="/TaskScheduling" element={<TaskScheduling />} />
-          <Route path="/CmtDeptReport" element={<CmtDeptReport />} />
-          <Route path="/SalesDeptReport" element={<SalesDeptReport />} />
-          <Route path="/Invoices" element={<Invoices />} />
-          <Route path="/CheckInvoice" element={<CheckInvoice />} />
-          <Route path="/AssignLoad" element={<AssignLoad />} />
-          <Route path="/finance-dashboard" element={<FinanceDashboard />} />
-          <Route path="/CallingReport" element={<CallingReport />} />
-          <Route path="/AddFleet" element={<AddFleet />} />
-
+          <Route path="daily-follow-up" element={<DailyFollowUp />} />
+          <Route path="AddCustomer" element={<AddCustomer />} />
+          <Route path="AssignAgent" element={<AssignAgent />} />
+          <Route path="CarrierDocs" element={<CarrierDocs />} />
+          <Route path="DODetails" element={<DoDetails />} />
+          <Route path="candidate-shortlist" element={<CandidateShortlist />} />
+          <Route path="target-reports" element={<TargetReports />} />
+          <Route path="Consignment" element={<Consignment />} />
+          <Route path="CustomerLoads" element={<CustomerLoads />} />
+          <Route path="DailyRateRequest" element={<DailyRateRequest />} />
+          <Route path="OfficeInventory" element={<OfficeInventory />} />
+          <Route path="dinner-status" element={<DinnerStatus />} />
+          <Route path="TruckerReport" element={<TruckerReport />} />
+          <Route path="AllLeads" element={<AllLeads />} />
+          <Route path="TaskScheduling" element={<TaskScheduling />} />
+          <Route path="CmtDeptReport" element={<CmtDeptReport />} />
+          <Route path="SalesDeptReport" element={<SalesDeptReport />} />
+          <Route path="Invoices" element={<Invoices />} />
+          <Route path="CheckInvoice" element={<CheckInvoice />} />
+          <Route path="AssignLoad" element={<AssignLoad />} />
+          <Route path="finance-dashboard" element={<FinanceDashboard />} />
+          <Route path="CallingReport" element={<CallingReport />} />
+          <Route path="AddFleet" element={<AddFleet />} />
+          <Route path="OfficeExpenses" element={<OfficeExpenses />} />
+          <Route path="empleaves" element={<EmpLeaves />} />
+          <Route path="addtruckerdriver" element={<AddTruckerDriver />} />
+          
+          {/* Catch-all for nested protected routes */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" />} />
+        {/* Fallback route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
       {/* Terms and Conditions Modal */}
