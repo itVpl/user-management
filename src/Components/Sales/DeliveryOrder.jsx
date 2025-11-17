@@ -328,9 +328,10 @@ export default function DeliveryOrder() {
   const [errors, setErrors] = useState({
     customers: [],      // [{billTo:'', dispatcherName:'', workOrderNo:'', lineHaul:'', fsc:'', other:''}]
     carrier: {},        // { carrierName:'', equipmentType:'', fees:'' , chargeRows:[{name:'', quantity:'', amt:''}] }
-    shipper: {},        // { shipperName:'', containerNo:'', containerType:'' }
+    shipper: {},        // { shipmentNo:'', containerNo:'', containerType:'' }
     pickups: [],        // [{name:'', address:'', city:'', state:'', zipCode:'', weight:'', pickUpDate:''}]
     drops: [],          // [{name:'', address:'', city:'', state:'', zipCode:'', weight:'', dropDate:''}]
+    returnLocation: {},  // { address:'', city:'', state:'', zipCode:'' } for DRAYAGE
     docs: ''            // error string
   });
   // --- shared error style helpers ---
@@ -380,6 +381,31 @@ export default function DeliveryOrder() {
   // ADD: shipper companies (for Bill To dropdown)
   const [shippers, setShippers] = useState([]);
   const [loadingShippers, setLoadingShippers] = useState(false);
+  // ADD: truckers/carriers (for Carrier Name dropdown)
+  const [truckers, setTruckers] = useState([]);
+  const [loadingTruckers, setLoadingTruckers] = useState(false);
+  
+  // ADD: get approved truckers (for Carrier Name dropdown)
+  const fetchTruckersList = async () => {
+    try {
+      setLoadingTruckers(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const list = (res.data?.data || []).filter(x => x.userType === 'trucker' && x.status === 'approved');
+      list.sort((a, b) => (a.compName || '').localeCompare(b.compName || ''));
+      setTruckers(list);
+    } catch (err) {
+      console.error('Error loading truckers:', err);
+      alertify.error('Failed to load carrier list');
+      setTruckers([]);
+    } finally {
+      setLoadingTruckers(false);
+    }
+  };
+  
   // ADD: get approved shippers (company names for Bill To)
   const fetchShippersList = async () => {
     try {
@@ -447,7 +473,10 @@ export default function DeliveryOrder() {
   const [charges, setCharges] = useState([
     { name: '', quantity: '', amt: '', total: 0 }
   ]);
+  const [currentCustomerIndex, setCurrentCustomerIndex] = useState(null); // Track which customer's "Other" field is being edited
 
+  // LoadType state (DRAYAGE or OTR)
+  const [selectedLoadType, setSelectedLoadType] = useState('OTR');
 
   // Form state for Add Delivery Order
   // REPLACE THIS BLOCK: formData ka initial state (weight shipper se hata kar pickup/drop locations me dala)
@@ -472,12 +501,20 @@ export default function DeliveryOrder() {
     totalRates: '',
     bolInformation: '',
 
-    // Shipper Information
-    shipperName: '',
+    // Location Information (formerly Shipper Information)
+    shipmentNo: '', // Changed from shipperName to shipmentNo
     containerNo: '',
     containerType: '',
+    commodity: '', // Commodity field
     selectedLoad: '', // Load reference dropdown
     company: '', // Company field
+    loadType: 'OTR', // Load type: DRAYAGE or OTR
+    returnLocation: { // Return location for DRAYAGE
+      address: '',
+      city: '',
+      state: '',
+      zipCode: ''
+    },
 
     // Pickup Locations - each has weight, individual date, and remarks (optional)
     pickupLocations: [
@@ -684,6 +721,7 @@ export default function DeliveryOrder() {
     fetchOrders();
     fetchDispatchers();
     fetchShippersList();         // ADD: load companies for Bill To dropdown
+    fetchTruckersList();         // ADD: load truckers for Carrier Name dropdown
     fetchLoads();                // ADD: load loads for load reference dropdown
   }, []);
 
@@ -1438,11 +1476,37 @@ export default function DeliveryOrder() {
 
     // 3) valid -> totals apply
     const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
-    setFormData(prev => ({ 
-      ...prev, 
-      carrierFees: `$${totalCharges.toFixed(2)}`,
-      totalRates: String(totalCharges)
-    }));
+    
+    // If currentCustomerIndex is set, update customer's "other" field
+    if (currentCustomerIndex !== null) {
+      setFormData(prev => {
+        const updatedCustomers = [...prev.customers];
+        if (updatedCustomers[currentCustomerIndex]) {
+          updatedCustomers[currentCustomerIndex] = {
+            ...updatedCustomers[currentCustomerIndex],
+            other: String(totalCharges),
+            chargeRows: charges.map(ch => ({
+              name: ch.name.trim(),
+              quantity: parseInt(ch.quantity, 10) || 0,
+              amount: parseFloat(ch.amt) || 0,
+              total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
+            })),
+            totalAmount: toNum2(updatedCustomers[currentCustomerIndex].lineHaul || 0) + 
+                        toNum2(updatedCustomers[currentCustomerIndex].fsc || 0) + 
+                        toNum2(totalCharges)
+          };
+        }
+        return { ...prev, customers: updatedCustomers };
+      });
+      setCurrentCustomerIndex(null);
+    } else {
+      // Original behavior for carrier fees
+      setFormData(prev => ({ 
+        ...prev, 
+        carrierFees: `$${totalCharges.toFixed(2)}`,
+        totalRates: String(totalCharges)
+      }));
+    }
 
     if (editingOrder && editingOrder._id) {
       const carrierFeesData = (charges || []).map(ch => ({
@@ -1571,7 +1635,7 @@ export default function DeliveryOrder() {
         customers: customersWithTotals,
         carrier: carrierData,
         shipper: {
-          name: formData.shipperName,
+          shipmentNo: formData.shipmentNo,
           pickUpLocations: formData.pickupLocations.map(l => ({
             name: l.name,
             address: l.address,
@@ -1601,6 +1665,8 @@ export default function DeliveryOrder() {
         ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadReference: formData.selectedLoad } : {}), // Only include loadReference if it has a value
         ...(formData.company && formData.company.trim() ? { company: formData.company } : {}), // Only include company if it has a value
         ...(formData.company && formData.company.trim() ? { addDispature: formData.company } : {}), // Only include addDispature if company has a value
+        loadType: formData.loadType || selectedLoadType,
+        ...(formData.loadType === 'DRAYAGE' && formData.returnLocation ? { returnLocation: formData.returnLocation } : {}),
         remarks: formData.remarks
       };
 
@@ -1631,7 +1697,7 @@ export default function DeliveryOrder() {
         };
 
         const shipperJSON = {
-          name: formData.shipperName,
+          shipmentNo: formData.shipmentNo,
           containerNo: formData.containerNo,
           containerType: formData.containerType,
           pickUpLocations: formData.pickupLocations.map(l => ({
@@ -1685,6 +1751,10 @@ export default function DeliveryOrder() {
           if (val) fd.append(`bols[${i}][bolNo]`, val);   // 👈 nested fields, no JSON string
         });
         fd.append('remarks', formData.remarks || '');
+        fd.append('loadType', formData.loadType || selectedLoadType);
+        if (formData.loadType === 'DRAYAGE' && formData.returnLocation) {
+          fd.append('returnLocation', JSON.stringify(formData.returnLocation));
+        }
         fd.append('document', formData.docs);
 
         response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, fd, {
@@ -1865,14 +1935,35 @@ export default function DeliveryOrder() {
 
 
     // --- Shipper ---
-    if (!formData.shipperName?.trim()) {
-      next.shipper.shipperName = 'Please enter the Shipper Name ';
-    } else if (!/^[A-Za-z ]+$/.test(formData.shipperName.trim())) {
-      next.shipper.shipperName = 'Shipper Name should contain only alphabets';
+    if (!formData.shipmentNo?.trim()) {
+      next.shipper.shipmentNo = 'Please enter the Shipment No ';
     }
 
     if (!formData.containerNo) next.shipper.containerNo = 'Please enter the Container Number  .';
     if (!formData.containerType) next.shipper.containerType = 'Please enter the Container Type  .';
+
+    // --- Return Location (for DRAYAGE only) ---
+    if (formData.loadType === 'DRAYAGE') {
+      if (!formData.returnLocation?.address?.trim()) {
+        next.returnLocation = next.returnLocation || {};
+        next.returnLocation.address = 'Please enter the Return Full Address.';
+      }
+      if (!formData.returnLocation?.city?.trim()) {
+        next.returnLocation = next.returnLocation || {};
+        next.returnLocation.city = 'Please enter the city.';
+      }
+      if (!formData.returnLocation?.state?.trim()) {
+        next.returnLocation = next.returnLocation || {};
+        next.returnLocation.state = 'Please enter the state.';
+      }
+      if (!formData.returnLocation?.zipCode?.trim()) {
+        next.returnLocation = next.returnLocation || {};
+        next.returnLocation.zipCode = 'Please enter the zip code.';
+      } else if (!isZip(formData.returnLocation.zipCode)) {
+        next.returnLocation = next.returnLocation || {};
+        next.returnLocation.zipCode = 'Enter a valid ZIP/Postal code.';
+      }
+    }
 
     // --- Pickup Locations ---
     (formData.pickupLocations || []).forEach((l, i) => {
@@ -1930,8 +2021,11 @@ export default function DeliveryOrder() {
       (next.carrier.carrierName || next.carrier.equipmentType || next.carrier.fees ||
         (Array.isArray(next.carrier.chargeRows) && next.carrier.chargeRows.some(r => r.name || r.quantity || r.amt)));
 
+    const hasReturnLocationErr = formData.loadType === 'DRAYAGE' && next.returnLocation && Object.keys(next.returnLocation).length > 0;
+    const hasShipperErr = next.shipper.shipmentNo || next.shipper.containerNo || next.shipper.containerType;
+
     const valid = !(
-      hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || next.shipper.shipperName || next.shipper.containerNo || next.shipper.containerType || next.docs
+      hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || hasShipperErr || hasReturnLocationErr || next.docs
     );
 
 
@@ -1940,9 +2034,41 @@ export default function DeliveryOrder() {
 
 
 
+  // Handle LoadType toggle
+  const handleLoadTypeToggle = (type) => {
+    setSelectedLoadType(type);
+    setFormData(prev => ({
+      ...prev,
+      loadType: type,
+      equipmentType: '', // Reset equipment type when switching load types
+      // Reset pickup/drop locations to single for DRAYAGE
+      pickupLocations: type === 'DRAYAGE' ? [prev.pickupLocations[0] || {
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        weight: '',
+        pickUpDate: '',
+        remarks: ''
+      }] : prev.pickupLocations,
+      dropLocations: type === 'DRAYAGE' ? [prev.dropLocations[0] || {
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        weight: '',
+        dropDate: '',
+        remarks: ''
+      }] : prev.dropLocations
+    }));
+  };
+
   // Reset form when modal closes
   const handleCloseModal = () => {
     setShowAddOrderForm(false);
+    setSelectedLoadType('OTR');
     setFormData({
       customers: [
         {
@@ -1962,10 +2088,18 @@ export default function DeliveryOrder() {
       carrierFees: '',
       totalRates: '',
 
-      // Shipper Information
-      shipperName: '',
+      // Location Information (formerly Shipper Information)
+      shipmentNo: '',
       containerNo: '',
       containerType: '',
+      commodity: '',
+      loadType: 'OTR',
+      returnLocation: {
+        address: '',
+        city: '',
+        state: '',
+        zipCode: ''
+      },
 
       // Pickup Locations — with weight, date, remarks
       pickupLocations: [
@@ -2084,11 +2218,19 @@ export default function DeliveryOrder() {
           equipmentType: fullOrderData.carrier?.equipmentType || '',
           carrierFees: fullOrderData.carrier?.totalCarrierFees || '',
           totalRates: fullOrderData.carrier?.totalRates || fullOrderData.carrier?.totalrates || '',
-          shipperName: fullOrderData.shipper?.name || '',
+          shipmentNo: fullOrderData.shipper?.shipmentNo || fullOrderData.shipper?.name || '',
           containerNo: fullOrderData.shipper?.containerNo || '',
           containerType: fullOrderData.shipper?.containerType || '',
+          commodity: fullOrderData.shipper?.commodity || fullOrderData.commodity || '',
           selectedLoad: fullOrderData.loadReference || '', // Load reference from database
           company: fullOrderData.company || fullOrderData.addDispature || '', // Company from database (check both company and addDispature)
+          loadType: fullOrderData.loadType || 'OTR',
+          returnLocation: fullOrderData.returnLocation || {
+            address: '',
+            city: '',
+            state: '',
+            zipCode: ''
+          },
           pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{ name: '', address: '', city: '', state: '', zipCode: '' }]).map(l => ({
             ...l,
             pickUpDate: formatDateForInput(l?.pickUpDate || fullOrderData.shipper?.pickUpDate),
@@ -2125,6 +2267,7 @@ export default function DeliveryOrder() {
 
         setFormData(editFormData);
         setCharges(processedCharges);
+        setSelectedLoadType(fullOrderData.loadType || 'OTR');
         setEditingOrder({
           ...order,
           _id: originalId,
@@ -2469,7 +2612,7 @@ export default function DeliveryOrder() {
 
       // --- Shipper + per-location fields
       const shipper = {
-        name: formData.shipperName || '',
+        shipmentNo: formData.shipmentNo || '',
         containerNo: formData.containerNo || '',
         containerType: formData.containerType || '',
         pickUpLocations: (formData.pickupLocations || []).map(l => ({
@@ -3089,12 +3232,6 @@ export default function DeliveryOrder() {
     alertify.error('Failed to generate PDF. Please try again.');
   }
 };
-
-
-
-
-
-
 
 
   // Generate Invoice PDF function
@@ -4128,12 +4265,37 @@ export default function DeliveryOrder() {
 
                   </div>
                 </div>
-                <button
-                  onClick={handleCloseModal}
-                  className="text-white hover:text-gray-200 text-2xl font-bold"
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-4">
+                  {/* Load Type Toggle - Header ke right side */}
+                  <div className="inline-flex items-center bg-blue-500 rounded-full overflow-hidden shadow-lg border-2 border-white/30">
+                    <button
+                      type="button"
+                      onClick={() => handleLoadTypeToggle('OTR')}
+                      className={`px-6 py-2 transition-all duration-300 text-sm font-semibold text-center ${selectedLoadType === 'OTR'
+                        ? "bg-white text-blue-600 shadow-inner"
+                        : "bg-transparent text-white hover:bg-white/20"
+                        }`}
+                    >
+                      OTR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleLoadTypeToggle('DRAYAGE')}
+                      className={`px-6 py-2 transition-all duration-300 text-sm font-semibold text-center ${selectedLoadType === 'DRAYAGE'
+                        ? "bg-white text-blue-600 shadow-inner"
+                        : "bg-transparent text-white hover:bg-white/20"
+                        }`}
+                    >
+                      DRAYAGE
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleCloseModal}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -4622,9 +4784,11 @@ export default function DeliveryOrder() {
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
-                  <button type="button" onClick={addCustomer} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition">
-                    + Add Customer
-                  </button>
+                  {selectedLoadType === 'OTR' && (
+                    <button type="button" onClick={addCustomer} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition">
+                      + Add Customer
+                    </button>
+                  )}
                 </div>
 
                 {formData.customers.map((customer, customerIndex) => {
@@ -4756,19 +4920,20 @@ export default function DeliveryOrder() {
                           {cErr.fsc && <p className="text-red-600 text-xs mt-1">{cErr.fsc}</p>}
                         </div>
 
-                        {/* Other * */}
+                        {/* Other * - Opens Charges Calculator */}
                         <div>
                           <input
-                            type="number"
+                            type="text"
                             value={customer.other}
-                            onChange={(e) => handleCustomerChange(customerIndex, 'other', e.target.value)}
-
-                            min="0"
-                            step="0.01"
-                            inputMode="decimal"
-                            onKeyDown={blockMoneyChars}
-                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.other ? 'border-red-400' : 'border-gray-300'}`}
-                            placeholder="Other *"
+                            onClick={() => {
+                              // Set current customer index for charges calculator
+                              setCurrentCustomerIndex(customerIndex);
+                              setCharges(customer.chargeRows || [{ name: '', quantity: '', amt: '', total: 0 }]);
+                              setShowChargesPopup(true);
+                            }}
+                            readOnly
+                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${cErr.other ? 'border-red-400' : 'border-gray-300'}`}
+                            placeholder="Other * (Click to add charges)"
                           />
                           {cErr.other && <p className="text-red-600 text-xs mt-1">{cErr.other}</p>}
                         </div>
@@ -4789,25 +4954,68 @@ export default function DeliveryOrder() {
                 <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <input
-                      type="text"
-                      name="carrierName"
-                      value={formData.carrierName}
-                      onChange={handleInputChange}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.carrier?.carrierName ? 'border-red-400' : 'border-gray-300'}`}
-                      placeholder="Carrier Name *"
-                    />
+                    {truckers.length > 0 ? (
+                      <SearchableDropdown
+                        value={formData.carrierName || ''}
+                        onChange={(value) => setFormData(prev => ({ ...prev, carrierName: value }))}
+                        options={truckers.map(t => ({ 
+                          value: t.compName || '', 
+                          label: `${t.compName || ''}${t.mc_dot_no ? ` (${t.mc_dot_no})` : ''}` 
+                        }))}
+                        placeholder={loadingTruckers ? "Loading carriers..." : "Select Carrier Name *"}
+                        disabled={loadingTruckers}
+                        loading={loadingTruckers}
+                        searchPlaceholder="Search carriers..."
+                        className={errors.carrier?.carrierName ? errBox(true) : ''}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        name="carrierName"
+                        value={formData.carrierName}
+                        onChange={handleInputChange}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.carrier?.carrierName ? 'border-red-400' : 'border-gray-300'}`}
+                        placeholder={loadingTruckers ? "Loading carriers..." : "Carrier Name *"}
+                      />
+                    )}
                     {errors.carrier?.carrierName && <p className="text-red-600 text-xs mt-1">{errors.carrier.carrierName}</p>}
                   </div>
 
                   <div>
-                    <input
-                      type="text"
-                      name="equipmentType"
-                      value={formData.equipmentType}
-                      onChange={handleInputChange}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.carrier?.equipmentType ? 'border-red-400' : 'border-gray-300'}`}
-                      placeholder="Equipment Type *"
+                    <SearchableDropdown
+                      value={formData.equipmentType || ''}
+                      onChange={(value) => setFormData(prev => ({ ...prev, equipmentType: value }))}
+                      options={
+                        selectedLoadType === 'OTR' 
+                          ? [
+                              { value: 'Dry Van', label: 'Dry Van' },
+                              { value: 'Reefer', label: 'Reefer' },
+                              { value: 'Step Deck', label: 'Step Deck' },
+                              { value: 'Double Drop / Lowboy', label: 'Double Drop / Lowboy' },
+                              { value: 'Conestoga', label: 'Conestoga' },
+                              { value: 'Livestock Trailer', label: 'Livestock Trailer' },
+                              { value: 'Car Hauler', label: 'Car Hauler' },
+                              { value: 'Container Chassis', label: 'Container Chassis' },
+                              { value: 'End Dump', label: 'End Dump' },
+                              { value: 'Side Dump', label: 'Side Dump' },
+                              { value: 'Hopper Bottom', label: 'Hopper Bottom' }
+                            ]
+                          : [
+                              { value: "20' Standard", label: "20' Standard" },
+                              { value: "40' Standard", label: "40' Standard" },
+                              { value: "45' Standard", label: "45' Standard" },
+                              { value: "20' Reefer", label: "20' Reefer" },
+                              { value: "40' Reefer", label: "40' Reefer" },
+                              { value: 'Open Top Container', label: 'Open Top Container' },
+                              { value: 'Flat Rack Container', label: 'Flat Rack Container' },
+                              { value: 'Tank Container', label: 'Tank Container' },
+                              { value: "40' High Cube", label: "40' High Cube" },
+                              { value: "45' High Cube", label: "45' High Cube" }
+                            ]
+                      }
+                      placeholder="Select Equipment Type *"
+                      searchPlaceholder="Search equipment type..."
+                      className={errors.carrier?.equipmentType ? errBox(true) : ''}
                     />
                     {errors.carrier?.equipmentType && <p className="text-red-600 text-xs mt-1">{errors.carrier.equipmentType}</p>}
                   </div>
@@ -4852,35 +5060,22 @@ export default function DeliveryOrder() {
                 </div>
               </div>
 
-              {/* Shipper Information Section */}
+              {/* Location Information Section (formerly Shipper Information) */}
               <div className="bg-purple-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
+                <h3 className="text-lg font-semibold text-purple-800 mb-4">Location Information</h3>
 
-                {/* Shipper Basic Info */}
+                {/* Location Basic Info */}
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <div>
                     <input
-                      name="shipperName"
-                      value={formData.shipperName}
-                      onChange={handleShipperNameChange}
-                      onKeyDown={blockNonAlphaKeys}
-                      onPaste={(e) => {
-                        // paste sanitize
-                        e.preventDefault();
-                        const text = (e.clipboardData || window.clipboardData).getData('text');
-                        const clean = sanitizeAlphaSpaces(text);
-                        handleShipperNameChange({ target: { value: clean } });
-                      }}
-                      pattern="[A-Za-z ]+"
-                      title="Only alphabets and spaces are allowed"
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2
-    ${errors?.shipper?.shipperName ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-purple-500'}`}
-                      placeholder="Shipper Name *"
+                      type="text"
+                      name="shipmentNo"
+                      value={formData.shipmentNo || ''}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.shipper?.shipmentNo ? 'border-red-400' : 'border-gray-300'}`}
+                      placeholder="Shipment No *"
                     />
-                    {errors?.shipper?.shipperName && (
-                      <p className="mt-1 text-xs text-red-600">{errors.shipper.shipperName}</p>
-                    )}
-
+                    {errors.shipper?.shipmentNo && <p className="text-red-600 text-xs mt-1">{errors.shipper.shipmentNo}</p>}
                   </div>
 
                   <div>
@@ -4906,6 +5101,17 @@ export default function DeliveryOrder() {
                     />
                     {errors.shipper?.containerType && <p className="text-red-600 text-xs mt-1">{errors.shipper.containerType}</p>}
                   </div>
+
+                  <div>
+                    <input
+                      type="text"
+                      name="commodity"
+                      value={formData.commodity || ''}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 border-gray-300`}
+                      placeholder="Commodity"
+                    />
+                  </div>
                 </div>
 
                 {/* Pickup Locations */}
@@ -4913,9 +5119,11 @@ export default function DeliveryOrder() {
                 <div className="bg-white p-4 rounded-lg mb-4">
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
-                    <button type="button" onClick={addPickupLocation} className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition">
-                      + Add Location
-                    </button>
+                    {selectedLoadType === 'OTR' && (
+                      <button type="button" onClick={addPickupLocation} className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition">
+                        + Add Location
+                      </button>
+                    )}
                   </div>
 
                   {formData.pickupLocations.map((location, locationIndex) => {
@@ -4924,7 +5132,7 @@ export default function DeliveryOrder() {
                       <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
                         <div className="flex justify-between items-center mb-3">
                           <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
-                          {formData.pickupLocations.length > 1 && (
+                          {selectedLoadType === 'OTR' && formData.pickupLocations.length > 1 && (
                             <button type="button" onClick={() => removePickupLocation(locationIndex)} className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition">
                               Remove
                             </button>
@@ -5034,13 +5242,15 @@ export default function DeliveryOrder() {
                 <div className="bg-white p-4 rounded-lg">
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
-                    <button
-                      type="button"
-                      onClick={addDropLocation}
-                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                    >
-                      + Add Location
-                    </button>
+                    {selectedLoadType === 'OTR' && (
+                      <button
+                        type="button"
+                        onClick={addDropLocation}
+                        className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                      >
+                        + Add Location
+                      </button>
+                    )}
                   </div>
 
                   {formData.dropLocations.map((location, locationIndex) => {
@@ -5051,7 +5261,7 @@ export default function DeliveryOrder() {
                           <h5 className="text-sm font-semibold text-gray-700">
                             Drop Location {locationIndex + 1}
                           </h5>
-                          {formData.dropLocations.length > 1 && (
+                          {selectedLoadType === 'OTR' && formData.dropLocations.length > 1 && (
                             <button
                               type="button"
                               onClick={() => removeDropLocation(locationIndex)}
@@ -5209,6 +5419,70 @@ export default function DeliveryOrder() {
                     );
                   })}
                 </div>
+
+                {/* Return Location Section - Only for DRAYAGE, inside Location Information */}
+                {selectedLoadType === 'DRAYAGE' && (
+                  <div className="bg-white p-4 rounded-lg mt-4">
+                    <h4 className="text-md font-semibold text-gray-800 mb-4">Return Location</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          value={formData.returnLocation?.address || ''}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            returnLocation: { ...prev.returnLocation, address: e.target.value }
+                          }))}
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.address ? 'border-red-400' : 'border-gray-300'}`}
+                          placeholder="Return Full Address *"
+                        />
+                        {errors.returnLocation?.address && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.address}</p>}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={formData.returnLocation?.city || ''}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            returnLocation: { ...prev.returnLocation, city: e.target.value }
+                          }))}
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.city ? 'border-red-400' : 'border-gray-300'}`}
+                          placeholder="City *"
+                        />
+                        {errors.returnLocation?.city && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.city}</p>}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={formData.returnLocation?.state || ''}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            returnLocation: { ...prev.returnLocation, state: e.target.value }
+                          }))}
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.state ? 'border-red-400' : 'border-gray-300'}`}
+                          placeholder="State *"
+                        />
+                        {errors.returnLocation?.state && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.state}</p>}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={formData.returnLocation?.zipCode || ''}
+                          onChange={(e) => {
+                            const val = sanitizeAlphaNum(e.target.value);
+                            setFormData(prev => ({
+                              ...prev,
+                              returnLocation: { ...prev.returnLocation, zipCode: val }
+                            }));
+                          }}
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.zipCode ? 'border-red-400' : 'border-gray-300'}`}
+                          placeholder="Zip Code *"
+                        />
+                        {errors.returnLocation?.zipCode && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.zipCode}</p>}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               </div>
 
@@ -6359,13 +6633,40 @@ export default function DeliveryOrder() {
 
                   {/* Equipment Type */}
                   <div>
-                    <input
-                      type="text"
-                      name="equipmentType"
-                      value={formData.equipmentType}
-                      onChange={handleInputChange}
-                      className={errCls(!!errors.carrier?.equipmentType)}
-                      placeholder="Equipment Type *"
+                    <SearchableDropdown
+                      value={formData.equipmentType || ''}
+                      onChange={(value) => setFormData(prev => ({ ...prev, equipmentType: value }))}
+                      options={
+                        selectedLoadType === 'OTR' 
+                          ? [
+                              { value: 'Dry Van', label: 'Dry Van' },
+                              { value: 'Reefer', label: 'Reefer' },
+                              { value: 'Step Deck', label: 'Step Deck' },
+                              { value: 'Double Drop / Lowboy', label: 'Double Drop / Lowboy' },
+                              { value: 'Conestoga', label: 'Conestoga' },
+                              { value: 'Livestock Trailer', label: 'Livestock Trailer' },
+                              { value: 'Car Hauler', label: 'Car Hauler' },
+                              { value: 'Container Chassis', label: 'Container Chassis' },
+                              { value: 'End Dump', label: 'End Dump' },
+                              { value: 'Side Dump', label: 'Side Dump' },
+                              { value: 'Hopper Bottom', label: 'Hopper Bottom' }
+                            ]
+                          : [
+                              { value: "20' Standard", label: "20' Standard" },
+                              { value: "40' Standard", label: "40' Standard" },
+                              { value: "45' Standard", label: "45' Standard" },
+                              { value: "20' Reefer", label: "20' Reefer" },
+                              { value: "40' Reefer", label: "40' Reefer" },
+                              { value: 'Open Top Container', label: 'Open Top Container' },
+                              { value: 'Flat Rack Container', label: 'Flat Rack Container' },
+                              { value: 'Tank Container', label: 'Tank Container' },
+                              { value: "40' High Cube", label: "40' High Cube" },
+                              { value: "45' High Cube", label: "45' High Cube" }
+                            ]
+                      }
+                      placeholder="Select Equipment Type *"
+                      searchPlaceholder="Search equipment type..."
+                      className={errors.carrier?.equipmentType ? errBox(true) : ''}
                     />
                     {errors.carrier?.equipmentType && (
                       <p className="mt-1 text-xs text-red-600">{errors.carrier.equipmentType}</p>
