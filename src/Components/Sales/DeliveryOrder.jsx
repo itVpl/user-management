@@ -468,12 +468,20 @@ export default function DeliveryOrder() {
       setCustomerNameInput(selectedOrder.customerName || '');
     }
   }, [selectedOrder]);
-  // Charges popup state
+  // Charges popup state - Separate for Customer and Carrier
   const [showChargesPopup, setShowChargesPopup] = useState(false);
-  const [charges, setCharges] = useState([
+  const [chargesPopupType, setChargesPopupType] = useState(null); // 'customer' or 'carrier'
+  const [customerCharges, setCustomerCharges] = useState([
+    { name: '', quantity: '', amt: '', total: 0 }
+  ]);
+  const [carrierCharges, setCarrierCharges] = useState([
     { name: '', quantity: '', amt: '', total: 0 }
   ]);
   const [currentCustomerIndex, setCurrentCustomerIndex] = useState(null); // Track which customer's "Other" field is being edited
+  
+  // Get current charges based on popup type
+  const charges = chargesPopupType === 'customer' ? customerCharges : carrierCharges;
+  const setCharges = chargesPopupType === 'customer' ? setCustomerCharges : setCarrierCharges;
 
   // LoadType state (DRAYAGE or OTR)
   const [selectedLoadType, setSelectedLoadType] = useState('OTR');
@@ -886,7 +894,8 @@ export default function DeliveryOrder() {
       }));
 
       setFormData(prefForm);
-      setCharges(fees.length ? fees : [{ name: '', quantity: '', amt: '', total: 0 }]);
+      // Set carrier charges when loading order data
+      setCarrierCharges(fees.length ? fees : [{ name: '', quantity: '', amt: '', total: 0 }]);
       
       // Set load type for the form
       setSelectedLoadType(src.loadType || 'OTR');
@@ -1163,8 +1172,8 @@ export default function DeliveryOrder() {
               total: rate.total || 0
             }));
             
-            // Set charges (calculator will open only when user clicks on Carrier Fees field)
-            setCharges(mappedCharges);
+            // Set carrier charges (calculator will open only when user clicks on Carrier Fees field)
+            setCarrierCharges(mappedCharges);
             
             // Set totalRates (will be displayed in carrierFees field)
             const totalRatesValue = loadData.acceptedBid?.totalrates || loadData.acceptedBid?.totalRates || '';
@@ -1394,21 +1403,67 @@ export default function DeliveryOrder() {
   };
 
 
-  // Handle charges popup
+  // Handle charges popup for Carrier
   const handleChargesClick = () => {
-    console.log('Charges popup opened, current charges state:', charges);
+    console.log('Carrier charges popup opened');
+    setChargesPopupType('carrier');
+    setCurrentCustomerIndex(null);
+    // Load existing carrier charges if available
+    const existingCharges = formData.carrier?.carrierFees || [];
+    if (existingCharges.length > 0 && Array.isArray(existingCharges)) {
+      setCarrierCharges(existingCharges.map(ch => ({
+        name: ch.name || '',
+        quantity: String(ch.quantity || ''),
+        amt: String(ch.amount || ''),
+        total: ch.total || 0
+      })));
+    } else {
+      setCarrierCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+    }
+    setShowChargesPopup(true);
+  };
+  
+  // Handle charges popup for Customer
+  const handleCustomerChargesClick = (customerIndex) => {
+    console.log('Customer charges popup opened for customer:', customerIndex);
+    setChargesPopupType('customer');
+    setCurrentCustomerIndex(customerIndex);
+    // Load existing customer charges if available
+    const customer = formData.customers[customerIndex];
+    const existingCharges = customer?.chargeRows || [];
+    if (existingCharges.length > 0 && Array.isArray(existingCharges)) {
+      setCustomerCharges(existingCharges.map(ch => ({
+        name: ch.name || '',
+        quantity: String(ch.quantity || ''),
+        amt: String(ch.amount || ''),
+        total: ch.total || 0
+      })));
+    } else {
+      setCustomerCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+    }
     setShowChargesPopup(true);
   };
   // ===== Carrier Fees validation state & helpers =====
-  const [chargeErrors, setChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
+  const [customerChargeErrors, setCustomerChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
+  const [carrierChargeErrors, setCarrierChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
   const [chargesPopupError, setChargesPopupError] = useState('');
+
+  // Get current charge errors based on popup type
+  const chargeErrors = chargesPopupType === 'customer' ? customerChargeErrors : carrierChargeErrors;
+  const setChargeErrors = chargesPopupType === 'customer' ? setCustomerChargeErrors : setCarrierChargeErrors;
 
   // keep errors array size in sync with charges rows
   useEffect(() => {
-    setChargeErrors(prev =>
-      (charges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
-    );
-  }, [charges]);
+    if (chargesPopupType === 'customer') {
+      setCustomerChargeErrors(prev =>
+        (customerCharges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
+      );
+    } else if (chargesPopupType === 'carrier') {
+      setCarrierChargeErrors(prev =>
+        (carrierCharges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
+      );
+    }
+  }, [customerCharges, carrierCharges, chargesPopupType]);
 
   // only letters & spaces (for charge name)
   const onlyAlpha = (s = '') => s.replace(/[^A-Za-z ]/g, '');
@@ -1477,10 +1532,12 @@ export default function DeliveryOrder() {
     }
   };
 
-  // ✅ Replace your applyCharges with this (popup-inside validation)
+  // ✅ Replace your applyCharges with this (popup-inside validation) - Updated for separate Customer and Carrier
   const applyCharges = async () => {
+    const currentCharges = chargesPopupType === 'customer' ? customerCharges : carrierCharges;
+    
     // 1) sab rows bilkul khaali?
-    const allEmpty = (charges || []).every(
+    const allEmpty = (currentCharges || []).every(
       ch => !(ch?.name?.trim()) &&
         !(String(ch?.quantity ?? '') !== '') &&
         !(String(ch?.amt ?? '') !== '')
@@ -1488,7 +1545,7 @@ export default function DeliveryOrder() {
 
     if (allEmpty) {
       // row 0 pe inline errors dikhane ke liye
-      const errs = (charges || []).map((_, i) =>
+      const errs = (currentCharges || []).map((_, i) =>
         i === 0
           ? {
             name: 'Please enter the charge name',
@@ -1498,13 +1555,16 @@ export default function DeliveryOrder() {
           : { name: '', quantity: '', amt: '' }
       );
       setChargeErrors(errs);
-      setChargesPopupError('Please add Carrier Fees .');
+      const errorMsg = chargesPopupType === 'customer' 
+        ? 'Please add Customer Charges.' 
+        : 'Please add Carrier Fees.';
+      setChargesPopupError(errorMsg);
       focusFirstError?.();
       return;
     }
 
     // 2) row-by-row validation (exact messages)
-    const nextErrs = (charges || []).map((ch) => {
+    const nextErrs = (currentCharges || []).map((ch) => {
       const row = { name: '', quantity: '', amt: '' };
       const hasAny = (ch?.name || ch?.quantity || ch?.amt);
 
@@ -1534,17 +1594,18 @@ export default function DeliveryOrder() {
     }
 
     // 3) valid -> totals apply
-    const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
+    const totalCharges = (currentCharges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
     
-    // If currentCustomerIndex is set, update customer's "other" field
-    if (currentCustomerIndex !== null) {
+    // Apply based on type
+    if (chargesPopupType === 'customer' && currentCustomerIndex !== null) {
+      // Apply to customer
       setFormData(prev => {
         const updatedCustomers = [...prev.customers];
         if (updatedCustomers[currentCustomerIndex]) {
           updatedCustomers[currentCustomerIndex] = {
             ...updatedCustomers[currentCustomerIndex],
             other: String(totalCharges),
-            chargeRows: charges.map(ch => ({
+            chargeRows: currentCharges.map(ch => ({
               name: ch.name.trim(),
               quantity: parseInt(ch.quantity, 10) || 0,
               amount: parseFloat(ch.amt) || 0,
@@ -1558,27 +1619,29 @@ export default function DeliveryOrder() {
         return { ...prev, customers: updatedCustomers };
       });
       setCurrentCustomerIndex(null);
-    } else {
-      // Original behavior for carrier fees
+    } else if (chargesPopupType === 'carrier') {
+      // Apply to carrier
       setFormData(prev => ({ 
         ...prev, 
         carrierFees: `$${totalCharges.toFixed(2)}`,
         totalRates: String(totalCharges)
       }));
-    }
 
-    if (editingOrder && editingOrder._id) {
-      const carrierFeesData = (charges || []).map(ch => ({
-        name: ch.name.trim(),
-        quantity: parseInt(ch.quantity, 10) || 0,
-        amount: parseFloat(ch.amt) || 0,
-        total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
-      }));
-      await updateCarrierFees(editingOrder._id, carrierFeesData);
+      // If editing order, update carrier fees via API
+      if (editingOrder && editingOrder._id) {
+        const carrierFeesData = currentCharges.map(ch => ({
+          name: ch.name.trim(),
+          quantity: parseInt(ch.quantity, 10) || 0,
+          amount: parseFloat(ch.amt) || 0,
+          total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
+        }));
+        await updateCarrierFees(editingOrder._id, carrierFeesData);
+      }
     }
 
     setChargesPopupError('');
     setShowChargesPopup(false);
+    setChargesPopupType(null);
   };
 
 
@@ -1618,6 +1681,8 @@ export default function DeliveryOrder() {
   // Close charges popup
   const closeChargesPopup = () => {
     setShowChargesPopup(false);
+    setChargesPopupType(null);
+    setCurrentCustomerIndex(null);
   };
 
   // Handle form submission
@@ -1975,7 +2040,9 @@ export default function DeliveryOrder() {
           bols: [{ bolNo: '' }],
           docs: null
         });
-        setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+        // Reset both customer and carrier charges
+        setCustomerCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+        setCarrierCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
 
         alertify.success('✅ Delivery order created successfully!');
       } else {
@@ -2286,8 +2353,11 @@ export default function DeliveryOrder() {
     });
 
     // Reset charges state
-    setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+    setCustomerCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+    setCarrierCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
     setShowChargesPopup(false);
+    setChargesPopupType(null);
+    setCurrentCustomerIndex(null);
     setFormMode('add');
     setEditingOrder(null);
   };
@@ -2467,7 +2537,8 @@ export default function DeliveryOrder() {
         }));
 
         setFormData(editFormData);
-        setCharges(processedCharges);
+        // Set carrier charges when editing order
+        setCarrierCharges(processedCharges);
         setSelectedLoadType(fullOrderData.loadType || 'OTR');
         setEditingOrder({
           ...order,
@@ -2527,7 +2598,9 @@ export default function DeliveryOrder() {
       };
 
       setFormData(fallbackFormData);
-      setCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+      // Reset both customer and carrier charges for fallback
+      setCustomerCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+      setCarrierCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
       setEditingOrder({ _id: originalId, customerId: null, fullData: null });
       setFormMode('edit');
       setShowAddOrderForm(true);
@@ -5126,12 +5199,7 @@ export default function DeliveryOrder() {
                           <input
                             type="text"
                             value={customer.other}
-                            onClick={() => {
-                              // Set current customer index for charges calculator
-                              setCurrentCustomerIndex(customerIndex);
-                              setCharges(customer.chargeRows || [{ name: '', quantity: '', amt: '', total: 0 }]);
-                              setShowChargesPopup(true);
-                            }}
+                            onClick={() => handleCustomerChargesClick(customerIndex)}
                             readOnly
                             className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${cErr.other ? 'border-red-400' : 'border-gray-300'}`}
                             placeholder="Other * (Click to add charges)"
@@ -5658,89 +5726,127 @@ export default function DeliveryOrder() {
                 </div>
 
                 {/* Return Location Section - Only for DRAYAGE, inside Location Information */}
-                {selectedLoadType === 'DRAYAGE' && (
-                  <div className="bg-white p-4 rounded-lg mt-4">
-                    <h4 className="text-md font-semibold text-gray-800 mb-4">Return Location</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2">
-                        <input
-                          type="text"
-                          value={formData.returnLocation?.address || ''}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            returnLocation: { ...prev.returnLocation, address: e.target.value }
-                          }))}
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.address ? 'border-red-400' : 'border-gray-300'}`}
-                          placeholder="Return Full Address *"
-                        />
-                        {errors.returnLocation?.address && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.address}</p>}
-                      </div>
-                      <div>
-                        <input
-                          type="text"
-                          value={formData.returnLocation?.city || ''}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            returnLocation: { ...prev.returnLocation, city: e.target.value }
-                          }))}
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.city ? 'border-red-400' : 'border-gray-300'}`}
-                          placeholder="City *"
-                        />
-                        {errors.returnLocation?.city && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.city}</p>}
-                      </div>
-                      <div>
-                        <input
-                          type="text"
-                          value={formData.returnLocation?.state || ''}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            returnLocation: { ...prev.returnLocation, state: e.target.value }
-                          }))}
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.state ? 'border-red-400' : 'border-gray-300'}`}
-                          placeholder="State *"
-                        />
-                        {errors.returnLocation?.state && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.state}</p>}
-                      </div>
-                      <div>
-                        <input
-                          type="text"
-                          value={formData.returnLocation?.zipCode || ''}
-                          onChange={(e) => {
-                            const val = sanitizeAlphaNum(e.target.value);
-                            setFormData(prev => ({
-                              ...prev,
-                              returnLocation: { ...prev.returnLocation, zipCode: val }
-                            }));
-                          }}
-                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.zipCode ? 'border-red-400' : 'border-gray-300'}`}
-                          placeholder="Zip Code *"
-                        />
-                        {errors.returnLocation?.zipCode && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.zipCode}</p>}
-                      </div>
-                      <div className="col-span-2">
-                        <div
-                          onClick={(e) => {
-                            const input = e.currentTarget.querySelector('input');
-                            if (input?.showPicker) input.showPicker();
-                            else input?.focus();
-                          }}
-                        >
-                          <input
-                            type="datetime-local"
-                            value={formData.returnLocation?.returnDate || ''}
-                            onChange={(e) => setFormData(prev => ({
-                              ...prev,
-                              returnLocation: { ...prev.returnLocation, returnDate: e.target.value }
-                            }))}
-                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.returnDate ? 'border-red-400' : 'border-gray-300'}`}
-                            placeholder="Return Date & Time *"
-                          />
-                        </div>
-                        {errors.returnLocation?.returnDate && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.returnDate}</p>}
-                      </div>
-                    </div>
-                  </div>
-                )}
+  {selectedLoadType === 'DRAYAGE' && (
+  <div className="bg-white p-4 rounded-lg mt-4">
+    <h4 className="text-md font-semibold text-gray-800 mb-4">Return Location</h4>
+    <div className="grid grid-cols-3 gap-4">
+      {/* Location Name */}
+      <div className="col-span-1">
+        <input
+          type="text"
+          value={formData.returnLocation?.locationName || ''}
+          onChange={(e) => setFormData(prev => ({
+            ...prev,
+            returnLocation: { ...prev.returnLocation, locationName: e.target.value }
+          }))}
+          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.locationName ? 'border-red-400' : 'border-gray-300'}`}
+          placeholder="Location Name (e.g., Warehouse, Port, Facility) *"
+        />
+        {errors.returnLocation?.locationName && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.locationName}</p>}
+      </div>
+      
+      {/* Address */}
+      <div className="col-span-1">
+        <input
+          type="text"
+          value={formData.returnLocation?.address || ''}
+          onChange={(e) => setFormData(prev => ({
+            ...prev,
+            returnLocation: { ...prev.returnLocation, address: e.target.value }
+          }))}
+          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.address ? 'border-red-400' : 'border-gray-300'}`}
+          placeholder="Street Address *"
+        />
+        {errors.returnLocation?.address && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.address}</p>}
+      </div>
+
+      {/* City, State, Zip Code, Weight */}
+      <div>
+        <input
+          type="text"
+          value={formData.returnLocation?.city || ''}
+          onChange={(e) => setFormData(prev => ({
+            ...prev,
+            returnLocation: { ...prev.returnLocation, city: e.target.value }
+          }))}
+          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.city ? 'border-red-400' : 'border-gray-300'}`}
+          placeholder="City *"
+        />
+        {errors.returnLocation?.city && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.city}</p>}
+      </div>
+      <div>
+        <input
+          type="text"
+          value={formData.returnLocation?.state || ''}
+          onChange={(e) => setFormData(prev => ({
+            ...prev,
+            returnLocation: { ...prev.returnLocation, state: e.target.value }
+          }))}
+          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.state ? 'border-red-400' : 'border-gray-300'}`}
+          placeholder="State *"
+        />
+        {errors.returnLocation?.state && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.state}</p>}
+      </div>
+      <div>
+        <input
+          type="text"
+          value={formData.returnLocation?.zipCode || ''}
+          onChange={(e) => {
+            const val = sanitizeAlphaNum(e.target.value);
+            setFormData(prev => ({
+              ...prev,
+              returnLocation: { ...prev.returnLocation, zipCode: val }
+            }));
+          }}
+          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.zipCode ? 'border-red-400' : 'border-gray-300'}`}
+          placeholder="Zip Code *"
+        />
+        {errors.returnLocation?.zipCode && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.zipCode}</p>}
+      </div>
+      <div>
+        <input
+          type="number"
+          value={formData.returnLocation?.weight || ''}
+          onChange={(e) => {
+            const val = e.target.value;
+            setFormData(prev => ({
+              ...prev,
+              returnLocation: { ...prev.returnLocation, weight: val }
+            }));
+          }}
+          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.weight ? 'border-red-400' : 'border-gray-300'}`}
+          placeholder="Weight (lbs)"
+          min="0"
+          step="0.01"
+        />
+        {errors.returnLocation?.weight && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.weight}</p>}
+      </div>
+      
+      {/* Return Date & Time */}
+      <div className="col-span-1">
+        <div
+          onClick={(e) => {
+            const input = e.currentTarget.querySelector('input');
+            if (input?.showPicker) input.showPicker();
+            else input?.focus();
+          }}
+        >
+          <input
+            type="datetime-local"
+            value={formData.returnLocation?.returnDate || ''}
+            onChange={(e) => setFormData(prev => ({
+              ...prev,
+              returnLocation: { ...prev.returnLocation, returnDate: e.target.value }
+            }))}
+            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.returnDate ? 'border-red-400' : 'border-gray-300'}`}
+            placeholder="Return Date & Time *"
+          />
+        </div>
+        {errors.returnLocation?.returnDate && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.returnDate}</p>}
+      </div>
+    </div>
+  </div>
+)}
 
               </div>
 
@@ -5915,7 +6021,7 @@ export default function DeliveryOrder() {
                             </div>
                             <div className="col-span-2">
                               <p className="text-sm text-gray-600">Total Amount</p>
-                              <p className="font-bold text-lg text-green-600">${customer?.totalAmount || 0}</p>
+                              <p className="font-bold text-lg text-green-600">${customer?.calculatedTotal || 0}</p>
                             </div>
                           </div>
 
@@ -6258,6 +6364,7 @@ export default function DeliveryOrder() {
                           <p className="text-sm text-gray-600">Zip Code</p>
                           <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.zipCode || 'N/A'}</p>
                         </div>
+                        
                         <div>
                           <p className="text-sm text-gray-600">Return Date</p>
                           <p className="font-medium text-gray-800">
@@ -6503,13 +6610,20 @@ export default function DeliveryOrder() {
           <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
 
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 -m-8 mb-6 p-6 rounded-t-xl">
+            <div className={`bg-gradient-to-r ${chargesPopupType === 'customer' ? 'from-blue-500 to-blue-600' : 'from-green-500 to-green-600'} -m-8 mb-6 p-6 rounded-t-xl`}>
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="bg-white bg-opacity-20 p-2 rounded-lg">
                     <DollarSign className="w-6 h-6 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold text-white">Charges Calculator</h2>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">
+                      {chargesPopupType === 'customer' ? 'Customer Charges Calculator' : 'Carrier Charges Calculator'}
+                    </h2>
+                    {chargesPopupType === 'customer' && currentCustomerIndex !== null && (
+                      <p className="text-white/80 text-sm mt-1">Customer {currentCustomerIndex + 1}</p>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={closeChargesPopup}
@@ -6718,9 +6832,9 @@ export default function DeliveryOrder() {
                     <button
                       type="button"
                       onClick={applyCharges}
-                      className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                      className={`px-6 py-3 bg-gradient-to-r ${chargesPopupType === 'customer' ? 'from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' : 'from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'} text-white rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105`}
                     >
-                      Apply to Carrier Fees
+                      {chargesPopupType === 'customer' ? 'Apply to Customer Charges' : 'Apply to Carrier Fees'}
                     </button>
                   </div>
                 </div>

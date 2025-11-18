@@ -137,6 +137,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   const [addDocsError, setAddDocsError] = useState('');
   const [additionalDocs, setAdditionalDocs] = useState([]); // array of {documentUrl, uploadedBy, uploadedAt, _id}
 
+  // Drivers / Assign Driver UI state
+  const [drivers, setDrivers] = useState([]);
+  const [driversLoading, setDriversLoading] = useState(false);
+  const [driverSearch, setDriverSearch] = useState('');
+  const [showDriverDropdown, setShowDriverDropdown] = useState(false);
+  const [selectedDriver, setSelectedDriver] = useState(null); // { _id, fullName, vehicleNumber }
+  const [vehicleNumberInput, setVehicleNumberInput] = useState('');
+  const [assignLoading, setAssignLoading] = useState(false);
+
   // Important Dates state
   const getDateValue = (date) => {
     if (!date) return '';
@@ -1158,6 +1167,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
   const images = imgPayload?.images || null;
   const loadStatus = imgPayload?.loadStatus || null;
+  // filter drivers by search text (name or id)
+  const filteredDrivers = (drivers || []).filter((d) => {
+    const needle = (driverSearch || '').toLowerCase().trim();
+    if (!needle) return true;
+    const name = (d?.fullName || d?.name || '').toLowerCase();
+    const id = String(d?._id || d?.id || '').toLowerCase();
+    return name.includes(needle) || id.includes(needle);
+  });
 
   // Forward
   const forwardToAccountant = async () => {
@@ -1216,6 +1233,139 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   useEffect(() => {
     if (open) fetchAdditionalDocs();
   }, [open, doMongoId]); // eslint-disable-line
+
+  // Fetch drivers for the CMT user and filter client-side by the carrier's trucker id
+  const fetchDriversForCarrier = async () => {
+    try {
+      setDriversLoading(true);
+      setDrivers([]);
+
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) {
+        console.warn('No authentication token found');
+        setDrivers([]);
+        return;
+      }
+
+      // Get company name from carrier
+      const companyName = carrier?.carrierName || carrier?.companyName || carrier?.name || carrier?.company || '';
+      
+      if (!companyName) {
+        console.warn('No company name found in carrier data');
+        setDrivers([]);
+        return;
+      }
+
+      // Fetch drivers by company name
+      const url = `https://vpl-liveproject-1.onrender.com/api/v1/cmt-reports/drivers-by-company?compName=${encodeURIComponent(
+        companyName
+      )}`;
+      
+      const res = await axios.get(url, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      
+      if (res?.data?.success) {
+        const payload = res?.data?.data || {};
+        const all = Array.isArray(payload.drivers) ? payload.drivers : [];
+
+        if (all.length === 0) {
+          console.warn(`No drivers found for company: ${companyName}`);
+        }
+
+        const mapped = all.map((d) => ({
+          _id: d.driverId || d._id || d.id,
+          fullName: d.companyName || d.fullName || d.name || d.driverName || 'Unknown Driver',
+          vehicleNumber: d.vehicleNumber || d.vehicleNo || d.mcDotNumber || '',
+          phoneNo: d.contactInfo?.phoneNo || '',
+          email: d.contactInfo?.email || '',
+          mcDotNumber: d.mcDotNumber || '',
+          carrierType: d.companyDetails?.carrierType || '',
+          fleetSize: d.companyDetails?.fleetSize || '',
+          status: d.status || '',
+          address: d.companyDetails?.address || {},
+          raw: d,
+        }));
+
+        setDrivers(mapped);
+      } else {
+        console.warn('API response success is false');
+        setDrivers([]);
+      }
+    } catch (err) {
+      console.error('Error fetching drivers:', err?.response?.data?.message || err?.message || err);
+      alertify.error(err?.response?.data?.message || 'Failed to load drivers');
+      setDrivers([]);
+    } finally {
+      setDriversLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    fetchDriversForCarrier();
+    // re-run when carrier or CMT user changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, carrier?._id, carrier?.truckerId, cmtEmpId]);
+
+  // Assign driver to load via API
+  const handleAssignDriver = async () => {
+    try {
+      if (!selectedDriver || !selectedDriver._id) return alertify.error('Please select a driver');
+
+      const loadId = loadRef._id || loadRef.loadId || loadRef.id || order?.raw?.loadId || order?.raw?._id;
+      if (!loadId) return alertify.error('Missing load id to assign driver');
+
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) return alertify.error('Authentication required');
+
+      setAssignLoading(true);
+      const url = `https://vpl-liveproject-1.onrender.com/api/v1/do/load/${encodeURIComponent(loadId)}/assign-driver`;
+      
+      // Prepare payload - only driverId and vehicleNumber as per API spec
+      const payload = { 
+        driverId: String(selectedDriver._id),
+        vehicleNumber: (vehicleNumberInput || selectedDriver.mcDotNumber || selectedDriver.vehicleNumber || '').trim()
+      };
+
+      console.log('Assigning driver with payload:', payload);
+      console.log('Load ID:', loadId);
+
+      const res = await axios.post(url, payload, { 
+        headers: { 
+          Authorization: `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        } 
+      });
+
+      if (res?.data?.success) {
+        alertify.success(res.data?.message || 'Driver assigned successfully');
+        // Update the local order object to reflect assigned driver so UI updates
+        try {
+          if (!order.raw) order.raw = {};
+          order.raw.acceptedBid = { 
+            ...(order.raw.acceptedBid || {}), 
+            driverId: payload.driverId, 
+            vehicleNumber: payload.vehicleNumber, 
+            driverName: selectedDriver.fullName || selectedDriver.name || '',
+            phoneNo: selectedDriver.phoneNo || '',
+            email: selectedDriver.email || ''
+          };
+          setSelectedDriver((s) => ({ ...(s || {}), _id: payload.driverId, vehicleNumber: payload.vehicleNumber }));
+        } catch (e) {
+          console.error('Error updating local state:', e);
+        }
+      } else {
+        alertify.error(res?.data?.message || 'Failed to assign driver');
+      }
+    } catch (e) {
+      console.error('Assign driver error:', e);
+      const errorMsg = e?.response?.data?.error || e?.response?.data?.message || e.message || 'Assign driver failed';
+      alertify.error(errorMsg);
+    } finally {
+      setAssignLoading(false);
+    }
+  };
 
   /* ---------------- Important Dates: UPDATE ---------------- */
   const updateImportantDates = async () => {
@@ -1554,6 +1704,69 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   </div>
                 </div>
               )}
+
+              {/* Assign Driver UI */}
+              <div className="mt-4 pt-4">
+                <h4 className="font-semibold text-black mb-3">Assign Driver</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
+                  <div className="relative md:col-span-1">
+                    <label className="text-md font-medium text-black">Driver name</label>
+                    <input
+                      type="text"
+                      value={selectedDriver ? `${selectedDriver.fullName || selectedDriver.name || ''} (${selectedDriver._id || ''})` : driverSearch}
+                      placeholder="Start typing driver name or id..."
+                      onChange={(e) => { setDriverSearch(e.target.value); if (selectedDriver) setSelectedDriver(null); setShowDriverDropdown(true); }}
+                      onFocus={() => setShowDriverDropdown(true)}
+                      className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white"
+                    />
+
+                    {showDriverDropdown && (
+                      <div className="absolute z-30 mt-1 w-full max-h-60 overflow-auto bg-white rounded shadow-lg border border-gray-200">
+                        {driversLoading ? (
+                          <div className="p-3 text-sm text-gray-600 flex items-center gap-2">
+                            <RefreshCw className="animate-spin" size={14} />
+                            Loading drivers...
+                          </div>
+                        ) : filteredDrivers.length === 0 ? (
+                          <div className="p-3 text-sm text-gray-500">No drivers found for {carrier?.companyName || carrier?.name || 'this carrier'}</div>
+                        ) : (
+                          filteredDrivers.map((d) => (
+                            <button
+                              key={d._id || d.id}
+                              onClick={() => { setSelectedDriver(d); setVehicleNumberInput(d.mcDotNumber || d.vehicleNumber || ''); setDriverSearch(''); setShowDriverDropdown(false); }}
+                              className="w-full text-left px-3 py-2.5 hover:bg-blue-50 border-b last:border-b-0 text-sm transition-colors"
+                            >
+                              <div className="font-semibold text-gray-900">{d.fullName || d.name || 'Unnamed'}</div>
+                              <div className="text-xs text-gray-600 mt-0.5">Driver ID: {d._id || d.id}</div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-md font-medium text-black">Vehicle Number</label>
+                    <input
+                      type="text"
+                      value={vehicleNumberInput}
+                      onChange={(e) => setVehicleNumberInput(e.target.value)}
+                      placeholder="ABC-1234"
+                      className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleAssignDriver}
+                      disabled={assignLoading || !selectedDriver}
+                      className={`px-4 py-2 rounded-lg font-semibold ${assignLoading || !selectedDriver ? MS.disabledBtn : MS.primaryBtn}`}
+                    >
+                      {assignLoading ? 'Assigning...' : 'Assign Driver'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1597,7 +1810,6 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                 </div>
               </div>
 
-              {/* Pickup Locations */}
               {pickUps.length > 0 && (
                 <div className="mt-4">
                   <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
@@ -3130,3 +3342,5 @@ export default function DODetails({ overrideEmpId }) {
     </div>
   );
 }
+
+

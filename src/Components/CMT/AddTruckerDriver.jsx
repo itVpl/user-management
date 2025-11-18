@@ -77,14 +77,7 @@ const ViewDriverDetailsModal = ({ isOpen, onClose, driverData }) => {
                   <div className={inputClass}>
                     {driverData.truckerInfo?.truckerName || 'N/A'}
                   </div>
-                  {driverData.truckerInfo && (
-                    <div className="mt-2 space-y-1 text-xs">
-                      <p className="text-gray-600">ID: {driverData.truckerInfo.truckerId}</p>
-                      <p className="text-gray-600">MC/DOT: {driverData.truckerInfo.mcDot || 'N/A'}</p>
-                      <p className="text-gray-600">Email: {driverData.truckerInfo.email || 'N/A'}</p>
-                      <p className="text-gray-600">Phone: {driverData.truckerInfo.phoneNo || 'N/A'}</p>
-                    </div>
-                  )}
+               
                 </div>
 
                 {/* Full Name */}
@@ -1022,17 +1015,7 @@ const AddTruckerDriver = () => {
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-sans">
       
-      {/* Header and Action Bar */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Trucker Drivers Management</h1>
-          {userData && (
-            <p className="text-gray-600">
-              Welcome, {userData.employeeName} ({userData.department})
-            </p>
-          )}
-        </div>
-      </div>
+    
 
       {/* Stats Cards and Search Bar */}
       <div className="flex flex-wrap md:flex-nowrap justify-between items-center mb-8 gap-4">
