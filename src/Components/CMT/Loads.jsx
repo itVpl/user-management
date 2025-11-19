@@ -4847,13 +4847,21 @@ const MaterialShipperDropdown = ({
 
       <div className="p-6">
 
-        <div className="flex justify-center items-center h-64">
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
 
-          <div className="text-center">
+          <div className="relative">
 
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
 
-            <p className="text-gray-600">Loading loads...</p>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+
+          </div>
+
+          <div className="mt-6 text-center">
+
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Loads...</p>
+
+            <p className="text-sm text-gray-600">Please wait while we fetch the data</p>
 
           </div>
 
@@ -6051,9 +6059,18 @@ const MaterialShipperDropdown = ({
 
           `}</style>
 
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+          <div 
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4"
+            onClick={() => {
+              setShowLoadCreationModal(false);
+              resetLoadForm();
+            }}
+          >
 
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200">
+            <div 
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200"
+              onClick={(e) => e.stopPropagation()}
+            >
 
             
 
@@ -8506,9 +8523,21 @@ const MaterialShipperDropdown = ({
 
       {showViewModal && selectedLoadForAction && (
 
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4"
+          onClick={() => {
+            setShowViewModal(false);
+            setSelectedLoadForAction(null);
+            setCmtAssignment(null);
+            setLoadingCmtAssignment(false);
+          }}
+        >
 
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" 
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
+          >
 
             <style>{`
 
@@ -9176,9 +9205,19 @@ const MaterialShipperDropdown = ({
 
           `}</style>
 
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+          <div 
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4"
+            onClick={() => {
+              setShowEditModal(false);
+              setSelectedLoadForAction(null);
+              resetLoadForm();
+            }}
+          >
 
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200">
+            <div 
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200"
+              onClick={(e) => e.stopPropagation()}
+            >
 
             
 
@@ -11616,9 +11655,18 @@ const MaterialShipperDropdown = ({
 
       {showDeleteModal && selectedLoadForAction && (
 
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4"
+          onClick={() => {
+            setShowDeleteModal(false);
+            setSelectedLoadForAction(null);
+          }}
+        >
 
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
 
             {/* Header */}
 
@@ -11774,9 +11822,15 @@ const MaterialShipperDropdown = ({
 
       {showChargesCalculator && (
 
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4"
+          onClick={handleCancelCharges}
+        >
 
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-200">
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-200"
+            onClick={(e) => e.stopPropagation()}
+          >
 
             {/* Header */}
 
@@ -12043,3 +12097,4 @@ const MaterialShipperDropdown = ({
   );
 
 } 
+

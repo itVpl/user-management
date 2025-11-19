@@ -2805,10 +2805,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
       {/* Employee DO Data Modal */}
       {detailsOpen && selected && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setDetailsOpen(false)}
+        >
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
@@ -3510,8 +3514,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
-          <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar">
+          <div 
+            className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+            onClick={() => setEditOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Header */}
               <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
                 <div className="flex justify-between items-center">
@@ -3577,3 +3587,5 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     </ThemeProvider>
   );
 }
+
+

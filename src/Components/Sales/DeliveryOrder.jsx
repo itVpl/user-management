@@ -1777,22 +1777,38 @@ export default function DeliveryOrder() {
         const fsc = toNum2(c.fsc);
         const oth = toNum2(c.other);
         
-        // Convert other (single value) to array format as required by API
-        const otherArray = oth > 0 ? [{
-          name: "Other Charges",
-          quantity: 1,
-          amount: oth,
-          total: oth
-        }] : [];
+        // Use chargeRows if available (from customer charges calculator), otherwise convert other to array format
+        let otherArray = [];
+        if (c.chargeRows && Array.isArray(c.chargeRows) && c.chargeRows.length > 0) {
+          // Use chargeRows from customer charges calculator
+          otherArray = c.chargeRows.map(ch => ({
+            name: (ch.name || 'Other Charges').trim(),
+            quantity: parseInt(ch.quantity, 10) || 0,
+            amount: parseFloat(ch.amount || ch.amt) || 0,
+            total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amount || ch.amt) || 0),
+          }));
+        } else if (oth > 0) {
+          // Fallback: convert single other value to array format
+          otherArray = [{
+            name: "Other Charges",
+            quantity: 1,
+            amount: oth,
+            total: oth
+          }];
+        }
+
+        // Calculate total from actual otherArray
+        const otherTotal = otherArray.reduce((sum, item) => sum + (item.total || 0), 0);
         
         return {
-          dispatcherName: c.dispatcherName,
-          workOrderNo: c.workOrderNo,
+          billTo: (c.billTo || '').trim(),
+          dispatcherName: (c.dispatcherName || '').trim(),
+          workOrderNo: (c.workOrderNo || '').trim(),
           lineHaul: lh,
           fsc: fsc,
           other: otherArray,
-          otherTotal: oth,
-          totalAmount: toNum2(lh + fsc + oth),
+          otherTotal: otherTotal,
+          totalAmount: toNum2(lh + fsc + otherTotal),
         };
       });
 
@@ -1942,13 +1958,12 @@ export default function DeliveryOrder() {
           fd.append('returnLocation', JSON.stringify(returnLocationData));
         }
 
-        // Load reference
-        if (formData.selectedLoad && formData.selectedLoad.trim()) {
-          fd.append('loadReference', formData.selectedLoad);
-        } else {
-          fd.append('loadReference', '');
-        }
-
+// Load reference
+if (formData.selectedLoad && formData.selectedLoad.trim()) {
+  fd.append('loadNo', formData.selectedLoad);
+} else {
+  fd.append('loadNo', '');
+}
         // Supporting docs
         fd.append('supportingDocs', '');
         fd.append('document', formData.docs);
@@ -2065,189 +2080,204 @@ export default function DeliveryOrder() {
   };
 
   // ⬇️ ADD this function anywhere inside the component
-  const validateForm = (mode = formMode) => {
-    const next = {
-      customers: [],
-      carrier: {},
-      shipper: {},
-      pickups: [],
-      drops: [],
-      docs: ''
-    };
-
-    // --- Customers validation ---
-    (formData.customers || []).forEach((c, idx) => {
-      const rowErr = {};
-
-      // 1) Company (Bill To)
-      if (!c.billTo) rowErr.billTo = 'Please select the company name.';
-
-      // 2) Dispatcher
-      if (!c.dispatcherName) rowErr.dispatcherName = 'Please select the Dispatcher name.';
-
-      // 3) Work Order No (required + alphanumeric)
-      if (!c.workOrderNo) rowErr.workOrderNo = 'Please enter the Work Order Number.';
-      else if (!isAlnum(c.workOrderNo)) rowErr.workOrderNo = 'Work Order Number must be alphanumeric.';
-
-      // 4/5/6) Money-like fields: integer only, non-negative
-      if (c.lineHaul === '' || c.lineHaul === null) rowErr.lineHaul = 'Please enter the Line Haul.';
-      else if (!isMoney2dp(c.lineHaul)) rowErr.lineHaul = 'Enter a non-negative amount (max 2 decimals).';
-
-      if (c.fsc === '' || c.fsc === null) rowErr.fsc = 'Please enter the FSC.';
-      else if (!isMoney2dp(c.fsc)) rowErr.fsc = 'Enter a non-negative amount (max 2 decimals).';
-
-      if (c.other === '' || c.other === null) rowErr.other = 'Please enter the Other.';
-      else if (!isMoney2dp(c.other)) rowErr.other = 'Enter a non-negative amount (max 2 decimals).';
-
-
-      next.customers[idx] = rowErr;
-    });
-
-    // --- Carrier section ---
-    // --- Carrier section ---
-    if (!formData.carrierName?.trim()) next.carrier.carrierName = 'Please enter the Carrier Name.';
-    if (!formData.equipmentType?.trim()) next.carrier.equipmentType = 'Please enter the Equipment Type .';
-
-    // Carrier Fees via charges[]
-    const rows = charges || [];
-    const hasAnyRow = rows.some(r =>
-      (r?.name?.trim()) || (String(r?.quantity ?? '') !== '') || (String(r?.amt ?? '') !== '')
-    );
-    if (!hasAnyRow) {
-      next.carrier.fees = 'Please add Carrier Fees .';
-    }
-
-    next.carrier.chargeRows = rows.map((r) => {
-      const rErr = {};
-
-      // Name: required + alphabets only
-      if (!r.name?.trim()) rErr.name = 'Please enter the charge name';
-      else if (!/^[A-Za-z ]+$/.test(r.name.trim())) rErr.name = 'Name should contain only alphabets';
-
-      // Quantity: required + positive integer
-      if (r.quantity === '' || r.quantity === null || r.quantity === undefined) {
-        rErr.quantity = 'Please enter the Quantity';
-      } else if (!/^[1-9]\d*$/.test(String(r.quantity))) {
-        rErr.quantity = 'Quantity must be a positive integer';
-      }
-
-      // Amount: required + positive integer
-      if (r.amt === '' || r.amt === null || r.amt === undefined) {
-        rErr.amt = 'Please enter the amount';
-      } else if (!/^\d+(\.\d{1,2})?$/.test(String(r.amt))) {
-        rErr.amt = 'Amount must be a positive number (max 2 decimal places)';
-      }
-
-      return rErr;
-    });
-
-    const anyChargeError = next.carrier.chargeRows.some(r => r.name || r.quantity || r.amt);
-    if (anyChargeError) {
-      next.carrier.fees = next.carrier.fees || 'Please correct the charge rows (Name*, Quantity*, Amount*).';
-    }
-
-
-    // --- Shipper ---
-    if (!formData.shipmentNo?.trim()) {
-      next.shipper.shipmentNo = 'Please enter the Shipment No ';
-    }
-
-    if (!formData.containerNo) next.shipper.containerNo = 'Please enter the Container Number  .';
-    if (!formData.containerType) next.shipper.containerType = 'Please enter the Container Type  .';
-
-    // --- Return Location (for DRAYAGE only) ---
-    if (formData.loadType === 'DRAYAGE') {
-      if (!formData.returnLocation?.address?.trim()) {
-        next.returnLocation = next.returnLocation || {};
-        next.returnLocation.address = 'Please enter the Return Full Address.';
-      }
-      if (!formData.returnLocation?.city?.trim()) {
-        next.returnLocation = next.returnLocation || {};
-        next.returnLocation.city = 'Please enter the city.';
-      }
-      if (!formData.returnLocation?.state?.trim()) {
-        next.returnLocation = next.returnLocation || {};
-        next.returnLocation.state = 'Please enter the state.';
-      }
-      if (!formData.returnLocation?.zipCode?.trim()) {
-        next.returnLocation = next.returnLocation || {};
-        next.returnLocation.zipCode = 'Please enter the zip code.';
-      } else if (!isZip(formData.returnLocation.zipCode)) {
-        next.returnLocation = next.returnLocation || {};
-        next.returnLocation.zipCode = 'Enter a valid ZIP/Postal code.';
-      }
-      if (!formData.returnLocation?.returnDate?.trim()) {
-        next.returnLocation = next.returnLocation || {};
-        next.returnLocation.returnDate = 'Please enter the return date.';
-      }
-    }
-
-    // --- Pickup Locations ---
-    (formData.pickupLocations || []).forEach((l, i) => {
-      const lErr = {};
-      if (!l.name) lErr.name = 'Please enter the Location Name .';
-      if (!l.address) lErr.address = 'Please enter the address .';
-      if (!l.city) lErr.city = 'Please enter the city .';
-      if (!l.state) lErr.state = 'Please enter the state .';
-      if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
-      else if (!/^[A-Za-z0-9]+$/.test(l.zipCode)) lErr.zipCode = 'Zip code must be alphanumeric only.';
-      else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
-
-      if (l.weight === '' || l.weight === null) {
-        lErr.weight = 'Please enter the weight.';
-      } else if (!isNonNegInt(l.weight)) {
-        lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
-      }
-
-      if (!l.pickUpDate) lErr.pickUpDate = 'Please select the pickup date.';
-      next.pickups[i] = lErr;
-    });
-
-    // --- Drop Locations ---
-    (formData.dropLocations || []).forEach((l, i) => {
-      const lErr = {};
-      if (!l.name) lErr.name = 'Please enter the Location Name .';
-      if (!l.address) lErr.address = 'Please enter the address .';
-      if (!l.city) lErr.city = 'Please enter the city .';
-      if (!l.state) lErr.state = 'Please enter the state .';
-      if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
-      else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
-      if (l.weight === '' || l.weight === null) {
-        lErr.weight = 'Please enter the weight.';
-      } else if (!isNonNegInt(l.weight)) {
-        lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
-      }
-
-      if (!l.dropDate) lErr.dropDate = 'Please select the drop date.';
-      next.drops[i] = lErr;
-    });
-
-    // --- Docs (required on ADD; optional on EDIT unless you want to force it) ---
-    if (mode !== 'edit') {
-      if (!formData.docs) next.docs = 'Please upload a document.';
-    }
-
-    setErrors(next);
-
-    // Decide valid
-    const hasCustomerErr = next.customers.some(row => Object.keys(row || {}).length);
-    const hasPickErr = next.pickups.some(row => Object.keys(row || {}).length);
-    const hasDropErr = next.drops.some(row => Object.keys(row || {}).length);
-    const hasCarrierErr =
-      Object.keys(next.carrier || {}).length &&
-      (next.carrier.carrierName || next.carrier.equipmentType || next.carrier.fees ||
-        (Array.isArray(next.carrier.chargeRows) && next.carrier.chargeRows.some(r => r.name || r.quantity || r.amt)));
-
-    const hasReturnLocationErr = formData.loadType === 'DRAYAGE' && next.returnLocation && Object.keys(next.returnLocation).length > 0;
-    const hasShipperErr = next.shipper.shipmentNo || next.shipper.containerNo || next.shipper.containerType;
-
-    const valid = !(
-      hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || hasShipperErr || hasReturnLocationErr || next.docs
-    );
-
-
-    return valid;
+ // ✅ FIXED: Enhanced validateForm function for customer validation
+const validateForm = (mode = formMode) => {
+  const next = {
+    customers: [],
+    carrier: {},
+    shipper: {},
+    pickups: [],
+    drops: [],
+    docs: ''
   };
+
+  // --- Enhanced Customers validation ---
+  (formData.customers || []).forEach((c, idx) => {
+    const rowErr = {};
+
+    // 1) Company (Bill To) - required
+    if (!c.billTo || c.billTo.trim() === '') {
+      rowErr.billTo = 'Please select the company name.';
+    }
+
+    // 2) Dispatcher - required
+    if (!c.dispatcherName || c.dispatcherName.trim() === '') {
+      rowErr.dispatcherName = 'Please select the Dispatcher name.';
+    }
+
+    // 3) Work Order No (required + alphanumeric)
+    if (!c.workOrderNo || c.workOrderNo.trim() === '') {
+      rowErr.workOrderNo = 'Please enter the Work Order Number.';
+    } else if (!isAlnum(c.workOrderNo)) {
+      rowErr.workOrderNo = 'Work Order Number must be alphanumeric.';
+    }
+
+    // 4/5/6) Money-like fields: non-negative numbers
+    if (c.lineHaul === '' || c.lineHaul === null || c.lineHaul === undefined) {
+      rowErr.lineHaul = 'Please enter the Line Haul.';
+    } else if (!isMoney2dp(c.lineHaul)) {
+      rowErr.lineHaul = 'Enter a non-negative amount (max 2 decimals).';
+    }
+
+    if (c.fsc === '' || c.fsc === null || c.fsc === undefined) {
+      rowErr.fsc = 'Please enter the FSC.';
+    } else if (!isMoney2dp(c.fsc)) {
+      rowErr.fsc = 'Enter a non-negative amount (max 2 decimals).';
+    }
+
+    if (c.other === '' || c.other === null || c.other === undefined) {
+      rowErr.other = 'Please enter the Other.';
+    } else if (!isMoney2dp(c.other)) {
+      rowErr.other = 'Enter a non-negative amount (max 2 decimals).';
+    }
+
+    next.customers[idx] = rowErr;
+  });
+
+  // --- Carrier section validation ---
+  if (!formData.carrierName?.trim()) next.carrier.carrierName = 'Please enter the Carrier Name.';
+  if (!formData.equipmentType?.trim()) next.carrier.equipmentType = 'Please enter the Equipment Type .';
+
+  // Carrier Fees via carrierCharges (use carrierCharges directly, not computed charges)
+  const rows = carrierCharges || [];
+  const hasAnyRow = rows.some(r =>
+    (r?.name?.trim()) || (String(r?.quantity ?? '') !== '') || (String(r?.amt ?? '') !== '')
+  );
+  if (!hasAnyRow) {
+    next.carrier.fees = 'Please add Carrier Fees .';
+  }
+
+  next.carrier.chargeRows = rows.map((r) => {
+    const rErr = {};
+
+    // Name: required + alphabets only
+    if (!r.name?.trim()) rErr.name = 'Please enter the charge name';
+    else if (!/^[A-Za-z ]+$/.test(r.name.trim())) rErr.name = 'Name should contain only alphabets';
+
+    // Quantity: required + positive integer
+    if (r.quantity === '' || r.quantity === null || r.quantity === undefined) {
+      rErr.quantity = 'Please enter the Quantity';
+    } else if (!/^[1-9]\d*$/.test(String(r.quantity))) {
+      rErr.quantity = 'Quantity must be a positive integer';
+    }
+
+    // Amount: required + positive number
+    if (r.amt === '' || r.amt === null || r.amt === undefined) {
+      rErr.amt = 'Please enter the amount';
+    } else if (!/^\d+(\.\d{1,2})?$/.test(String(r.amt))) {
+      rErr.amt = 'Amount must be a positive number (max 2 decimal places)';
+    }
+
+    return rErr;
+  });
+
+  const anyChargeError = next.carrier.chargeRows.some(r => r.name || r.quantity || r.amt);
+  if (anyChargeError) {
+    next.carrier.fees = next.carrier.fees || 'Please correct the charge rows (Name*, Quantity*, Amount*).';
+  }
+
+  // --- Shipper validation ---
+  if (!formData.shipmentNo?.trim()) {
+    next.shipper.shipmentNo = 'Please enter the Shipment No ';
+  }
+
+  if (!formData.containerNo) next.shipper.containerNo = 'Please enter the Container Number  .';
+  if (!formData.containerType) next.shipper.containerType = 'Please enter the Container Type  .';
+
+  // --- Return Location (for DRAYAGE only) ---
+  if (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') {
+    if (!formData.returnLocation?.address?.trim()) {
+      next.returnLocation = next.returnLocation || {};
+      next.returnLocation.address = 'Please enter the Return Full Address.';
+    }
+    if (!formData.returnLocation?.city?.trim()) {
+      next.returnLocation = next.returnLocation || {};
+      next.returnLocation.city = 'Please enter the city.';
+    }
+    if (!formData.returnLocation?.state?.trim()) {
+      next.returnLocation = next.returnLocation || {};
+      next.returnLocation.state = 'Please enter the state.';
+    }
+    if (!formData.returnLocation?.zipCode?.trim()) {
+      next.returnLocation = next.returnLocation || {};
+      next.returnLocation.zipCode = 'Please enter the zip code.';
+    } else if (!isZip(formData.returnLocation.zipCode)) {
+      next.returnLocation = next.returnLocation || {};
+      next.returnLocation.zipCode = 'Enter a valid ZIP/Postal code.';
+    }
+    if (!formData.returnLocation?.returnDate?.trim()) {
+      next.returnLocation = next.returnLocation || {};
+      next.returnLocation.returnDate = 'Please enter the return date.';
+    }
+  }
+
+  // --- Pickup Locations validation ---
+  (formData.pickupLocations || []).forEach((l, i) => {
+    const lErr = {};
+    if (!l.name) lErr.name = 'Please enter the Location Name .';
+    if (!l.address) lErr.address = 'Please enter the address .';
+    if (!l.city) lErr.city = 'Please enter the city .';
+    if (!l.state) lErr.state = 'Please enter the state .';
+    if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
+    else if (!/^[A-Za-z0-9]+$/.test(l.zipCode)) lErr.zipCode = 'Zip code must be alphanumeric only.';
+    else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
+
+    if (l.weight === '' || l.weight === null) {
+      lErr.weight = 'Please enter the weight.';
+    } else if (!isNonNegInt(l.weight)) {
+      lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
+    }
+
+    if (!l.pickUpDate) lErr.pickUpDate = 'Please select the pickup date.';
+    next.pickups[i] = lErr;
+  });
+
+  // --- Drop Locations validation ---
+  (formData.dropLocations || []).forEach((l, i) => {
+    const lErr = {};
+    if (!l.name) lErr.name = 'Please enter the Location Name .';
+    if (!l.address) lErr.address = 'Please enter the address .';
+    if (!l.city) lErr.city = 'Please enter the city .';
+    if (!l.state) lErr.state = 'Please enter the state .';
+    if (!l.zipCode) lErr.zipCode = 'Please enter the zip code .';
+    else if (!isZip(l.zipCode)) lErr.zipCode = 'Enter a valid ZIP/Postal code.';
+    if (l.weight === '' || l.weight === null) {
+      lErr.weight = 'Please enter the weight.';
+    } else if (!isNonNegInt(l.weight)) {
+      lErr.weight = 'Weight must be a non-negative integer (0 allowed).';
+    }
+
+    if (!l.dropDate) lErr.dropDate = 'Please select the drop date.';
+    next.drops[i] = lErr;
+  });
+
+  // --- Docs (required on ADD; optional on EDIT) ---
+  if (mode !== 'edit') {
+    if (!formData.docs) next.docs = 'Please upload a document.';
+  }
+
+  setErrors(next);
+
+  // Check if any customer has errors
+  const hasCustomerErr = next.customers.some(row => 
+    row && Object.keys(row).length > 0 && Object.values(row).some(err => err !== '')
+  );
+
+  const hasPickErr = next.pickups.some(row => Object.keys(row || {}).length);
+  const hasDropErr = next.drops.some(row => Object.keys(row || {}).length);
+  const hasCarrierErr = Object.keys(next.carrier || {}).length && 
+    (next.carrier.carrierName || next.carrier.equipmentType || next.carrier.fees ||
+     (Array.isArray(next.carrier.chargeRows) && next.carrier.chargeRows.some(r => r.name || r.quantity || r.amt)));
+
+  const hasReturnLocationErr = formData.loadType === 'DRAYAGE' && next.returnLocation && Object.keys(next.returnLocation).length > 0;
+  const hasShipperErr = next.shipper.shipmentNo || next.shipper.containerNo || next.shipper.containerType;
+
+  const valid = !(
+    hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || hasShipperErr || hasReturnLocationErr || next.docs
+  );
+
+  return valid;
+};
 
 
 
@@ -2809,176 +2839,346 @@ export default function DeliveryOrder() {
 
   // Handle update order 
 
-  const handleUpdateOrder = async (e) => {
-    e.preventDefault();
-    if (!validateForm('edit')) { setSubmitting(false); focusFirstError(); return; }
-    setSubmitting(true);
-    try {
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+// ✅ REPLACE your handleUpdateOrder with this fixed version
+// ✅ FIXED: handleUpdateOrder function
+// ✅ FIXED: handleUpdateOrder function with proper customer validation
+const handleUpdateOrder = async (e) => {
+  e.preventDefault();
+  
+  // Validate form first
+  if (!validateForm('edit')) { 
+    setSubmitting(false); 
+    focusFirstError(); 
+    return; 
+  }
+  
+  setSubmitting(true);
+  try {
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
-      // Make sure we send the real Mongo _id, not "DO-xxxxxx"
-      let orderId = editingOrder?._id;
-      if (!orderId) { alertify.error('Order ID missing'); return; }
-      if (String(orderId).startsWith('DO-')) {
-        orderId = orderId.replace(/^DO-/, '');
-      }
-
-      // 👉 existing customers from the full order (to preserve loadNo & _id)
-      const prevCustomers = editingOrder?.fullData?.customers || [];
-
-      // --- REQUIRED fields quick check (BillTo/Dispatcher/W/O)
-      for (let i = 0; i < (formData.customers?.length || 0); i++) {
-        const c = formData.customers[i] || {};
-        if (!c.billTo || !c.dispatcherName || !c.workOrderNo) {
-          alertify.error(`Customer ${i + 1} ke required fields (Bill To, Dispatcher, W/O) bharo`);
-          return;
-        }
-      }
-
-      // --- Customers (⚠️ loadNo preserve)
-      const customers = (formData.customers || []).map((c, idx) => {
-        const preservedLoadNo =
-          prevCustomers[idx]?.loadNo ||
-          editingOrder?.doNum ||
-          c.loadNo ||
-          '';
-
-        if (!preservedLoadNo) {
-          alertify.error(`Customer ${idx + 1}: Load No missing`);
-          throw new Error('Missing loadNo');
-        }
-
-        const lh = toNum2(c.lineHaul);
-        const fsc = toNum2(c.fsc);
-        const oth = toNum2(c.other);
-
-        return {
-          _id: prevCustomers[idx]?._id,
-          loadNo: preservedLoadNo,
-          billTo: (c.billTo || '').trim(),
-          dispatcherName: (c.dispatcherName || '').trim(),
-          workOrderNo: (c.workOrderNo || '').trim(),
-          lineHaul: lh,
-          fsc: fsc,
-          other: oth,
-          totalAmount: toNum2(lh + fsc + oth),
-        };
-
-
-      });
-
-      // --- Carrier
-      const carrierFees = (charges || [])
-        .filter(ch => ch?.name)
-        .map(ch => ({
-          name: ch.name,
-          quantity: Number(ch.quantity) || 0,
-          amount: Number(ch.amt) || 0,
-          total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
-        }));
-
-      const carrier = {
-        carrierName: formData.carrierName || '',
-        equipmentType: formData.equipmentType || '',
-        carrierFees,
-        totalCarrierFees: carrierFees.reduce((s, f) => s + (f.total || 0), 0),
-      };
-
-      // --- Shipper + per-location fields
-      const shipper = {
-        shipmentNo: formData.shipmentNo || '',
-        containerNo: formData.containerNo || '',
-        containerType: formData.containerType || '',
-        pickUpLocations: (formData.pickupLocations || []).map(l => ({
-          name: l.name || '',
-          address: l.address || '',
-          city: l.city || '',
-          state: l.state || '',
-          zipCode: l.zipCode || '',
-          weight: l.weight === '' ? 0 : Number(l.weight) || 0,
-          pickUpDate: l.pickUpDate || '',
-          remarks: l.remarks || ''
-        })),
-        dropLocations: (formData.dropLocations || []).map(l => ({
-          name: l.name || '',
-          address: l.address || '',
-          city: l.city || '',
-          state: l.state || '',
-          zipCode: l.zipCode || '',
-          weight: l.weight === '' ? 0 : Number(l.weight) || 0,
-          dropDate: l.dropDate || '',
-          remarks: l.remarks || ''
-        })),
-      };
-
-      const updatePayload = {
-        customers,  // ✅ includes loadNo
-        carrier,
-        shipper,
-        ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadReference: formData.selectedLoad } : {}), // Only include loadReference if it has a value
-        ...(formData.company && formData.company.trim() ? { company: formData.company } : {}), // Only include company if it has a value
-        ...(formData.company && formData.company.trim() ? { addDispature: formData.company } : {}), // Only include addDispature if company has a value
-        remarks: formData.remarks || '',
-        bols: (formData.bols || []).map((b, i) => ({
-          _id: editingOrder?.fullData?.bols?.[i]?._id, // preserve if exists
-          bolNo: (b.bolNo || '').trim()
-        })).filter(b => b.bolNo),
-      };
-
-      console.log('Updating delivery order with loadReference:', formData.selectedLoad);
-      console.log('Full update payload:', updatePayload);
-
-      // 1) JSON update
-      const res = await axios.put(
-        `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
-        updatePayload,
-        { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } }
-      );
-
-      if (!res?.data?.success) {
-        alertify.error(res?.data?.message || 'Update failed');
-        return;
-      }
-
-      // 2) OPTIONAL document upload — same versioned base path to avoid 404
-      if (formData.docs && formData.docs instanceof File) {
-        try {
-          const fd = new FormData();
-          // NOTE: Change 'document' -> 'file' if your backend expects 'file'
-          fd.append('document', formData.docs);
-
-          const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}/upload`;
-          console.debug('Uploading document to:', uploadUrl, 'orderId:', orderId);
-
-          const upRes = await axios.put(uploadUrl, fd, {
-            headers: { Authorization: `Bearer ${token}` }, // axios sets multipart boundary automatically
-            timeout: 20000,
-          });
-
-          if (upRes?.data?.success) {
-            alertify.success('Document uploaded');
-          } else {
-            alertify.warning(upRes?.data?.message ? `Document upload failed: ${upRes.data.message}` : 'Document upload failed');
-          }
-        } catch (upErr) {
-          console.error('Upload error:', upErr?.response?.data || upErr);
-          const msg = upErr?.response?.data?.message || upErr?.message || 'Unknown error';
-          alertify.warning(`Order updated, but document upload failed: ${msg}`);
-        }
-      }
-
-      alertify.success('Delivery order updated!');
-      setShowAddOrderForm(false);
-      setEditingOrder(null);
-      fetchOrders();
-    } catch (err) {
-      console.error('Update error:', err?.response?.data || err);
-      alertify.error(err?.response?.data?.message || err.message || 'Failed to update delivery order');
-    } finally {
+    // Get the correct order ID
+    let orderId = editingOrder?._id;
+    if (!orderId) { 
+      alertify.error('Order ID missing'); 
       setSubmitting(false);
+      return; 
     }
-  };
+    
+    // Clean up order ID if it has DO- prefix
+    if (String(orderId).startsWith('DO-')) {
+      orderId = orderId.replace(/^DO-/, '');
+    }
 
+    console.log('Updating order ID:', orderId);
+
+    // Get user/employee info
+    const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+    const user = JSON.parse(userStr || '{}');
+    const empId = user.empId || "EMP001";
+
+    // --- FIXED: Customers data preparation with proper validation ---
+    const customers = (formData.customers || []).map((c, idx) => {
+      // Ensure all required fields have values - trim and validate
+      const billTo = (c.billTo || '').trim();
+      const dispatcherName = (c.dispatcherName || '').trim();
+      const workOrderNo = (c.workOrderNo || '').trim();
+      
+      // Validate required fields before processing
+      if (!billTo || !dispatcherName || !workOrderNo) {
+        console.error(`Customer ${idx + 1} missing required fields:`, {
+          billTo: billTo || 'MISSING',
+          dispatcherName: dispatcherName || 'MISSING',
+          workOrderNo: workOrderNo || 'MISSING'
+        });
+      }
+      
+      // Convert money fields with proper fallbacks
+      const lh = toNum2(c.lineHaul || '0');
+      const fsc = toNum2(c.fsc || '0');
+      const oth = toNum2(c.other || '0');
+
+      // Use chargeRows if available (from customer charges calculator), otherwise convert other to array format
+      let otherArray = [];
+      if (c.chargeRows && Array.isArray(c.chargeRows) && c.chargeRows.length > 0) {
+        // Use chargeRows from customer charges calculator
+        otherArray = c.chargeRows.map(ch => ({
+          name: (ch.name || 'Other Charges').trim(),
+          quantity: parseInt(ch.quantity, 10) || 0,
+          amount: parseFloat(ch.amount || ch.amt) || 0,
+          total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amount || ch.amt) || 0),
+        }));
+      } else if (oth > 0) {
+        // Fallback: convert single other value to array format
+        otherArray = [{
+          name: "Other Charges",
+          quantity: 1,
+          amount: oth,
+          total: oth
+        }];
+      }
+
+      // Calculate total from actual otherArray
+      const otherTotal = otherArray.reduce((sum, item) => sum + (item.total || 0), 0);
+
+      // Create customer object with all required fields
+      const customerData = {
+        billTo: billTo,
+        dispatcherName: dispatcherName,
+        workOrderNo: workOrderNo,
+        lineHaul: lh,
+        fsc: fsc,
+        other: otherArray,
+        otherTotal: otherTotal,
+        totalAmount: toNum2(lh + fsc + otherTotal),
+      };
+
+      console.log(`Customer ${idx + 1} data:`, customerData);
+      return customerData;
+    });
+
+    // Validate that we have at least one customer with all required fields - STRICT VALIDATION
+    const validCustomers = customers.filter(c => {
+      const hasBillTo = c.billTo && typeof c.billTo === 'string' && c.billTo.trim() !== '';
+      const hasDispatcher = c.dispatcherName && typeof c.dispatcherName === 'string' && c.dispatcherName.trim() !== '';
+      const hasWorkOrder = c.workOrderNo && typeof c.workOrderNo === 'string' && c.workOrderNo.trim() !== '';
+      
+      if (!hasBillTo || !hasDispatcher || !hasWorkOrder) {
+        console.warn('Invalid customer filtered out:', {
+          billTo: c.billTo || 'MISSING',
+          dispatcherName: c.dispatcherName || 'MISSING',
+          workOrderNo: c.workOrderNo || 'MISSING'
+        });
+        return false;
+      }
+      return true;
+    });
+    
+    if (validCustomers.length === 0) {
+      alertify.error('Please fill in all required customer fields (Bill To, Dispatcher Name, Work Order No)');
+      setSubmitting(false);
+      return;
+    }
+
+    // Final check: Ensure no customer has empty required fields - double validation
+    const finalCustomers = validCustomers.map((c, idx) => {
+      // Ensure all fields are non-empty strings
+      const billTo = (c.billTo || '').trim();
+      const dispatcherName = (c.dispatcherName || '').trim();
+      const workOrderNo = (c.workOrderNo || '').trim();
+      
+      if (!billTo || !dispatcherName || !workOrderNo) {
+        console.error(`Customer ${idx + 1} still has missing fields after validation:`, {
+          billTo: billTo || 'EMPTY',
+          dispatcherName: dispatcherName || 'EMPTY',
+          workOrderNo: workOrderNo || 'EMPTY'
+        });
+        return null;
+      }
+      
+      // Return customer with all required fields guaranteed to be non-empty
+      return {
+        ...c,
+        billTo: billTo,
+        dispatcherName: dispatcherName,
+        workOrderNo: workOrderNo
+      };
+    }).filter(c => c !== null); // Remove any null entries
+
+    if (finalCustomers.length === 0) {
+      alertify.error('No valid customers found. Please fill all required fields (Bill To, Dispatcher Name, Work Order No).');
+      setSubmitting(false);
+      return;
+    }
+
+    console.log('Final customers to send:', finalCustomers);
+
+    // --- Carrier data preparation ---
+    const carrierFees = (carrierCharges || [])
+      .filter(ch => ch?.name && ch.name.trim() !== '')
+      .map(ch => ({
+        name: ch.name.trim(),
+        quantity: Number(ch.quantity) || 0,
+        amount: Number(ch.amt) || 0,
+        total: (Number(ch.quantity) || 0) * (Number(ch.amt) || 0),
+      }));
+
+    const carrier = {
+      carrierName: formData.carrierName || '',
+      equipmentType: formData.equipmentType || '',
+      carrierFees: carrierFees,
+      totalCarrierFees: carrierFees.reduce((s, f) => s + (f.total || 0), 0),
+    };
+
+    // --- Shipper data preparation ---
+    const shipper = {
+      shipmentNo: formData.shipmentNo || '',
+      containerNo: formData.containerNo || '',
+      containerType: formData.containerType || '',
+      pickUpLocations: (formData.pickupLocations || []).map(l => ({
+        name: l.name || '',
+        address: l.address || '',
+        city: l.city || '',
+        state: l.state || '',
+        zipCode: l.zipCode || '',
+        weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+        commodity: l.commodity || formData.commodity || '',
+        pickUpDate: l.pickUpDate || '',
+        remarks: l.remarks || ''
+      })),
+      dropLocations: (formData.dropLocations || []).map(l => ({
+        name: l.name || '',
+        address: l.address || '',
+        city: l.city || '',
+        state: l.state || '',
+        zipCode: l.zipCode || '',
+        weight: l.weight === '' ? 0 : Number(l.weight) || 0,
+        commodity: l.commodity || formData.commodity || '',
+        dropDate: l.dropDate || '',
+        remarks: l.remarks || ''
+      })),
+    };
+
+    // --- Return location for DRAYAGE ---
+    const returnLocationData = (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && formData.returnLocation ? {
+      returnFullAddress: [
+        formData.returnLocation.address,
+        formData.returnLocation.city,
+        formData.returnLocation.state,
+        formData.returnLocation.zipCode
+      ].filter(Boolean).join(', ') || '',
+      city: formData.returnLocation.city || '',
+      state: formData.returnLocation.state || '',
+      zipCode: formData.returnLocation.zipCode || '',
+      returnDate: formData.returnLocation.returnDate || ''
+    } : null;
+
+    // Get shipperId and carrierId
+    let shipperId = formData.shipperId || '';
+    if (!shipperId && formData.shipperName) {
+      const foundShipper = shippers.find(s => s.compName === formData.shipperName);
+      shipperId = foundShipper?._id || '';
+    }
+    
+    let carrierId = formData.carrierId || '';
+    if (!carrierId && formData.carrierName) {
+      const foundCarrier = truckers.find(t => t.compName === formData.carrierName);
+      carrierId = foundCarrier?._id || '';
+    }
+
+// --- Complete update payload ---
+const updatePayload = {
+  empId: empId,
+  loadType: formData.loadType || selectedLoadType,
+  shipperId: shipperId || '',
+  carrierId: carrierId || '',
+  customers: finalCustomers,
+  carrier: carrier,
+  shipper: shipper,
+  ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadNo: formData.selectedLoad } : {}),
+  ...(formData.company && formData.company.trim() ? { 
+    company: formData.company,
+    addDispature: formData.company 
+  } : {}),
+  remarks: formData.remarks || '',
+  bols: (formData.bols || [])
+    .filter(b => (b.bolNo || '').trim())
+    .map(b => ({ bolNo: b.bolNo.trim() })),
+  ...(returnLocationData ? { returnLocation: returnLocationData } : {}),
+};
+
+    console.log('Final update payload:', JSON.stringify(updatePayload, null, 2));
+    console.log('Customer validation check:', validCustomers.length > 0 ? 'PASSED' : 'FAILED');
+    console.log('Total customers:', customers.length, 'Valid customers:', validCustomers.length, 'Final customers:', finalCustomers.length);
+
+    // 1) Make the main API call to update the order
+    const response = await axios.put(
+      `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
+      updatePayload,
+      { 
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
+        timeout: 30000
+      }
+    );
+
+    if (!response?.data?.success) {
+      console.error('Update failed:', response?.data);
+      alertify.error(response?.data?.message || 'Update failed');
+      setSubmitting(false);
+      return;
+    }
+
+    console.log('Update successful:', response.data);
+
+    // 2) OPTIONAL: Handle document upload if a new file is selected
+    if (formData.docs && formData.docs instanceof File) {
+      try {
+        const fd = new FormData();
+        fd.append('document', formData.docs);
+
+        const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}/upload`;
+        console.log('Uploading document to:', uploadUrl);
+
+        const uploadResponse = await axios.put(uploadUrl, fd, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          timeout: 20000,
+        });
+
+        if (uploadResponse?.data?.success) {
+          console.log('Document upload successful');
+          alertify.success('Document uploaded successfully');
+        } else {
+          console.warn('Document upload response not successful:', uploadResponse?.data);
+          alertify.warning(uploadResponse?.data?.message || 'Document upload completed with warnings');
+        }
+      } catch (uploadError) {
+        console.error('Document upload error:', uploadError?.response?.data || uploadError);
+        const errorMsg = uploadError?.response?.data?.message || uploadError?.message || 'Unknown upload error';
+        alertify.warning(`Order updated, but document upload failed: ${errorMsg}`);
+      }
+    }
+
+    // Success message and cleanup
+    alertify.success('Delivery order updated successfully!');
+    
+    // Close modal and refresh data
+    setShowEditModal(false);
+    setEditingOrder(null);
+    
+    // Refresh the orders list
+    await fetchOrders();
+    
+  } catch (error) {
+    console.error('Update error:', error);
+    console.error('Error response:', error.response?.data);
+    
+    let errorMessage = 'Failed to update delivery order';
+    if (error.response?.data?.message) {
+      errorMessage = `API Error: ${error.response.data.message}`;
+    } else if (error.response?.data?.error) {
+      errorMessage = `API Error: ${error.response.data.error}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    alertify.error(errorMessage);
+    
+    // Show specific field errors if available
+    if (error.response?.data?.errors) {
+      console.error('Field errors:', error.response.data.errors);
+      Object.values(error.response.data.errors).forEach(err => {
+        alertify.error(err);
+      });
+    }
+  } finally {
+    setSubmitting(false);
+  }
+};
 
 
 
@@ -8053,24 +8253,22 @@ export default function DeliveryOrder() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${submitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-green-600 hover:to-green-700'}`}
-                  onClick={(e) => {
-                    // ensure validation blocks submit if invalid
-                    if (!validateForm('edit')) { e.preventDefault(); focusFirstError(); }
-                  }}
-                >
-                  {submitting ? (
-                    <span className="flex items-center gap-2">
-                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                      Updating...
-                    </span>
-                  ) : (
-                    'Update Delivery Order'
-                  )}
-                </button>
+            <button
+  type="submit"
+  disabled={submitting}
+  className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${
+    submitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-green-600 hover:to-green-700'
+  }`}
+>
+  {submitting ? (
+    <span className="flex items-center gap-2">
+      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+      Updating...
+    </span>
+  ) : (
+    'Update Delivery Order'
+  )}
+</button>
               </div>
             </form>
           </div>

@@ -1,7 +1,4 @@
 import React, { useEffect, useState } from 'react';
-
-
-
 const ShiperLoadData = () => {
   const [Loading, setLoading] = useState(true);
   useEffect(() => {
@@ -9,6 +6,7 @@ const ShiperLoadData = () => {
     const timer = setTimeout(() => {
       setLoading(false);
     }, 1000); // 1 second delay
+
 
     return () => clearTimeout(timer);
   }, []);
@@ -23,6 +21,7 @@ const ShiperLoadData = () => {
     { id: 'CNU1234567', loadId: 'L00331', weight: '300Lbs', vehicle: 'Flatbed', from: 'Edenberg', to: 'Nepal', pickupDate: 'Flatbed', status: 'Delivered' },
   ];
 
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'Pending': return 'bg-yellow-300 text-yellow-800';
@@ -33,19 +32,33 @@ const ShiperLoadData = () => {
       default: return 'bg-gray-200 text-gray-800';
     }
   };
-    
+   
 if (Loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg px-12">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Shipper Data...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the load information</p>
+          </div>
+        </div>
       </div>
     );
   }
 
 
 
+
+
+
   return (
     <div className="flex h-screen bg-gray-50 font-sans">
+
+
 
 
       {/* Main Content */}
@@ -93,5 +106,4 @@ if (Loading) {
     </div>
   );
 };
-
 export default ShiperLoadData;

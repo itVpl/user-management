@@ -6,6 +6,7 @@ import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
 
+
 export default function CarrierDocs() {
   const [carriers, setCarriers] = useState([]);
   const [statistics, setStatistics] = useState({
@@ -25,24 +26,27 @@ export default function CarrierDocs() {
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
+
 
   useEffect(() => {
     fetchCarriers();
   }, []);
 
+
   const fetchCarriers = async () => {
     try {
       setLoading(true);
-      
+     
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/all-truckers`, {
-        headers: { 
+        headers: {
           'Content-Type': 'application/json'
         }
       });
-      
+     
       if (res.data && res.data.success) {
         setCarriers(res.data.truckers || []);
         setStatistics(res.data.statistics || {
@@ -78,20 +82,21 @@ export default function CarrierDocs() {
     }
   };
 
+
   const handleStatusUpdate = async (status) => {
     try {
       const { userId } = selectedCarrier;
-      
+     
       if (status === 'approved') {
         // Use the manager approval API
         const response = await axios.patch(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/manager/${userId}`, {
           approvalReason: reason || "Documents verified and approved",
         }, {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json'
           }
         });
-        
+       
         if (response.data.success) {
           alertify.success('✅ Carrier approved successfully!');
         }
@@ -100,16 +105,16 @@ export default function CarrierDocs() {
         const response = await axios.patch(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/reject/${userId}`, {
           rejectionReason: reason || "Incomplete documents provided",
         }, {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json'
           }
         });
-        
+       
         if (response.data.success) {
           alertify.error('❌ Carrier rejected successfully!');
         }
       }
-      
+     
       setModalType(null);
       setReason('');
       setSelectedCarrier(null);
@@ -121,6 +126,7 @@ export default function CarrierDocs() {
     }
   };
 
+
   // Status color helper
   const statusColor = (status) => {
     if (!status) return 'bg-yellow-100 text-yellow-700';
@@ -130,16 +136,19 @@ export default function CarrierDocs() {
     return 'bg-blue-100 text-blue-700';
   };
 
+
   // Pagination calculations
   const totalPages = Math.ceil(carriers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentCarriers = carriers.slice(startIndex, endIndex);
 
+
   // Handle page change
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
+
 
   // Handle view carrier details
   const handleViewCarrier = (carrier) => {
@@ -147,10 +156,12 @@ export default function CarrierDocs() {
     setShowCarrierModal(true);
   };
 
+
   // Handle document preview
   const handleDocumentPreview = (documentUrl, documentName) => {
     setSelectedDocument({ url: documentUrl, name: documentName });
   };
+
 
   // Get document display name
   const getDocumentDisplayName = (docKey) => {
@@ -167,10 +178,12 @@ export default function CarrierDocs() {
     return displayNames[docKey] || docKey;
   };
 
+
   // Check if file is image
   const isImageFile = (fileType) => {
     return ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileType?.toUpperCase());
   };
+
 
   // Filter carriers based on search term
   const filteredCarriers = carriers.filter(carrier =>
@@ -179,23 +192,35 @@ export default function CarrierDocs() {
     carrier.mc_dot_no?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+
   if (loading) {
     return (
       <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading carriers...</p>
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Carrier Documents...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
           </div>
         </div>
       </div>
     );
   }
 
+
   if (previewImg) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
-        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4">
+      <div
+        className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center"
+        onClick={() => setPreviewImg(null)}
+      >
+        <div
+          className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4"
+          onClick={(e) => e.stopPropagation()}
+        >
           <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl shadow-lg" />
           <button
             onClick={() => setPreviewImg(null)}
@@ -208,10 +233,17 @@ export default function CarrierDocs() {
     );
   }
 
+
   if (modalType) {
     return (
-      <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center">
+      <div
+        className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center"
+        onClick={() => setModalType(null)}
+      >
+        <div
+          className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
@@ -230,6 +262,7 @@ export default function CarrierDocs() {
       </div>
     );
   }
+
 
   return (
     <div className="p-6">
@@ -294,6 +327,7 @@ export default function CarrierDocs() {
         </div>
       </div>
 
+
       {viewDoc && selectedCarrier ? (
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
           <div className="flex justify-between items-center mb-8">
@@ -326,6 +360,7 @@ export default function CarrierDocs() {
               <FaDownload className="text-blue-500 text-2xl cursor-pointer" />
             </a>
           </div>
+
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50 to-white shadow flex flex-col gap-2">
@@ -360,7 +395,7 @@ export default function CarrierDocs() {
       ) : (
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-max">
               <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                 <tr>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier ID</th>
@@ -439,6 +474,7 @@ export default function CarrierDocs() {
         </div>
       )}
 
+
       {/* Pagination */}
       {totalPages > 1 && filteredCarriers.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
@@ -478,13 +514,21 @@ export default function CarrierDocs() {
         </div>
       )}
 
+
       {/* Carrier Details Modal */}
       {showCarrierModal && selectedCarrier && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}>
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowCarrierModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -505,6 +549,7 @@ export default function CarrierDocs() {
                 </button>
               </div>
             </div>
+
 
             {/* Content */}
             <div className="p-6 space-y-6">
@@ -587,6 +632,7 @@ export default function CarrierDocs() {
                 </div>
               </div>
 
+
               {/* Address Information */}
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-4">
@@ -624,6 +670,7 @@ export default function CarrierDocs() {
                 </div>
               </div>
 
+
               {/* Documents Section */}
               {selectedCarrier.documents && Object.keys(selectedCarrier.documents).length > 0 && (
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
@@ -634,7 +681,7 @@ export default function CarrierDocs() {
                       {selectedCarrier.documentCount || Object.keys(selectedCarrier.documents).length} documents
                     </span>
                   </div>
-                  
+                 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {Object.entries(selectedCarrier.documents).map(([docKey, docUrl]) => (
                       <div key={docKey} className="bg-white rounded-xl p-4 shadow-sm border border-green-100 hover:shadow-md transition">
@@ -649,12 +696,12 @@ export default function CarrierDocs() {
                             {docUrl.split('.').pop()?.toUpperCase() || 'FILE'}
                           </span>
                         </div>
-                        
+                       
                         <div className="space-y-2">
                           <div className="text-xs text-gray-600 truncate">
                             {docUrl.split('/').pop()}
                           </div>
-                          
+                         
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleDocumentPreview(docUrl, getDocumentDisplayName(docKey))}
@@ -679,6 +726,7 @@ export default function CarrierDocs() {
                   </div>
                 </div>
               )}
+
 
               {/* Status Information */}
               <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6">
@@ -709,6 +757,7 @@ export default function CarrierDocs() {
                 </div>
               </div>
 
+
               {/* Action Buttons */}
               <div className="flex gap-4 justify-center pt-6">
                 <button
@@ -731,9 +780,16 @@ export default function CarrierDocs() {
         </div>
       )}
 
+
       {selectedDocument && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4">
-          <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh]">
+        <div
+          className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4"
+          onClick={() => setSelectedDocument(null)}
+        >
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex justify-between items-center">
               <h3 className="text-lg font-semibold">{selectedDocument.name}</h3>
               <button
@@ -745,9 +801,9 @@ export default function CarrierDocs() {
             </div>
             <div className="p-4">
               {isImageFile(selectedDocument.url.split('.').pop()) ? (
-                <img 
-                  src={selectedDocument.url} 
-                  alt={selectedDocument.name} 
+                <img
+                  src={selectedDocument.url}
+                  alt={selectedDocument.name}
                   className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
                 />
               ) : (
@@ -755,9 +811,9 @@ export default function CarrierDocs() {
                   <div className="text-center">
                     <FaFileAlt className="text-6xl text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 mb-4">Document preview not available</p>
-                    <a 
-                      href={selectedDocument.url} 
-                      target="_blank" 
+                    <a
+                      href={selectedDocument.url}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition"
                     >
@@ -773,3 +829,6 @@ export default function CarrierDocs() {
     </div>
   );
 }
+
+
+

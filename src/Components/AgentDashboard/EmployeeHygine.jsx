@@ -33,6 +33,7 @@ import {
 import API_CONFIG from '../../config/api.js';
 const API_BASE = `${API_CONFIG.BASE_URL}`;
 
+
 /* -------------------- Utilities -------------------- */
 const getEmpIdFromSession = () => {
   if (typeof window === "undefined") return null;
@@ -51,7 +52,9 @@ const getEmpIdFromSession = () => {
   return null;
 };
 
+
 const pct = (v, t) => (!t ? 0 : Math.round((v / t) * 100));
+
 
 /* -------------------- Styled Small Card -------------------- */
 const CardShell = ({ children }) => (
@@ -71,6 +74,7 @@ const CardShell = ({ children }) => (
   </Card>
 );
 
+
 const StatCard = ({ title, value, total, icon, color = "primary" }) => {
   const percentage = pct(value, total);
   return (
@@ -82,6 +86,7 @@ const StatCard = ({ title, value, total, icon, color = "primary" }) => {
         </Typography>
       </Box>
 
+
       <Box display="flex" alignItems="baseline" mb={1}>
         <Typography variant="h3" fontWeight={800} lineHeight={1}>
           {value}
@@ -92,6 +97,7 @@ const StatCard = ({ title, value, total, icon, color = "primary" }) => {
           </Typography>
         )}
       </Box>
+
 
       {total != null && (
         <>
@@ -115,6 +121,7 @@ const StatCard = ({ title, value, total, icon, color = "primary" }) => {
   );
 };
 
+
 const PerformanceScore = ({ score, status }) => {
   const getScoreColor = (n) => (n >= 85 ? "success" : n >= 60 ? "warning" : "error");
   const col = getScoreColor(score);
@@ -123,6 +130,7 @@ const PerformanceScore = ({ score, status }) => {
       <Typography variant="h6" fontWeight={800} mb={2}>
         Overall Performance
       </Typography>
+
 
       <Box position="relative" display="inline-flex" mb={2}>
         <CircularProgress variant="determinate" value={100} size={140} thickness={5} sx={{ color: "grey.300" }} />
@@ -149,6 +157,7 @@ const PerformanceScore = ({ score, status }) => {
         </Box>
       </Box>
 
+
       <Box>
         <Chip
           label={status || "—"}
@@ -161,6 +170,7 @@ const PerformanceScore = ({ score, status }) => {
     </CardShell>
   );
 };
+
 
 const BreakManagement = ({ overdueBreaks, hasOverdue, overdueDetails }) => {
   return (
@@ -183,7 +193,9 @@ const BreakManagement = ({ overdueBreaks, hasOverdue, overdueDetails }) => {
         />
       </Box>
 
+
       <Divider sx={{ my: 1.5 }} />
+
 
       {overdueDetails?.length ? (
         <List dense>
@@ -219,6 +231,7 @@ const BreakManagement = ({ overdueBreaks, hasOverdue, overdueDetails }) => {
   );
 };
 
+
 const PerformanceBreakdown = ({ breakdown }) => {
   const items = [
     { label: "Attendance Score", value: breakdown?.attendanceScore || 0 },
@@ -235,6 +248,7 @@ const PerformanceBreakdown = ({ breakdown }) => {
           Performance Breakdown
         </Typography>
       </Box>
+
 
       {items.map((it, idx) => (
         <Box key={idx} mb={2}>
@@ -260,6 +274,7 @@ const PerformanceBreakdown = ({ breakdown }) => {
   );
 };
 
+
 /* -------------------- Main Component -------------------- */
 const EmployeeHygiene = () => {
   const [monthYear, setMonthYear] = useState(
@@ -269,8 +284,10 @@ const EmployeeHygiene = () => {
   const [error, setError] = useState("");
   const [report, setReport] = useState(null);
 
+
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const empId = typeof window !== "undefined" ? getEmpIdFromSession() : null;
+
 
   const fetchReport = async () => {
     if (!empId) {
@@ -298,10 +315,31 @@ const EmployeeHygiene = () => {
     }
   };
 
+
   useEffect(() => {
     fetchReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthYear]);
+
+
+  // Show loader on initial load
+  if (loading && !report) {
+    return (
+      <Box sx={{ p: 3, minHeight: "100vh", bgcolor: "#f5f9ff" }}>
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Dashboard...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch your performance data</p>
+          </div>
+        </div>
+      </Box>
+    );
+  }
+
 
   // Derived data
   const presentDays = report?.attendanceAnalysis?.presentDays ?? 0;
@@ -313,6 +351,7 @@ const EmployeeHygiene = () => {
   const overdueDetails = report?.breakAnalysis?.details || [];
   const scorePct = Math.round(report?.overallProgress?.score ?? 0);
   const statusText = report?.overallProgress?.status ?? "—";
+
 
   return (
     <Box sx={{ p: 3, minHeight: "100vh", bgcolor: "linear-gradient(180deg,#f5f9ff,#ffffff)" }}>
@@ -345,6 +384,7 @@ const EmployeeHygiene = () => {
               Period: {report?.period?.startDate || "—"} to {report?.period?.endDate || "—"}
             </Typography>
           </Box>
+
 
           <Box display="flex" alignItems="center" gap={1.5}>
             <TextField
@@ -386,12 +426,14 @@ const EmployeeHygiene = () => {
         </Box>
       </Paper>
 
+
       {/* Loading */}
       {loading && (
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="380px">
           <CircularProgress size={60} />
         </Box>
       )}
+
 
       {/* Error */}
       {!loading && error && (
@@ -404,6 +446,7 @@ const EmployeeHygiene = () => {
           </Button>
         </Alert>
       )}
+
 
       {/* Empty */}
       {!loading && !error && !report && (
@@ -419,6 +462,7 @@ const EmployeeHygiene = () => {
           </Button>
         </CardShell>
       )}
+
 
       {/* Content */}
       {!loading && !error && report && (
@@ -452,6 +496,7 @@ const EmployeeHygiene = () => {
             </Grid>
           </Grid>
 
+
           {/* ROW 2: Overall Performance | Performance Breakdown */}
           <Grid container spacing={2.5} alignItems="stretch">
             <Grid item xs={12} md={6}>
@@ -467,4 +512,8 @@ const EmployeeHygiene = () => {
   );
 };
 
+
 export default EmployeeHygiene;
+
+
+
