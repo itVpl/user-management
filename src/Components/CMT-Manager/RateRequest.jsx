@@ -53,7 +53,8 @@ const RateRequest = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [rate, setRate] = useState('');
+  const [rate, setRate] = useState(''); // Line Haul amount
+  const [fscPercentage, setFscPercentage] = useState(''); // FSC percentage
   const [message, setMessage] = useState('');
   const [pickupDate, setPickupDate] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -717,6 +718,7 @@ useEffect(() => {
     setIsModalOpen(false);
     setSelectedRequest(null);
     setRate('');
+    setFscPercentage('');
     setMessage('');
     setPickupDate('');
     setDeliveryDate('');
@@ -1016,26 +1018,67 @@ useEffect(() => {
     console.log('LoadId being sent:', actualLoadId);
     console.log('Approval ID:', selectedRequest?._id);
     
+    // Calculate total bid rate
+    const lineHaul = parseFloat(rate) || 0;
+    const fscPct = parseFloat(fscPercentage) || 0;
+    const fscValue = (lineHaul * fscPct) / 100;
+    const otherCharges = (ratesArray || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+    const totalBidRate = lineHaul + fscValue + otherCharges;
+
     // Create FormData for file upload
     const formData = new FormData();
     formData.append('loadId', actualLoadId);
     formData.append('truckerId', selectedTrucker);
     formData.append('empId', empId);
     
-    // Append rates array if charges were added via Charges Calculator
-    if (ratesArray && ratesArray.length > 0) {
-      // Send rates array as indexed format (most backends parse this correctly)
-      ratesArray.forEach((rateItem, index) => {
-        formData.append(`rates[${index}][name]`, rateItem.name);
-        formData.append(`rates[${index}][quantity]`, rateItem.quantity.toString());
-        formData.append(`rates[${index}][amount]`, rateItem.amount.toString());
+    // Send ONLY the calculated total bid rate
+    formData.append('rate', totalBidRate.toFixed(2));
+    
+    // Send detailed breakdown in rates array for record keeping
+    const detailedRates = [];
+    
+    // Add Line Haul
+    if (lineHaul > 0) {
+      detailedRates.push({
+        name: 'Line Haul',
+        quantity: 1,
+        amount: lineHaul,
+        total: lineHaul
       });
-    } else {
-      // Fallback: if no rates array, send single rate value
-      if (rate && rate.trim() !== '') {
-        formData.append('rate', parseInt(rate, 10));
-      }
     }
+    
+    // Add FSC
+    if (fscValue > 0) {
+      detailedRates.push({
+        name: `FSC (${fscPct}%)`,
+        quantity: 1,
+        amount: fscValue,
+        total: fscValue
+      });
+    }
+    
+    // Add other charges from calculator (modal se jo values aayi hain)
+    if (ratesArray && ratesArray.length > 0) {
+      ratesArray.forEach(item => {
+        detailedRates.push({
+          name: item.name,
+          quantity: item.quantity,
+          amount: item.amount,
+          total: item.total
+        });
+      });
+    }
+    
+    // Append detailed rates array for breakdown
+    detailedRates.forEach((rateItem, index) => {
+      formData.append(`rates[${index}][name]`, rateItem.name);
+      formData.append(`rates[${index}][quantity]`, rateItem.quantity.toString());
+      formData.append(`rates[${index}][amount]`, rateItem.amount.toString());
+      formData.append(`rates[${index}][total]`, rateItem.total.toString());
+    });
+    
+    // Also send totalrates field (same as rate)
+    formData.append('totalrates', totalBidRate.toFixed(2));
     
     formData.append('message', message);
     formData.append('estimatedPickupDate', pickupDate);
@@ -1524,18 +1567,17 @@ useEffect(() => {
       return;
     }
 
-    const totalCharges = (charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
-    setRate(String(totalCharges));
-
-    // Format charges array for API (rates array)
+    // Format charges array for API (rates array) - for Other Charges only
     const formattedRates = (charges || [])
       .filter(ch => ch?.name?.trim() && ch?.quantity && ch?.amt) // Only include valid charges
       .map(ch => ({
         name: (ch.name || '').trim(),
         quantity: parseInt(ch.quantity, 10) || 1,
-        amount: parseFloat(ch.amt) || 0
+        amount: parseFloat(ch.amt) || 0,
+        total: (parseInt(ch.quantity, 10) || 1) * (parseFloat(ch.amt) || 0)
       }));
     
+    // Store in ratesArray - this will show in Other Charges field
     setRatesArray(formattedRates);
 
     setChargesPopupError('');
@@ -1548,13 +1590,25 @@ useEffect(() => {
 
   const validateForm = () => {
     const errors = {};
+    
+    // Calculate if we have any rate information
+    const lineHaul = parseFloat(rate) || 0;
+    const fscPct = parseFloat(fscPercentage) || 0;
+    const otherCharges = (ratesArray || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+    const totalBidRate = lineHaul + (lineHaul * fscPct / 100) + otherCharges;
+    
+    // Check if at least one rate component exists
+    if (totalBidRate <= 0) {
+      errors.rate = 'Please enter Line Haul, FSC, or add Other Charges';
+    }
+    
+    // Validate required fields (excluding rate and fscPercentage as they're now optional)
     const fields = {
       trucker: selectedTrucker,
       driverName: driverName,
       vehicleNo: vehicleNo,
       pickupDate: pickupDate,
       deliveryDate: deliveryDate,
-      rate: rate,
       message: message,
       uploadedFile: uploadedFile
     };
@@ -1574,6 +1628,7 @@ useEffect(() => {
       pickupDate: true,
       deliveryDate: true,
       rate: true,
+      fscPercentage: true,
       message: true,
       uploadedFile: true
     });
@@ -1686,7 +1741,16 @@ useEffect(() => {
 
           <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
             {isFetching ? (
-              <div className="p-8 text-center text-gray-500">Loading...</div>
+              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+                <div className="relative">
+                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                </div>
+                <div className="mt-6 text-center">
+                  <p className="text-xl font-semibold text-gray-800 mb-2">Loading Requests...</p>
+                  <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+                </div>
+              </div>
             ) : (
               <table className="min-w-full table-auto text-sm text-left">
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
@@ -1886,7 +1950,16 @@ useEffect(() => {
 
           <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
             {isFetching ? (
-              <div className="p-8 text-center text-gray-500">Loading...</div>
+              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+                <div className="relative">
+                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                </div>
+                <div className="mt-6 text-center">
+                  <p className="text-xl font-semibold text-gray-800 mb-2">Loading Completed Requests...</p>
+                  <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+                </div>
+              </div>
             ) : (
               <table className="min-w-full table-auto text-sm text-left">
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
@@ -2009,8 +2082,14 @@ useEffect(() => {
 
       {/* Bid Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden"
+          onClick={closeModal}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <form onSubmit={handleSubmit} className="flex flex-col h-full">
               <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white px-8 py-6 rounded-t-3xl shadow-lg flex justify-between items-center flex-shrink-0">
                 <div className="flex items-center gap-4">
@@ -2331,17 +2410,24 @@ useEffect(() => {
                       )}
                     </div>
 
-                    <div className="md:col-span-2">
+                    {/* Line Haul (Rate) */}
+                    <div>
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
-                        Bid Rate ($) <span className="text-red-500">*</span>
+                        Line Haul ($)
                       </label>
                       <input
-                        type="text"
+                        type="number"
                         value={rate}
-                        onClick={handleChargesClick}
-                        readOnly
-                        placeholder="Click to add charges"
-                        className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 cursor-pointer ${
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^\d.]/g, '');
+                          setRate(val);
+                          handleFieldChange('rate', val);
+                        }}
+                        onBlur={() => handleFieldBlur('rate')}
+                        min="0"
+                        step="0.01"
+                        placeholder="Enter Line Haul amount"
+                        className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
                           touchedFields.rate && formErrors.rate
                             ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
                             : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
@@ -2355,6 +2441,93 @@ useEffect(() => {
                           {formErrors.rate}
                         </div>
                       )}
+                    </div>
+
+                    {/* FSC Percentage */}
+                    <div>
+                      <label className="block text-gray-700 text-sm font-semibold mb-2">
+                        FSC (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={fscPercentage}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^\d.]/g, '');
+                          setFscPercentage(val);
+                          handleFieldChange('fscPercentage', val);
+                        }}
+                        onBlur={() => handleFieldBlur('fscPercentage')}
+                        min="0"
+                        step="0.01"
+                        placeholder="Enter FSC percentage"
+                        className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
+                          touchedFields.fscPercentage && formErrors.fscPercentage
+                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                        }`}
+                      />
+                      {touchedFields.fscPercentage && formErrors.fscPercentage && (
+                        <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {formErrors.fscPercentage}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* FSC Value (Calculated - Read Only) */}
+                    <div>
+                      <label className="block text-gray-700 text-sm font-semibold mb-2">
+                        FSC Value ($)
+                      </label>
+                      <div className="w-full border-2 border-blue-200 bg-blue-50 px-4 py-3 rounded-xl">
+                        <span className="text-blue-700 font-semibold">
+                          ${(() => {
+                            const lh = parseFloat(rate) || 0;
+                            const fscPct = parseFloat(fscPercentage) || 0;
+                            const fscVal = (lh * fscPct) / 100;
+                            return fscVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Other Charges - Opens Charges Calculator */}
+                    <div className="md:col-span-2">
+                      <label className="block text-gray-700 text-sm font-semibold mb-2">
+                        Other Charges ($)
+                      </label>
+                      <input
+                        type="text"
+                        value={(() => {
+                          const total = (ratesArray || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                          return total > 0 ? total.toFixed(2) : '';
+                        })()}
+                        onClick={handleChargesClick}
+                        readOnly
+                        placeholder="Click to add other charges (optional)"
+                        className="w-full border-2 border-gray-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300 transition-all duration-200 cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Total Bid Rate (Calculated - Read Only) */}
+                    <div className="md:col-span-2">
+                      <label className="block text-gray-700 text-sm font-semibold mb-2">
+                        Total Bid Rate ($)
+                      </label>
+                      <div className="w-full border-2 border-green-200 bg-green-50 px-4 py-3 rounded-xl">
+                        <span className="text-green-700 font-bold text-lg">
+                          ${(() => {
+                            const lh = parseFloat(rate) || 0;
+                            const fscPct = parseFloat(fscPercentage) || 0;
+                            const fscVal = (lh * fscPct) / 100;
+                            const otherCharges = (ratesArray || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                            const total = lh + fscVal + otherCharges;
+                            return total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                          })()}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="md:col-span-2">
@@ -2526,8 +2699,14 @@ useEffect(() => {
 
       {/* Approval/Rejection Modal */}
       {approvalModal.visible && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
-          <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-blue-100">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+          onClick={() => setApprovalModal({ visible: false, load: null })}
+        >
+          <div 
+            className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-blue-100"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
@@ -2634,8 +2813,14 @@ useEffect(() => {
 
       {/* View Bids Modal */}
       {bidDetailsModal.visible && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
-          <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-6xl p-8 border border-purple-100">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+          onClick={() => setBidDetailsModal({ visible: false, load: null })}
+        >
+          <div 
+            className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-6xl p-8 border border-purple-100"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-purple-600 to-indigo-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
@@ -2666,9 +2851,15 @@ useEffect(() => {
               </div>
               
               {bidDetailsLoading ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-                  <p className="text-gray-500 text-lg">Loading bid details...</p>
+                <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+                  <div className="relative">
+                    <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                  </div>
+                  <div className="mt-6 text-center">
+                    <p className="text-xl font-semibold text-gray-800 mb-2">Loading Bid Details...</p>
+                    <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+                  </div>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -2791,10 +2982,15 @@ useEffect(() => {
           {/* Rate Details Table */}
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
             {rateDetailsLoading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-                <p className="text-gray-500 text-lg">Loading rate details...</p>
-                <p className="text-gray-400 text-sm">Please wait while we fetch the data</p>
+              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+                <div className="relative">
+                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                </div>
+                <div className="mt-6 text-center">
+                  <p className="text-xl font-semibold text-gray-800 mb-2">Loading Rate Details...</p>
+                  <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+                </div>
               </div>
             ) : (
               <>
@@ -2905,8 +3101,14 @@ useEffect(() => {
 
       {/* Accessorial charges Popup */}
       {showChargesPopup && (
-        <div className="fixed inset-0 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 flex items-center justify-center z-[60]"
+          onClick={closeChargesPopup}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
 
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 -m-8 mb-6 p-6 rounded-t-xl">
@@ -3143,3 +3345,5 @@ useEffect(() => {
 };
 
 export default RateRequest;
+
+

@@ -11,7 +11,7 @@ import Logo from '../../assets/LogoFinal.png';
 /* ====================== Helpers ====================== */
 const fmtCurrency = (amount) => {
   const n = Number(amount || 0);
-  return n ? `$${n.toLocaleString()}` : '$0';
+  return n ? `${n.toLocaleString()}` : '$0';
 };
 const fmtDate = (d) => {
   if (!d) return '—';
@@ -1638,15 +1638,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Line Haul</p>
-                        <p className="font-medium text-gray-800">{fmtCurrency(customer?.lineHaul || 0)}</p>
+                        <p className="font-medium text-gray-800">${fmtCurrency(customer?.lineHaul || 0)}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">FSC</p>
-                        <p className="font-medium text-gray-800">{fmtCurrency(customer?.fsc || 0)}</p>
+                        <p className="font-medium text-gray-800">{fmtCurrency(customer?.fsc || 0)}%</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Other</p>
-                        <p className="font-medium text-gray-800">{fmtCurrency(customer?.other || 0)}</p>
+                        <p className="font-medium text-gray-800">${fmtCurrency(customer?.otherTotal || 0)}</p>
                       </div>
                       <div className="col-span-2">
                         <p className="text-sm text-gray-600">Total Amount</p>

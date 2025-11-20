@@ -3748,8 +3748,8 @@ const updatePayload = {
 
       // ---- ONLY customer rates ----
       const LH = Number(cust.lineHaul) || 0;
-      const FSC = Number(cust.fsc) || 0;
-      const OTH = Number(cust.other) || 0;
+      const FSC = Number((cust.fsc * cust.lineHaul )/100) || 0;
+      const OTH = Number(cust.otherTotal) || 0;
       const CUSTOMER_TOTAL = LH + FSC + OTH;
 
       // helpers
@@ -5253,169 +5253,188 @@ const updatePayload = {
                 </div>
               </div>
 
-              {/* Customer Information Section */}
-              {/* Customer Information Section */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
-                  {selectedLoadType === 'OTR' && (
-                    <button type="button" onClick={addCustomer} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition">
-                      + Add Customer
-                    </button>
-                  )}
-                </div>
+  
+<div className="bg-blue-50 p-4 rounded-lg">
+  <div className="flex justify-between items-center mb-4">
+    <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
+    {selectedLoadType === 'OTR' && (
+      <button type="button" onClick={addCustomer} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition">
+        + Add Customer
+      </button>
+    )}
+  </div>
 
-                {formData.customers.map((customer, customerIndex) => {
-                  const cErr = errors.customers?.[customerIndex] || {};
-                  return (
-                    <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
-                      <div className="flex justify-between items-center mb-3">
-                        <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
-                        {formData.customers.length > 1 && (
-                          <button type="button" onClick={() => removeCustomer(customerIndex)} className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition">
-                            Remove
-                          </button>
-                        )}
-                      </div>
+  {formData.customers.map((customer, customerIndex) => {
+    const cErr = errors.customers?.[customerIndex] || {};
+    
+    // Calculate FSC amount from percentage
+    const calculateFSCAmount = () => {
+      const lineHaul = parseFloat(customer.lineHaul) || 0;
+      const fscPercentage = parseFloat(customer.fsc) || 0;
+      return (lineHaul * fscPercentage) / 100;
+    };
 
-                      <div className="grid grid-cols-4 gap-4">
-                        {/* Select Company * */}
-                        <div>
-                          {shippers.length > 0 ? (
-                            <SearchableDropdown
-                              value={customer.billTo || ''}
-                              onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
-                              options={[
-                                ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
-                                  ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
-                                  : []),
-                                ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
-                              ]}
-                              placeholder="Select Company *"
-                              disabled={loadingShippers}
-                              loading={loadingShippers}
-                              searchPlaceholder="Search companies..."
-                            />
-                          ) : (
-                            <input
-                              type="text"
-                              value={customer.billTo}
-                              onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.billTo ? 'border-red-400' : 'border-gray-300'}`}
-                              placeholder={loadingShippers ? "Loading companies..." : "Select Company *"}
-                            />
-                          )}
-                          {cErr.billTo && <p className="text-red-600 text-xs mt-1">{cErr.billTo}</p>}
-                        </div>
+    const fscAmount = calculateFSCAmount();
+    const otherAmount = parseFloat(customer.other) || 0;
+    const totalAmount = (parseFloat(customer.lineHaul) || 0) + fscAmount + otherAmount;
 
-                        {/* Dispatcher * */}
-                        <div>
-                          {dispatchers.length > 0 ? (
-                            <SearchableDropdown
-                              value={customer.dispatcherName || ''}
-                              onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
-                              options={[
-                                ...(customer.dispatcherName &&
-                                  !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
-                                  ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
-                                  : []),
-                                ...dispatchers
-                                  .filter(d => (d.status || '').toLowerCase() === 'active')
-                                  .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
-                                  .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
-                              ]}
-                              placeholder="Select Dispatcher *"
-                              disabled={loadingDispatchers}
-                              loading={loadingDispatchers}
-                              searchPlaceholder="Search dispatchers..."
-                            />
-                          ) : (
-                            <input
-                              type="text"
-                              value={customer.dispatcherName}
-                              onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.dispatcherName ? 'border-red-400' : 'border-gray-300'}`}
-                              placeholder="Select Dispatcher *"
-                            />
-                          )}
-                          {cErr.dispatcherName && <p className="text-red-600 text-xs mt-1">{cErr.dispatcherName}</p>}
-                        </div>
+    return (
+      <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
+        <div className="flex justify-between items-center mb-3">
+          <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
+          {formData.customers.length > 1 && (
+            <button type="button" onClick={() => removeCustomer(customerIndex)} className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition">
+              Remove
+            </button>
+          )}
+        </div>
 
-                        {/* Work Order No * (alphanumeric) */}
-                        <div>
-                          <input
-                            type="text"
-                            value={customer.workOrderNo}
-                            onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
-                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.workOrderNo ? 'border-red-400' : 'border-gray-300'}`}
-                            // ⬇️ native guard + user-friendly tooltip
-                            pattern="[A-Za-z0-9]+"
-                            title="Only letters and numbers are allowed."
-                            // optional: space disable (space alphanumeric nahi hai)
-                            onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
-                            autoComplete="off"
-                            placeholder="Work Order No *"
-                          />
-                          {cErr.workOrderNo && <p className="text-red-600 text-xs mt-1">{cErr.workOrderNo}</p>}
-                        </div>
+        <div className="grid grid-cols-4 gap-4">
+          {/* Select Company * */}
+          <div>
+            {shippers.length > 0 ? (
+              <SearchableDropdown
+                value={customer.billTo || ''}
+                onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
+                options={[
+                  ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
+                    ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
+                    : []),
+                  ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
+                ]}
+                placeholder="Select Company *"
+                disabled={loadingShippers}
+                loading={loadingShippers}
+                searchPlaceholder="Search companies..."
+              />
+            ) : (
+              <input
+                type="text"
+                value={customer.billTo}
+                onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.billTo ? 'border-red-400' : 'border-gray-300'}`}
+                placeholder={loadingShippers ? "Loading companies..." : "Select Company *"}
+              />
+            )}
+            {cErr.billTo && <p className="text-red-600 text-xs mt-1">{cErr.billTo}</p>}
+          </div>
 
-                        {/* Line Haul * (non-negative integer) */}
-                        <div>
-                          <input
-                            type="number"
-                            value={customer.lineHaul}
-                            onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
+          {/* Dispatcher * */}
+          <div>
+            {dispatchers.length > 0 ? (
+              <SearchableDropdown
+                value={customer.dispatcherName || ''}
+                onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
+                options={[
+                  ...(customer.dispatcherName &&
+                    !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
+                    ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
+                    : []),
+                  ...dispatchers
+                    .filter(d => (d.status || '').toLowerCase() === 'active')
+                    .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
+                    .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
+                ]}
+                placeholder="Select Dispatcher *"
+                disabled={loadingDispatchers}
+                loading={loadingDispatchers}
+                searchPlaceholder="Search dispatchers..."
+              />
+            ) : (
+              <input
+                type="text"
+                value={customer.dispatcherName}
+                onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.dispatcherName ? 'border-red-400' : 'border-gray-300'}`}
+                placeholder="Select Dispatcher *"
+              />
+            )}
+            {cErr.dispatcherName && <p className="text-red-600 text-xs mt-1">{cErr.dispatcherName}</p>}
+          </div>
 
-                            min="0"
-                            step="0.01"
-                            inputMode="decimal"
-                            onKeyDown={blockMoneyChars}
+          {/* Work Order No * (alphanumeric) */}
+          <div>
+            <input
+              type="text"
+              value={customer.workOrderNo}
+              onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.workOrderNo ? 'border-red-400' : 'border-gray-300'}`}
+              pattern="[A-Za-z0-9]+"
+              title="Only letters and numbers are allowed."
+              onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+              autoComplete="off"
+              placeholder="Work Order No *"
+            />
+            {cErr.workOrderNo && <p className="text-red-600 text-xs mt-1">{cErr.workOrderNo}</p>}
+          </div>
 
-                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.lineHaul ? 'border-red-400' : 'border-gray-300'}`}
-                            placeholder="Line Haul *"
-                          />
-                          {cErr.lineHaul && <p className="text-red-600 text-xs mt-1">{cErr.lineHaul}</p>}
-                        </div>
+          {/* Line Haul * (non-negative number) */}
+          <div>
+            <input
+              type="number"
+              value={customer.lineHaul}
+              onChange={(e) => handleCustomerChange(customerIndex, 'lineHaul', e.target.value)}
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              onKeyDown={blockMoneyChars}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.lineHaul ? 'border-red-400' : 'border-gray-300'}`}
+              placeholder="Line Haul *"
+            />
+            {cErr.lineHaul && <p className="text-red-600 text-xs mt-1">{cErr.lineHaul}</p>}
+          </div>
 
-                        {/* FSC * */}
-                        <div>
-                          <input
-                            type="number"
-                            value={customer.fsc}
-                            onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
-
-                            min="0"
-                            step="0.01"
-                            inputMode="decimal"
-                            onKeyDown={blockMoneyChars}
-                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.fsc ? 'border-red-400' : 'border-gray-300'}`}
-                            placeholder="FSC *"
-                          />
-                          {cErr.fsc && <p className="text-red-600 text-xs mt-1">{cErr.fsc}</p>}
-                        </div>
-
-                        {/* Other * - Opens Charges Calculator */}
-                        <div>
-                          <input
-                            type="text"
-                            value={customer.other}
-                            onClick={() => handleCustomerChargesClick(customerIndex)}
-                            readOnly
-                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${cErr.other ? 'border-red-400' : 'border-gray-300'}`}
-                            placeholder="Other * (Click to add charges)"
-                          />
-                          {cErr.other && <p className="text-red-600 text-xs mt-1">{cErr.other}</p>}
-                        </div>
-
-                        {/* Total (read-only) */}
-                        <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg flex items-center">
-                          <span className="text-black-700 font-medium">Total: ${Number(customer.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+          {/* FSC * (Percentage) */}
+          <div>
+            <div className="relative">
+              <input
+                type="number"
+                value={customer.fsc}
+                onChange={(e) => handleCustomerChange(customerIndex, 'fsc', e.target.value)}
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                onKeyDown={blockMoneyChars}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.fsc ? 'border-red-400' : 'border-gray-300'}`}
+                placeholder="FSC % *"
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <span className="text-gray-500">%</span>
               </div>
+            </div>
+            {/* {fscAmount > 0 && (
+              <p className="text-xs text-green-600 mt-1">
+                FSC Amount: ${fscAmount.toFixed(2)}
+              </p>
+            )} */}
+            {cErr.fsc && <p className="text-red-600 text-xs mt-1">{cErr.fsc}</p>}
+          </div>
+
+          {/* Other * - Opens Charges Calculator */}
+          <div>
+            <input
+              type="text"
+              value={customer.other}
+              onClick={() => handleCustomerChargesClick(customerIndex)}
+              readOnly
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${cErr.other ? 'border-red-400' : 'border-gray-300'}`}
+              placeholder="Other * (Click to add charges)"
+            />
+            {cErr.other && <p className="text-red-600 text-xs mt-1">{cErr.other}</p>}
+          </div>
+
+           <div className="flex items-center min-w-[180px]">
+  <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
+    <span className="text-black-700 font-medium whitespace-nowrap">
+      Total: ${totalAmount.toFixed(2)}
+    </span>
+  </div>
+</div>
+        </div>
+      </div>
+    );
+  })}
+</div>
 
 
               {/* Carrier Information Section */}
@@ -6209,7 +6228,7 @@ const updatePayload = {
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">FSC</p>
-                              <p className="font-medium text-gray-800">${customer?.fsc || 0}</p>
+                              <p className="font-medium text-gray-800">{customer?.fsc || 0}%</p>
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">Other</p>
@@ -6221,7 +6240,7 @@ const updatePayload = {
                             </div>
                             <div className="col-span-2">
                               <p className="text-sm text-gray-600">Total Amount</p>
-                              <p className="font-bold text-lg text-green-600">${customer?.calculatedTotal || 0}</p>
+                              <p className="font-bold text-lg text-green-600">${customer?.totalAmount || 0}</p>
                             </div>
                           </div>
 
@@ -7078,193 +7097,222 @@ const updatePayload = {
             {/* Form */}
             <form onSubmit={handleUpdateOrder} className="p-6 space-y-6">
               {/* Customer Information */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
-                  <button
-                    type="button"
-                    onClick={addCustomer}
-                    className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
-                  >
-                    + Add Customer
-                  </button>
-                </div>
+             <div className="bg-blue-50 p-4 rounded-lg">
+  <div className="flex justify-between items-center mb-4">
+    <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
+    <button
+      type="button"
+      onClick={addCustomer}
+      className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
+    >
+      + Add Customer
+    </button>
+  </div>
 
-                {formData.customers.map((customer, customerIndex) => (
-                  <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
-                      {formData.customers.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeCustomer(customerIndex)}
-                          className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
+  {formData.customers.map((customer, customerIndex) => {
+    const cErr = errors.customers?.[customerIndex] || {};
+    
+    // Calculate FSC amount from percentage
+    const calculateFSCAmount = () => {
+      const lineHaul = parseFloat(customer.lineHaul) || 0;
+      const fscPercentage = parseFloat(customer.fsc) || 0;
+      return (lineHaul * fscPercentage) / 100;
+    };
 
-                    <div className="grid grid-cols-4 gap-4">
-                      {/* Bill To (Company) */}
-                      <div>
-                        {shippers.length > 0 ? (
-                          <div className={errBox(!!errors.customers?.[customerIndex]?.billTo)}>
-                            <SearchableDropdown
-                              value={customer.billTo || ''}
-                              onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
-                              options={[
-                                ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
-                                  ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
-                                  : []
-                                ),
-                                ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
-                              ]}
-                              placeholder="Select Company *"
-                              disabled={loadingShippers}
-                              loading={loadingShippers}
-                              searchPlaceholder="Search companies..."
-                              className="w-full"
-                            />
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={customer.billTo}
-                            onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                            className={errCls(!!errors.customers?.[customerIndex]?.billTo)}
-                            placeholder={loadingShippers ? "Loading companies..." : "Bill To *"}
-                          />
-                        )}
-                        {errors.customers?.[customerIndex]?.billTo && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].billTo}</p>
-                        )}
-                      </div>
+    const fscAmount = calculateFSCAmount();
+    const otherAmount = parseFloat(customer.other) || 0;
+    const totalAmount = (parseFloat(customer.lineHaul) || 0) + fscAmount + otherAmount;
 
-                      {/* Dispatcher */}
-                      <div>
-                        {dispatchers.length > 0 ? (
-                          <div className={errBox(!!errors.customers?.[customerIndex]?.dispatcherName)}>
-                            <SearchableDropdown
-                              value={customer.dispatcherName || ''}
-                              onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
-                              options={[
-                                ...(customer.dispatcherName &&
-                                  !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
-                                  ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
-                                  : []
-                                ),
-                                ...dispatchers
-                                  .filter(d => (d.status || '').toLowerCase() === 'active')
-                                  .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
-                                  .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
-                              ]}
-                              placeholder="Select Dispatcher *"
-                              disabled={loadingDispatchers}
-                              loading={loadingDispatchers}
-                              searchPlaceholder="Search dispatchers..."
-                              className="w-full"
-                            />
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={customer.dispatcherName}
-                            onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                            className={errCls(!!errors.customers?.[customerIndex]?.dispatcherName)}
-                            placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Dispatcher Name *'}
-                          />
-                        )}
-                        {errors.customers?.[customerIndex]?.dispatcherName && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].dispatcherName}</p>
-                        )}
-                      </div>
+    return (
+      <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
+        <div className="flex justify-between items-center mb-3">
+          <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
+          {formData.customers.length > 1 && (
+            <button
+              type="button"
+              onClick={() => removeCustomer(customerIndex)}
+              className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
+            >
+              Remove
+            </button>
+          )}
+        </div>
 
-                      {/* Work Order No (alphanumeric only) */}
-                      <div>
-                        <input
-                          type="text"
-                          value={customer.workOrderNo}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
-                          className={errCls(!!errors.customers?.[customerIndex]?.workOrderNo)}
-                          placeholder="Work Order No *"
-                        />
-                        {errors.customers?.[customerIndex]?.workOrderNo && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].workOrderNo}</p>
-                        )}
-                      </div>
-
-                      {/* Line Haul */}
-                      <div>
-                        <input
-                          type="text"
-                          value={String(customer.lineHaul ?? '')}
-                          onKeyDown={blockMoneyChars}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'lineHaul', e.target.value)
-                          }
-                          onBlur={(e) =>
-                            handleCustomerChange(customerIndex, 'lineHaul', ensureMoney2dp(e.target.value))
-                          }
-                          className={errCls(!!errors.customers?.[customerIndex]?.lineHaul)}
-                          placeholder="Line Haul *"
-                          inputMode="decimal"
-                        />
-                        {errors.customers?.[customerIndex]?.lineHaul && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].lineHaul}</p>
-                        )}
-                      </div>
-
-                      {/* FSC */}
-                      <div>
-                        <input
-                          type="text"
-                          value={String(customer.fsc ?? '')}
-                          onKeyDown={blockMoneyChars}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'fsc', e.target.value)
-                          }
-                          onBlur={(e) =>
-                            handleCustomerChange(customerIndex, 'fsc', ensureMoney2dp(e.target.value))
-                          }
-                          className={errCls(!!errors.customers?.[customerIndex]?.fsc)}
-                          placeholder="FSC *"
-                          inputMode="decimal"
-                        />
-                        {errors.customers?.[customerIndex]?.fsc && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].fsc}</p>
-                        )}
-                      </div>
-
-                      {/* Other */}
-                      <div>
-                        <input
-                          type="text"
-                          value={String(customer.other ?? '')}
-                          onKeyDown={blockMoneyChars}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'other', e.target.value)
-                          }
-                          onBlur={(e) =>
-                            handleCustomerChange(customerIndex, 'other', ensureMoney2dp(e.target.value))
-                          }
-                          className={errCls(!!errors.customers?.[customerIndex]?.other)}
-                          placeholder="Other *"
-                          inputMode="decimal"
-                        />
-                        {errors.customers?.[customerIndex]?.other && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].other}</p>
-                        )}
-                      </div>
-
-                      {/* Total */}
-                      <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
-                        <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        <div className="grid grid-cols-4 gap-4">
+          {/* Bill To (Company) */}
+          <div>
+            {shippers.length > 0 ? (
+              <div className={errBox(!!errors.customers?.[customerIndex]?.billTo)}>
+                <SearchableDropdown
+                  value={customer.billTo || ''}
+                  onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
+                  options={[
+                    ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
+                      ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
+                      : []
+                    ),
+                    ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
+                  ]}
+                  placeholder="Select Company *"
+                  disabled={loadingShippers}
+                  loading={loadingShippers}
+                  searchPlaceholder="Search companies..."
+                  className="w-full"
+                />
               </div>
+            ) : (
+              <input
+                type="text"
+                value={customer.billTo}
+                onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
+                className={errCls(!!errors.customers?.[customerIndex]?.billTo)}
+                placeholder={loadingShippers ? "Loading companies..." : "Bill To *"}
+              />
+            )}
+            {errors.customers?.[customerIndex]?.billTo && (
+              <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].billTo}</p>
+            )}
+          </div>
+
+          {/* Dispatcher */}
+          <div>
+            {dispatchers.length > 0 ? (
+              <div className={errBox(!!errors.customers?.[customerIndex]?.dispatcherName)}>
+                <SearchableDropdown
+                  value={customer.dispatcherName || ''}
+                  onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
+                  options={[
+                    ...(customer.dispatcherName &&
+                      !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
+                      ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
+                      : []
+                    ),
+                    ...dispatchers
+                      .filter(d => (d.status || '').toLowerCase() === 'active')
+                      .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
+                      .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
+                  ]}
+                  placeholder="Select Dispatcher *"
+                  disabled={loadingDispatchers}
+                  loading={loadingDispatchers}
+                  searchPlaceholder="Search dispatchers..."
+                  className="w-full"
+                />
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={customer.dispatcherName}
+                onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
+                className={errCls(!!errors.customers?.[customerIndex]?.dispatcherName)}
+                placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Dispatcher Name *'}
+              />
+            )}
+            {errors.customers?.[customerIndex]?.dispatcherName && (
+              <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].dispatcherName}</p>
+            )}
+          </div>
+
+          {/* Work Order No (alphanumeric only) */}
+          <div>
+            <input
+              type="text"
+              value={customer.workOrderNo}
+              onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
+              className={errCls(!!errors.customers?.[customerIndex]?.workOrderNo)}
+              placeholder="Work Order No *"
+            />
+            {errors.customers?.[customerIndex]?.workOrderNo && (
+              <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].workOrderNo}</p>
+            )}
+          </div>
+
+          {/* Line Haul */}
+          <div>
+            <input
+              type="text"
+              value={String(customer.lineHaul ?? '')}
+              onKeyDown={blockMoneyChars}
+              onChange={(e) =>
+                handleCustomerChange(customerIndex, 'lineHaul', e.target.value)
+              }
+              onBlur={(e) =>
+                handleCustomerChange(customerIndex, 'lineHaul', ensureMoney2dp(e.target.value))
+              }
+              className={errCls(!!errors.customers?.[customerIndex]?.lineHaul)}
+              placeholder="Line Haul *"
+              inputMode="decimal"
+            />
+            {errors.customers?.[customerIndex]?.lineHaul && (
+              <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].lineHaul}</p>
+            )}
+          </div>
+
+          {/* FSC (Percentage) */}
+          <div>
+            <div className="relative">
+              <input
+                type="text"
+                value={String(customer.fsc ?? '')}
+                onKeyDown={blockMoneyChars}
+                onChange={(e) =>
+                  handleCustomerChange(customerIndex, 'fsc', e.target.value)
+                }
+                onBlur={(e) =>
+                  handleCustomerChange(customerIndex, 'fsc', ensureMoney2dp(e.target.value))
+                }
+                className={errCls(!!errors.customers?.[customerIndex]?.fsc)}
+                placeholder="FSC % *"
+                inputMode="decimal"
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <span className="text-gray-500">%</span>
+              </div>
+            </div>
+            {/* {fscAmount > 0 && (
+              <p className="text-xs text-green-600 mt-1">
+                FSC Amount: ${fscAmount.toFixed(2)}
+              </p>
+            )} */}
+            {errors.customers?.[customerIndex]?.fsc && (
+              <p className="text-red-600 text-xs mt-1">{errors.customers[customerIndex].fsc}</p>
+            )}
+          </div>
+
+          {/* Other */}
+          <div>
+            <input
+              type="text"
+              value={String(customer.other ?? '')}
+              onKeyDown={blockMoneyChars}
+              onChange={(e) =>
+                handleCustomerChange(customerIndex, 'other', e.target.value)
+              }
+              onBlur={(e) =>
+                handleCustomerChange(customerIndex, 'other', ensureMoney2dp(e.target.value))
+              }
+              className={errCls(!!errors.customers?.[customerIndex]?.other)}
+              placeholder="Other *"
+              inputMode="decimal"
+            />
+            {errors.customers?.[customerIndex]?.other && (
+              <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].other}</p>
+            )}
+          </div>
+
+
+          <div className="flex items-center">
+  <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
+    <span className="text-gray-700 font-medium">
+      Total: ${totalAmount.toFixed(2)}
+    </span>
+  </div>
+</div>
+        </div>
+      </div>
+    );
+  })}
+</div>
 
               {/* Carrier (Trucker) Information */}
               <div className="bg-green-50 p-4 rounded-lg">
