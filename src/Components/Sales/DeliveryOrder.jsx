@@ -942,6 +942,7 @@ export default function DeliveryOrder() {
     const text = searchTerm.toLowerCase();
     const matchesText =
       order.id.toLowerCase().includes(text) ||
+      order.doNum.toLowerCase().includes(text) ||
       order.clientName.toLowerCase().includes(text) ||
       order.pickupLocation.toLowerCase().includes(text) ||
       order.deliveryLocation.toLowerCase().includes(text);
