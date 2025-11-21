@@ -1844,7 +1844,7 @@ export default function DeliveryOrder() {
         loadType: formData.loadType || selectedLoadType,
         shipperId: shipperId || '',
         carrierId: carrierId || '',
-        companyName: formData.company || formData.addDispature || '', // Company name for both DRAYAGE and OTR
+        addDispature: formData.company || formData.addDispature || '', // Company name for both DRAYAGE and OTR
         customers: customersWithTotals,
         carrier: carrierData,
         shipper: {
@@ -1900,7 +1900,7 @@ export default function DeliveryOrder() {
         fd.append('loadType', formData.loadType || selectedLoadType);
         fd.append('shipperId', shipperId || '');
         fd.append('carrierId', carrierId || '');
-        fd.append('companyName', formData.company || formData.addDispature || ''); // Company name for both DRAYAGE and OTR
+        fd.append('addDispature', formData.company || formData.addDispature || ''); // Company name for both DRAYAGE and OTR
 
         fd.append('customers', JSON.stringify(customersWithTotals));
 
@@ -3075,10 +3075,7 @@ const updatePayload = {
   carrier: carrier,
   shipper: shipper,
   ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadNo: formData.selectedLoad } : {}),
-  ...(formData.company && formData.company.trim() ? { 
-    company: formData.company,
-    addDispature: formData.company 
-  } : {}),
+  addDispature: formData.company || '',
   remarks: formData.remarks || '',
   bols: (formData.bols || [])
     .filter(b => (b.bolNo || '').trim())
