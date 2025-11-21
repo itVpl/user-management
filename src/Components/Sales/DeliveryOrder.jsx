@@ -521,6 +521,7 @@ export default function DeliveryOrder() {
     company: '', // Company field
     loadType: 'OTR', // Load type: DRAYAGE or OTR
     returnLocation: { // Return location for DRAYAGE
+      locationName: '',
       address: '',
       city: '',
       state: '',
@@ -837,12 +838,14 @@ export default function DeliveryOrder() {
 
         // Return location for DRAYAGE
         returnLocation: src.loadType === 'DRAYAGE' && src.returnLocation ? {
-          address: src.returnLocation.returnFullAddress || '',
+          locationName: src.returnLocation.locationName || '',
+          address: src.returnLocation.returnFullAddress || src.returnLocation.address || '',
           city: src.returnLocation.city || '',
           state: src.returnLocation.state || '',
           zipCode: src.returnLocation.zipCode || '',
           returnDate: fmt(src.returnLocation.returnDate)
         } : {
+          locationName: '',
           address: '',
           city: '',
           state: '',
@@ -2343,6 +2346,7 @@ const validateForm = (mode = formMode) => {
       commodity: '',
       loadType: 'OTR',
       returnLocation: {
+        locationName: '',
         address: '',
         city: '',
         state: '',
@@ -2391,6 +2395,7 @@ const validateForm = (mode = formMode) => {
     setCurrentCustomerIndex(null);
     setFormMode('add');
     setEditingOrder(null);
+    setCarrierFeesJustUpdated(false);
   };
 
 
@@ -2467,6 +2472,7 @@ const validateForm = (mode = formMode) => {
             ? (c.otherTotal || c.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
             : (Number(c.other) || 0);
           return {
+            _id: c._id || c.id || null, // Store customer ID for updates
             billTo: c.billTo || '',
             dispatcherName: c.dispatcherName || '',
             workOrderNo: c.workOrderNo || '',
@@ -2506,12 +2512,36 @@ const validateForm = (mode = formMode) => {
           
           // Return location for DRAYAGE
           returnLocation: fullOrderData.loadType === 'DRAYAGE' && fullOrderData.returnLocation ? {
-            address: fullOrderData.returnLocation.returnFullAddress || '',
+            locationName: fullOrderData.returnLocation.locationName || '',
+            // Extract address properly - avoid duplication
+            // If address contains commas (is returnFullAddress), extract first part only
+            address: (() => {
+              const addr = fullOrderData.returnLocation.address || '';
+              const fullAddr = fullOrderData.returnLocation.returnFullAddress || '';
+              
+              // If address field exists and doesn't contain multiple commas, use it directly
+              if (addr && !addr.includes(',')) {
+                return addr;
+              }
+              
+              // If address contains commas, it's probably the full concatenated address - extract first part only
+              if (addr && addr.includes(',')) {
+                return addr.split(',')[0]?.trim() || '';
+              }
+              
+              // If no address field, extract from returnFullAddress (first part only)
+              if (fullAddr) {
+                return fullAddr.split(',')[0]?.trim() || '';
+              }
+              
+              return '';
+            })(),
             city: fullOrderData.returnLocation.city || '',
             state: fullOrderData.returnLocation.state || '',
             zipCode: fullOrderData.returnLocation.zipCode || '',
             returnDate: formatDateForInput(fullOrderData.returnLocation.returnDate)
           } : {
+            locationName: '',
             address: '',
             city: '',
             state: '',
@@ -2578,7 +2608,7 @@ const validateForm = (mode = formMode) => {
           fullData: fullOrderData
         });
         setFormMode('edit');
-        setShowEditModal(true);
+        setShowAddOrderForm(true);
       } else {
         alertify.error('Failed to fetch order details for editing');
       }
@@ -2878,18 +2908,38 @@ const handleUpdateOrder = async (e) => {
     const empId = user.empId || "EMP001";
 
     // --- FIXED: Customers data preparation with proper validation ---
+    // Get original customers data once for all customers
+    const originalCustomersData = editingOrder?.fullData?.customers || [];
+    const originalOrderData = editingOrder?.fullData || {};
+    
     const customers = (formData.customers || []).map((c, idx) => {
       // Ensure all required fields have values - trim and validate
       const billTo = (c.billTo || '').trim();
       const dispatcherName = (c.dispatcherName || '').trim();
       const workOrderNo = (c.workOrderNo || '').trim();
       
+      // Get customer ID from formData (stored during edit load) or from original data
+      let customerId = c._id || c.id || null;
+      
+      // For edit mode, _id is required - try to get from original data if not in formData
+      if (!customerId) {
+        console.warn(`Customer ${idx + 1} missing _id in formData - trying original data`);
+        // Try to get from original data as fallback
+        const originalCustomer = originalCustomersData[idx];
+        customerId = originalCustomer?._id || originalCustomer?.id || null;
+        if (!customerId) {
+          console.error(`Customer ${idx + 1} has no _id available - skipping`);
+          return null;
+        }
+      }
+      
       // Validate required fields before processing
       if (!billTo || !dispatcherName || !workOrderNo) {
         console.error(`Customer ${idx + 1} missing required fields:`, {
           billTo: billTo || 'MISSING',
           dispatcherName: dispatcherName || 'MISSING',
-          workOrderNo: workOrderNo || 'MISSING'
+          workOrderNo: workOrderNo || 'MISSING',
+          _id: customerId || 'MISSING'
         });
       }
       
@@ -2921,75 +2971,54 @@ const handleUpdateOrder = async (e) => {
       // Calculate total from actual otherArray
       const otherTotal = otherArray.reduce((sum, item) => sum + (item.total || 0), 0);
 
-      // Create customer object with all required fields
+      // Create customer object with all required fields (matching handleSubmit format exactly)
+      // Ensure all required string fields are non-empty
+      if (!billTo || billTo.trim() === '' || !dispatcherName || dispatcherName.trim() === '' || !workOrderNo || workOrderNo.trim() === '') {
+        console.error(`Customer ${idx + 1} has empty required fields:`, {
+          billTo: billTo || 'EMPTY',
+          dispatcherName: dispatcherName || 'EMPTY',
+          workOrderNo: workOrderNo || 'EMPTY'
+        });
+        // Return null to filter out invalid customers
+        return null;
+      }
+      
+      // Get loadNo - Priority: original customer loadNo > selectedLoadData.shipmentNumber > empty
+      // Don't use formData.selectedLoad directly as it's ObjectId, not the actual load number
+      const originalCustomerForLoadNo = originalCustomersData[idx];
+      // Use original customer's loadNo (already in proper format like "L0521")
+      // Or use selectedLoadData.shipmentNumber if load is selected
+      const loadNo = originalCustomerForLoadNo?.loadNo 
+        || (selectedLoadData?.shipmentNumber && selectedLoadData.shipmentNumber.trim())
+        || '';
+
       const customerData = {
-        billTo: billTo,
-        dispatcherName: dispatcherName,
-        workOrderNo: workOrderNo,
-        lineHaul: lh,
-        fsc: fsc,
+        _id: customerId, // Always include ID for updates (required)
+        billTo: billTo.trim(),
+        dispatcherName: dispatcherName.trim(),
+        workOrderNo: workOrderNo.trim(),
+        loadNo: loadNo.trim(), // Required field for customer
+        lineHaul: toNum2(lh), // Already returns a number
+        fsc: toNum2(fsc), // Already returns a number
         other: otherArray,
-        otherTotal: otherTotal,
-        totalAmount: toNum2(lh + fsc + otherTotal),
+        otherTotal: toNum2(otherTotal), // Already returns a number
+        totalAmount: toNum2(lh + fsc + otherTotal), // Already returns a number
       };
 
       console.log(`Customer ${idx + 1} data:`, customerData);
       return customerData;
-    });
+    }).filter(c => c !== null); // Filter out any null entries (invalid customers)
 
-    // Validate that we have at least one customer with all required fields - STRICT VALIDATION
-    const validCustomers = customers.filter(c => {
-      const hasBillTo = c.billTo && typeof c.billTo === 'string' && c.billTo.trim() !== '';
-      const hasDispatcher = c.dispatcherName && typeof c.dispatcherName === 'string' && c.dispatcherName.trim() !== '';
-      const hasWorkOrder = c.workOrderNo && typeof c.workOrderNo === 'string' && c.workOrderNo.trim() !== '';
-      
-      if (!hasBillTo || !hasDispatcher || !hasWorkOrder) {
-        console.warn('Invalid customer filtered out:', {
-          billTo: c.billTo || 'MISSING',
-          dispatcherName: c.dispatcherName || 'MISSING',
-          workOrderNo: c.workOrderNo || 'MISSING'
-        });
-        return false;
-      }
-      return true;
-    });
-    
-    if (validCustomers.length === 0) {
+    // Customers are already validated and filtered in the map function above
+    // Just ensure we have at least one valid customer
+    if (customers.length === 0) {
       alertify.error('Please fill in all required customer fields (Bill To, Dispatcher Name, Work Order No)');
       setSubmitting(false);
       return;
     }
 
-    // Final check: Ensure no customer has empty required fields - double validation
-    const finalCustomers = validCustomers.map((c, idx) => {
-      // Ensure all fields are non-empty strings
-      const billTo = (c.billTo || '').trim();
-      const dispatcherName = (c.dispatcherName || '').trim();
-      const workOrderNo = (c.workOrderNo || '').trim();
-      
-      if (!billTo || !dispatcherName || !workOrderNo) {
-        console.error(`Customer ${idx + 1} still has missing fields after validation:`, {
-          billTo: billTo || 'EMPTY',
-          dispatcherName: dispatcherName || 'EMPTY',
-          workOrderNo: workOrderNo || 'EMPTY'
-        });
-        return null;
-      }
-      
-      // Return customer with all required fields guaranteed to be non-empty
-      return {
-        ...c,
-        billTo: billTo,
-        dispatcherName: dispatcherName,
-        workOrderNo: workOrderNo
-      };
-    }).filter(c => c !== null); // Remove any null entries
-
-    if (finalCustomers.length === 0) {
-      alertify.error('No valid customers found. Please fill all required fields (Bill To, Dispatcher Name, Work Order No).');
-      setSubmitting(false);
-      return;
-    }
+    // Final customers - already validated and filtered
+    const finalCustomers = customers;
 
     console.log('Final customers to send:', finalCustomers);
 
@@ -3041,6 +3070,7 @@ const handleUpdateOrder = async (e) => {
 
     // --- Return location for DRAYAGE ---
     const returnLocationData = (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && formData.returnLocation ? {
+      locationName: formData.returnLocation.locationName || '',
       returnFullAddress: [
         formData.returnLocation.address,
         formData.returnLocation.city,
@@ -3091,12 +3121,52 @@ if (carrierId && carrierId !== originalCarrierId) {
   updatePayload.carrierId = carrierId;
 }
 
-// Customers - DON'T include in update payload unless explicitly needed
-// API validates customers even if they haven't changed, so skip them for partial updates
-// Only include if user explicitly modified customer fields (we'll track this separately if needed)
-// For now, skip customers array completely to avoid validation errors
-console.log('⏭️ Skipping customers array in update payload to avoid validation errors');
-console.log('📝 Note: Customers will be updated only when explicitly modified');
+// Customers - Always include in update payload when editing (user has explicitly modified the form)
+if (finalCustomers.length > 0) {
+  // Final validation: Ensure all required fields are present and non-empty
+  const validatedCustomers = finalCustomers.map((c, idx) => {
+    const validated = {
+      ...c,
+      billTo: (c.billTo || '').trim(),
+      dispatcherName: (c.dispatcherName || '').trim(),
+      workOrderNo: (c.workOrderNo || '').trim(),
+      lineHaul: Number(c.lineHaul) || 0,
+      fsc: Number(c.fsc) || 0,
+      other: Array.isArray(c.other) ? c.other : [],
+      otherTotal: Number(c.otherTotal) || 0,
+      totalAmount: Number(c.totalAmount) || 0
+    };
+    
+    // Validate required fields one more time
+    if (!validated.billTo || !validated.dispatcherName || !validated.workOrderNo) {
+      console.error(`❌ Customer ${idx + 1} validation failed:`, {
+        billTo: validated.billTo || 'EMPTY',
+        dispatcherName: validated.dispatcherName || 'EMPTY',
+        workOrderNo: validated.workOrderNo || 'EMPTY'
+      });
+      return null;
+    }
+    
+    return validated;
+  }).filter(c => c !== null);
+  
+  if (validatedCustomers.length > 0) {
+    updatePayload.customers = validatedCustomers;
+    console.log('✅ Customers included in update payload');
+    console.log('📊 Customers count:', validatedCustomers.length);
+    console.log('📊 Customers data:', JSON.stringify(validatedCustomers, null, 2));
+  } else {
+    console.error('❌ All customers failed validation - cannot update');
+    alertify.error('Customer validation failed. Please check all required fields (Bill To, Dispatcher Name, Work Order No).');
+    setSubmitting(false);
+    return;
+  }
+} else {
+  console.log('⚠️ No valid customers found - this should not happen after validation');
+  alertify.error('No valid customers found. Please fill all required fields.');
+  setSubmitting(false);
+  return;
+}
 
 // Carrier - only if changed
 const originalCarrier = originalOrder.carrier || {};
@@ -3152,8 +3222,8 @@ if (returnLocationData) {
     console.log('📤 Final update payload (only changed fields):', JSON.stringify(updatePayload, null, 2));
     console.log('📊 Payload fields count:', Object.keys(updatePayload).length);
     console.log('📋 Fields included:', Object.keys(updatePayload).join(', '));
-    console.log('✅ Customer validation check:', validCustomers.length > 0 ? 'PASSED' : 'FAILED');
-    console.log('📈 Total customers:', customers.length, '| Valid customers:', validCustomers.length, '| Final customers:', finalCustomers.length);
+    console.log('✅ Customer validation check:', finalCustomers.length > 0 ? 'PASSED' : 'FAILED');
+    console.log('📈 Total customers:', customers.length, '| Final customers:', finalCustomers.length);
 
     // 1) Make the main API call to update the order
     const response = await axios.put(
@@ -3212,8 +3282,7 @@ if (returnLocationData) {
     alertify.success('Delivery order updated successfully!');
     
     // Close modal and refresh data
-    setShowEditModal(false);
-    setEditingOrder(null);
+    handleCloseModal();
     
     // Refresh the orders list
     await fetchOrders();
@@ -6134,20 +6203,22 @@ if (returnLocationData) {
   <div className="bg-white p-4 rounded-lg mt-4">
     <h4 className="text-md font-semibold text-gray-800 mb-4">Return Location</h4>
     <div className="grid grid-cols-3 gap-4">
-      {/* Location Name */}
-      <div className="col-span-1">
-        <input
-          type="text"
-          value={formData.returnLocation?.locationName || ''}
-          onChange={(e) => setFormData(prev => ({
-            ...prev,
-            returnLocation: { ...prev.returnLocation, locationName: e.target.value }
-          }))}
-          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.locationName ? 'border-red-400' : 'border-gray-300'}`}
-          placeholder="Location Name (e.g., Warehouse, Port, Facility) *"
-        />
-        {errors.returnLocation?.locationName && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.locationName}</p>}
-      </div>
+      {/* Location Name - Hidden in edit mode */}
+      {formMode !== 'edit' && (
+        <div className="col-span-1">
+          <input
+            type="text"
+            value={formData.returnLocation?.locationName || ''}
+            onChange={(e) => setFormData(prev => ({
+              ...prev,
+              returnLocation: { ...prev.returnLocation, locationName: e.target.value }
+            }))}
+            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.locationName ? 'border-red-400' : 'border-gray-300'}`}
+            placeholder="Location Name (e.g., Warehouse, Port, Facility) *"
+          />
+          {errors.returnLocation?.locationName && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.locationName}</p>}
+        </div>
+      )}
       
       {/* Address */}
       <div className="col-span-1">
@@ -6207,24 +6278,27 @@ if (returnLocationData) {
         />
         {errors.returnLocation?.zipCode && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.zipCode}</p>}
       </div>
-      <div>
-        <input
-          type="number"
-          value={formData.returnLocation?.weight || ''}
-          onChange={(e) => {
-            const val = e.target.value;
-            setFormData(prev => ({
-              ...prev,
-              returnLocation: { ...prev.returnLocation, weight: val }
-            }));
-          }}
-          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.weight ? 'border-red-400' : 'border-gray-300'}`}
-          placeholder="Weight (lbs)"
-          min="0"
-          step="0.01"
-        />
-        {errors.returnLocation?.weight && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.weight}</p>}
-      </div>
+      {/* Weight - Hidden in edit mode */}
+      {formMode !== 'edit' && (
+        <div>
+          <input
+            type="number"
+            value={formData.returnLocation?.weight || ''}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFormData(prev => ({
+                ...prev,
+                returnLocation: { ...prev.returnLocation, weight: val }
+              }));
+            }}
+            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.weight ? 'border-red-400' : 'border-gray-300'}`}
+            placeholder="Weight (lbs)"
+            min="0"
+            step="0.01"
+          />
+          {errors.returnLocation?.weight && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.weight}</p>}
+        </div>
+      )}
       
       {/* Return Date & Time */}
       <div className="col-span-1">
@@ -7261,8 +7335,8 @@ if (returnLocationData) {
 
 
 
-      {/* Edit Order Modal */}
-      {showEditModal && editingOrder && (
+      {/* Edit Order Modal - REMOVED: Now using main form (same as duplicate) */}
+      {false && showEditModal && editingOrder && (
         <div 
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
           onClick={handleCloseEditModal}
