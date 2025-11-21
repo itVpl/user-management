@@ -68,6 +68,7 @@ import AddFleet from "./Components/CMT-Manager/addFleet.jsx";
 import OfficeExpenses from "./Components/HRDashboard/OfficeExpenses.jsx";
 import EmpLeaves from "./Components/HRDashboard/EmpLeaves.jsx";
 import AddTruckerDriver from "./Components/CMT/AddTruckerDriver.jsx";
+import  AssignDo  from "./Components/CMT-Manager/AssignDo.jsx";
 
 // Global Notification Component
 function GlobalAssignmentNotification() {
@@ -437,6 +438,7 @@ function App() {
           <Route path="OfficeExpenses" element={<OfficeExpenses />} />
           <Route path="empleaves" element={<EmpLeaves />} />
           <Route path="addtruckerdriver" element={<AddTruckerDriver />} />
+          <Route path="assigndo" element={<AssignDo />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

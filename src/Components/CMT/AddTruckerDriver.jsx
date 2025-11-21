@@ -32,26 +32,26 @@ const ViewDriverDetailsModal = ({ isOpen, onClose, driverData }) => {
   const sectionHeaderClass = "text-lg font-bold text-white border-b border-white pb-2 mb-4 -mt-4";
 
   return (
-    <div
-      className="fixed inset-0 backdrop-blur-md bg-black/30 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" onClick={onClose} />
       <div 
-        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden transform transition-all duration-300"
+        className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden flex flex-col transform transition-all duration-300 scale-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="bg-blue-600 p-4 flex justify-between items-center text-white rounded-t-xl shadow-md">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 p-6 flex justify-between items-center text-white shadow-lg">
           <div className="flex items-center space-x-3">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
             <div>
-              <h3 className="text-xl font-bold">Driver Details</h3>
-              <p className="text-sm text-blue-200">Complete information about {driverData.fullName}</p>
+              <h3 className="text-2xl font-bold">Driver Details</h3>
+              <p className="text-sm text-blue-100 mt-1">Complete information about {driverData.fullName}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-white hover:text-blue-200 p-1 rounded-full transition">
+          <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-xl transition-all duration-200">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
@@ -503,25 +503,29 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 backdrop-blur-md bg-black/30 flex items-center justify-center z-50 p-4"
-      onClick={resetFormAndClose}
-    >
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" onClick={resetFormAndClose} />
       <div 
-        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden transform transition-all duration-300"
+        className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden flex flex-col transform transition-all duration-300 scale-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="bg-blue-600 p-4 flex justify-between items-center text-white rounded-t-xl shadow-md">
+        <div className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 p-6 flex justify-between items-center text-white shadow-lg">
           <div className="flex items-center space-x-3">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
             <div>
-              <h3 className="text-xl font-bold">Add New Trucker Driver</h3>
-              <p className="text-sm text-blue-200">Register a new driver and complete their compliance profile</p>
+              <h3 className="text-2xl font-bold">Add New Trucker Driver</h3>
+              <p className="text-sm text-green-100 mt-1">Register a new driver and complete their compliance profile</p>
             </div>
           </div>
-          <button onClick={resetFormAndClose} className="text-white hover:text-blue-200 p-1 rounded-full transition" disabled={loading}>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          <button onClick={resetFormAndClose} className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-xl transition-all duration-200" disabled={loading}>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
           </button>
         </div>
         
@@ -1014,51 +1018,52 @@ const AddTruckerDriver = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-sans">
-      
-    
-
-      {/* Stats Cards and Search Bar */}
-      <div className="flex flex-wrap md:flex-nowrap justify-between items-center mb-8 gap-4">
-        <div className="flex space-x-4">
-          {/* Total Drivers Card */}
-          <div className="flex items-center space-x-4 p-5 bg-white rounded-xl shadow-xl border-l-4 border-blue-500 min-w-[200px]">
-            <div className="bg-blue-100 p-3 rounded-full text-blue-600">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+      {/* Stats Cards */}
+      <div className="flex items-center gap-6 mb-6">
+        {/* Total Drivers Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
               </svg>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Drivers</p>
-              <p className="text-2xl font-bold text-gray-900">{driversData.length}</p>
+              <p className="text-xs text-gray-500 font-medium">Total Drivers</p>
+              <p className="text-xl font-bold text-gray-900">{driversData.length}</p>
             </div>
           </div>
+        </div>
 
-          {/* Active Drivers Card */}
-          <div className="flex items-center space-x-4 p-5 bg-white rounded-xl shadow-xl border-l-4 border-green-500 min-w-[200px]">
-            <div className="bg-green-100 p-3 rounded-full text-green-600">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        {/* Active Drivers Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
               </svg>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Active Drivers</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-xs text-gray-500 font-medium">Active Drivers</p>
+              <p className="text-xl font-bold text-green-600">
                 {driversData.filter(driver => driver.isLoggedIn).length}
               </p>
             </div>
           </div>
+        </div>
 
-          {/* Unique Truckers Card */}
-          <div className="hidden lg:flex items-center space-x-4 p-5 bg-white rounded-xl shadow-xl border-l-4 border-purple-500 min-w-[200px]">
-            <div className="bg-purple-100 p-3 rounded-full text-purple-600">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        {/* Unique Truckers Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"></path>
                 <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z"></path>
               </svg>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Unique Truckers</p>
-              <p className="text-2xl font-bold text-purple-600">
+              <p className="text-xs text-gray-500 font-medium">Unique Truckers</p>
+              <p className="text-xl font-bold text-purple-600">
                 {new Set(driversData.map(driver => driver.truckerInfo?.truckerId)).size}
               </p>
             </div>
@@ -1068,25 +1073,27 @@ const AddTruckerDriver = () => {
         {/* Add Driver Button */}
         <button
           onClick={() => setIsModalOpen(true)}
-          className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-5 rounded-xl shadow-lg transition duration-150 ease-in-out flex items-center space-x-2"
+          className="ml-auto flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl font-semibold"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
           </svg>
-          <span>Add Trucker Driver</span>
+          <span>Add Driver</span>
         </button>
+      </div>
 
-        {/* Search Input */}
-        <div className="relative w-full md:w-auto">
+      {/* Search Bar */}
+      <div className="mb-6">
+        <div className="relative max-w-md">
           <input
             type="text"
             placeholder="Search by Driver ID, Name, Trucker, or Email"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setCurrentPage(1); // Reset to first page when searching
+              setCurrentPage(1);
             }}
-            className="w-full md:w-80 pl-10 pr-4 py-3 border border-gray-300 rounded-xl shadow-inner focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition duration-150"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150"
           />
           <svg className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -1095,18 +1102,18 @@ const AddTruckerDriver = () => {
       </div>
 
       {/* Data Table Section */}
-      <div className="bg-white rounded-xl shadow-2xl overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-200 to-gray-200">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">S.NO</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">FULL NAME</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">EMAIL</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">PHONE</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">TRUCKER</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">LICENSE</th>
-              <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">STATUS</th>
-              <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">ACTION</th>
+              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
+              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">FULL NAME</th>
+              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMAIL</th>
+              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">PHONE</th>
+              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">TRUCKER</th>
+              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">LICENSE</th>
+              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
+              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
@@ -1126,24 +1133,24 @@ const AddTruckerDriver = () => {
               </tr>
             ) : (
               currentDrivers.map((driver, index) => (
-                <tr key={driver.driverId} className="hover:bg-blue-50/50 transition duration-100">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <tr key={driver.driverId} className=" transition duration-100 border-b border-gray-200">
+                  <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {(currentPage - 1) * itemsPerPage + index + 1}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">
                     <div className="flex items-center">
                       {driver.fullName}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{driver.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{driver.phone}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">{driver.email}</td>
+                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">{driver.phone}</td>
+                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">
                     <div>
                       <p className="font-medium">{driver.truckerInfo?.truckerName || 'N/A'}</p>
                       <p className="text-xs text-gray-500">MC: {driver.truckerInfo?.mcDot || 'N/A'}</p>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{driver.driverLicense}</td>
+                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">{driver.driverLicense}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       driver.isLoggedIn 
@@ -1156,9 +1163,13 @@ const AddTruckerDriver = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                     <button 
                       onClick={() => handleViewDetails(driver)}
-                      className="bg-blue-500 hover:bg-blue-600 text-white py-1.5 px-3.5 rounded-lg text-xs font-medium transition duration-150 shadow-md"
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:from-blue-600 hover:to-indigo-700 hover:shadow-xl mx-auto"
                     >
-                      View Details
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                      </svg>
+                      View
                     </button>
                   </td>
                 </tr>
@@ -1168,48 +1179,56 @@ const AddTruckerDriver = () => {
         </table>
 
         {/* Pagination Section */}
-        {filteredDrivers.length > 0 && (
-          <div className="flex justify-between items-center p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-            <p className="text-sm text-gray-600">
-              Showing <span className="font-bold">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-              <span className="font-bold">
-                {Math.min(currentPage * itemsPerPage, filteredDrivers.length)}
-              </span> of{' '}
-              <span className="font-bold">{filteredDrivers.length}</span> drivers
-            </p>
-            <div className="flex space-x-2">
-              <button 
+        {filteredDrivers.length > 0 && totalPages > 1 && (
+          <div className="flex justify-between items-center p-4 border-t border-gray-200 bg-gray-50">
+            <div className="text-sm text-gray-600">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredDrivers.length)} of {filteredDrivers.length} drivers
+            </div>
+
+            <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+              {/* Previous Button */}
+              <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="flex items-center px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`p-2 rounded-lg transition-all duration-200 ${
+                  currentPage === 1
+                    ? 'text-gray-300 cursor-not-allowed'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
+                }`}
+                title="Previous page"
               >
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
                 </svg>
-                Previous
               </button>
-              
+
+              {/* Page Numbers */}
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                 <button
                   key={page}
                   onClick={() => handlePageChange(page)}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
+                  className={`min-w-[2.5rem] h-10 rounded-lg font-medium text-sm transition-all duration-200 ${
                     currentPage === page
-                      ? 'text-blue-700 bg-blue-100 border border-blue-500'
-                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   {page}
                 </button>
               ))}
-              
-              <button 
+
+              {/* Next Button */}
+              <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`p-2 rounded-lg transition-all duration-200 ${
+                  currentPage === totalPages
+                    ? 'text-gray-300 cursor-not-allowed'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
+                }`}
+                title="Next page"
               >
-                Next
-                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
                 </svg>
               </button>

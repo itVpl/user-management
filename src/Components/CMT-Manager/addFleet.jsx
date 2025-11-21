@@ -536,11 +536,6 @@ export default function AddFleet() {
 
     return (
         <div className="p-6 bg-gray-50 min-h-screen">
-            {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Fleet Management</h1>
-            </div>
-
             {/* Stats and Actions */}
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-6">

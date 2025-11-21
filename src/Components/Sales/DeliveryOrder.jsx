@@ -4246,8 +4246,14 @@ const updatePayload = {
 
   if (previewImg) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
-        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4">
+      <div 
+        className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center"
+        onClick={() => setPreviewImg(null)}
+      >
+        <div 
+          className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4"
+          onClick={(e) => e.stopPropagation()}
+        >
           <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl shadow-lg" />
           <button
             onClick={() => setPreviewImg(null)}
@@ -4262,8 +4268,14 @@ const updatePayload = {
 
   if (modalType) {
     return (
-      <div className="fixed inset-0 z-50 backdrop-blue-sm bg-black/30 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center">
+      <div 
+        className="fixed inset-0 z-50 backdrop-blue-sm bg-black/30 flex items-center justify-center"
+        onClick={() => setModalType(null)}
+      >
+        <div 
+          className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
@@ -4380,8 +4392,14 @@ const updatePayload = {
 
           {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
           {showCustomRange && (
-            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl shadow-2xl p-4">
+            <div 
+              className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4"
+              onClick={() => setShowCustomRange(false)}
+            >
+              <div 
+                className="bg-white rounded-xl shadow-2xl p-4"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <DateRange
                   ranges={[range]}
                   onChange={(item) => setRange(item.selection)}
@@ -4427,7 +4445,14 @@ const updatePayload = {
       {/* The custom error box UI for API errors is removed as per the edit hint. */}
 
       {viewDoc && selectedOrder ? (
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setViewDoc(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
           <div className="flex justify-between items-center mb-8">
             <div className="flex gap-4">
               <button
@@ -4541,6 +4566,7 @@ const updatePayload = {
               </div>
             </div>
           )}
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -4704,7 +4730,10 @@ const updatePayload = {
 
       {/* Add Delivery Order Modal */}
       {showAddOrderForm && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={handleCloseModal}
+        >
           {/* Hide scrollbar for modal content */}
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -4713,6 +4742,7 @@ const updatePayload = {
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
@@ -6163,10 +6193,14 @@ const updatePayload = {
             </div>
           )}
 
-          <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div 
+            className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+            onClick={() => setShowOrderModal(false)}
+          >
             <div
               className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
               <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
@@ -6825,8 +6859,14 @@ const updatePayload = {
 
       {/* Charges Popup */}
       {showChargesPopup && (
-        <div className="fixed inset-0 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 flex items-center justify-center z-[60] bg-black/30"
+          onClick={closeChargesPopup}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
 
             {/* Header */}
             <div className={`bg-gradient-to-r ${chargesPopupType === 'customer' ? 'from-blue-500 to-blue-600' : 'from-green-500 to-green-600'} -m-8 mb-6 p-6 rounded-t-xl`}>
@@ -7068,14 +7108,20 @@ const updatePayload = {
 
       {/* Edit Order Modal */}
       {showEditModal && editingOrder && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={handleCloseEditModal}
+        >
           {/* Hide scrollbar for modal content */}
           <style>{`
       .hide-scrollbar::-webkit-scrollbar { display: none; }
       .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
     `}</style>
 
-          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar">
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -8325,8 +8371,14 @@ const updatePayload = {
 
       {/* Delete Order Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={closeDeleteModal}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-[500px] relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 rounded-t-2xl">
               <div className="flex justify-between items-center">
@@ -8424,8 +8476,14 @@ const updatePayload = {
 
       {/* Assign Order Modal */}
       {showAssignModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={handleCancelAssign}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-[500px] relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-2xl">
               <div className="flex justify-between items-center">

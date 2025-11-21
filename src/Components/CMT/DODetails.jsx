@@ -2784,33 +2784,33 @@ export default function DODetails({ overrideEmpId }) {
     /* eslint-disable-next-line */
   }, [resolvedEmpId]);
 
-  const filteredOrders = useMemo(() => {
-    const term = (searchTerm || '').toLowerCase();
-    const base = orders.filter((o) =>
-      o.loadNo?.toLowerCase().includes(term) ||
-      o.billTo?.toLowerCase().includes(term) ||
-      o.dispatcherName?.toLowerCase().includes(term) ||
-      o.workOrderNo?.toLowerCase().includes(term) ||
-      o.carrierName?.toLowerCase().includes(term) ||
-      o.shipperName?.toLowerCase().includes(term) ||
-      o.doId?.toLowerCase().includes(term)
-    );
-    return base.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [orders, searchTerm]);
+ const filteredOrders = useMemo(() => {
+  const term = (searchTerm || '').toLowerCase();
+  const base = orders.filter((o) =>
+    o.loadNo?.toLowerCase().includes(term) ||
+    o.billTo?.toLowerCase().includes(term) ||
+    o.dispatcherName?.toLowerCase().includes(term) ||
+    o.workOrderNo?.toLowerCase().includes(term) ||
+    o.carrierName?.toLowerCase().includes(term) ||
+    o.shipperName?.toLowerCase().includes(term) ||
+    o.doId?.toLowerCase().includes(term)
+  );
+  return base.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+}, [orders, searchTerm]);
 
-  const filteredRejectedDOs = useMemo(() => {
-    const term = (searchTerm || '').toLowerCase();
-    const base = rejectedDOs.filter((o) =>
-      o.loadNo?.toLowerCase().includes(term) ||
-      o.billTo?.toLowerCase().includes(term) ||
-      o.dispatcherName?.toLowerCase().includes(term) ||
-      o.workOrderNo?.toLowerCase().includes(term) ||
-      o.carrierName?.toLowerCase().includes(term) ||
-      o.shipperName?.toLowerCase().includes(term) ||
-      o.doId?.toLowerCase().includes(term)
-    );
-    return base.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [rejectedDOs, searchTerm]);
+ const filteredRejectedDOs = useMemo(() => {
+  const term = (searchTerm || '').toLowerCase();
+  const base = rejectedDOs.filter((o) =>
+    o.loadNo?.toLowerCase().includes(term) ||
+    o.billTo?.toLowerCase().includes(term) ||
+    o.dispatcherName?.toLowerCase().includes(term) ||
+    o.workOrderNo?.toLowerCase().includes(term) ||
+    o.carrierName?.toLowerCase().includes(term) ||
+    o.shipperName?.toLowerCase().includes(term) ||
+    o.doId?.toLowerCase().includes(term)
+  );
+  return base.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}, [rejectedDOs, searchTerm]);
 
   const currentData = activeTab === 'assign-do' ? filteredOrders : filteredRejectedDOs;
   const totalPages = Math.ceil(currentData.length / itemsPerPage) || 1;

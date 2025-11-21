@@ -205,17 +205,7 @@ const DailyRateRequest = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Daily Rate Request</h1>
-        {/* <p className="text-gray-600">Manage daily bids (new API)</p> */}
-      </div>
-
-
-
-
-
-
+     
       {/* Top bar: Summary + Controls in one row */}
       <div className="flex items-start justify-between gap-6 mb-6">
         {/* Summary cards */}

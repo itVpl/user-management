@@ -33,14 +33,13 @@ const formatDateTime = (dateString) => {
   }
 };
 
-export default function AssignLoad() {
-  const [loads, setLoads] = useState([]);
+export default function AssignDo() {
+  const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedLoad, setSelectedLoad] = useState(null);
-  const [viewLoading, setViewLoading] = useState(false);
-  const [reassignModal, setReassignModal] = useState({ visible: false, load: null });
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [reassignModal, setReassignModal] = useState({ visible: false, assignment: null });
   const [cmtUsers, setCmtUsers] = useState([]);
   const [selectedCmtUser, setSelectedCmtUser] = useState('');
   const [reassignDescription, setReassignDescription] = useState('');
@@ -52,8 +51,8 @@ export default function AssignLoad() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
-  // Fetch loads from API
-  const fetchLoads = async () => {
+  // Fetch assignments from API
+  const fetchAssignments = async () => {
     try {
       setLoading(true);
       
@@ -65,8 +64,8 @@ export default function AssignLoad() {
         return;
       }
 
-      // Fetch data from the API endpoint for CMT assigned loads
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/cmt/all-loads-with-assignment`, {
+      // Fetch data from the API endpoint for CMT assigned DOs
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/assignment-mapping`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -78,79 +77,35 @@ export default function AssignLoad() {
 
       // Check if response has data property
       if (response.data && response.data.success) {
-        const loadsData = response.data.data?.loads || [];
-        console.log('Loads Data:', loadsData);
+        const assignmentsData = response.data.data?.assignments || [];
+        console.log('Assignments Data:', assignmentsData);
         
-        if (Array.isArray(loadsData)) {
-          const transformedData = loadsData.map((load, index) => {
-            // Log CMT assignment data for debugging
-            if (load.cmtAssignment) {
-              console.log(`Load ${load._id} CMT Assignment:`, load.cmtAssignment);
-            }
+        if (Array.isArray(assignmentsData)) {
+          const transformedData = assignmentsData.map((assignment, index) => {
+            console.log(`Assignment ${assignment.doId} CMT Assignment:`, assignment.assignedToCMT);
             
-            // Helper function to get origin data (check both single object and array)
-            const getOriginData = () => {
-              if (load.origin && load.origin.city) {
-                return { city: load.origin.city, state: load.origin.state };
-              }
-              if (load.origins && load.origins.length > 0) {
-                return { city: load.origins[0].city, state: load.origins[0].state };
-              }
-              return { city: 'N/A', state: 'N/A' };
-            };
-
-            // Helper function to get destination data (check both single object and array)
-            const getDestinationData = () => {
-              if (load.destination && load.destination.city) {
-                return { city: load.destination.city, state: load.destination.state };
-              }
-              if (load.destinations && load.destinations.length > 0) {
-                return { city: load.destinations[0].city, state: load.destinations[0].state };
-              }
-              return { city: 'N/A', state: 'N/A' };
-            };
-
-            const originData = getOriginData();
-            const destinationData = getDestinationData();
-
             return {
-              id: load._id || index,
+              id: assignment.doId || index,
               sNo: index + 1,
-              loadId: load._id,
-              shipmentNo: load.shipmentNumber || 'N/A',
-              shipperName: load.shipper?.compName || 'N/A',
-              shipperEmail: load.shipper?.email || 'N/A',
-              weight: load.weight || 0,
-              commodity: load.commodity || 'N/A',
-              vehicleType: load.vehicleType || 'N/A',
-              rate: load.rate || 0,
-              rateType: load.rateType || 'N/A',
-              status: load.status || 'N/A',
-              loadType: load.loadType || 'N/A',
-              pickupAddress: originData.city,
-              pickupState: originData.state,
-              deliveryAddress: destinationData.city,
-              deliveryState: destinationData.state,
-              pickupDate: load.pickupDate,
-              deliveryDate: load.deliveryDate,
-              createdAt: load.createdAt || new Date().toISOString().split('T')[0],
-              updatedAt: load.updatedAt,
-              // CMT Assignment details
-              assignedTo: load.assignedTo,
-              cmtAssignment: load.cmtAssignment || null,
-              customerAddedBy: load.customerAddedBy || {},
-              createdBy: load.customerAddedBy || load.addedBy || {},
-              loadApprovalStatus: load.loadApprovalStatus || 'N/A',
-              cmtApprovals: load.cmtApprovals || [],
-              approvalExpiry: load.approvalExpiry,
-              isExpired: load.isExpired || false
+              doId: assignment.doId,
+              date: assignment.date,
+              loadType: assignment.loadType || 'N/A',
+              customerName: assignment.customerName || 'N/A',
+              loadNumbers: assignment.loadNumbers || [],
+              shipper: assignment.shipper || null,
+              carrier: assignment.carrier || null,
+              loadReference: assignment.loadReference || null,
+              assignedToCMT: assignment.assignedToCMT || null,
+              assignmentStatus: assignment.assignmentStatus || 'N/A',
+              doStatus: assignment.doStatus || 'N/A',
+              createdAt: assignment.createdAt || new Date().toISOString()
             };
           });
 
           console.log('Transformed Data:', transformedData);
-          setLoads(transformedData);
+          setAssignments(transformedData);
         } else {
-          console.log('Loads data is not an array:', loadsData);
+          console.log('Assignments data is not an array:', assignmentsData);
           toast.error('API returned data is not in expected format');
         }
       } else {
@@ -158,7 +113,7 @@ export default function AssignLoad() {
         toast.error('Unexpected response structure from API');
       }
     } catch (error) {
-      console.error('Error fetching loads:', error);
+      console.error('Error fetching assignments:', error);
       console.error('Error response:', error.response);
       console.error('Error message:', error.message);
       
@@ -200,7 +155,7 @@ export default function AssignLoad() {
   };
 
   useEffect(() => {
-    fetchLoads();
+    fetchAssignments();
     fetchCmtUsers();
   }, []);
 
@@ -243,16 +198,16 @@ export default function AssignLoad() {
     setIsCmtDropdownOpen(false);
   };
 
-  // Handle view load details
-  const handleViewLoad = (load) => {
-    console.log('Opening load view for:', load.shipmentNo);
-    setSelectedLoad(load);
+  // Handle view assignment details
+  const handleViewAssignment = (assignment) => {
+    console.log('Opening assignment view for:', assignment.doId);
+    setSelectedAssignment(assignment);
     setShowViewModal(true);
   };
 
   // Handle Re-Assign
-  const handleReAssign = (load) => {
-    setReassignModal({ visible: true, load });
+  const handleReAssign = (assignment) => {
+    setReassignModal({ visible: true, assignment });
     setSelectedCmtUser('');
     setReassignDescription('');
     setCmtUserSearch('');
@@ -260,7 +215,7 @@ export default function AssignLoad() {
   };
 
   const closeReassignModal = () => {
-    setReassignModal({ visible: false, load: null });
+    setReassignModal({ visible: false, assignment: null });
     setSelectedCmtUser('');
     setReassignDescription('');
     setReassignSubmitting(false);
@@ -270,7 +225,7 @@ export default function AssignLoad() {
 
   const handleReassignSubmit = async () => {
     if (!selectedCmtUser) {
-      toast.error('Please select a CMT user to assign the load to');
+      toast.error('Please select a CMT user to assign the DO to');
       return;
     }
 
@@ -298,16 +253,16 @@ export default function AssignLoad() {
 
       // Prepare API payload
       const payload = {
-        loadId: reassignModal.load?.loadId || reassignModal.load?._id,
-        newCMTEmpId: selectedUser.empId,
+        doId: reassignModal.assignment?.doId,
+        newCmtUserId: selectedUser.empId,
         reason: reassignDescription.trim()
       };
 
       console.log('Re-assign payload:', payload);
 
-      // Make API call to re-assign load
-      const response = await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/cmt-assignments/reassign`,
+      // Make API call to re-assign DO
+      const response = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/do/do/reassign-to-cmt`,
         payload,
         { 
           headers: { 
@@ -318,19 +273,19 @@ export default function AssignLoad() {
       );
 
       if (response.data.success || response.status === 200) {
-        toast.success(`Load re-assigned successfully to ${selectedUser.employeeName}!`);
+        toast.success(`DO re-assigned successfully to ${selectedUser.employeeName}!`);
         
         closeReassignModal();
         
         // Refresh the data immediately and then again after a delay to ensure updated data
         console.log('Refreshing data after re-assignment...');
-        fetchLoads();
+        fetchAssignments();
         setTimeout(() => {
           console.log('Second refresh after re-assignment...');
-          fetchLoads();
+          fetchAssignments();
         }, 2000);
       } else {
-        toast.error(response.data.message || 'Failed to re-assign load');
+        toast.error(response.data.message || 'Failed to re-assign DO');
       }
 
     } catch (error) {
@@ -338,33 +293,34 @@ export default function AssignLoad() {
       if (error.response?.data?.message) {
         toast.error(error.response.data.message);
       } else {
-        toast.error('Failed to re-assign load. Please try again.');
+        toast.error('Failed to re-assign DO. Please try again.');
       }
     } finally {
       setReassignSubmitting(false);
     }
   };
 
-  // Filter loads based on search term and sort by creation date (latest first - LIFO)
-  const filteredLoads = loads
-    .filter(load =>
-      load.shipmentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.shipperName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.shipperEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.pickupAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.deliveryAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.commodity.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.vehicleType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (load.cmtAssignment?.empName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (load.cmtAssignment?.empId || '').toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter assignments based on search term and sort by creation date (latest first - LIFO)
+  const filteredAssignments = assignments
+    .filter(assignment =>
+      assignment.doId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      assignment.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      assignment.loadNumbers?.some(loadNo => 
+        loadNo.toLowerCase().includes(searchTerm.toLowerCase())
+      ) ||
+      (assignment.shipper?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (assignment.shipper?.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (assignment.carrier?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (assignment.assignedToCMT?.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (assignment.assignedToCMT?.empId || '').toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   // Pagination calculations
-  const totalPages = Math.ceil(filteredLoads.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredAssignments.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentLoads = filteredLoads.slice(startIndex, endIndex);
+  const currentAssignments = filteredAssignments.slice(startIndex, endIndex);
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -380,25 +336,14 @@ export default function AssignLoad() {
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case 'pending': return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
-      case 'bidding': return 'bg-blue-100 text-blue-800 border border-blue-200';
       case 'assigned': return 'bg-green-100 text-green-800 border border-green-200';
-      case 'in_transit': return 'bg-purple-100 text-purple-800 border border-purple-200';
-      case 'delivered': return 'bg-green-100 text-green-800 border border-green-200';
-      case 'cancelled': return 'bg-red-100 text-red-800 border border-red-200';
+      case 'sales_verified': return 'bg-blue-100 text-blue-800 border border-blue-200';
+      case 'accountant_approved': return 'bg-purple-100 text-purple-800 border border-purple-200';
+      case 'in_progress': return 'bg-orange-100 text-orange-800 border border-orange-200';
       case 'completed': return 'bg-green-100 text-green-800 border border-green-200';
+      case 'unassigned': return 'bg-gray-100 text-gray-800 border border-gray-200';
       case 'active': return 'bg-green-100 text-green-800 border border-green-200';
-      case 'inactive': return 'bg-gray-100 text-gray-800 border border-gray-200';
-      case 'approved': return 'bg-green-100 text-green-800 border border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border border-gray-200';
-    }
-  };
-
-  // Get approval status color
-  const getApprovalStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'approved': return 'bg-green-100 text-green-800 border border-green-200';
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
-      case 'rejected': return 'bg-red-100 text-red-800 border border-red-200';
+      case 'cancelled': return 'bg-red-100 text-red-800 border border-red-200';
       default: return 'bg-gray-100 text-gray-800 border border-gray-200';
     }
   };
@@ -417,15 +362,38 @@ export default function AssignLoad() {
     }
   };
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    if (!amount) return '$0';
-    return `$${Number(amount).toLocaleString()}`;
+  // Get load numbers as string
+  const getLoadNumbersString = (loadNumbers) => {
+    if (!loadNumbers || !Array.isArray(loadNumbers)) return 'N/A';
+    return loadNumbers.join(', ');
+  };
+
+  // Get origin information
+  const getOriginInfo = (loadReference) => {
+    if (!loadReference) return { city: 'N/A', state: 'N/A' };
+    if (loadReference.origin && typeof loadReference.origin === 'object') {
+      return {
+        city: loadReference.origin.city || 'N/A',
+        state: loadReference.origin.state || 'N/A'
+      };
+    }
+    return { city: 'N/A', state: 'N/A' };
+  };
+
+  // Get destination information
+  const getDestinationInfo = (loadReference) => {
+    if (!loadReference) return { city: 'N/A', state: 'N/A' };
+    if (loadReference.destination && typeof loadReference.destination === 'object') {
+      return {
+        city: loadReference.destination.city || 'N/A',
+        state: loadReference.destination.state || 'N/A'
+      };
+    }
+    return { city: 'N/A', state: 'N/A' };
   };
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-
       {/* Stats and Actions */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-6">
@@ -435,8 +403,8 @@ export default function AssignLoad() {
                 <FaBox className="text-blue-600" size={20} />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total Load</p>
-                <p className="text-xl font-bold text-gray-800">{loads.length}</p>
+                <p className="text-sm text-gray-600">Total DO Assignments</p>
+                <p className="text-xl font-bold text-gray-800">{assignments.length}</p>
               </div>
             </div>
           </div>
@@ -446,14 +414,14 @@ export default function AssignLoad() {
             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
-              placeholder="Search loads..."
+              placeholder="Search DOs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <button
-            onClick={fetchLoads}
+            onClick={fetchAssignments}
             disabled={loading}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -465,12 +433,12 @@ export default function AssignLoad() {
         </div>
       </div>
 
-      {/* Loads Table */}
+      {/* Assignments Table */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-500 text-lg">Loading loads...</p>
+            <p className="text-gray-500 text-lg">Loading DO assignments...</p>
             <p className="text-gray-400 text-sm">Please wait while we fetch the data</p>
           </div>
         ) : (
@@ -480,104 +448,109 @@ export default function AssignLoad() {
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                   <tr>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Shipper</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Pickup</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Delivery</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Status</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">DO ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Customer</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Load Numbers</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Shipper</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Carrier</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load Type</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Assignment Status</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">CMT Assignment</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Date & Time</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Approval</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">DO Status</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {currentLoads.map((load, index) => (
-                    <tr key={load.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{load.sNo}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{load.loadId ? `L-${load.loadId.slice(-5)}` : 'N/A'}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div>
-                          <span className="font-medium text-gray-700">{load.shipperName}</span>
-                          <p className="text-xs text-gray-500">{load.shipperEmail}</p>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div>
-                          <span className="font-medium text-gray-700 text-sm">{load.pickupAddress}</span>
-                          <p className="text-xs text-gray-500">{load.pickupState}</p>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div>
-                          <span className="font-medium text-gray-700 text-sm">{load.deliveryAddress}</span>
-                          <p className="text-xs text-gray-500">{load.deliveryState}</p>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{load.weight} lbs</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-bold text-green-600">{formatCurrency(load.rate)}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(load.status)}`}>
-                          {load.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        {load.cmtAssignment ? (
+                  {currentAssignments.map((assignment, index) => {
+                    const originInfo = getOriginInfo(assignment.loadReference);
+                    const destinationInfo = getDestinationInfo(assignment.loadReference);
+                    
+                    return (
+                      <tr key={assignment.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{assignment.sNo}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{assignment.doId ? `DO-${assignment.doId.slice(-5)}` : 'N/A'}</span>
+                        </td>
+                        <td className="py-2 px-3">
                           <div>
-                            <span className="font-medium text-gray-700 text-sm">{load.cmtAssignment.displayName || load.cmtAssignment.empName}</span>
-                            <p className="text-xs text-gray-500">{load.cmtAssignment.empId}</p>
+                            <span className="font-medium text-gray-700">{assignment.customerName}</span>
                           </div>
-                        ) : (
-                          <span className="text-gray-400 text-sm">Not Assigned</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3">
-                        <div>
-                          <span className="font-medium text-gray-700 text-sm">{formatDateTime(load.createdAt).date}</span>
-                          <p className="text-xs text-gray-500">{formatDateTime(load.createdAt).time}</p>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${getApprovalStatusColor(load.loadApprovalStatus)}`}>
-                          {load.loadApprovalStatus}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <button
-                          onClick={() => handleReAssign(load)}
-                          disabled={reassignSubmitting}
-                          className={`px-3 py-1 text-orange-600 text-xs rounded-md transition-colors border border-orange-300 hover:bg-orange-50 ${
-                            reassignSubmitting 
-                              ? 'opacity-50 cursor-not-allowed' 
-                              : ''
-                          }`}
-                        >
-                          {reassignSubmitting ? 'Processing...' : 'Re-Assign'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700 text-sm">{getLoadNumbersString(assignment.loadNumbers)}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <span className="font-medium text-gray-700 text-sm">{assignment.shipper?.name || 'N/A'}</span>
+                            <p className="text-xs text-gray-500">{assignment.shipper?.email || ''}</p>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <span className="font-medium text-gray-700 text-sm">{assignment.carrier?.name || 'N/A'}</span>
+                            <p className="text-xs text-gray-500">{assignment.carrier?.email || ''}</p>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{assignment.loadType}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(assignment.assignmentStatus)}`}>
+                            {assignment.assignmentStatus.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          {assignment.assignedToCMT ? (
+                            <div>
+                              <span className="font-medium text-gray-700 text-sm">{assignment.assignedToCMT.employeeName}</span>
+                              <p className="text-xs text-gray-500">{assignment.assignedToCMT.empId}</p>
+                              {/* <p className="text-xs text-gray-500">Assigned by: {assignment.assignedToCMT.assignedBy?.employeeName}</p> */}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-sm">Not Assigned</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3">
+                          <div>
+                            <span className="font-medium text-gray-700 text-sm">{formatDateTime(assignment.date).date}</span>
+                            <p className="text-xs text-gray-500">{formatDateTime(assignment.date).time}</p>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(assignment.doStatus)}`}>
+                            {assignment.doStatus}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <button
+                            onClick={() => handleReAssign(assignment)}
+                            disabled={reassignSubmitting}
+                            className={`px-3 py-1 text-orange-600 text-xs rounded-md transition-colors border border-orange-300 hover:bg-orange-50 ${
+                              reassignSubmitting 
+                                ? 'opacity-50 cursor-not-allowed' 
+                                : ''
+                            }`}
+                          >
+                            {reassignSubmitting ? 'Processing...' : 'Re-Assign'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-            {filteredLoads.length === 0 && (
+            {filteredAssignments.length === 0 && (
               <div className="text-center py-12">
                 <FaBox className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500 text-lg">
-                  {searchTerm ? 'No loads found matching your search' : 'No loads found'}
+                  {searchTerm ? 'No DO assignments found matching your search' : 'No DO assignments found'}
                 </p>
                 <p className="text-gray-400 text-sm">
-                  {searchTerm ? 'Try adjusting your search terms' : 'No loads available'}
+                  {searchTerm ? 'Try adjusting your search terms' : 'No DO assignments available'}
                 </p>
               </div>
             )}
@@ -586,11 +559,11 @@ export default function AssignLoad() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && filteredLoads.length > 0 && (
+      {totalPages > 1 && filteredAssignments.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredLoads.length)} of {filteredLoads.length} loads
-            {searchTerm && ` (filtered from ${loads.length} total)`}
+            Showing {startIndex + 1} to {Math.min(endIndex, filteredAssignments.length)} of {filteredAssignments.length} assignments
+            {searchTerm && ` (filtered from ${assignments.length} total)`}
           </div>
           <div className="flex gap-2">
             <button
@@ -624,7 +597,7 @@ export default function AssignLoad() {
       )}
 
       {/* View Details Modal */}
-      {showViewModal && selectedLoad && (
+      {showViewModal && selectedAssignment && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
             {/* Header */}
@@ -635,8 +608,8 @@ export default function AssignLoad() {
                     <FaEye className="text-white" size={24} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Load Details</h2>
-                    <p className="text-blue-100">Complete load information and CMT assignment details</p>
+                    <h2 className="text-xl font-bold">DO Assignment Details</h2>
+                    <p className="text-blue-100">Complete DO assignment information and CMT assignment details</p>
                   </div>
                 </div>
                 <button
@@ -650,71 +623,76 @@ export default function AssignLoad() {
 
             {/* Content */}
             <div className="p-6">
-              {/* Load Information */}
+              {/* DO Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <div className="bg-gray-50 p-4 rounded-xl">
                   <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                     <FaBox className="text-blue-600" size={16} />
-                    Load Information
+                    DO Information
                   </h3>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Load ID:</span> {selectedLoad.loadId ? `L-${selectedLoad.loadId.slice(-5)}` : 'N/A'}</div>
-                    <div><span className="font-medium">Shipment No:</span> {selectedLoad.shipmentNo}</div>
-                    <div><span className="font-medium">Load Type:</span> {selectedLoad.loadType}</div>
-                    <div><span className="font-medium">Status:</span> 
-                      <span className={`ml-2 text-xs px-2 py-1 rounded-full font-bold ${getStatusColor(selectedLoad.status)}`}>
-                        {selectedLoad.status}
+                    <div><span className="font-medium">DO ID:</span> {selectedAssignment.doId ? `DO-${selectedAssignment.doId.slice(-5)}` : 'N/A'}</div>
+                    <div><span className="font-medium">Load Numbers:</span> {getLoadNumbersString(selectedAssignment.loadNumbers)}</div>
+                    <div><span className="font-medium">Load Type:</span> {selectedAssignment.loadType}</div>
+                    <div><span className="font-medium">Customer:</span> {selectedAssignment.customerName}</div>
+                    <div><span className="font-medium">Assignment Status:</span> 
+                      <span className={`ml-2 text-xs px-2 py-1 rounded-full font-bold ${getStatusColor(selectedAssignment.assignmentStatus)}`}>
+                        {selectedAssignment.assignmentStatus.replace(/_/g, ' ')}
                       </span>
                     </div>
-                    <div><span className="font-medium">Weight:</span> {selectedLoad.weight} Kg</div>
-                    <div><span className="font-medium">Commodity:</span> {selectedLoad.commodity}</div>
-                    <div><span className="font-medium">Vehicle Type:</span> {selectedLoad.vehicleType}</div>
-                    <div><span className="font-medium">Rate:</span> {formatCurrency(selectedLoad.rate)}</div>
-                    <div><span className="font-medium">Rate Type:</span> {selectedLoad.rateType}</div>
+                    <div><span className="font-medium">DO Status:</span> 
+                      <span className={`ml-2 text-xs px-2 py-1 rounded-full font-bold ${getStatusColor(selectedAssignment.doStatus)}`}>
+                        {selectedAssignment.doStatus}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="bg-gray-50 p-4 rounded-xl">
                   <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                     <FaTruck className="text-green-600" size={16} />
-                    Route Information
+                    Shipper & Carrier Information
                   </h3>
-                  <div className="space-y-2 text-sm">
+                  <div className="space-y-4 text-sm">
                     <div>
-                      <span className="font-medium">Pickup:</span>
+                      <span className="font-medium">Shipper:</span>
                       <div className="ml-2">
-                        <div>{selectedLoad.pickupAddress}</div>
-                        <div className="text-gray-500">{selectedLoad.pickupState}</div>
+                        <div>{selectedAssignment.shipper?.name || 'N/A'}</div>
+                        <div className="text-gray-500">{selectedAssignment.shipper?.email || ''}</div>
+                        <div className="text-gray-500">{selectedAssignment.shipper?.phone || ''}</div>
                       </div>
                     </div>
                     <div>
-                      <span className="font-medium">Delivery:</span>
+                      <span className="font-medium">Carrier:</span>
                       <div className="ml-2">
-                        <div>{selectedLoad.deliveryAddress}</div>
-                        <div className="text-gray-500">{selectedLoad.deliveryState}</div>
+                        <div>{selectedAssignment.carrier?.name || 'N/A'}</div>
+                        <div className="text-gray-500">{selectedAssignment.carrier?.email || ''}</div>
+                        <div className="text-gray-500">{selectedAssignment.carrier?.phone || ''}</div>
                       </div>
                     </div>
-                    <div><span className="font-medium">Pickup Date:</span> {formatDate(selectedLoad.pickupDate)}</div>
-                    <div><span className="font-medium">Delivery Date:</span> {formatDate(selectedLoad.deliveryDate)}</div>
                   </div>
                 </div>
 
                 <div className="bg-gray-50 p-4 rounded-xl">
                   <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                    <FaUser className="text-purple-600" size={16} />
-                    Shipper Information
+                    <FaCalendar className="text-purple-600" size={16} />
+                    Date Information
                   </h3>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Company:</span> {selectedLoad.shipperName}</div>
-                    <div><span className="font-medium">Email:</span> {selectedLoad.shipperEmail}</div>
-                    <div><span className="font-medium">Added By:</span> {selectedLoad.customerAddedBy?.empName || 'N/A'}</div>
-                    <div><span className="font-medium">Department:</span> {selectedLoad.customerAddedBy?.department || 'N/A'}</div>
+                    <div><span className="font-medium">DO Date:</span> {formatDate(selectedAssignment.date)}</div>
+                    <div><span className="font-medium">Created At:</span> {formatDate(selectedAssignment.createdAt)}</div>
+                    {selectedAssignment.loadReference && (
+                      <>
+                        <div><span className="font-medium">Origin:</span> {getOriginInfo(selectedAssignment.loadReference).city}, {getOriginInfo(selectedAssignment.loadReference).state}</div>
+                        <div><span className="font-medium">Destination:</span> {getDestinationInfo(selectedAssignment.loadReference).city}, {getDestinationInfo(selectedAssignment.loadReference).state}</div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* CMT Assignment Details */}
-              {selectedLoad.cmtAssignment && (
+              {selectedAssignment.assignedToCMT && (
                 <div className="bg-blue-50 p-6 rounded-xl mb-6">
                   <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <FaUserCheck className="text-blue-600" size={20} />
@@ -722,66 +700,17 @@ export default function AssignLoad() {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2 text-sm">
-                      <div><span className="font-medium">Assigned To:</span> {selectedLoad.cmtAssignment.displayName || selectedLoad.cmtAssignment.empName}</div>
-                      <div><span className="font-medium">Employee ID:</span> {selectedLoad.cmtAssignment.empId}</div>
-                      <div><span className="font-medium">Email:</span> {selectedLoad.cmtAssignment.email}</div>
-                      <div><span className="font-medium">Department:</span> {selectedLoad.cmtAssignment.department}</div>
+                      <div><span className="font-medium">Assigned To:</span> {selectedAssignment.assignedToCMT.employeeName}</div>
+                      <div><span className="font-medium">Employee ID:</span> {selectedAssignment.assignedToCMT.empId}</div>
+                      <div><span className="font-medium">Department:</span> {selectedAssignment.assignedToCMT.department}</div>
+                      <div><span className="font-medium">Assignment Type:</span> {selectedAssignment.assignedToCMT.assignmentType}</div>
                     </div>
                     <div className="space-y-2 text-sm">
-                      <div><span className="font-medium">Assigned At:</span> {formatDate(selectedLoad.cmtAssignment.assignedAt)}</div>
-                      <div><span className="font-medium">Status:</span> 
-                        <span className={`ml-2 text-xs px-2 py-1 rounded-full font-bold ${getStatusColor(selectedLoad.cmtAssignment.status)}`}>
-                          {selectedLoad.cmtAssignment.status}
-                        </span>
-                      </div>
-                      <div><span className="font-medium">Approval Status:</span> 
-                        <span className={`ml-2 text-xs px-2 py-1 rounded-full font-bold ${getApprovalStatusColor(selectedLoad.loadApprovalStatus)}`}>
-                          {selectedLoad.loadApprovalStatus}
-                        </span>
-                      </div>
-                      <div><span className="font-medium">Expiry:</span> {formatDate(selectedLoad.approvalExpiry)}</div>
+                      <div><span className="font-medium">Assigned At:</span> {formatDate(selectedAssignment.assignedToCMT.assignedAt)}</div>
+                      <div><span className="font-medium">Assigned By:</span> {selectedAssignment.assignedToCMT.assignedBy?.employeeName}</div>
+                      <div><span className="font-medium">Assigned By Dept:</span> {selectedAssignment.assignedToCMT.assignedBy?.department}</div>
+                      <div><span className="font-medium">Assigned By ID:</span> {selectedAssignment.assignedToCMT.assignedBy?.empId}</div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* CMT Approvals */}
-              {selectedLoad.cmtApprovals && selectedLoad.cmtApprovals.length > 0 && (
-                <div className="bg-green-50 p-6 rounded-xl">
-                  <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <FaCheckCircle className="text-green-600" size={20} />
-                    CMT Approvals
-                  </h3>
-                  <div className="space-y-3">
-                    {selectedLoad.cmtApprovals.map((approval, index) => (
-                      <div key={index} className="bg-white p-4 rounded-lg border border-green-200">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <span className="font-medium">CMT User:</span>
-                            <div className="ml-2">
-                              <div>{approval.cmtUser?.empName}</div>
-                              <div className="text-gray-500">{approval.cmtUser?.empId}</div>
-                            </div>
-                          </div>
-                          <div>
-                            <span className="font-medium">Action By:</span>
-                            <div className="ml-2">
-                              <div>{approval.actionBy?.empName}</div>
-                              <div className="text-gray-500">{approval.actionBy?.empId}</div>
-                            </div>
-                          </div>
-                          <div>
-                            <span className="font-medium">Action:</span>
-                            <div className="ml-2">
-                              <span className={`text-xs px-2 py-1 rounded-full font-bold ${getApprovalStatusColor(approval.status)}`}>
-                                {approval.action} - {approval.status}
-                              </span>
-                              <div className="text-gray-500 mt-1">{formatDate(approval.actionAt)}</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
@@ -797,10 +726,10 @@ export default function AssignLoad() {
             <div className="bg-gradient-to-r from-orange-600 to-red-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
-                  Re-Assign Load
+                  Re-Assign Delivery Order
                 </h2>
                 <p className="text-sm text-orange-100 mt-1">
-                  Select a CMT user to reassign this load
+                  Select a CMT user to reassign this DO
                 </p>
               </div>
               <button 
@@ -812,47 +741,47 @@ export default function AssignLoad() {
               </button>
             </div>
 
-            {/* Load Details */}
+            {/* DO Details */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-700 bg-orange-50 px-4 py-3 rounded-lg mb-6">
               <div>
-                <strong>Load ID:</strong>
+                <strong>DO ID:</strong>
                 <br />
-                {reassignModal.load?.loadId ? `L-${reassignModal.load.loadId.slice(-5)}` : 'N/A'}
+                {reassignModal.assignment?.doId ? `DO-${reassignModal.assignment.doId.slice(-5)}` : 'N/A'}
+              </div>
+              <div>
+                <strong>Customer:</strong>
+                <br />
+                {reassignModal.assignment?.customerName || 'N/A'}
+              </div>
+              <div>
+                <strong>Load Numbers:</strong>
+                <br />
+                {getLoadNumbersString(reassignModal.assignment?.loadNumbers)}
+              </div>
+              <div>
+                <strong>Load Type:</strong>
+                <br />
+                {reassignModal.assignment?.loadType || 'N/A'}
               </div>
               <div>
                 <strong>Shipper:</strong>
                 <br />
-                {reassignModal.load?.shipperName || 'N/A'}
+                {reassignModal.assignment?.shipper?.name || 'N/A'}
               </div>
               <div>
-                <strong>Weight:</strong>
+                <strong>Carrier:</strong>
                 <br />
-                {reassignModal.load?.weight || 0} Kg
+                {reassignModal.assignment?.carrier?.name || 'N/A'}
               </div>
               <div>
-                <strong>Rate:</strong>
+                <strong>Assignment Status:</strong>
                 <br />
-                {formatCurrency(reassignModal.load?.rate || 0)}
+                {reassignModal.assignment?.assignmentStatus || 'N/A'}
               </div>
               <div>
-                <strong>Pickup:</strong>
+                <strong>DO Status:</strong>
                 <br />
-                {reassignModal.load?.pickupAddress || 'N/A'}
-              </div>
-              <div>
-                <strong>Drop:</strong>
-                <br />
-                {reassignModal.load?.deliveryAddress || 'N/A'}
-              </div>
-              <div>
-                <strong>Vehicle:</strong>
-                <br />
-                {reassignModal.load?.vehicleType || 'N/A'}
-              </div>
-              <div>
-                <strong>Status:</strong>
-                <br />
-                {reassignModal.load?.status || 'N/A'}
+                {reassignModal.assignment?.doStatus || 'N/A'}
               </div>
             </div>
 
@@ -960,7 +889,7 @@ export default function AssignLoad() {
                 value={reassignDescription}
                 onChange={(e) => setReassignDescription(e.target.value)}
                 rows={4}
-                placeholder="Please provide a description for re-assigning this load..."
+                placeholder="Please provide a description for re-assigning this DO..."
                 className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 resize-none"
               />
             </div>
@@ -993,7 +922,7 @@ export default function AssignLoad() {
                     Re-assigning...
                   </div>
                 ) : (
-                  'Re-Assign Load'
+                  'Re-Assign DO'
                 )}
               </button>
             </div>
