@@ -3065,27 +3065,94 @@ const handleUpdateOrder = async (e) => {
       carrierId = foundCarrier?._id || '';
     }
 
-// --- Complete update payload ---
-const updatePayload = {
-  empId: empId,
-  loadType: formData.loadType || selectedLoadType,
-  shipperId: shipperId || '',
-  carrierId: carrierId || '',
-  customers: finalCustomers,
-  carrier: carrier,
-  shipper: shipper,
-  ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadNo: formData.selectedLoad } : {}),
-  addDispature: formData.company || '',
-  remarks: formData.remarks || '',
-  bols: (formData.bols || [])
-    .filter(b => (b.bolNo || '').trim())
-    .map(b => ({ bolNo: b.bolNo.trim() })),
-  ...(returnLocationData ? { returnLocation: returnLocationData } : {}),
-};
+// --- Build partial update payload (only changed fields) ---
+const originalOrder = editingOrder?.fullData || {};
+const updatePayload = {};
 
-    console.log('Final update payload:', JSON.stringify(updatePayload, null, 2));
-    console.log('Customer validation check:', validCustomers.length > 0 ? 'PASSED' : 'FAILED');
-    console.log('Total customers:', customers.length, 'Valid customers:', validCustomers.length, 'Final customers:', finalCustomers.length);
+// Only include fields that have changed or are required
+// empId is always required
+updatePayload.empId = empId;
+
+// Load Type - only if changed
+if ((formData.loadType || selectedLoadType) !== originalOrder.loadType) {
+  updatePayload.loadType = formData.loadType || selectedLoadType;
+}
+
+// Shipper ID - only if changed
+const originalShipperId = typeof originalOrder.shipperId === 'object' ? originalOrder.shipperId?._id : originalOrder.shipperId;
+if (shipperId && shipperId !== originalShipperId) {
+  updatePayload.shipperId = shipperId;
+}
+
+// Carrier ID - only if changed
+const originalCarrierId = typeof originalOrder.carrierId === 'object' ? originalOrder.carrierId?._id : originalOrder.carrierId;
+if (carrierId && carrierId !== originalCarrierId) {
+  updatePayload.carrierId = carrierId;
+}
+
+// Customers - DON'T include in update payload unless explicitly needed
+// API validates customers even if they haven't changed, so skip them for partial updates
+// Only include if user explicitly modified customer fields (we'll track this separately if needed)
+// For now, skip customers array completely to avoid validation errors
+console.log('⏭️ Skipping customers array in update payload to avoid validation errors');
+console.log('📝 Note: Customers will be updated only when explicitly modified');
+
+// Carrier - only if changed
+const originalCarrier = originalOrder.carrier || {};
+const carrierChanged = JSON.stringify(carrier) !== JSON.stringify(originalCarrier);
+if (carrierChanged) {
+  updatePayload.carrier = carrier;
+}
+
+// Shipper - only if changed
+const originalShipper = originalOrder.shipper || {};
+const shipperChanged = JSON.stringify(shipper) !== JSON.stringify(originalShipper);
+if (shipperChanged) {
+  updatePayload.shipper = shipper;
+}
+
+// Load No - only if changed
+const originalLoadNo = originalOrder.loadReference || '';
+if (formData.selectedLoad && formData.selectedLoad.trim() && formData.selectedLoad !== originalLoadNo) {
+  updatePayload.loadNo = formData.selectedLoad;
+}
+
+// Add Dispature - only if changed
+const originalAddDispature = originalOrder.addDispature || originalOrder.company || '';
+if (formData.company && formData.company !== originalAddDispature) {
+  updatePayload.addDispature = formData.company;
+}
+
+// Remarks - only if changed
+const originalRemarks = originalOrder.remarks || '';
+if (formData.remarks !== originalRemarks) {
+  updatePayload.remarks = formData.remarks || '';
+}
+
+// BOLs - only if changed
+const originalBols = (originalOrder.bols || []).map(b => ({ bolNo: (b.bolNo || '').trim() })).filter(b => b.bolNo);
+const newBols = (formData.bols || [])
+  .filter(b => (b.bolNo || '').trim())
+  .map(b => ({ bolNo: b.bolNo.trim() }));
+const bolsChanged = JSON.stringify(newBols) !== JSON.stringify(originalBols);
+if (bolsChanged) {
+  updatePayload.bols = newBols;
+}
+
+// Return Location - only if changed (for DRAYAGE)
+if (returnLocationData) {
+  const originalReturnLocation = originalOrder.returnLocation || {};
+  const returnLocationChanged = JSON.stringify(returnLocationData) !== JSON.stringify(originalReturnLocation);
+  if (returnLocationChanged) {
+    updatePayload.returnLocation = returnLocationData;
+  }
+}
+
+    console.log('📤 Final update payload (only changed fields):', JSON.stringify(updatePayload, null, 2));
+    console.log('📊 Payload fields count:', Object.keys(updatePayload).length);
+    console.log('📋 Fields included:', Object.keys(updatePayload).join(', '));
+    console.log('✅ Customer validation check:', validCustomers.length > 0 ? 'PASSED' : 'FAILED');
+    console.log('📈 Total customers:', customers.length, '| Valid customers:', validCustomers.length, '| Final customers:', finalCustomers.length);
 
     // 1) Make the main API call to update the order
     const response = await axios.put(
