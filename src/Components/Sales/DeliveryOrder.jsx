@@ -3688,6 +3688,36 @@ if (returnLocationData) {
     <!-- Drop Locations (each separately) -->
     ${dropSectionsHTML}
 
+    <!-- Return Location (for DRAYAGE) -->
+    ${order?.returnLocation && order?.loadType === 'DRAYAGE' ? `
+    <div style="margin-top: 20px; page-break-inside: avoid;">
+      <table class="rates-table">
+        <thead>
+          <tr>
+            <th colspan="2">Return Location</th>
+            <th>Weight (lbs)</th>
+            <th>Container No</th>
+            <th>Container Type</th>
+            <th>Qty</th>
+            <th>Return Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="2">${order.returnLocation.returnFullAddress || 
+              [order.returnLocation.address, order.returnLocation.city, order.returnLocation.state, order.returnLocation.zipCode]
+                .filter(Boolean).join(', ') || 'N/A'}</td>
+            <td>N/A</td>
+            <td>${order.shipper?.containerNo || 'N/A'}</td>
+            <td>${order.shipper?.containerType || 'N/A'}</td>
+            <td>1</td>
+            <td>${order.returnLocation.returnDate ? formatDateStrUS(order.returnLocation.returnDate) : 'N/A'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
     <!-- Dispatcher Notes -->
     <div style="margin-top: 20px;">
       <h4 style="font-size: 14px; font-weight: bold; color:#0b0e11;">Dispatcher Notes:</h4>
@@ -3970,6 +4000,36 @@ if (returnLocationData) {
       </table>
     </div>
 
+    <!-- Return Location (for DRAYAGE) -->
+    ${order?.returnLocation && order?.loadType === 'DRAYAGE' ? `
+    <div class="section">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th colspan="2">Return Location</th>
+            <th>Weight (lbs)</th>
+            <th>Container No</th>
+            <th>Container Type</th>
+            <th>Qty</th>
+            <th>Return Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="2">${order.returnLocation.returnFullAddress || 
+              [order.returnLocation.address, order.returnLocation.city, order.returnLocation.state, order.returnLocation.zipCode]
+                .filter(Boolean).join(', ') || 'N/A'}</td>
+            <td>N/A</td>
+            <td>${order.shipper?.containerNo || 'N/A'}</td>
+            <td>${order.shipper?.containerType || 'N/A'}</td>
+            <td>1</td>
+            <td>${order.returnLocation.returnDate ? fmtDate(order.returnLocation.returnDate) : 'N/A'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
     <!-- Charges: ONLY customer information rates -->
     <div class="section">
       <table class="tbl">
@@ -4179,6 +4239,36 @@ if (returnLocationData) {
         </tbody>
       </table>
     </div>
+
+    <!-- Return Location (for DRAYAGE) -->
+    ${order?.returnLocation && order?.loadType === 'DRAYAGE' ? `
+    <div class="section">
+      <table>
+        <thead>
+          <tr>
+            <th colspan="2">Return Location</th>
+            <th>Weight (lbs)</th>
+            <th>Container No</th>
+            <th>Container Type</th>
+            <th>Qty</th>
+            <th>Return Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="2">${order.returnLocation.returnFullAddress || 
+              [order.returnLocation.address, order.returnLocation.city, order.returnLocation.state, order.returnLocation.zipCode]
+                .filter(Boolean).join(', ') || 'N/A'}</td>
+            <td>N/A</td>
+            <td>${shipper.containerNo || 'N/A'}</td>
+            <td>${shipper.containerType || 'N/A'}</td>
+            <td>1</td>
+            <td>${order.returnLocation.returnDate ? fmtDate(order.returnLocation.returnDate) : 'N/A'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
 
     <!-- Freight Information (Load # included) -->
     <div class="section">
