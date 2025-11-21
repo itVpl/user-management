@@ -9,21 +9,28 @@ import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 
+
 export default function TaskScheduling() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
+
   // filters + search
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
+
 
   // stats
   const [statistics, setStatistics] = useState({
     total: 0, pending: 0, completed: 0, cancelled: 0, overdue: 0, today: 0
   });
 
+
   // modals
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+
+
 
 
 
@@ -31,9 +38,11 @@ export default function TaskScheduling() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
 
+
   // create/update button loaders -> prevents multiple submits
   const [createLoading, setCreateLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
 
   // form state
   const [formData, setFormData] = useState({
@@ -43,27 +52,33 @@ export default function TaskScheduling() {
     priority: 'select'  // default "Select"
   });
 
+
   // inline validation errors (no browser popups)
   const [errors, setErrors] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
+
 
   // pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
+
   // refs for “entire text field clickable”
   const titleInputRef = useRef(null);
   const dateTimeInputRef = useRef(null);
+
 
   useEffect(() => {
     fetchTasks();
     fetchStatistics();
   }, []);
 
+
   // Reset page when filters/search change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, priorityFilter]);
+
 
   const authHeaders = () => {
     const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
@@ -77,11 +92,13 @@ export default function TaskScheduling() {
     };
   };
 
+
   const fetchTasks = async () => {
     try {
       setLoading(true);
       const headers = authHeaders();
       if (!headers) return;
+
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tasks`, { headers });
       if (response.data?.success) {
@@ -98,10 +115,12 @@ export default function TaskScheduling() {
     }
   };
 
+
   const fetchStatistics = async () => {
     try {
       const headers = authHeaders();
       if (!headers) return;
+
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tasks/stats`, { headers });
       if (response.data?.success) {
@@ -112,15 +131,18 @@ export default function TaskScheduling() {
     }
   };
 
+
   // ===== VALIDATION =====
   const validateForm = (data, forEdit = false) => {
     const newErrors = {};
     const now = new Date();
 
+
     // Task Title
     if (!data.taskTitle?.trim()) {
       newErrors.taskTitle = 'Please enter the task title.';
     }
+
 
     // Scheduled Date & Time (must be present or future)
     if (!data.scheduledDateTime) {
@@ -133,14 +155,17 @@ export default function TaskScheduling() {
       }
     }
 
+
     // Priority
     if (!data.priority || data.priority === 'select') {
       newErrors.priority = 'Please select the priority.';
     }
 
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
 
   // ===== CREATE =====
   const handleCreateTask = async (e) => {
@@ -148,14 +173,18 @@ export default function TaskScheduling() {
     if (createLoading) return; // one task at a time
     setSubmitAttempted(true);
 
+
     if (!validateForm(formData)) return;
+
 
     try {
       setCreateLoading(true);
       const headers = authHeaders();
       if (!headers) return;
 
+
       const response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/tasks/create`, formData, { headers });
+
 
       if (response.data?.success) {
         alertify.success('✅ Task created successfully!');
@@ -175,12 +204,16 @@ export default function TaskScheduling() {
   };
 
 
+
+
   // --- helpers: dynamic min (always future) ---
   const getMinDateTimeLocal = (offsetMs = 60 * 1000) => {
     return new Date(Date.now() + offsetMs).toISOString().slice(0, 16); // +1 min
   };
 
+
   const [minLocal, setMinLocal] = useState(getMinDateTimeLocal());
+
 
   // jab Create Modal open ho tab dynamic min ko refresh karte raho (e.g. 30s):
   useEffect(() => {
@@ -193,11 +226,16 @@ export default function TaskScheduling() {
 
 
 
+
+
+
+
   // ===== DELETE (custom modal – normal popup) =====
   const openDeleteModal = (taskId) => {
     setTaskToDelete(taskId);
     setShowDeleteModal(true);
   };
+
 
   const confirmDelete = async () => {
     if (!taskToDelete) return;
@@ -205,6 +243,7 @@ export default function TaskScheduling() {
       setDeleteLoading(true);
       const headers = authHeaders();
       if (!headers) return;
+
 
       const response = await axios.delete(`${API_CONFIG.BASE_URL}/api/v1/tasks/${taskToDelete}`, { headers });
       if (response.data?.success) {
@@ -224,6 +263,9 @@ export default function TaskScheduling() {
 
 
 
+
+
+
   // ===== HELPERS =====
   const formatDateTime = (dateTime) => {
     const date = new Date(dateTime);
@@ -233,11 +275,13 @@ export default function TaskScheduling() {
     };
   };
 
+
   const isOverdue = (scheduledDateTime, status) => {
     if (status === 'completed' || status === 'cancelled') return false;
     return new Date(scheduledDateTime) < new Date();
     // purely visual; backend should still be the source of truth for "overdue" status if you have one
   };
+
 
   const getPriorityColor = (priority) => {
     switch ((priority || '').toLowerCase()) {
@@ -249,6 +293,7 @@ export default function TaskScheduling() {
     }
   };
 
+
   // ===== FILTER + SORT (latest on top) =====
   const filteredTasks = useMemo(() => {
     const list = tasks.filter((task) => {
@@ -258,6 +303,7 @@ export default function TaskScheduling() {
       return task.taskTitle?.toLowerCase().includes(q) || task.taskDescription?.toLowerCase().includes(q);
     });
 
+
     // latest on top (prefer createdAt if available else scheduledDateTime)
     return list.sort((a, b) => {
       const aKey = a.createdAt || a.scheduledDateTime;
@@ -266,17 +312,21 @@ export default function TaskScheduling() {
     });
   }, [tasks, searchTerm, priorityFilter]);
 
+
   // pagination
   const totalPages = Math.ceil(filteredTasks.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentTasks = filteredTasks.slice(startIndex, endIndex);
 
+
   // now -> min value for datetime-local
   const minDateTimeLocal = new Date(Date.now() + 60 * 1000).toISOString().slice(0, 16); // +1 min buffer
 
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+
 
       {/* Top Stats + Filters */}
       <div className="flex justify-between items-center mb-6">
@@ -311,6 +361,7 @@ export default function TaskScheduling() {
           ))}
         </div>
 
+
         <div className="flex items-center gap-4">
           <div className="relative">
             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -336,6 +387,7 @@ export default function TaskScheduling() {
           </button>
         </div>
       </div>
+
 
       {/* Tasks Table */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -410,6 +462,7 @@ export default function TaskScheduling() {
               </table>
             </div>
 
+
             {filteredTasks.length === 0 && (
               <div className="text-center py-12">
                 <FaCalendarAlt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -428,6 +481,7 @@ export default function TaskScheduling() {
           </>
         )}
       </div>
+
 
       {/* Pagination */}
       {filteredTasks.length > 0 && (
@@ -465,10 +519,17 @@ export default function TaskScheduling() {
         </div>
       )}
 
+
       {/* ===== Create Task Modal ===== */}
       {showCreateModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => !createLoading && setShowCreateModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -489,6 +550,7 @@ export default function TaskScheduling() {
                 </button>
               </div>
             </div>
+
 
             <form onSubmit={handleCreateTask} className="p-6 space-y-6">
               {/* Task Title (clickable container focuses input) */}
@@ -514,6 +576,7 @@ export default function TaskScheduling() {
                 )}
               </div>
 
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Task Description
@@ -528,8 +591,9 @@ export default function TaskScheduling() {
                 />
               </div>
 
+
               {/* Scheduled Date & Time (full container clickable) */}
-              
+             
               <div
                 className="cursor-text"
                 onClick={() => {
@@ -569,11 +633,13 @@ export default function TaskScheduling() {
                     const selected = new Date(val).getTime();
                     const minTs = new Date(minLocal).getTime();
 
+
                     if (!val) {
                       setFormData({ ...formData, scheduledDateTime: '' });
                       setErrors((prev) => ({ ...prev, scheduledDateTime: 'The selected date should be greater than the present date.' }));
                       return;
                     }
+
 
                     if (isNaN(selected) || selected < minTs) {
                       // auto-correct to min and show inline error once
@@ -598,6 +664,8 @@ export default function TaskScheduling() {
               </div>
 
 
+
+
               {/* Priority with * and default "Select" */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -620,6 +688,7 @@ export default function TaskScheduling() {
                   <p className="mt-1 text-sm text-red-600">{errors.priority}</p>
                 )}
               </div>
+
 
               <div className="flex gap-4 justify-end pt-6">
                 <button
@@ -648,10 +717,19 @@ export default function TaskScheduling() {
 
 
 
+
+
+
       {/* ===== Delete Confirmation Modal (normal popup) ===== */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm"
+          onClick={() => !deleteLoading && setShowDeleteModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-5 border-b bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-800">Delete Task</h3>
               <p className="text-sm text-gray-500 mt-1">
@@ -683,3 +761,6 @@ export default function TaskScheduling() {
     </div>
   );
 }
+
+
+

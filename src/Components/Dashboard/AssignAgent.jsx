@@ -5,6 +5,7 @@ import 'alertifyjs/build/css/alertify.css';
 import 'alertifyjs/build/css/themes/default.min.css';
 import API_CONFIG from '../../config/api';
 
+
 const AssignAgentTable = () => {
   const [rows, setRows] = useState([]);                 // [{ customer, assignedUsers }]
   const [loading, setLoading] = useState(false);
@@ -12,17 +13,21 @@ const AssignAgentTable = () => {
   const [empIdInput, setEmpIdInput] = useState('');
   const [modalCustomerId, setModalCustomerId] = useState(null);
 
+
   // 🔢 Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // options: 5/10/20/50
 
+
   // ✅ Prefer sessionStorage to match your existing auth usage
   const token = useMemo(() => sessionStorage.getItem('token'), []);
+
 
   // Toast position
   useEffect(() => {
     alertify.set('notifier', 'position', 'top-right');
   }, []);
+
 
   // 🔄 Fetch all shippers ➜ then fetch assigned-users for each (parallel)
   const fetchAll = async () => {
@@ -31,6 +36,7 @@ const AssignAgentTable = () => {
       alertify.error('No auth token found. Please login again.');
       return;
     }
+
 
     setLoading(true);
     setError('');
@@ -43,15 +49,18 @@ const AssignAgentTable = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+
       // Expecting shape: { success: true, data: [...] }
       const shippers = shippersRes?.data?.data || [];
       const ids = shippers.map((s) => s?._id).filter(Boolean);
+
 
       if (ids.length === 0) {
         setRows([]);
         setCurrentPage(1);
         return;
       }
+
 
       // 2) For each shipper id, get `{ customer, assignedUsers }`
       const settle = await Promise.allSettled(
@@ -63,9 +72,11 @@ const AssignAgentTable = () => {
         )
       );
 
+
       const results = settle
         .filter((r) => r.status === 'fulfilled' && r.value?.data)
         .map((r) => r.value.data);
+
 
       setRows(results);
       // Keep current page in range if data size shrank
@@ -84,12 +95,14 @@ const AssignAgentTable = () => {
     }
   };
 
+
   // ✅ Assign agent to selected customer
   const handleAssign = async () => {
     if (!empIdInput?.trim() || !modalCustomerId) {
       alertify.warning('Please enter Employee ID');
       return;
     }
+
 
     try {
       await axios.put(
@@ -111,6 +124,7 @@ const AssignAgentTable = () => {
     }
   };
 
+
   // 🔖 Pagination helpers
   const totalItems = rows.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -118,20 +132,24 @@ const AssignAgentTable = () => {
   const endIndex = Math.min(startIndex + pageSize, totalItems);
   const pageRows = rows.slice(startIndex, endIndex);
 
+
   const goToPage = (p) => {
     const page = Math.min(Math.max(1, p), totalPages);
     setCurrentPage(page);
   };
+
 
   useEffect(() => {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
   // Reset to page 1 if pageSize changes
   useEffect(() => {
     setCurrentPage(1);
   }, [pageSize]);
+
 
   return (
     <div className="p-6">
@@ -139,6 +157,7 @@ const AssignAgentTable = () => {
         <h2 className="text-4xl font-bold text-blue-800 drop-shadow-sm tracking-wide">
           🧾 Customer & Agent Assignment
         </h2>
+
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -154,6 +173,7 @@ const AssignAgentTable = () => {
             </select>
           </div>
 
+
           <button
             onClick={fetchAll}
             disabled={loading}
@@ -164,11 +184,13 @@ const AssignAgentTable = () => {
         </div>
       </div>
 
+
       {error && (
         <div className="mb-4 text-red-600 bg-red-50 border border-red-200 px-4 py-2 rounded">
           {error}
         </div>
       )}
+
 
       <div className="overflow-x-auto rounded-2xl shadow-xl border border-gray-200 bg-white/90 backdrop-blur-md">
         <table className="min-w-full text-sm text-gray-800">
@@ -180,11 +202,21 @@ const AssignAgentTable = () => {
             </tr>
           </thead>
 
+
           <tbody className="bg-white divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td className="px-6 py-6" colSpan={3}>
-                  <div className="animate-pulse text-gray-500">Loading customers…</div>
+                <td className="px-6 py-12" colSpan={3}>
+                  <div className="flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg py-12">
+                    <div className="relative">
+                      <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                      <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                    </div>
+                    <div className="mt-6 text-center">
+                      <p className="text-xl font-semibold text-gray-800 mb-2">Loading Customers...</p>
+                      <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+                    </div>
+                  </div>
                 </td>
               </tr>
             ) : totalItems === 0 ? (
@@ -206,6 +238,7 @@ const AssignAgentTable = () => {
                       </span>
                     </div>
                   </td>
+
 
                   <td className="px-6 py-4">
                     {entry.assignedUsers?.users?.length > 0 ? (
@@ -240,6 +273,7 @@ const AssignAgentTable = () => {
                     )}
                   </td>
 
+
                   <td className="px-6 py-4 text-center">
                     <button
                       onClick={() => setModalCustomerId(entry.customer._id)}
@@ -254,6 +288,7 @@ const AssignAgentTable = () => {
           </tbody>
         </table>
       </div>
+
 
       {/* Footer: Pagination Controls */}
       {totalItems > 0 && (
@@ -299,11 +334,19 @@ const AssignAgentTable = () => {
         </div>
       )}
 
+
       {/* Modal */}
       {modalCustomerId && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white/90 backdrop-blur-xl border border-blue-300 p-6 rounded-3xl shadow-2xl w-96">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+          onClick={() => setModalCustomerId(null)}
+        >
+          <div
+            className="bg-white/90 backdrop-blur-xl border border-blue-300 p-6 rounded-3xl shadow-2xl w-96"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-xl font-bold mb-5 text-blue-800 drop-shadow">Assign New Agent</h3>
+
 
             <div className="relative w-full mb-6">
               <input
@@ -321,6 +364,7 @@ const AssignAgentTable = () => {
                 Enter Employee ID
               </label>
             </div>
+
 
             <div className="flex justify-end gap-3">
               <button
@@ -343,4 +387,8 @@ const AssignAgentTable = () => {
   );
 };
 
+
 export default AssignAgentTable;
+
+
+

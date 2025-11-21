@@ -693,10 +693,14 @@ export default function DailyFollowUp() {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading follow-ups...</p>
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Follow-Ups...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
           </div>
         </div>
       </div>
@@ -864,8 +868,14 @@ export default function DailyFollowUp() {
 
       {/* Add Follow-Up Modal */}
       {showAddFollowUpForm && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={handleCloseModal}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -1221,11 +1231,18 @@ export default function DailyFollowUp() {
 
       {/* View Follow-Up Modal */}
       {showViewModal && selectedFollowUp && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}>
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowViewModal(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" 
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -1445,8 +1462,14 @@ export default function DailyFollowUp() {
 
       {/* Edit Follow-Up Modal */}
       {showEditModal && selectedFollowUp && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowEditModal(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -1817,8 +1840,14 @@ export default function DailyFollowUp() {
 
       {/* Add New Follow-Up Modal */}
       {showAddNewFollowUpForm && selectedFollowUp && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowAddNewFollowUpForm(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -1940,3 +1969,4 @@ export default function DailyFollowUp() {
     </div>
   );
 } 
+

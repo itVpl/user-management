@@ -14,9 +14,11 @@ import {
   CreditCard,
 } from "lucide-react";
 
+
 // API Service
 const expenseAPI = {
   baseURL: "https://vpl-liveproject-1.onrender.com/api/v1/expenses",
+
 
   // Helper function to get auth headers
   getHeaders() {
@@ -26,6 +28,7 @@ const expenseAPI = {
       Authorization: `Bearer ${token}`,
     };
   },
+
 
   // Get all expenses
   async getAllExpenses(params = {}) {
@@ -37,7 +40,7 @@ const expenseAPI = {
           headers: this.getHeaders(),
         }
       );
-      
+     
       if (!response.ok) throw new Error("Failed to fetch expenses");
       return await response.json();
     } catch (error) {
@@ -45,6 +48,7 @@ const expenseAPI = {
       throw error;
     }
   },
+
 
   // Create expense
   async createExpense(expenseData) {
@@ -54,7 +58,7 @@ const expenseAPI = {
         headers: this.getHeaders(),
         body: JSON.stringify(expenseData),
       });
-      
+     
       if (!response.ok) throw new Error("Failed to create expense");
       return await response.json();
     } catch (error) {
@@ -62,6 +66,7 @@ const expenseAPI = {
       throw error;
     }
   },
+
 
   // Update expense
   async updateExpense(id, expenseData) {
@@ -71,7 +76,7 @@ const expenseAPI = {
         headers: this.getHeaders(),
         body: JSON.stringify(expenseData),
       });
-      
+     
       if (!response.ok) throw new Error("Failed to update expense");
       return await response.json();
     } catch (error) {
@@ -80,6 +85,7 @@ const expenseAPI = {
     }
   },
 
+
   // Delete expense
   async deleteExpense(id) {
     try {
@@ -87,7 +93,7 @@ const expenseAPI = {
         method: "DELETE",
         headers: this.getHeaders(),
       });
-      
+     
       if (!response.ok) throw new Error("Failed to delete expense");
       return await response.json();
     } catch (error) {
@@ -95,6 +101,7 @@ const expenseAPI = {
       throw error;
     }
   },
+
 
   // Mark as payment
   async markAsPayment(id, paymentData) {
@@ -104,7 +111,7 @@ const expenseAPI = {
         headers: this.getHeaders(),
         body: JSON.stringify(paymentData),
       });
-      
+     
       if (!response.ok) throw new Error("Failed to mark as payment");
       return await response.json();
     } catch (error) {
@@ -113,6 +120,7 @@ const expenseAPI = {
     }
   },
 };
+
 
 // Utility function to transform API data to frontend format
 const transformExpenseFromAPI = (apiExpense) => {
@@ -124,8 +132,8 @@ const transformExpenseFromAPI = (apiExpense) => {
       date: item.date.split('T')[0],
       itemName: item.itemName,
       totalAmount: item.totalAmount,
-      status: apiExpense.status === 'paid' ? 'Paid' : 
-              apiExpense.status === 'draft' ? 'Due' : 
+      status: apiExpense.status === 'paid' ? 'Paid' :
+              apiExpense.status === 'draft' ? 'Due' :
               apiExpense.payment?.isPayment ? 'Partial' : 'Due',
       createdBy: apiExpense.createdBy?.employeeName || 'Unknown',
       paymentAddedBy: apiExpense.payment?.markedAsPaymentBy?.employeeName || 'N/A',
@@ -138,15 +146,15 @@ const transformExpenseFromAPI = (apiExpense) => {
       apiData: apiExpense
     };
   }
-  
+ 
   // For multiple items, use aggregate data
   return {
     _id: apiExpense._id,
     date: apiExpense.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
     itemName: apiExpense.items?.[0]?.itemName || apiExpense.expenseTitle || 'Expense',
     totalAmount: apiExpense.totalAmount,
-    status: apiExpense.status === 'paid' ? 'Paid' : 
-            apiExpense.status === 'draft' ? 'Due' : 
+    status: apiExpense.status === 'paid' ? 'Paid' :
+            apiExpense.status === 'draft' ? 'Due' :
             apiExpense.payment?.isPayment ? 'Partial' : 'Due',
     createdBy: apiExpense.createdBy?.employeeName || 'Unknown',
     paymentAddedBy: apiExpense.payment?.markedAsPaymentBy?.employeeName || 'N/A',
@@ -159,6 +167,7 @@ const transformExpenseFromAPI = (apiExpense) => {
     apiData: apiExpense
   };
 };
+
 
 // Utility function to transform frontend data to API format
 const transformExpenseToAPI = (frontendExpense, isNew = false) => {
@@ -174,6 +183,7 @@ const transformExpenseToAPI = (frontendExpense, isNew = false) => {
     };
   }
 
+
   return {
     expenseTitle: frontendExpense.expenseTitle,
     items: [{
@@ -181,11 +191,13 @@ const transformExpenseToAPI = (frontendExpense, isNew = false) => {
       date: frontendExpense.date,
       totalAmount: parseFloat(frontendExpense.totalAmount) || 0
     }],
-    status: frontendExpense.due === 0 ? 'paid' : 
+    status: frontendExpense.due === 0 ? 'paid' :
             frontendExpense.paid > 0 ? 'submitted' : 'draft',
     notes: frontendExpense.notes || ""
   };
 };
+
+
 
 
 const EditExpenseModal = ({ expense, onEdit, onClose }) => {
@@ -202,7 +214,9 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
     notes: expense.notes || ""
   });
 
+
   const [loading, setLoading] = useState(false);
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -212,16 +226,19 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
     }));
   };
 
+
   const calculateDue = (total, paid) => {
     const totalNum = parseFloat(total.toString().replace(/,/g, "")) || 0;
     const paidNum = parseFloat(paid.toString().replace(/,/g, "")) || 0;
     return Math.max(0, (totalNum - paidNum)).toFixed(2);
   };
 
+
   const handleTotalAmountChange = (e) => {
     const { value } = e.target;
     const newPaid = formData.paid;
     const newDue = calculateDue(value, newPaid);
+
 
     setFormData((prev) => ({
       ...prev,
@@ -230,10 +247,12 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
     }));
   };
 
+
   const handlePaidChange = (e) => {
     const { value } = e.target;
     const newTotal = formData.totalAmount;
     const newDue = calculateDue(newTotal, value);
+
 
     setFormData((prev) => ({
       ...prev,
@@ -242,18 +261,22 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
     }));
   };
 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
+
     const total = parseFloat(formData.totalAmount.toString().replace(/,/g, "")) || 0;
     const paid = parseFloat(formData.paid.toString().replace(/,/g, "")) || 0;
+
 
     if (paid > total) {
       alert("Paid amount cannot be greater than Total Amount.");
       setLoading(false);
       return;
     }
+
 
     try {
       const updatedExpense = {
@@ -269,9 +292,10 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
         notes: formData.notes
       };
 
+
       const apiData = transformExpenseToAPI(updatedExpense);
       await expenseAPI.updateExpense(expense._id, apiData);
-      
+     
       onEdit(updatedExpense);
     } catch (error) {
       alert("Error updating expense: " + error.message);
@@ -279,6 +303,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
       setLoading(false);
     }
   };
+
 
   return (
     <form onSubmit={handleSubmit} className="w-full">
@@ -295,6 +320,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
         </div>
       </div>
 
+
       {/* Form Content */}
       <div className="p-8 bg-white rounded-b-2xl">
         {/* Expense Entry Details Section */}
@@ -305,6 +331,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
               Expense Entry Details
             </h2>
           </div>
+
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Expense Title */}
@@ -322,6 +349,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
               />
             </div>
 
+
             {/* Date */}
             <div>
               <label className="block text-xs text-gray-500 mb-1">Date *</label>
@@ -336,6 +364,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
                 />
               </div>
             </div>
+
 
             {/* Item Name - CHANGED: Dropdown से Text Input में */}
             <div>
@@ -353,6 +382,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
               />
             </div>
 
+
             {/* Created By */}
             <div>
               <label className="block text-xs text-gray-500 mb-1">
@@ -366,6 +396,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
               />
             </div>
 
+
             {/* Payment Added By */}
             <div>
               <label className="block text-xs text-gray-500 mb-1">
@@ -378,6 +409,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-xl bg-gray-100 text-gray-600 outline-none"
               />
             </div>
+
 
             {/* Paid */}
             <div>
@@ -396,6 +428,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
               </div>
             </div>
 
+
             {/* Due */}
             <div>
               <label className="block text-xs text-gray-500 mb-1">Due *</label>
@@ -410,6 +443,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
                 />
               </div>
             </div>
+
 
             {/* Total Amount */}
             <div className="md:col-span-3">
@@ -430,6 +464,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
               </div>
             </div>
 
+
             {/* Notes */}
             <div className="md:col-span-3">
               <label className="block text-xs text-gray-500 mb-1">
@@ -447,6 +482,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
           </div>
         </div>
 
+
         {/* Document Section */}
         <div className="bg-white border border-gray-200 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -455,6 +491,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
               Documents
             </h2>
           </div>
+
 
           {expense.documents && expense.documents.length > 0 ? (
             <div className="space-y-2">
@@ -473,6 +510,7 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
             </p>
           )}
         </div>
+
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-4 mt-6">
@@ -498,17 +536,20 @@ const EditExpenseModal = ({ expense, onEdit, onClose }) => {
   );
 };
 
+
 /* 💰 Show Payment Details Modal Component */
 const ShowPaymentDetailsModal = ({ expense, onClose }) => {
   const [personName, setPersonName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [loading, setLoading] = useState(false);
 
+
   const handleConfirm = async () => {
     if (!personName || !paymentMethod) {
       alert("Please fill in Person Name and select a Payment Method.");
       return;
     }
+
 
     setLoading(true);
     try {
@@ -517,6 +558,7 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
         paymentType: paymentMethod.toLowerCase().replace(' ', '_'),
         attachment: ""
       };
+
 
       await expenseAPI.markAsPayment(expense._id, paymentData);
       alert("Payment marked successfully!");
@@ -528,6 +570,7 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
     }
   };
 
+
   return (
     <div className="w-full">
       {/* Header */}
@@ -537,13 +580,14 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">
-            Show Payment Details
+            Add Payment Details
           </h1>
           <p className="text-white/90 text-sm">
             Please provide the payment details below for {expense.itemName}
           </p>
         </div>
       </div>
+
 
       {/* Form Content */}
       <div className="p-8 bg-white rounded-b-2xl">
@@ -552,6 +596,7 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
           <CreditCard className="w-5 h-5" />
           Payment Details
         </h3>
+
 
         <div className="grid grid-cols-2 md:grid-cols-2 gap-6 mb-8">
           {/* Person Name */}
@@ -568,6 +613,7 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             />
           </div>
+
 
           {/* Payment Method */}
           <div>
@@ -591,6 +637,7 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
             </div>
           </div>
         </div>
+
 
         {/* Uploaded Document Section */}
         <h3 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-3 flex items-center gap-2">
@@ -631,6 +678,7 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
             </p>
           )}
 
+
           {expense.attachment && (
             <div className="mt-4 flex items-center justify-between">
               <button
@@ -644,6 +692,7 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
             </div>
           )}
         </div>
+
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-4 mt-6">
@@ -670,9 +719,11 @@ const ShowPaymentDetailsModal = ({ expense, onClose }) => {
   );
 };
 
+
 /* 🗑️ Delete Expense Modal Component */
 const DeleteExpenseModal = ({ expense, onDelete, onClose }) => {
   const [loading, setLoading] = useState(false);
+
 
   const handleDelete = async () => {
     setLoading(true);
@@ -684,6 +735,7 @@ const DeleteExpenseModal = ({ expense, onDelete, onClose }) => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="w-full">
@@ -698,6 +750,7 @@ const DeleteExpenseModal = ({ expense, onDelete, onClose }) => {
         </div>
       </div>
 
+
       {/* Content */}
       <div className="p-8 bg-white rounded-b-2xl">
         <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 mb-6">
@@ -708,10 +761,12 @@ const DeleteExpenseModal = ({ expense, onDelete, onClose }) => {
             </h2>
           </div>
 
+
           <p className="text-red-600 font-semibold mb-4">
             Are you sure you want to delete this expense? This action cannot be
             undone.
           </p>
+
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-3 bg-white border border-gray-200 rounded-lg">
@@ -749,6 +804,7 @@ const DeleteExpenseModal = ({ expense, onDelete, onClose }) => {
           </div>
         </div>
 
+
         {/* Action Buttons */}
         <div className="flex justify-end gap-4 mt-6">
           <button
@@ -772,6 +828,7 @@ const DeleteExpenseModal = ({ expense, onDelete, onClose }) => {
   );
 };
 
+
 /* ✅ View Expense Modal Component */
 const ViewExpenseModal = ({ expense }) => {
   return (
@@ -791,6 +848,7 @@ const ViewExpenseModal = ({ expense }) => {
         </div>
       </div>
 
+
       {/* Content */}
       <div className="p-6">
         {/* Expense Entry Details Section */}
@@ -801,6 +859,7 @@ const ViewExpenseModal = ({ expense }) => {
               Expense Entry Details
             </h2>
           </div>
+
 
           <div className="grid grid-cols-3 md:grid-cols-3 gap-6">
             {/* Date */}
@@ -816,6 +875,7 @@ const ViewExpenseModal = ({ expense }) => {
               </div>
             </div>
 
+
             {/* Item Name */}
             <div className="flex items-start gap-3">
               <div className="bg-green-100 p-2 rounded-lg">
@@ -829,6 +889,7 @@ const ViewExpenseModal = ({ expense }) => {
               </div>
             </div>
 
+
             {/* Created By */}
             <div className="flex items-start gap-3">
               <div className="bg-pink-100 p-2 rounded-lg">
@@ -841,6 +902,7 @@ const ViewExpenseModal = ({ expense }) => {
                 </p>
               </div>
             </div>
+
 
             {/* Payment Added By */}
             <div className="flex items-start gap-3">
@@ -856,6 +918,7 @@ const ViewExpenseModal = ({ expense }) => {
                 </p>
               </div>
             </div>
+
 
             {/* Paid */}
             <div className="flex items-start gap-3">
@@ -875,6 +938,7 @@ const ViewExpenseModal = ({ expense }) => {
               </div>
             </div>
 
+
             {/* Due */}
             <div className="flex items-start gap-3">
               <div className="bg-orange-100 p-2 rounded-lg">
@@ -892,6 +956,7 @@ const ViewExpenseModal = ({ expense }) => {
                 </p>
               </div>
             </div>
+
 
             {/* Total Amount */}
             <div className="flex items-start gap-3 md:col-span-3">
@@ -911,6 +976,7 @@ const ViewExpenseModal = ({ expense }) => {
               </div>
             </div>
 
+
             {/* Notes */}
             {expense.notes && (
               <div className="flex items-start gap-3 md:col-span-3">
@@ -928,6 +994,7 @@ const ViewExpenseModal = ({ expense }) => {
           </div>
         </div>
 
+
         {/* Uploaded Document Section */}
         {expense.documents && expense.documents.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
@@ -937,6 +1004,7 @@ const ViewExpenseModal = ({ expense }) => {
                 Uploaded Document
               </h2>
             </div>
+
 
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
@@ -965,6 +1033,7 @@ const ViewExpenseModal = ({ expense }) => {
               </table>
             </div>
 
+
             {expense.attachment && (
               <div className="mt-4 flex items-center justify-between">
                 <button className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1">
@@ -981,6 +1050,7 @@ const ViewExpenseModal = ({ expense }) => {
   );
 };
 
+
 /* ✅ Add Expense Form Component */
 const AddExpenseForm = ({ onAdd, onClose }) => {
   const [rows, setRows] = useState([
@@ -995,6 +1065,7 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
+
   const addNewRow = () => {
     const newRow = {
       id: Date.now(),
@@ -1005,11 +1076,13 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
     setRows([...rows, newRow]);
   };
 
+
   const deleteRow = (id) => {
     if (rows.length > 1) {
       setRows(rows.filter((row) => row.id !== id));
     }
   };
+
 
   const updateRow = (id, field, value) => {
     setRows(
@@ -1017,13 +1090,16 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
     );
   };
 
+
   const handleSubmit = async () => {
     const isValid = rows.every((row) => row.itemName && row.totalAmount) && expenseTitle;
+
 
     if (!isValid) {
       alert("Please fill all required fields including expense title");
       return;
     }
+
 
     setLoading(true);
     try {
@@ -1037,8 +1113,9 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
         notes: notes,
       };
 
+
       const response = await expenseAPI.createExpense(expenseData);
-      
+     
       // Transform the API response to frontend format
       const newExpenses = response.data.expense.items.map(item => ({
         _id: item._id,
@@ -1056,6 +1133,7 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
         notes: response.data.expense.notes
       }));
 
+
       onAdd(newExpenses);
     } catch (error) {
       alert("Error creating expense: " + error.message);
@@ -1063,6 +1141,7 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="w-full">
@@ -1097,11 +1176,13 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
         </div>
       </div>
 
+
       {/* Form Content */}
       <div className="p-8 bg-white rounded-b-2xl">
         <h3 className="text-2xl font-semibold text-blue-600 mb-8 border-b pb-3">
           Expense Information
         </h3>
+
 
         {/* Expense Title */}
         <div className="mb-6">
@@ -1117,6 +1198,7 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
           />
         </div>
+
 
         <div className="space-y-4">
           {rows.map((row) => (
@@ -1139,10 +1221,12 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
                 </div>
               </div>
 
+
            <div>
   <label className="block text-sm font-medium text-gray-700 mb-2">
     Item Name <span className="text-red-500">*</span>
   </label>
+
 
   <input
     type="text"
@@ -1150,11 +1234,13 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
     onChange={(e) => updateRow(row.id, "itemName", e.target.value)}
     required
     placeholder="Enter Item Name"
-    className="w-full px-4 py-3 border border-gray-300 rounded-xl 
-               focus:ring-2 focus:ring-blue-500 focus:border-transparent 
+    className="w-full px-4 py-3 border border-gray-300 rounded-xl
+               focus:ring-2 focus:ring-blue-500 focus:border-transparent
                outline-none"
   />
 </div>
+
+
 
 
               <div>
@@ -1179,6 +1265,7 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
                 </div>
               </div>
 
+
               <div className="flex items-end justify-end md:justify-start">
                 <button
                   type="button"
@@ -1196,6 +1283,7 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
             </div>
           ))}
 
+
           <div className="flex justify-center items-center py-4">
             <button
               type="button"
@@ -1206,6 +1294,7 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
               Add New Item
             </button>
           </div>
+
 
           {/* Notes */}
           <div className="mb-6">
@@ -1220,6 +1309,7 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
               placeholder="Additional notes..."
             />
           </div>
+
 
           <div className="flex justify-end gap-4">
             <button
@@ -1246,7 +1336,9 @@ const AddExpenseForm = ({ onAdd, onClose }) => {
   );
 };
 
+
 // --- START: Main OfficeExpenses Component ---
+
 
 const OfficeExpenses = () => {
   const [search, setSearch] = useState("");
@@ -1257,10 +1349,12 @@ const OfficeExpenses = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+
   // Fetch expenses on component mount
   useEffect(() => {
     fetchExpenses();
   }, []);
+
 
   const fetchExpenses = async () => {
     try {
@@ -1272,7 +1366,7 @@ const OfficeExpenses = () => {
         sortBy: 'createdAt',
         sortOrder: 'desc'
       });
-      
+     
       if (response.success) {
         const transformedExpenses = response.data.expenses.map(transformExpenseFromAPI);
         setExpenses(transformedExpenses);
@@ -1289,21 +1383,25 @@ const OfficeExpenses = () => {
     }
   };
 
+
   const filteredExpenses = expenses.filter((item) =>
     item.itemName.toLowerCase().includes(search.toLowerCase()) ||
     (item.expenseTitle && item.expenseTitle.toLowerCase().includes(search.toLowerCase()))
   );
+
 
   const totalExpense = expenses.reduce(
     (acc, item) => acc + item.totalAmount,
     0
   );
 
+
   const handleModalOpen = (type, expense = null) => {
     setSelectedExpense(expense);
     setModalType(type);
     setActiveDropdown(null);
   };
+
 
   const handleModalClose = () => {
     setModalType("");
@@ -1312,6 +1410,7 @@ const OfficeExpenses = () => {
       fetchExpenses();
     }
   };
+
 
   const handleDelete = async (id) => {
     try {
@@ -1323,10 +1422,12 @@ const OfficeExpenses = () => {
     }
   };
 
+
   const handleAddExpense = (newExpenses) => {
     setExpenses([...expenses, ...newExpenses]);
     handleModalClose();
   };
+
 
   const handleEditExpense = (updatedExpense) => {
     setExpenses(
@@ -1337,10 +1438,12 @@ const OfficeExpenses = () => {
     handleModalClose();
   };
 
+
   const toggleDropdown = (expenseId, e) => {
     e.stopPropagation();
     setActiveDropdown(activeDropdown === expenseId ? null : expenseId);
   };
+
 
   // Close dropdown when clicking outside
   React.useEffect(() => {
@@ -1348,11 +1451,13 @@ const OfficeExpenses = () => {
       setActiveDropdown(null);
     };
 
+
     document.addEventListener('click', handleClickOutside);
     return () => {
       document.removeEventListener('click', handleClickOutside);
     };
   }, []);
+
 
   if (loading) {
     return (
@@ -1364,6 +1469,7 @@ const OfficeExpenses = () => {
       </div>
     );
   }
+
 
   return (
     <div className="bg-[#EEF3FA] min-h-screen p-6">
@@ -1395,6 +1501,7 @@ const OfficeExpenses = () => {
           </div>
         </div>
 
+
         {/* Right Side: Search + Add Expense */}
         <div className="flex flex-row sm:flex-row items-end gap-3 ">
           <div className="relative flex items-center bg-white rounded-xl shadow-sm w-[300px] sm:w-[300px]">
@@ -1416,10 +1523,11 @@ const OfficeExpenses = () => {
         </div>
       </div>
 
+
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
           <p>Error loading expenses: {error}</p>
-          <button 
+          <button
             onClick={fetchExpenses}
             className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
@@ -1427,6 +1535,7 @@ const OfficeExpenses = () => {
           </button>
         </div>
       )}
+
 
       {/* Table Section */}
       <div className="bg-white rounded-2xl shadow p-4 overflow-x-auto">
@@ -1507,6 +1616,7 @@ const OfficeExpenses = () => {
                       Add Payment Details
                     </button>
 
+
                     {/* Fixed Dropdown Menu */}
                     <div className="relative">
                       <button
@@ -1515,7 +1625,7 @@ const OfficeExpenses = () => {
                       >
                         <BsThreeDotsVertical className="text-gray-600" />
                       </button>
-                      
+                     
                       {activeDropdown === exp._id && (
                         <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg w-32 z-50">
                           <button
@@ -1547,10 +1657,17 @@ const OfficeExpenses = () => {
         )}
       </div>
 
+
       {/* ✅ Modals */}
       {modalType && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleModalClose}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={handleModalClose}
               className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center text-gray-800 bg-white/50 rounded-full p-2 transition hover:bg-white/80"
@@ -1563,13 +1680,16 @@ const OfficeExpenses = () => {
               <X className="w-5 h-5" />
             </button>
 
+
             {modalType === "add" && (
               <AddExpenseForm onAdd={handleAddExpense} onClose={handleModalClose} />
             )}
 
+
             {modalType === "view" && selectedExpense && (
               <ViewExpenseModal expense={selectedExpense} />
             )}
+
 
             {modalType === "edit" && selectedExpense && (
               <EditExpenseModal
@@ -1579,6 +1699,7 @@ const OfficeExpenses = () => {
               />
             )}
 
+
             {modalType === "delete" && selectedExpense && (
               <DeleteExpenseModal
                 expense={selectedExpense}
@@ -1586,7 +1707,7 @@ const OfficeExpenses = () => {
                 onClose={handleModalClose}
               />
             )}
-            
+           
             {modalType === "payment" && selectedExpense && (
               <ShowPaymentDetailsModal
                 expense={selectedExpense}
@@ -1600,4 +1721,8 @@ const OfficeExpenses = () => {
   );
 };
 
+
 export default OfficeExpenses;
+
+
+

@@ -12,11 +12,13 @@ import {
 } from "lucide-react";
 import API_CONFIG from '../../config/api.js';
 
+
 /* ============ AXIOS INSTANCE (JWT attach) ============ */
 const api = axios.create({
   baseURL: `${API_CONFIG.BASE_URL}`,
   withCredentials: false,
 });
+
 
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -27,10 +29,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+
 /* ============ DEBUG HELPERS ============ */
 const DEBUG = true;
 // const dbg = (...args) => DEBUG && console.log("%c[DailyTarget]", "color:#2563eb;font-weight:bold", ...args);
 const dberr = (...args) => DEBUG && console.error("%c[DailyTarget]", "color:#dc2626;font-weight:bold", ...args);
+
 
 /* ============ STORAGE HELPERS ============ */
 const getUserInfoRaw = () => localStorage.getItem("user") || sessionStorage.getItem("user");
@@ -52,6 +56,7 @@ const getUserInfo = () => {
   }
 };
 
+
 /* ============ UTILS ============ */
 const normalizeDept = (d) => {
   const v = (d || "").toString().trim().toLowerCase();
@@ -60,10 +65,12 @@ const normalizeDept = (d) => {
   return null; // HR/Admin => consolidated
 };
 
+
 const toDateInputValue = (d = new Date()) => {
   const dt = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return dt.toISOString().slice(0, 10); // YYYY-MM-DD
 };
+
 
 const formatDDMMYYYY = (dStr) => {
   if (!dStr) return "—";
@@ -74,6 +81,7 @@ const formatDDMMYYYY = (dStr) => {
   const yyyy = dt.getFullYear();
   return `${dd}-${mm}-${yyyy}`;
 };
+
 
 // Treat these as placeholders -> don't prefill / don't show in summary
 const isPlaceholderReason = (val) => {
@@ -89,15 +97,18 @@ const isPlaceholderReason = (val) => {
   );
 };
 
+
 const prettyName = (key) => {
   const map = { talkTime: "Talk Time (hrs)", deliveryOrders: "Delivery Orders", truckers: "Truckers Added" };
   return map[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
 };
 
+
 const percent = (current, required) => {
   if (!required || required <= 0) return 0;
   return Math.min(100, Math.round((Number(current || 0) / Number(required)) * 100));
 };
+
 
 const StatusBadge = ({ status }) => {
   const completed = String(status).toLowerCase() === "completed";
@@ -114,6 +125,7 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+
 /* ============ SKELETON & CARD ============ */
 const SkeletonCard = () => (
   <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -123,23 +135,28 @@ const SkeletonCard = () => (
   </div>
 );
 
+
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow ${className}`}>
     {children}
   </div>
 );
 
+
 /* ============ COMPONENT ============ */
 const DailyTarget = () => {
   const { empId, department: deptFromUser } = getUserInfo();
 
+
   const [date, setDate] = useState(toDateInputValue());
   const department = useMemo(() => normalizeDept(deptFromUser), [deptFromUser]);
+
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [serverMsg, setServerMsg] = useState(null);
   const [report, setReport] = useState(null);
+
 
   // Reason modal state
   const [isReasonOpen, setIsReasonOpen] = useState(false);
@@ -147,14 +164,17 @@ const DailyTarget = () => {
   const [reasonLoading, setReasonLoading] = useState(false);
   const [reasonError, setReasonError] = useState(null);
 
+
   // Clickable date
   const dateInputRef = useRef(null);
+
 
   // HR/Admin consolidated
   const [deptAllLoading, setDeptAllLoading] = useState(false);
   const [deptAllError, setDeptAllError] = useState(null);
   const [salesDept, setSalesDept] = useState(null);
   const [cmtDept, setCmtDept] = useState(null);
+
 
   // HR/Admin: fetch both departments
   useEffect(() => {
@@ -181,13 +201,16 @@ const DailyTarget = () => {
     run();
   }, [date, department]);
 
+
   const endpoint = useMemo(() => {
     if (department === "Sales") return "/api/v1/inhouseUser/sales/report";
     if (department === "CMT") return "/api/v1/inhouseUser/cmt/report";
     return null;
   }, [department]);
 
+
   const canRequest = endpoint && empId && date;
+
 
   const SummaryCard = ({ title, value, sub }) => (
     <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-100 p-4">
@@ -196,6 +219,7 @@ const DailyTarget = () => {
       {sub ? <p className="text-xs text-gray-500 mt-0.5">{sub}</p> : null}
     </div>
   );
+
 
   const EmployeesTable = ({ rows, type }) => (
     <div className="overflow-auto rounded-xl border border-gray-100">
@@ -236,10 +260,12 @@ const DailyTarget = () => {
     </div>
   );
 
+
   // fetch self report
   useEffect(() => {
     const fetchReport = async () => {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+
 
       if (!token) {
         setLoading(false);
@@ -250,15 +276,18 @@ const DailyTarget = () => {
         return;
       }
 
+
       if (!canRequest) {
         setLoading(false);
         return;
       }
 
+
       try {
         setLoading(true);
         setError(null);
         setServerMsg(null);
+
 
         const params = { date, empId };
         const res = await api.get(endpoint, { params });
@@ -276,6 +305,7 @@ const DailyTarget = () => {
     fetchReport();
   }, [endpoint, empId, date, canRequest, department]);
 
+
   /* ===== Save Reason with 404 fallback & validation ===== */
   const REASON_ENDPOINTS = useMemo(() => ([
     "/api/v1/inhouseUser/target/reason",
@@ -283,6 +313,7 @@ const DailyTarget = () => {
     "/api/v1/inhouseUser/cmt/target/reason",
     "/api/v1/inhouseUser/daily-target/reason",
   ]), []);
+
 
   const handleSubmitReason = async () => {
     if (!reasonText.trim()) {
@@ -293,9 +324,11 @@ const DailyTarget = () => {
       setReasonLoading(true);
       setReasonError(null);
 
+
       const payload = { empId, date, reason: reasonText.trim() };
       let success = false;
       let lastErr = null;
+
 
       for (const ep of REASON_ENDPOINTS) {
         try {
@@ -311,16 +344,19 @@ const DailyTarget = () => {
         }
       }
 
+
       if (!success) {
         const data = lastErr?.response?.data;
         const msg = data?.message || data?.error || lastErr?.message || "Failed to submit reason";
         throw new Error(msg);
       }
 
+
       // optimistic UI
       setReport((prev) =>
         prev ? { ...prev, reason: reasonText.trim(), statusMessage: prev.statusMessage || "" } : prev
       );
+
 
       setIsReasonOpen(false);
       setReasonText("");
@@ -330,6 +366,7 @@ const DailyTarget = () => {
       setReasonLoading(false);
     }
   };
+
 
   // ===== Early returns =====
   if (!empId) {
@@ -349,10 +386,12 @@ const DailyTarget = () => {
     );
   }
 
+
   // HR/Admin view
   if (!department) {
     const salesSummary = salesDept?.summary;
     const cmtSummary = cmtDept?.summary;
+
 
     return (
       <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
@@ -367,6 +406,7 @@ const DailyTarget = () => {
               <p className="text-gray-600">Sales &amp; CMT — {formatDDMMYYYY(date)}</p>
             </div>
           </div>
+
 
           {/* Full clickable date field */}
           <div
@@ -387,6 +427,7 @@ const DailyTarget = () => {
           </div>
         </div>
 
+
         {/* Loading / Error */}
         {deptAllLoading && (
           <div className="min-h-[120px] flex items-center justify-center">
@@ -403,6 +444,7 @@ const DailyTarget = () => {
           </Card>
         )}
 
+
         {/* SALES & CMT */}
         {!deptAllLoading && !deptAllError && (
           <div className="space-y-8">
@@ -415,6 +457,7 @@ const DailyTarget = () => {
                 </span>
               </div>
 
+
               {salesSummary ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
                   <SummaryCard title="Dept Status" value={salesSummary.departmentStatus} />
@@ -424,12 +467,14 @@ const DailyTarget = () => {
                 </div>
               ) : null}
 
+
               {salesDept?.employees?.length ? (
                 <EmployeesTable rows={salesDept.employees} type="sales" />
               ) : (
                 <div className="text-sm text-gray-600">No Sales data for this date.</div>
               )}
             </Card>
+
 
             {/* CMT */}
             <Card className="p-6">
@@ -440,6 +485,7 @@ const DailyTarget = () => {
                 </span>
               </div>
 
+
               {cmtSummary ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
                   <SummaryCard title="Dept Status" value={cmtSummary.departmentStatus} />
@@ -448,6 +494,7 @@ const DailyTarget = () => {
                   <SummaryCard title="Truckers Added" value={`${cmtSummary.totalTruckerCount}`} sub={`Req ${cmtSummary.targets?.truckers?.required}/user`} />
                 </div>
               ) : null}
+
 
               {cmtDept?.employees?.length ? (
                 <EmployeesTable rows={cmtDept.employees} type="cmt" />
@@ -460,6 +507,26 @@ const DailyTarget = () => {
       </div>
     );
   }
+
+
+  // Show full-page loader on initial load
+  if (loading && !report) {
+    return (
+      <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Dashboard...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch your daily targets</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
@@ -474,6 +541,7 @@ const DailyTarget = () => {
             <p className="text-gray-600">{department} department report</p>
           </div>
         </div>
+
 
         {/* Full clickable date field */}
         <div
@@ -493,6 +561,7 @@ const DailyTarget = () => {
           />
         </div>
       </div>
+
 
       {/* ===== TOP ROW ===== */}
       {!error && (
@@ -517,6 +586,7 @@ const DailyTarget = () => {
                 </p>
               </Card>
 
+
               {/* Dept-specific metric */}
               {String(report.department).toLowerCase() === "sales" ? (
                 <Card className="p-5 text-center">
@@ -536,6 +606,7 @@ const DailyTarget = () => {
                 </Card>
               )}
 
+
               {/* Status */}
               <Card className="p-5 text-center">
                 <div className="w-11 h-11 bg-green-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-green-100">
@@ -548,6 +619,7 @@ const DailyTarget = () => {
                   </span>
                 </p>
               </Card>
+
 
               {/* Designation */}
               <Card className="p-5 text-center">
@@ -562,6 +634,7 @@ const DailyTarget = () => {
         </>
       )}
 
+
       {/* Loading inline */}
       {loading && (
         <div className="min-h-[100px] flex items-center justify-center mb-8">
@@ -571,6 +644,7 @@ const DailyTarget = () => {
           </div>
         </div>
       )}
+
 
       {/* Error */}
       {!loading && error && (
@@ -594,6 +668,7 @@ const DailyTarget = () => {
         </Card>
       )}
 
+
       {/* Summary + Targets */}
       {!loading && !error && report && (
         <div className="space-y-8">
@@ -606,6 +681,7 @@ const DailyTarget = () => {
                 </h2>
                 <p className="text-sm text-gray-600">Date: {formatDDMMYYYY(report.date || date)}</p>
               </div>
+
 
               {/* Right side: status + updated + Reason button */}
               <div className="flex items-center gap-3">
@@ -632,6 +708,7 @@ const DailyTarget = () => {
               </div>
             </div>
 
+
             {report.statusMessage && (
               <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700">
                 {report.statusMessage}
@@ -643,6 +720,7 @@ const DailyTarget = () => {
               </div>
             )}
           </Card>
+
 
           {/* Targets Progress */}
           <Card className="p-6">
@@ -694,6 +772,7 @@ const DailyTarget = () => {
         </div>
       )}
 
+
       {/* Empty state */}
       {!loading && !error && !report && (
         <Card className="p-8 text-center">
@@ -702,6 +781,7 @@ const DailyTarget = () => {
           </p>
         </Card>
       )}
+
 
       {/* Reason Modal */}
       {isReasonOpen && (
@@ -728,6 +808,7 @@ const DailyTarget = () => {
               </button>
             </div>
 
+
             <div className="mt-4 space-y-2">
               <label className="text-sm font-medium text-gray-700" htmlFor="reasonText">
                 Reason <span className="text-red-600">*</span>
@@ -744,6 +825,7 @@ const DailyTarget = () => {
               />
               {reasonError && <p className="text-xs text-red-600">{reasonError}</p>}
             </div>
+
 
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
@@ -773,4 +855,8 @@ const DailyTarget = () => {
   );
 };
 
+
 export default DailyTarget;
+
+
+

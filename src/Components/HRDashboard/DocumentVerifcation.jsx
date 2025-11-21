@@ -6,11 +6,13 @@ const DocumentsVerification = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
+
   const statusStyles = {
     Pending: "bg-yellow-400 text-black",
     Rejected: "bg-red-500 text-white",
     Approved: "bg-green-600 text-white",
   };
+
 
   useEffect(() => {
     const fetchEmployees = async () => {
@@ -19,8 +21,10 @@ const DocumentsVerification = () => {
         const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/`);
         const data = res.data.employees || [];
 
+
         const mapped = data.map((emp) => {
           const docs = [];
+
 
           // Flatten document structure
           if (emp.identityDocs) {
@@ -33,6 +37,7 @@ const DocumentsVerification = () => {
             });
           }
 
+
           if (emp.previousCompanyDocs) {
             Object.entries(emp.previousCompanyDocs).forEach(([key, value]) => {
               if (Array.isArray(value)) {
@@ -43,10 +48,12 @@ const DocumentsVerification = () => {
             });
           }
 
+
           // Set status
           let status = "Pending";
           if (emp.docVerified === true) status = "Approved";
           else if (emp.docVerified === false) status = "Rejected";
+
 
           return {
             _id: emp._id,
@@ -60,6 +67,7 @@ const DocumentsVerification = () => {
           };
         });
 
+
         setEmployees(mapped);
       } catch (error) {
         console.error("Fetch failed:", error);
@@ -69,8 +77,10 @@ const DocumentsVerification = () => {
       }
     };
 
+
     fetchEmployees();
   }, []);
+
 
  const handleApprove = async () => {
   const token = sessionStorage.getItem("authToken");
@@ -78,6 +88,7 @@ const DocumentsVerification = () => {
     alert("❌ You are not logged in.");
     return;
   }
+
 
   try {
     const res = await axios.patch(
@@ -90,6 +101,7 @@ const DocumentsVerification = () => {
         },
       }
     );
+
 
     if (res.data.success) {
       alert("✅ Approved successfully!");
@@ -112,6 +124,7 @@ const DocumentsVerification = () => {
     return;
   }
 
+
   try {
     const res = await axios.patch(
       `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${selectedEmployee.id}/doc-verified`,
@@ -123,6 +136,7 @@ const DocumentsVerification = () => {
         },
       }
     );
+
 
     if (res.data.success) {
       alert("❌ Rejected successfully!");
@@ -139,6 +153,7 @@ const DocumentsVerification = () => {
   }
 };
 
+
   const handleDownloadAll = () => {
     selectedEmployee.allDocs.forEach((doc) => {
       const link = document.createElement("a");
@@ -150,9 +165,11 @@ const DocumentsVerification = () => {
     });
   };
 
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Documents Verification</h1>
+
 
       <table className="w-full bg-white shadow-md rounded-md overflow-hidden">
         <thead className="bg-gray-100 text-left">
@@ -168,8 +185,17 @@ const DocumentsVerification = () => {
         <tbody>
   {loading ? (
     <tr>
-      <td colSpan="6" className="text-center py-5">
-        <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+      <td colSpan="6" className="py-12">
+        <div className="flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg py-16 mx-4">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Documents...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch employee documents</p>
+          </div>
+        </div>
       </td>
     </tr>
   ) : (
@@ -197,8 +223,9 @@ const DocumentsVerification = () => {
   )}
 </tbody>
 
+
         {/* <tbody>
-          
+         
           {employees.map((emp) => (
             <tr key={emp._id} className="border-t">
               <td className="p-3">{emp.id}</td>
@@ -223,10 +250,17 @@ const DocumentsVerification = () => {
         </tbody> */}
       </table>
 
+
       {/* Modal */}
       {selectedEmployee && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-40 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-[90%] max-w-6xl relative">
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-opacity-40 z-50 flex items-center justify-center"
+          onClick={() => setSelectedEmployee(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-lg p-6 w-[90%] max-w-6xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               className="absolute top-2 right-4 text-xl font-bold"
               onClick={() => setSelectedEmployee(null)}
@@ -246,6 +280,7 @@ const DocumentsVerification = () => {
               <div><strong>Emergency:</strong> {selectedEmployee.raw.emergencyNo}</div>
             </div>
 
+
             <h3 className="text-lg font-semibold mb-2">Documents</h3>
             <div className="flex flex-wrap gap-3 mb-6">
               {selectedEmployee.allDocs?.map((doc, i) => (
@@ -260,6 +295,7 @@ const DocumentsVerification = () => {
                 </a>
               ))}
             </div>
+
 
             <div className="flex justify-end gap-4">
               <button
@@ -288,4 +324,8 @@ const DocumentsVerification = () => {
   );
 };
 
+
 export default DocumentsVerification;
+
+
+

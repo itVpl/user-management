@@ -439,10 +439,15 @@ const ManageUser = () => {
         />
       </div>
       {loading ? (
-        <div className="flex justify-center items-center h-60">
-          <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          {/* animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto */}
-          <span className="ml-2 text-gray-600">Loading users...</span>
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Users...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the data</p>
+          </div>
         </div>
       ) : (
         <>
@@ -638,8 +643,14 @@ const ManageUser = () => {
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm"
+          onClick={() => setShowConfirmModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="text-center">
               {/* Icon */}
               <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1062,8 +1073,14 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm overflow-hidden">
-      <div className="bg-white rounded-3xl shadow-2xl w-[98%] max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm overflow-hidden scrollbar-hide"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-3xl shadow-2xl w-[98%] max-w-4xl h-[90vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="bg-gradient-to-r from-green-600 via-blue-600 to-green-800 text-white p-8 rounded-t-3xl flex-shrink-0">
           <div className="flex justify-between items-center">
@@ -1081,7 +1098,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
         </div>
 
         {/* Body */}
-        <div ref={scrollAreaRef} className="flex-1 overflow-y-auto">
+        <div ref={scrollAreaRef} className="flex-1 overflow-y-auto scrollbar-hide">
           <form onSubmit={handleSubmit} noValidate  className="p-8 space-y-8">
 
             {/* Employee Details */}
@@ -1555,3 +1572,5 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
 
 
 export default ManageUser;
+
+

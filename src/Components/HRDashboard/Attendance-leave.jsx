@@ -7,9 +7,11 @@ import {
 } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 
+
 // ------------------ COMPONENT ------------------
 const HRManagementSystem = () => {
   const [activeTab, setActiveTab] = useState('dailyAttendance'); // 'dailyAttendance' | 'leaveRequest' | 'leaveBalance'
+
 
   // Attendance data
   const [dailyAttendanceData, setDailyAttendanceData] = useState([]);
@@ -19,6 +21,7 @@ const HRManagementSystem = () => {
   const [attendanceSearch, setAttendanceSearch] = useState('');
   const [attendanceStatusFilter, setAttendanceStatusFilter] = useState('all'); // all | present | half day | absent
 
+
   // Leave data
   const [leaveRequestData, setLeaveRequestData] = useState([]);
   const [loadingLeaves, setLoadingLeaves] = useState(true);
@@ -26,8 +29,10 @@ const HRManagementSystem = () => {
   const [leaveSearch, setLeaveSearch] = useState('');
   const [leaveStatusFilter, setLeaveStatusFilter] = useState('all'); // all | pending | approved | rejected | cancelled | manager_approved
 
+
   // per-row action loading (for finalize tick)
   const [finalizing, setFinalizing] = useState({});
+
 
   // Leave Balance (static demo)
   const leaveBalanceData = [
@@ -37,12 +42,15 @@ const HRManagementSystem = () => {
     { empId: 'VPL004', name: 'Rishabh', casualLeave: '03', sickLeave: '00', totalLeave: '03' },
   ];
 
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(10);
 
+
   // Reset page on tab/date/filter/search change
   useEffect(() => setCurrentPage(1), [activeTab, selectedDate, attendanceStatusFilter, leaveStatusFilter, attendanceSearch, leaveSearch]);
+
 
   // ------------------ FETCH: Attendance ------------------
   useEffect(() => {
@@ -77,6 +85,7 @@ const HRManagementSystem = () => {
     fetchAttendance();
   }, [selectedDate]);
 
+
   // ------------------ FETCH: Leaves ------------------
   useEffect(() => {
     const fetchLeaveRequests = async () => {
@@ -99,6 +108,7 @@ const HRManagementSystem = () => {
     fetchLeaveRequests();
   }, []);
 
+
   // ------------------ HELPERS ------------------
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -114,6 +124,7 @@ const HRManagementSystem = () => {
     return `${day}-${month}-${year}`;
   };
 
+
   const getAttendanceBadge = (status) => {
     switch ((status || '').toLowerCase()) {
       case 'present':  return 'bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold';
@@ -123,6 +134,7 @@ const HRManagementSystem = () => {
     }
   };
 
+
   // normalize status to snake_case lowercase
   const normalizeStatus = (s) =>
     (s || 'pending')
@@ -131,6 +143,7 @@ const HRManagementSystem = () => {
       .toLowerCase()
       .replace(/[ -]+/g, '_'); // spaces/dash => underscore
 
+
   // label pretty
   const prettyStatus = (sRaw) => {
     const s = normalizeStatus(sRaw);
@@ -138,6 +151,7 @@ const HRManagementSystem = () => {
     if (s === 'half_day') return 'Half Day';
     return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
+
 
   // Leave status chip (badge)
   const LeaveStatusChip = ({ status }) => {
@@ -152,10 +166,12 @@ const HRManagementSystem = () => {
     return <span className={`${base} ${cls}`}>{prettyStatus(status)}</span>;
   };
 
+
   // FINALIZE: only for manager_approved -> make approved
   const finalizeApprove = async (leaveId) => {
     const reviewer = JSON.parse(sessionStorage.getItem("user"))?.empId;
     if (!reviewer) return alert("Session expired");
+
 
     try {
       setFinalizing(prev => ({ ...prev, [leaveId]: true }));
@@ -175,6 +191,7 @@ const HRManagementSystem = () => {
       setFinalizing(prev => ({ ...prev, [leaveId]: false }));
     }
   };
+
 
   // ACTION CELL:
   // - if status == manager_approved -> show green tick button (to finalize)
@@ -204,6 +221,7 @@ const HRManagementSystem = () => {
     return <span className="text-gray-400">—</span>;
   };
 
+
   // Filters
   const attendanceFiltered = dailyAttendanceData.filter(r => {
     const matchText = (attendanceSearch || '').trim().toLowerCase();
@@ -214,6 +232,7 @@ const HRManagementSystem = () => {
     return okSearch && okStatus;
   });
 
+
   const leaveFiltered = leaveRequestData.filter(r => {
     const matchText = (leaveSearch || '').trim().toLowerCase();
     const str = `${r.empId || ''} ${r.empName || ''} ${r.leaveType || ''} ${r.department || ''} ${r.role || ''}`.toLowerCase();
@@ -223,6 +242,7 @@ const HRManagementSystem = () => {
     return okSearch && okStatus;
   });
 
+
   // Pagination helpers on filtered lists
   const paginated = (arr) => {
     const start = (currentPage - 1) * recordsPerPage;
@@ -230,15 +250,18 @@ const HRManagementSystem = () => {
     return arr.slice(start, end);
   };
 
+
   const currentData = activeTab === 'dailyAttendance'
     ? attendanceFiltered
     : activeTab === 'leaveRequest'
     ? leaveFiltered
     : leaveBalanceData;
 
+
   const totalPages = Math.max(1, Math.ceil(currentData.length / recordsPerPage));
   const startIndex = (currentPage - 1) * recordsPerPage;
   const endIndex   = Math.min(startIndex + recordsPerPage, currentData.length);
+
 
   // Stats Cards (LeaveApproval-style)
   const StatsHeader = () => {
@@ -247,6 +270,7 @@ const HRManagementSystem = () => {
       const halfday = attendanceFiltered.filter(x => (x.status || '').toLowerCase() === 'half day').length;
       const absent  = attendanceFiltered.filter(x => (x.status || '').toLowerCase() === 'absent').length;
       const total   = attendanceFiltered.length;
+
 
       return (
         <div className="flex flex-wrap items-center gap-6 mb-6">
@@ -262,6 +286,7 @@ const HRManagementSystem = () => {
             </div>
           </div>
 
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
@@ -274,6 +299,7 @@ const HRManagementSystem = () => {
             </div>
           </div>
 
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
@@ -285,6 +311,7 @@ const HRManagementSystem = () => {
               </div>
             </div>
           </div>
+
 
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
@@ -301,11 +328,13 @@ const HRManagementSystem = () => {
       );
     }
 
+
     if (activeTab === 'leaveRequest') {
       const total    = leaveFiltered.length;
       const pending  = leaveFiltered.filter(x => normalizeStatus(x.status || 'pending') === 'pending').length;
       const approved = leaveFiltered.filter(x => normalizeStatus(x.status) === 'approved').length;
       const rejected = leaveFiltered.filter(x => normalizeStatus(x.status) === 'rejected').length;
+
 
       return (
         <div className="flex flex-wrap items-center gap-6 mb-6">
@@ -321,6 +350,7 @@ const HRManagementSystem = () => {
             </div>
           </div>
 
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
@@ -333,6 +363,7 @@ const HRManagementSystem = () => {
             </div>
           </div>
 
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
@@ -344,6 +375,7 @@ const HRManagementSystem = () => {
               </div>
             </div>
           </div>
+
 
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
@@ -359,6 +391,7 @@ const HRManagementSystem = () => {
         </div>
       );
     }
+
 
     // Leave Balance
     return (
@@ -378,7 +411,27 @@ const HRManagementSystem = () => {
     );
   };
 
+
   // ------------------ RENDER ------------------
+ 
+  // Show loader on initial load
+  if (loadingAttendance && loadingLeaves) {
+    return (
+      <div className="p-6">
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Attendance & Leave Data...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+ 
   return (
     <div className="p-6">
       {/* Tabs (simple) */}
@@ -400,8 +453,10 @@ const HRManagementSystem = () => {
         ))}
       </div>
 
+
       {/* Header Stats — LeaveApproval-style */}
       <StatsHeader />
+
 
       {/* Search / Filters — LeaveApproval-style */}
       <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
@@ -426,6 +481,7 @@ const HRManagementSystem = () => {
               className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
 
           {/* Right: filters */}
           <div className="flex items-center gap-3 w-full md:w-auto">
@@ -467,6 +523,7 @@ const HRManagementSystem = () => {
           </div>
         </div>
       </div>
+
 
       {/* Tables — LeaveApproval-style */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -515,6 +572,7 @@ const HRManagementSystem = () => {
               </tr>
             </thead>
 
+
             <tbody>
               {/* Loading state */}
               {((activeTab === 'dailyAttendance' && loadingAttendance) ||
@@ -529,6 +587,7 @@ const HRManagementSystem = () => {
                 </tr>
               )}
 
+
               {/* Error state */}
               {((activeTab === 'dailyAttendance' && attendanceError) ||
                 (activeTab === 'leaveRequest' && leaveError)) && (
@@ -541,6 +600,7 @@ const HRManagementSystem = () => {
                   </td>
                 </tr>
               )}
+
 
               {/* Empty / Data rows */}
               {activeTab === 'dailyAttendance' && !loadingAttendance && !attendanceError && (
@@ -568,6 +628,7 @@ const HRManagementSystem = () => {
                   ))
                 )
               )}
+
 
               {activeTab === 'leaveRequest' && !loadingLeaves && !leaveError && (
                 leaveFiltered.length === 0 ? (
@@ -598,6 +659,7 @@ const HRManagementSystem = () => {
                 )
               )}
 
+
               {activeTab === 'leaveBalance' && (
                 leaveBalanceData.length === 0 ? (
                   <tr>
@@ -622,6 +684,7 @@ const HRManagementSystem = () => {
           </table>
         </div>
 
+
         {/* Pagination — LeaveApproval-style */}
         {currentData.length > 0 && (
           <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border-t border-gray-100">
@@ -638,6 +701,7 @@ const HRManagementSystem = () => {
                   <ArrowLeft size={16} /> Previous
                 </button>
 
+
                 <div className="hidden md:flex items-center gap-1">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                     <button
@@ -651,6 +715,7 @@ const HRManagementSystem = () => {
                     </button>
                   ))}
                 </div>
+
 
                 <button
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
@@ -667,5 +732,6 @@ const HRManagementSystem = () => {
     </div>
   );
 };
+
 
 export default HRManagementSystem;

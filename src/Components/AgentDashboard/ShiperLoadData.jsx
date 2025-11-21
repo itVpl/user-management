@@ -1,4 +1,10 @@
 import React, { useEffect, useState } from 'react';
+
+
+
+
+
+
 const ShiperLoadData = () => {
   const [Loading, setLoading] = useState(true);
   useEffect(() => {
@@ -106,4 +112,7 @@ if (Loading) {
     </div>
   );
 };
+
+
 export default ShiperLoadData;
+

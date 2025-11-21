@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
+
 const LoadBoard = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [selectedLoadType, setSelectedLoadType] = useState("OTR");
     const [availableLoads, setAvailableLoads] = useState([]);
     const [loading, setLoading] = useState(true);
+
 
     const defaultLoadData = {
         weight: "",
@@ -27,6 +29,7 @@ const LoadBoard = () => {
     };
     const [loadData, setLoadData] = useState(defaultLoadData);
 
+
     useEffect(() => {
         const fetchLoads = async () => {
             setLoading(true);
@@ -41,15 +44,18 @@ const LoadBoard = () => {
         fetchLoads();
     }, []);
 
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setLoadData((prev) => ({ ...prev, [name]: value }));
     };
 
+
     const handleToggle = (type) => {
         setSelectedLoadType(type);
         setLoadData(defaultLoadData);
     };
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -105,6 +111,7 @@ const LoadBoard = () => {
         }
     };
 
+
     return (
         <div className="p-6 relative">
             {/* Top Buttons */}
@@ -129,6 +136,7 @@ const LoadBoard = () => {
                 />
             </div>
 
+
             {/* Table */}
             <div className="bg-gray-50 rounded-2xl shadow-md overflow-auto">
                 <table className="min-w-full text-sm text-left">
@@ -149,12 +157,17 @@ const LoadBoard = () => {
                     </thead>
                     <tbody className="text-gray-800">
                         {loading ? (
-                            // <tr><td colSpan="11" className="text-center py-8">Loading...</td></tr>
                             <tr>
-                                <td colSpan="11" className="text-center py-8">
-                                    <div className="flex justify-center items-center gap-3">
-                                        <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                                        <span className="text-gray-600 text-sm font-medium">Loading...</span>
+                                <td colSpan="11" className="py-12">
+                                    <div className="flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg py-16 mx-4">
+                                        <div className="relative">
+                                            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                                            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                                        </div>
+                                        <div className="mt-6 text-center">
+                                            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Loads...</p>
+                                            <p className="text-sm text-gray-600">Please wait while we fetch available loads</p>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -185,6 +198,7 @@ const LoadBoard = () => {
                 </table>
             </div>
 
+
             {/* Pagination */}
             <div className="flex justify-between items-center mt-6">
                 <div className="relative inline-block w-20">
@@ -198,6 +212,7 @@ const LoadBoard = () => {
                     </span>
                 </div>
 
+
                 <div className="flex items-center gap-2">
                     <button className="text-gray-400">❮</button>
                     <span className="text-sm">1</span>
@@ -205,17 +220,26 @@ const LoadBoard = () => {
                 </div>
             </div>
 
+
             {/* Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-opacity-20 backdrop-blur-sm flex justify-center items-center z-50">
+                <div
+                    className="fixed inset-0 bg-opacity-20 backdrop-blur-sm flex justify-center items-center z-50"
+                    onClick={() => setShowModal(false)}
+                >
 
-                    <div className="bg-white rounded-2xl w-full max-w-4xl p-6 relative">
+
+                    <div
+                        className="bg-white rounded-2xl w-full max-w-4xl p-6 relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <button
                             className="absolute top-3 right-4 text-2xl font-bold text-gray-500 hover:text-red-500"
                             onClick={() => setShowModal(false)}
                         >
                             &times;
                         </button>
+
 
                         {/* Load Type Toggle */}
                         <div className="flex justify-center mb-6 mt-4">
@@ -242,6 +266,9 @@ const LoadBoard = () => {
                                 </button>
                             </div>
                         </div>
+
+
+
 
 
 
@@ -281,6 +308,7 @@ const LoadBoard = () => {
                                         </div>
                                     </div>
 
+
                                     {/* Row 2 */}
                                     <div className="flex gap-4">
                                         <div className="relative w-full">
@@ -314,6 +342,7 @@ const LoadBoard = () => {
                                         </div>
                                     </div>
 
+
                                     {/* Row 3 */}
                                     <div className="flex gap-4">
                                         <div className="relative w-full">
@@ -346,6 +375,7 @@ const LoadBoard = () => {
                                         </div>
                                     </div>
 
+
                                     {/* Row 4 */}
                                     <div className="flex gap-4">
                                         <div className="relative w-full">
@@ -377,6 +407,7 @@ const LoadBoard = () => {
                                             </label>
                                         </div>
                                     </div>
+
 
                                     {/* Row 5 */}
                                     <div className="flex gap-4">
@@ -446,6 +477,7 @@ const LoadBoard = () => {
                                         </div>
                                     </div>
 
+
                                     {/* Row 2 */}
                                     <div className="flex gap-4">
                                         <div className="relative w-full">
@@ -477,6 +509,7 @@ const LoadBoard = () => {
                                             </label>
                                         </div>
                                     </div>
+
 
                                     {/* Row 3 */}
                                     <div className="flex gap-4">
@@ -510,6 +543,7 @@ const LoadBoard = () => {
                                         </div>
                                     </div>
 
+
                                     {/* Row 4 */}
                                     <div className="flex gap-4">
                                         <div className="relative w-full">
@@ -541,6 +575,7 @@ const LoadBoard = () => {
                                             </label>
                                         </div>
                                     </div>
+
 
                                     {/* Row 5 */}
                                     <div className="flex gap-4">
@@ -575,6 +610,7 @@ const LoadBoard = () => {
                                             </label>
                                         </div>
                                     </div>
+
 
                                     {/* Row 6 */}
                                     <div className="flex gap-4">
@@ -612,6 +648,9 @@ const LoadBoard = () => {
 
 
 
+
+
+
                                     {/* Row 8 */}
                                     <div className="flex gap-4">
                                         <div className="relative w-full">
@@ -631,8 +670,13 @@ const LoadBoard = () => {
                                         </div>
                                     </div>
 
+
                                 </div>
                             )}
+
+
+
+
 
 
 
@@ -650,6 +694,7 @@ const LoadBoard = () => {
                                 </div>
                             </div>
 
+
                             {/* Buttons */}
                             <div className="flex justify-center gap-6 mt-8">
                                 <button type="button" onClick={() => setShowModal(false)} className="bg-gray-200 px-8 py-2 rounded-full text-gray-700 hover:bg-gray-300">Cancel</button>
@@ -663,4 +708,8 @@ const LoadBoard = () => {
     );
 };
 
+
 export default LoadBoard;
+
+
+

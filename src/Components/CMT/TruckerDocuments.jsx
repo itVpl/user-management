@@ -885,8 +885,14 @@ const handleCitySelect = (city) => {
 
   if (previewImg) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
-        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4">
+      <div 
+        className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center"
+        onClick={() => setPreviewImg(null)}
+      >
+        <div 
+          className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4"
+          onClick={(e) => e.stopPropagation()}
+        >
           <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl shadow-lg" />
           <button
             onClick={() => setPreviewImg(null)}
@@ -901,8 +907,14 @@ const handleCitySelect = (city) => {
 
   if (selectedDocument) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4">
-        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh]">
+      <div 
+        className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4"
+        onClick={() => setSelectedDocument(null)}
+      >
+        <div 
+          className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh]"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex justify-between items-center">
             <h3 className="text-lg font-semibold">{selectedDocument.name}</h3>
             <button
@@ -944,8 +956,14 @@ const handleCitySelect = (city) => {
 
   if (modalType) {
     return (
-      <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center">
+      <div 
+        className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center"
+        onClick={() => setModalType(null)}
+      >
+        <div 
+          className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
@@ -967,11 +985,18 @@ const handleCitySelect = (city) => {
 
   if (showEditModal) {
     return (
-      <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-        <div className="relative w-full max-w-2xl rounded-2xl shadow-2xl overflow-auto max-h-[90vh] p-4 bg-gradient-to-br from-blue-200 via-white to-blue-300" style={{
-          scrollbarWidth: 'none', // Firefox
-          msOverflowStyle: 'none', // IE 10+
-        }}>
+      <div 
+        className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+        onClick={() => setShowEditModal(false)}
+      >
+        <div 
+          className="relative w-full max-w-2xl rounded-2xl shadow-2xl overflow-auto max-h-[90vh] p-4 bg-gradient-to-br from-blue-200 via-white to-blue-300" 
+          style={{
+            scrollbarWidth: 'none', // Firefox
+            msOverflowStyle: 'none', // IE 10+
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <style>{`
              .hide-scrollbar::-webkit-scrollbar { display: none; }
            `}</style>
@@ -1544,8 +1569,17 @@ const handleCitySelect = (city) => {
               <tbody>
                 {Loading ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-8">
-                      <div className="w-10 h-10 border-b-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <td colSpan="6" className="py-12">
+                      <div className="flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg py-16 mx-4">
+                        <div className="relative">
+                          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                          <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                        </div>
+                        <div className="mt-6 text-center">
+                          <p className="text-xl font-semibold text-gray-800 mb-2">Loading Truckers...</p>
+                          <p className="text-sm text-gray-600">Please wait while we fetch trucker documents</p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ) : currentTruckers.length === 0 ? (
@@ -1717,11 +1751,18 @@ const handleCitySelect = (city) => {
 
       {/* Trucker Details Modal */}
       {showTruckerModal && selectedTrucker && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
-            scrollbarWidth: 'none', // Firefox
-            msOverflowStyle: 'none', // IE 10+
-          }}>
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowTruckerModal(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" 
+            style={{
+              scrollbarWidth: 'none', // Firefox
+              msOverflowStyle: 'none', // IE 10+
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -1953,13 +1994,17 @@ const handleCitySelect = (city) => {
       )}
 
       {showAddTruckerForm && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center"
+          onClick={() => setShowAddTruckerForm(false)}
+        >
           <div
             className="relative w-full max-w-3xl rounded-2xl shadow-2xl overflow-auto max-h-[90vh] p-4 bg-gradient-to-br from-blue-200 via-white to-blue-300"
             style={{
               scrollbarWidth: 'none', // Firefox
               msOverflowStyle: 'none', // IE 10+
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <style>{`
               .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -1982,3 +2027,5 @@ const handleCitySelect = (city) => {
     </div>
   );
 }
+
+

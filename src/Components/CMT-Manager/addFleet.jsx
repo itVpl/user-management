@@ -716,8 +716,14 @@ export default function AddFleet() {
 
              {/* View Details Modal */}
              {showViewModal && selectedFleet && (
-                 <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-                     <div className="bg-white rounded-3xl shadow-2xl max-w-7xl w-full max-h-[95vh] overflow-y-auto scrollbar-hide">
+                 <div 
+                     className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+                     onClick={() => setShowViewModal(false)}
+                 >
+                     <div 
+                         className="bg-white rounded-3xl shadow-2xl max-w-7xl w-full max-h-[95vh] overflow-y-auto scrollbar-hide"
+                         onClick={(e) => e.stopPropagation()}
+                     >
                          {/* Header */}
                          <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
                              <div className="flex justify-between items-center">
@@ -916,8 +922,14 @@ export default function AddFleet() {
 
              {/* Add Fleet Modal */}
              {showAddModal && (
-                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 p-4">
-                     <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide border border-green-100">
+                 <div 
+                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 p-4"
+                     onClick={() => setShowAddModal(false)}
+                 >
+                     <div 
+                         className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide border border-green-100"
+                         onClick={(e) => e.stopPropagation()}
+                     >
                         <div className="sticky top-0 bg-gradient-to-r from-green-600 to-blue-500 text-white px-6 py-4 rounded-t-3xl shadow mb-6 flex justify-between items-center z-10">
                             <div>
                                 <h2 className="text-2xl font-semibold flex items-center gap-2">
@@ -1202,8 +1214,14 @@ export default function AddFleet() {
 
             {/* Assign Fleet Modal */}
             {assignModal.visible && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
-                    <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-orange-100">
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+                    onClick={closeAssignModal}
+                >
+                    <div 
+                        className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-orange-100"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="bg-gradient-to-r from-orange-600 to-red-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
                             <div>
                                 <h2 className="text-2xl font-semibold flex items-center gap-2">
@@ -1411,4 +1429,5 @@ export default function AddFleet() {
         </div>
     );
 }
+
 

@@ -9,6 +9,7 @@ import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
 
+
 // ------------------ CONFIG ------------------
 const API_BASE = `${API_CONFIG.BASE_URL}/api/v1/leave`;
 const ENDPOINTS = {
@@ -18,15 +19,19 @@ const ENDPOINTS = {
   managerApprove: (id) => `${API_BASE}/manager-approve/${id}`,
 };
 
+
 // Employee details API (by empId)
 const EMP_API = `${API_CONFIG.BASE_URL}/api/v1/inhouseUser`;
+
 
 const DEBUG = true;
 const dbg = (...a) => DEBUG && console.log('[LeaveApproval]', ...a);
 
+
 // ------------------ HELPERS ------------------
 const getFirstNonEmpty = (...vals) =>
   vals.find(v => v !== undefined && v !== null && String(v).trim() !== '');
+
 
 const deriveDateFromObjectId = (id) => {
   if (!id || typeof id !== 'string' || id.length < 8) return null;
@@ -37,6 +42,7 @@ const deriveDateFromObjectId = (id) => {
   } catch { return null; }
 };
 
+
 const parseDate = (value) => {
   if (value === null || value === undefined) return null;
   if (value instanceof Date && !isNaN(value)) return value;
@@ -46,11 +52,14 @@ const parseDate = (value) => {
   }
   if (typeof value !== 'string') return null;
 
+
   let s = value.trim().replace(/[\[\]]/g, '').replace(/\s+/g, '');
   if (s.includes('to')) return null;
 
+
   let d = new Date(s);
   if (!isNaN(d)) return d;
+
 
   let m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
   if (m) {
@@ -62,20 +71,24 @@ const parseDate = (value) => {
     return isNaN(d) ? null : d;
   }
 
+
   m = s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
   if (m) {
     d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     return isNaN(d) ? null : d;
   }
 
+
   return null;
 };
+
 
 const formatDateDisplay = (raw) => {
   const d = parseDate(raw);
   if (!d) return '—';
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
+
 
 const calcDurationInclusive = (startRaw, endRaw) => {
   const start = parseDate(startRaw);
@@ -87,6 +100,7 @@ const calcDurationInclusive = (startRaw, endRaw) => {
   return Math.round((b - a) / (1000 * 60 * 60 * 24)) + 1;
 };
 
+
 const pickStart = (l) => getFirstNonEmpty(l.startDate, l.fromDate, l.dateFrom, l.start, l.from, l.dates?.[0]);
 const pickEnd   = (l) => getFirstNonEmpty(l.endDate,   l.toDate,   l.dateTo,   l.end,   l.to,   l.dates?.[1], pickStart(l));
 const pickCreatedAny = (l) => getFirstNonEmpty(
@@ -97,12 +111,14 @@ const pickCreatedAny = (l) => getFirstNonEmpty(
 );
 const pickReason = (l) => getFirstNonEmpty(l.reason, l.notes, l.note, l.description, l.message, l.remark, l.remarks);
 
+
 const getStatus = (l) => {
   const s = (getFirstNonEmpty(l.status) ?? 'pending').toString().trim().toLowerCase();
   if (s === '1') return 'approved';
   if (s === '0') return 'pending';
   return s;
 };
+
 
 const getEmployeeNameLocal = (l) => {
   const fn = getFirstNonEmpty(l.firstName, l.employee?.firstName, l.user?.firstName);
@@ -111,8 +127,10 @@ const getEmployeeNameLocal = (l) => {
   return getFirstNonEmpty(l.employeeName, l.name, l.fullName, l.employee?.name, l.employee?.fullName, l.user?.name, full) || '';
 };
 
+
 const getEmployeeId = (l) =>
   getFirstNonEmpty(l.employeeId, l.empId, l.empID, l.employeeCode, l.employee?.empId, l.employee?.employeeId, l.user?.empId) || 'N/A';
+
 
 // 🔁 Expanded synonyms for Department + Position
 const getDepartment = (l) =>
@@ -121,6 +139,7 @@ const getDepartment = (l) =>
     l.employee?.department, l.employee?.dept, l.employee?.departmentName,
     l.user?.department, l.user?.dept, l.user?.departmentName
   ) || 'N/A';
+
 
 const getPosition = (l) =>
   getFirstNonEmpty(
@@ -133,6 +152,7 @@ const getPosition = (l) =>
     l.user?.position, l.user?.designation, l.user?.Designation,
     l.user?.title, l.user?.role, l.user?.jobTitle, l.user?.job_title, l.user?.job, l.user?.post
   ) || 'N/A';
+
 
 // ---------- Employee hydration helpers ----------
 const extractNameFromEmployeeResp = (data) => {
@@ -147,10 +167,12 @@ const extractNameFromEmployeeResp = (data) => {
   return (explicit || '').trim();
 };
 
+
 const extractDepartmentFromEmployeeResp = (data) => {
   const emp = data?.employee || data?.user || data?.data || data;
   return getFirstNonEmpty(emp?.department, emp?.dept, emp?.departmentName, emp?.deptName) || '';
 };
+
 
 const extractPositionFromEmployeeResp = (data) => {
   const emp = data?.employee || data?.user || data?.data || data;
@@ -160,9 +182,11 @@ const extractPositionFromEmployeeResp = (data) => {
   ) || '';
 };
 
+
 const hydrateEmployeeNames = async (rows) => {
   // cache now stores name + dept + pos
   const cache = new Map();
+
 
   const targets = rows.filter(
     (r) =>
@@ -176,15 +200,18 @@ const hydrateEmployeeNames = async (rows) => {
   const uniqueEmpIds = [...new Set(targets.map((r) => r._norm.employeeId))];
   dbg('Hydrating employee fields for empIds:', uniqueEmpIds);
 
+
   await Promise.all(
     uniqueEmpIds.map(async (empId) => {
       try {
         const url = `${EMP_API}/${encodeURIComponent(empId)}`;
         const { data } = await axios.get(url, { withCredentials: true });
 
+
         const name = extractNameFromEmployeeResp(data) || data?.employeeName || data?.name;
         const dept = extractDepartmentFromEmployeeResp(data);
         const pos  = extractPositionFromEmployeeResp(data);
+
 
         cache.set(empId, {
           name: (name || '').trim(),
@@ -197,18 +224,22 @@ const hydrateEmployeeNames = async (rows) => {
     })
   );
 
+
   rows.forEach((r) => {
     const empId = r._norm?.employeeId;
     const info = empId && cache.get(empId);
     if (!info) return;
+
 
     if (info.name) r._norm.employeeName = r._norm.employeeName === 'N/A' ? info.name : (r._norm.employeeName || info.name);
     if (info.dept && (!r._norm.department || r._norm.department === 'N/A')) r._norm.department = info.dept;
     if (info.pos  && (!r._norm.position   || r._norm.position   === 'N/A')) r._norm.position   = info.pos;
   });
 
+
   return rows;
 };
+
 
 // ------------------ LOCAL PERSISTENCE (for fallback mode) ------------------
 const DECISION_KEY = 'vpl_leave_decisions_v1';
@@ -245,10 +276,12 @@ const saveDecisionToCache = (rowWithNorm) => {
   } catch {}
 };
 
+
 const loadDecisionCache = () => {
   try { return JSON.parse(localStorage.getItem(DECISION_KEY) || '[]'); }
   catch { return []; }
 };
+
 
 // ------------------ Pagination helper (compact window) ------------------
 const makePages = (total, current, delta = 1) => {
@@ -266,6 +299,7 @@ const makePages = (total, current, delta = 1) => {
   return out;
 };
 
+
 // ------------------ COMPONENT ------------------
 const LeaveApproval = () => {
   const [leaveRequests, setLeaveRequests] = useState([]);
@@ -278,10 +312,12 @@ const LeaveApproval = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(10);
 
+
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState(null);
   const [managerRemarks, setManagerRemarks] = useState('');
   const [remarksError, setRemarksError] = useState(''); // validation
+
 
   // Fetch data
   const fetchLeaveRequests = async () => {
@@ -289,6 +325,7 @@ const LeaveApproval = () => {
     try {
       setLoading(true);
       let dataList = [];
+
 
       // Try ALL
       try {
@@ -322,6 +359,7 @@ const LeaveApproval = () => {
         }
       }
 
+
       const normalized = (dataList || []).map((l) => {
         const startRaw = pickStart(l);
         const endRaw   = pickEnd(l);
@@ -329,6 +367,7 @@ const LeaveApproval = () => {
         const createdFromId = !createdRaw ? deriveDateFromObjectId(l._id) : null;
         const createdFinal = createdRaw || createdFromId;
         const localName = getEmployeeNameLocal(l);
+
 
         return {
           ...l,
@@ -346,6 +385,7 @@ const LeaveApproval = () => {
           }
         };
       });
+
 
       // Merge cached decisions if we are in fallback mode
       let merged = normalized;
@@ -380,6 +420,7 @@ const LeaveApproval = () => {
         }
       }
 
+
       const withNames = await hydrateEmployeeNames(merged);
       setLeaveRequests(withNames);
     } catch (err) {
@@ -391,7 +432,9 @@ const LeaveApproval = () => {
     }
   };
 
+
   useEffect(() => { fetchLeaveRequests(); }, []);
+
 
   const getStatusBadge = (statusRaw) => {
     const status = (statusRaw || 'pending').toString().toLowerCase();
@@ -411,6 +454,7 @@ const LeaveApproval = () => {
     );
   };
 
+
   // Search + status filter
   const filteredLeaves = leaveRequests.filter(l => {
     const nm = (l._norm?.employeeName || '').toLowerCase();
@@ -420,16 +464,19 @@ const LeaveApproval = () => {
     return matchesSearch && matchesStatus;
   });
 
+
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage));
   const startIndex = (currentPage - 1) * recordsPerPage;
   const endIndex   = startIndex + recordsPerPage;
   const currentLeaves = filteredLeaves.slice(startIndex, endIndex);
 
+
   // Clamp current page if filters reduce total pages
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   const openAction = (leave, type) => {
     setSelectedLeave(leave);
@@ -438,6 +485,7 @@ const LeaveApproval = () => {
     setRemarksError('');
     setShowActionModal(true);
   };
+
 
   const applyLocalDecision = (leaveId, newStatus, remarks = '') => {
     setLeaveRequests(prev =>
@@ -462,6 +510,7 @@ const LeaveApproval = () => {
     });
   };
 
+
   const submitManagerDecision = async () => {
     if (!selectedLeave || !actionType) return;
     // Remarks required on reject
@@ -471,6 +520,7 @@ const LeaveApproval = () => {
       return;
     }
 
+
     const leaveId = selectedLeave._id || selectedLeave.id;
     setActionLoading(p => ({ ...p, [leaveId]: actionType }));
     try {
@@ -478,6 +528,7 @@ const LeaveApproval = () => {
       const url = ENDPOINTS.managerApprove(leaveId);
       dbg('PATCH', url, payload);
       const { data } = await axios.patch(url, payload, { withCredentials: true });
+
 
       if (data?.success) {
         applyLocalDecision(leaveId, actionType, managerRemarks);
@@ -495,18 +546,24 @@ const LeaveApproval = () => {
     }
   };
 
+
   if (loading) {
     return (
       <div className="p-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading leave requests...</p>
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Leave Requests...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
           </div>
         </div>
       </div>
     );
   }
+
 
   return (
     <div className="p-6">
@@ -525,6 +582,7 @@ const LeaveApproval = () => {
             </div>
           </div>
 
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
@@ -539,6 +597,7 @@ const LeaveApproval = () => {
             </div>
           </div>
 
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
@@ -552,6 +611,7 @@ const LeaveApproval = () => {
               </div>
             </div>
           </div>
+
 
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
@@ -569,6 +629,7 @@ const LeaveApproval = () => {
         </div>
       </div>
 
+
       {/* Search + Status (one line) */}
       <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
         <div className="flex flex-row items-center justify-between gap-4 flex-wrap">
@@ -583,6 +644,7 @@ const LeaveApproval = () => {
               className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+
 
           {/* RIGHT: Status filter */}
           <div className="flex items-center gap-2 w-[220px]">
@@ -601,6 +663,7 @@ const LeaveApproval = () => {
           </div>
         </div>
       </div>
+
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -628,8 +691,10 @@ const LeaveApproval = () => {
                 const reason = leave._norm?.reason || leave.reason || 'N/A';
                 const remarks = leave.managerRemarks || '';
 
+
                 const duration = calcDurationInclusive(startRaw, endRaw);
                 const durationText = duration ? `${duration} ${duration === 1 ? 'day' : 'days'}` : '—';
+
 
                 return (
                   <tr key={leave._id || index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
@@ -645,9 +710,11 @@ const LeaveApproval = () => {
                       </div>
                     </td>
 
+
                     <td className="py-4 px-6">
                       <span className="font-medium text-gray-700">{leave.leaveType || 'N/A'}</span>
                     </td>
+
 
                     <td className="py-4 px-6">
                       <div>
@@ -658,9 +725,11 @@ const LeaveApproval = () => {
                       </div>
                     </td>
 
+
                     <td className="py-4 px-6">
                       <p className="text-gray-700 max-w-xs truncate" title={reason}>{reason}</p>
                     </td>
+
 
                     <td className="py-4 px-6">
                       <div className="flex flex-col gap-1">
@@ -674,11 +743,13 @@ const LeaveApproval = () => {
                       </div>
                     </td>
 
+
                     <td className="py-4 px-6">
                       <p className="text-sm text-gray-600">
                         {formatDateDisplay(createdFinal)}
                       </p>
                     </td>
+
 
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-2">
@@ -689,6 +760,7 @@ const LeaveApproval = () => {
                         >
                           <Eye size={16} />
                         </button>
+
 
                         {status === 'pending' && (
                           <>
@@ -706,6 +778,7 @@ const LeaveApproval = () => {
                                 : <CheckCircle size={12} />}
                               Approve
                             </button>
+
 
                             <button
                               onClick={() => openAction(leave, 'rejected')}
@@ -732,6 +805,7 @@ const LeaveApproval = () => {
           </table>
         </div>
 
+
         {currentLeaves.length === 0 && (
           <div className="text-center py-12">
             <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -745,12 +819,14 @@ const LeaveApproval = () => {
         )}
       </div>
 
+
       {/* Pagination (compact + smooth) */}
       {Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage)) > 1 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
             Showing {filteredLeaves.length ? startIndex + 1 : 0} to {Math.min(endIndex, filteredLeaves.length)} of {filteredLeaves.length} requests
           </div>
+
 
           <div className="flex items-center gap-2">
             <button
@@ -761,6 +837,7 @@ const LeaveApproval = () => {
               « First
             </button>
 
+
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
@@ -768,6 +845,7 @@ const LeaveApproval = () => {
             >
               ‹ Prev
             </button>
+
 
             <div className="flex items-center gap-1">
               {makePages(Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage)), currentPage, 1).map((p, idx) =>
@@ -787,6 +865,7 @@ const LeaveApproval = () => {
               )}
             </div>
 
+
             <button
               onClick={() => setCurrentPage(p => Math.min(Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage)), p + 1))}
               disabled={currentPage === Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage))}
@@ -794,6 +873,7 @@ const LeaveApproval = () => {
             >
               Next ›
             </button>
+
 
             <button
               onClick={() => setCurrentPage(Math.max(1, Math.ceil(filteredLeaves.length / recordsPerPage)))}
@@ -806,10 +886,17 @@ const LeaveApproval = () => {
         </div>
       )}
 
+
       {/* Details Modal */}
       {showDetailsModal && selectedLeave && (
-        <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center p-4"
+          onClick={() => setShowDetailsModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -824,6 +911,7 @@ const LeaveApproval = () => {
                 <button onClick={() => setShowDetailsModal(false)} className="text-white hover:text-gray-200 text-2xl font-bold transition-colors">×</button>
               </div>
             </div>
+
 
             <div className="p-6 space-y-6">
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
@@ -849,10 +937,11 @@ const LeaveApproval = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Position</p>
                     <p className="text-gray-800">{selectedLeave._norm?.position || getPosition(selectedLeave)}</p>
-                    
+                   
                   </div>
                 </div>
               </div>
+
 
               <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
                 <div className="flex items-center gap-2 mb-3">
@@ -888,6 +977,7 @@ const LeaveApproval = () => {
                 </div>
               </div>
 
+
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
                 <div className="flex items-center gap-2 mb-3">
                   <AlertCircle className="text-purple-600" size={18} />
@@ -908,6 +998,7 @@ const LeaveApproval = () => {
                     ) : null}
                   </div>
 
+
                   {(selectedLeave._norm?.status || getStatus(selectedLeave)) === 'pending' && (
                     <div className="flex flex-col sm:flex-row gap-2">
                       <button
@@ -922,6 +1013,7 @@ const LeaveApproval = () => {
                         <CheckCircle size={16} />
                         Approve
                       </button>
+
 
                       <button
                         onClick={() => openAction(selectedLeave, 'rejected')}
@@ -940,15 +1032,23 @@ const LeaveApproval = () => {
                 </div>
               </div>
 
+
             </div>
           </div>
         </div>
       )}
 
+
       {/* Action Modal */}
       {showActionModal && selectedLeave && (
-        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowActionModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className={`p-5 ${actionType === 'approved' ? 'bg-green-600' : 'bg-red-600'} text-white`}>
               <h3 className="text-lg font-bold">
                 {actionType === 'approved' ? 'Approve Leave' : 'Reject Leave'}
@@ -996,8 +1096,13 @@ const LeaveApproval = () => {
         </div>
       )}
 
+
     </div>
   );
 };
 
+
 export default LeaveApproval;
+
+
+

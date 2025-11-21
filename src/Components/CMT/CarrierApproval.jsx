@@ -6,6 +6,7 @@ import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
 
+
 export default function CarrierApproval() {
   const [carriers, setCarriers] = useState([]);
   const [statistics, setStatistics] = useState({
@@ -15,6 +16,7 @@ export default function CarrierApproval() {
     accountantApprovedTruckers: 0,
     rejectedTruckers: 0
   });
+
 
   const [viewDoc, setViewDoc] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
@@ -26,9 +28,11 @@ export default function CarrierApproval() {
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
+
 
   // Get current user's department
   const getCurrentUserDepartment = () => {
@@ -44,9 +48,12 @@ export default function CarrierApproval() {
     return null;
   };
 
+
   const currentUserDepartment = useMemo(() => getCurrentUserDepartment(), []);
 
+
   useEffect(() => { fetchCarriers(); }, []);
+
 
   const fetchCarriers = async () => {
     try {
@@ -54,6 +61,7 @@ export default function CarrierApproval() {
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/all-truckers`, {
         headers: { 'Content-Type': 'application/json' }
       });
+
 
       if (res.data && res.data.success) {
         setCarriers(res.data.truckers || []);
@@ -73,11 +81,13 @@ export default function CarrierApproval() {
     }
   };
 
+
   // --- Helpers ---
   const norm = (s) => (s || '').toString().toLowerCase().trim();
   const isApproved = (s) => /approved/i.test(s || '');
   const isRejected = (s) => /rejected/i.test(s || '');
   const isPending  = (s) => !s || /pending/i.test(s);
+
 
   const statusColor = (status) => {
     if (isApproved(status)) return 'bg-green-100 text-green-700';
@@ -85,6 +95,7 @@ export default function CarrierApproval() {
     if (isPending(status))  return 'bg-yellow-100 text-yellow-700';
     return 'bg-blue-100 text-blue-700';
   };
+
 
   const getDocumentDisplayName = (docKey) => {
     const displayNames = {
@@ -100,7 +111,9 @@ export default function CarrierApproval() {
     return displayNames[docKey] || docKey;
   };
 
+
   const isImageFile = (fileType) => ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes((fileType || '').toUpperCase());
+
 
   // --- Search / Filter ---
   const filteredCarriers = useMemo(() => {
@@ -113,8 +126,10 @@ export default function CarrierApproval() {
     );
   }, [carriers, searchTerm]);
 
+
   // Reset page on search change
   useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+
 
   // --- Pagination computed from filtered list (fix) ---
   const totalPages = Math.ceil(filteredCarriers.length / itemsPerPage) || 1;
@@ -122,10 +137,12 @@ export default function CarrierApproval() {
   const endIndex = startIndex + itemsPerPage;
   const currentCarriers = filteredCarriers.slice(startIndex, endIndex);
 
+
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
   };
+
 
   // --- Computed accurate counters from carriers (not API) ---
   const todayCount = useMemo(() => {
@@ -133,41 +150,47 @@ export default function CarrierApproval() {
     return carriers.filter(c => c?.addedAt && new Date(c.addedAt).toDateString() === today).length;
   }, [carriers]);
 
+
   const approvedCount = useMemo(() => carriers.filter(c => isApproved(c.status)).length, [carriers]);
   const rejectedCount = useMemo(() => carriers.filter(c => isRejected(c.status)).length, [carriers]);
   const pendingCount  = useMemo(() => carriers.filter(c => isPending(c.status)).length, [carriers]);
+
 
   const handleViewCarrier = (carrier) => {
     setSelectedCarrier(carrier);
     setShowCarrierModal(true);
   };
 
+
   const handleDocumentPreview = (documentUrl, documentName) => {
     setSelectedDocument({ url: documentUrl, name: documentName });
   };
+
 
   // Check if approve/reject buttons should be shown
   const shouldShowActionButtons = (carrierStatus) => {
     const isFinance = currentUserDepartment === "Finance" || currentUserDepartment === "finance";
     const isAccountantApproved = carrierStatus?.toLowerCase() === "accountant_approved";
-    
+   
     // If Finance department user and status is accountant_approved, hide buttons
     if (isFinance && isAccountantApproved) {
       return false;
     }
-    
+   
     // For non-Finance users: if status is accountant_approved, show buttons (they can approve/reject)
     if (!isFinance && isAccountantApproved) {
       return true;
     }
-    
+   
     // For all other cases, show buttons only if pending
     return isPending(carrierStatus);
   };
 
+
   const handleStatusUpdate = async (action) => {
     try {
       if (!selectedCarrier) return;
+
 
       // Guard: Check if buttons should be shown (department-based logic)
       if (!shouldShowActionButtons(selectedCarrier.status)) {
@@ -175,23 +198,26 @@ export default function CarrierApproval() {
         return;
       }
 
+
       // Reject reason mandatory
       if (action === 'rejected' && !reason.trim()) {
         alertify.error('Please enter the reason.');
         return;
       }
 
+
       const { userId } = selectedCarrier;
       const isFinance = currentUserDepartment === "Finance" || currentUserDepartment === "finance";
 
+
       if (action === 'approved') {
         let apiUrl, payload;
-        
+       
         if (isFinance) {
           // Finance department users use accountant approval API (PATCH)
           apiUrl = `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/accountant/${userId}`;
           payload = { approvalReason: reason || 'Documents verified and approved' };
-          
+         
           const response = await axios.patch(apiUrl, payload, {
             headers: { 'Content-Type': 'application/json' }
           });
@@ -200,7 +226,7 @@ export default function CarrierApproval() {
           // Non-Finance department users use manager approval API (PATCH)
           apiUrl = `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/approval/manager/${userId}`;
           payload = { approvalReason: reason || 'Documents verified and approved' };
-          
+         
           const response = await axios.patch(apiUrl, payload, {
             headers: { 'Content-Type': 'application/json' }
           });
@@ -218,6 +244,7 @@ export default function CarrierApproval() {
         if (response.data?.success) alertify.error('❌ Carrier rejected successfully!');
       }
 
+
       // Cleanup + Refresh
       setModalType(null);
       setReason('');
@@ -231,23 +258,35 @@ export default function CarrierApproval() {
     }
   };
 
+
   if (loading) {
     return (
       <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading carriers...</p>
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Carriers...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
           </div>
         </div>
       </div>
     );
   }
 
+
   if (previewImg) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
-        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4">
+      <div
+        className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center"
+        onClick={() => setPreviewImg(null)}
+      >
+        <div
+          className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4"
+          onClick={(e) => e.stopPropagation()}
+        >
           <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl shadow-lg" />
           <button
             onClick={() => setPreviewImg(null)}
@@ -260,12 +299,19 @@ export default function CarrierApproval() {
     );
   }
 
+
   // Reason modal
   if (modalType) {
     const label = modalType === 'rejection' ? 'Reason *' : 'Reason (optional)';
     return (
-      <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[420px] relative flex flex-col">
+      <div
+        className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center"
+        onClick={() => setModalType(null)}
+      >
+        <div
+          className="bg-white p-8 rounded-2xl shadow-2xl w-[420px] relative flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
           <label className="text-sm font-semibold mb-2">
             {label}
@@ -288,8 +334,10 @@ export default function CarrierApproval() {
     );
   }
 
+
   // Card counters (computed for accuracy)
   const totalCarriers = carriers.length;
+
 
   return (
     <div className="p-6">
@@ -341,6 +389,7 @@ export default function CarrierApproval() {
           </div>
         </div>
 
+
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -354,6 +403,7 @@ export default function CarrierApproval() {
           </div>
         </div>
       </div>
+
 
       {/* Legacy viewDoc block (kept but actions hidden if finalized) */}
       {viewDoc && selectedCarrier ? (
@@ -388,6 +438,7 @@ export default function CarrierApproval() {
               </a>
             )}
           </div>
+
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50 to-white shadow flex flex-col gap-2">
@@ -490,6 +541,7 @@ export default function CarrierApproval() {
             </table>
           </div>
 
+
           {filteredCarriers.length === 0 && (
             <div className="text-center py-12">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -504,6 +556,7 @@ export default function CarrierApproval() {
         </div>
       )}
 
+
       {/* Pagination */}
       {totalPages > 1 && filteredCarriers.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
@@ -511,6 +564,7 @@ export default function CarrierApproval() {
             Showing {startIndex + 1} to {Math.min(endIndex, filteredCarriers.length)} of {filteredCarriers.length} carriers
             {searchTerm && ` (filtered from ${carriers.length} total)`}
           </div>
+
 
           <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
             <button
@@ -524,6 +578,7 @@ export default function CarrierApproval() {
               Previous
             </button>
 
+
             <div className="flex items-center gap-1">
               {currentPage > 3 && (
                 <>
@@ -536,6 +591,7 @@ export default function CarrierApproval() {
                   {currentPage > 4 && <span className="px-2 text-gray-400">...</span>}
                 </>
               )}
+
 
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(page => {
@@ -558,6 +614,7 @@ export default function CarrierApproval() {
                   </button>
                 ))}
 
+
               {currentPage < totalPages - 2 && totalPages > 7 && (
                 <>
                   {currentPage < totalPages - 3 && <span className="px-2 text-gray-400">...</span>}
@@ -570,6 +627,7 @@ export default function CarrierApproval() {
                 </>
               )}
             </div>
+
 
             <button
               onClick={() => handlePageChange(currentPage + 1)}
@@ -585,10 +643,18 @@ export default function CarrierApproval() {
         </div>
       )}
 
+
       {/* Carrier Details Modal (primary) */}
       {showCarrierModal && selectedCarrier && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowCarrierModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -603,6 +669,7 @@ export default function CarrierApproval() {
                 <button onClick={() => setShowCarrierModal(false)} className="text-white hover:text-gray-200 text-2xl font-bold">×</button>
               </div>
             </div>
+
 
             <div className="p-6 space-y-6">
               {/* Company & Contact */}
@@ -630,6 +697,7 @@ export default function CarrierApproval() {
                 </div>
               </div>
 
+
               {/* Address */}
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-4">
@@ -643,6 +711,7 @@ export default function CarrierApproval() {
                 </div>
               </div>
 
+
               {/* Documents */}
               {selectedCarrier.documents && Object.keys(selectedCarrier.documents).length > 0 && (
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
@@ -653,6 +722,7 @@ export default function CarrierApproval() {
                       {selectedCarrier.documentCount || Object.keys(selectedCarrier.documents).length} documents
                     </span>
                   </div>
+
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {Object.entries(selectedCarrier.documents).map(([docKey, docUrl]) => (
@@ -669,10 +739,12 @@ export default function CarrierApproval() {
                           </span>
                         </div>
 
+
                         <div className="space-y-2">
                           <div className="text-xs text-gray-600 truncate">
                             {docUrl.split('/').pop()}
                           </div>
+
 
                           <div className="flex gap-2">
                             <button
@@ -699,6 +771,7 @@ export default function CarrierApproval() {
                 </div>
               )}
 
+
               {/* Status reason / timestamps */}
               {(selectedCarrier.statusReason || selectedCarrier.statusUpdatedAt) && (
                 <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6">
@@ -721,6 +794,7 @@ export default function CarrierApproval() {
                   </div>
                 </div>
               )}
+
 
               {/* Action Buttons – show based on department and status */}
               {shouldShowActionButtons(selectedCarrier.status) ? (
@@ -750,9 +824,16 @@ export default function CarrierApproval() {
         </div>
       )}
 
+
       {selectedDocument && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4">
-          <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh]">
+        <div
+          className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4"
+          onClick={() => setSelectedDocument(null)}
+        >
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl w-full max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex justify-between items-center">
               <h3 className="text-lg font-semibold">{selectedDocument.name}</h3>
               <button
@@ -793,6 +874,7 @@ export default function CarrierApproval() {
   );
 }
 
+
 // Small presentational row
 function InfoRow({ icon, label, value }) {
   return (
@@ -807,3 +889,6 @@ function InfoRow({ icon, label, value }) {
     </div>
   );
 }
+
+
+

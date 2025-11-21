@@ -6,6 +6,7 @@ import API_CONFIG from '../../config/api.js';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+
 /* ---------------- Reusable components ---------------- */
 const Input = React.memo(function Input({
   name, label, placeholder, type = 'text', icon = null, required = false,
@@ -50,20 +51,25 @@ const Input = React.memo(function Input({
   );
 });
 
+
 const CustomerTable = React.memo(function CustomerTable({ customers, onAction }) {
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
+
   const totalPages = Math.max(1, Math.ceil(customers.length / pageSize));
+
 
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [customers.length, totalPages, page]);
 
+
   const pageData = useMemo(() => {
     const start = (page - 1) * pageSize;
     return customers.slice(start, start + pageSize);
   }, [customers, page]);
+
 
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -149,6 +155,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
         </table>
       </div>
 
+
       {/* Pagination */}
       {totalPages > 1 && customers.length > 0 && (
         <div className="flex items-center justify-between p-4 border-t border-gray-200 bg-gray-50">
@@ -190,6 +197,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
   );
 });
 
+
 /* ---------------- Page ---------------- */
 const initialForm = {
   compName: '',
@@ -205,6 +213,7 @@ const initialForm = {
   zipcode: '',
 };
 
+
 const getToken = () =>
   sessionStorage.getItem('token') ||
   localStorage.getItem('token') ||
@@ -212,11 +221,13 @@ const getToken = () =>
   localStorage.getItem('authToken') ||
   null;
 
+
 // Regex rules
 const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const phoneRegex = /^[0-9]{10}$/;
 const zipRegex = /^[A-Za-z0-9]{5,8}$/; // 5–8 alphanumeric
 const passComboRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*(\d|\W)).{8,14}$/; // (kept for future use)
+
 
 const AddCustomer = () => {
   const [customers, setCustomers] = useState([]);
@@ -224,31 +235,37 @@ const AddCustomer = () => {
   const [totalStats, setTotalStats] = useState({ totalCustomers: 0, pendingCustomers: 0 });
   const [open, setOpen] = useState(false);
 
+
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
+
   // field refs for focusing
   const fieldRefs = useRef({});
+
 
   // Password visible by default
   const [showPassword, setShowPassword] = useState(true);
   const [showConfirm, setShowConfirm] = useState(true);
 
+
   // Search (debounced)
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterType, setFilterType] = useState('total'); // 'all' | 'total' | 'today'
-  
+ 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 200);
     return () => clearTimeout(t);
   }, [search]);
 
+
   useEffect(() => {
     fetchAllCustomers();
     fetchTodayStats();
   }, []);
+
 
   const fetchAllCustomers = async () => {
     try {
@@ -266,6 +283,7 @@ const AddCustomer = () => {
     }
   };
 
+
   const fetchTodayStats = async () => {
     try {
       const token = getToken();
@@ -279,6 +297,7 @@ const AddCustomer = () => {
     }
   };
 
+
   // Local fallback count
   const todaysCountLocal = useMemo(() => {
     const t = new Date();
@@ -290,6 +309,7 @@ const AddCustomer = () => {
     }).length;
   }, [customers]);
   const todaysCountDisplay = Math.max(todayStats.totalAdded || 0, todaysCountLocal);
+
 
   // Validators with exact messages
   const validators = {
@@ -326,6 +346,7 @@ const AddCustomer = () => {
     },
   };
 
+
   const validateAll = useCallback((data) => {
     const newErrors = {};
     Object.entries(validators).forEach(([k, fn]) => {
@@ -343,6 +364,7 @@ const AddCustomer = () => {
     return newErrors;
   }, [customers]);
 
+
   const focusField = (fieldName) => {
     const el = fieldRefs.current?.[fieldName];
     if (el?.focus) {
@@ -351,12 +373,14 @@ const AddCustomer = () => {
     }
   };
 
+
   const handleBlur = useCallback((e) => {
     const { name, value } = e.target;
     if (!validators[name]) return;
     const msg = validators[name](value, formData);
     setErrors(prev => ({ ...prev, [name]: msg }));
   }, [formData]);
+
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -367,6 +391,7 @@ const AddCustomer = () => {
     setFormData(prev => ({ ...prev, [name]: v }));
   }, []);
 
+
   const handleOpen = () => setOpen(true);
   const handleClose = () => {
     setOpen(false);
@@ -376,6 +401,7 @@ const AddCustomer = () => {
     setShowConfirm(true);
   };
 
+
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
     const token = getToken();
@@ -384,12 +410,14 @@ const AddCustomer = () => {
       return;
     }
 
+
     const newErrors = validateAll(formData);
     const keys = Object.keys(newErrors);
     if (keys.length > 0) {
       focusField(keys[0]);
       return;
     }
+
 
     const exists = customers.some(
       c => (c?.email || '').trim().toLowerCase() === formData.email.trim().toLowerCase()
@@ -399,6 +427,7 @@ const AddCustomer = () => {
       focusField('email');
       return;
     }
+
 
     try {
       setLoading(true);
@@ -410,11 +439,13 @@ const AddCustomer = () => {
         })
       );
 
+
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-customer`,
         cleanedData,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
 
       if (res?.data?.success) {
         toast.success('Customer Created successfully!.');
@@ -431,6 +462,7 @@ const AddCustomer = () => {
         error?.message ||
         'Unexpected error';
 
+
       if (
         error?.response?.status === 409 ||
         /already.*(registered|exists)/i.test(msg) ||
@@ -446,9 +478,10 @@ const AddCustomer = () => {
     }
   };
 
+
   const filteredCustomers = useMemo(() => {
     let filtered = customers;
-    
+   
     // Apply filter type (total/today)
     if (filterType === 'today') {
       const today = new Date();
@@ -461,15 +494,16 @@ const AddCustomer = () => {
     } else if (filterType === 'total') {
       filtered = customers; // Show all
     }
-    
+   
     // Apply search filter
     const q = debouncedSearch.trim().toLowerCase();
     if (q) {
       filtered = filtered.filter(c => (c?.compName || '').toLowerCase().includes(q));
     }
-    
+   
     return filtered;
   }, [customers, debouncedSearch, filterType]);
+
 
   /* ---------- BLACKLIST / REMOVE ACTION (Modal + API) ---------- */
   const [actionOpen, setActionOpen] = useState(false);
@@ -479,8 +513,10 @@ const AddCustomer = () => {
   const [actionForm, setActionForm] = useState({ reason: '', remarks: '', attachment: null });
   const [actionErr, setActionErr] = useState({});
 
+
   const ALLOWED_ACTION_EXT = ['PNG','JPG','JPEG','WEBP','PDF','DOC','DOCX'];
   const fileOk = (f) => !f || (ALLOWED_ACTION_EXT.includes((f?.name?.split('.').pop()||'').toUpperCase()) && f.size <= 10*1024*1024);
+
 
   const openAction = (cust) => {
     const blacklisted = /blacklist/i.test(cust?.status);
@@ -491,10 +527,12 @@ const AddCustomer = () => {
     setActionOpen(true);
   };
 
+
   const closeAction = () => {
     setActionOpen(false);
     setActionTarget(null);
   };
+
 
   const onActionInput = (e) => {
     const { name, value, files } = e.target;
@@ -510,12 +548,14 @@ const AddCustomer = () => {
     setActionForm(p => ({ ...p, [name]: value }));
   };
 
+
   const submitAction = async () => {
     const errs = {};
     if (!actionForm.reason.trim()) errs.reason = 'Required';
     if (!fileOk(actionForm.attachment)) errs.attachment = 'Invalid file';
     setActionErr(errs);
     if (Object.keys(errs).length) return;
+
 
     try {
       setActionLoading(true);
@@ -525,8 +565,10 @@ const AddCustomer = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+
       const userId = actionTarget?._id || actionTarget?.userId || actionTarget?.id;
       const fd = new FormData();
+
 
       if (actionType === 'blacklist') {
         fd.append('blacklistReason', actionForm.reason);
@@ -543,6 +585,7 @@ const AddCustomer = () => {
         toast.success('Removed from blacklist successfully.');
       }
 
+
       await fetchAllCustomers();
       closeAction();
     } catch (err) {
@@ -553,6 +596,7 @@ const AddCustomer = () => {
     }
   };
   /* -------------------------------------------------------------- */
+
 
   return (
     <div className="p-6">
@@ -575,6 +619,7 @@ const AddCustomer = () => {
               </div>
             </div>
           </button>
+
 
           <button
             onClick={() => setFilterType(filterType === 'today' ? 'all' : 'today')}
@@ -605,6 +650,7 @@ const AddCustomer = () => {
             />
           </div>
 
+
           <button
             onClick={handleOpen}
             className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
@@ -614,17 +660,26 @@ const AddCustomer = () => {
         </div>
       </div>
 
+
       {/* Table hidden while modal open */}
       {!open && <CustomerTable customers={filteredCustomers} onAction={openAction} />}
 
+
       {/* Add Modal */}
       {open && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={handleClose}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -646,11 +701,13 @@ const AddCustomer = () => {
               </div>
             </div>
 
+
             {/* Form */}
             <form className="p-6 space-y-6" onSubmit={handleSubmit}>
               {/* Company Information */}
               <div className="bg-orange-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-orange-800 mb-4">Company Information</h3>
+
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input
@@ -666,6 +723,7 @@ const AddCustomer = () => {
                       inputRef={el => (fieldRefs.current.compName = el)}
                     />
 
+
                     <Input
                       name="mc_dot_no"
                       label="MC/DOT Number"
@@ -678,6 +736,7 @@ const AddCustomer = () => {
                       error={errors.mc_dot_no}
                       inputRef={el => (fieldRefs.current.mc_dot_no = el)}
                     />
+
 
                     <Input
                       name="compAdd"
@@ -699,9 +758,11 @@ const AddCustomer = () => {
                   </div>
               </div>
 
+
               {/* Contact Information */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-blue-800 mb-4">Contact Information</h3>
+
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input
@@ -722,6 +783,7 @@ const AddCustomer = () => {
                       inputRef={el => (fieldRefs.current.email = el)}
                     />
 
+
                     <Input
                       name="phoneNo"
                       label="Mobile Number"
@@ -739,6 +801,7 @@ const AddCustomer = () => {
                       }
                       inputRef={el => (fieldRefs.current.phoneNo = el)}
                     />
+
 
                     <Input
                       name="password"
@@ -770,6 +833,7 @@ const AddCustomer = () => {
                     />
                   </div>
 
+
                   {/* Confirm Password */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <Input
@@ -798,9 +862,11 @@ const AddCustomer = () => {
                   </div>
               </div>
 
+
               {/* Location Details */}
               <div className="bg-green-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-green-800 mb-4">Location Details</h3>
+
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input
@@ -870,6 +936,7 @@ const AddCustomer = () => {
                   </div>
               </div>
 
+
               {/* Tip */}
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
                 <div className="flex items-center gap-2 mb-2">
@@ -883,6 +950,7 @@ const AddCustomer = () => {
                   Password must be 8–14 characters (any characters allowed).
                 </p>
               </div>
+
 
               {/* Actions */}
               <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-gray-200">
@@ -919,10 +987,17 @@ const AddCustomer = () => {
         </div>
       )}
 
+
       {/* Blacklist / Remove Modal */}
       {actionOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-black/20 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-black/20 p-4"
+          onClick={closeAction}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-red-500 to-purple-600 text-white p-4 rounded-t-2xl flex justify-between items-center">
               <h3 className="text-lg font-semibold">
                 {actionType === 'blacklist' ? 'Blacklist Customer' : 'Remove From Blacklist'}
@@ -930,10 +1005,12 @@ const AddCustomer = () => {
               <button onClick={closeAction} className="text-2xl leading-none">×</button>
             </div>
 
+
             <div className="p-5 space-y-4" onKeyDown={(e)=>{ if(e.key==='Enter') e.preventDefault(); }}>
               <div className="text-sm text-gray-600">
                 <span className="font-semibold">{actionTarget?.compName}</span> — {actionTarget?.email}
               </div>
+
 
               <div>
                 <label className="text-sm font-medium text-gray-700">
@@ -949,6 +1026,7 @@ const AddCustomer = () => {
                 {actionErr.reason && <p className="text-xs text-red-600 mt-1">Please enter the reason.</p>}
               </div>
 
+
               <div>
                 <label className="text-sm font-medium text-gray-700">Remarks</label>
                 <textarea
@@ -963,6 +1041,7 @@ const AddCustomer = () => {
                 />
               </div>
 
+
               <div>
                 <label className="text-sm font-medium text-gray-700">Attachment (optional)</label>
                 <input
@@ -975,6 +1054,7 @@ const AddCustomer = () => {
                 {actionErr.attachment && <p className="text-xs text-red-600 mt-1">{actionErr.attachment}</p>}
                 <p className="text-xs text-gray-500 mt-1">Images/PDF/DOC/DOCX up to 10MB</p>
               </div>
+
 
               <div className="flex justify-end gap-3 pt-2">
                 <button onClick={closeAction} className="px-4 py-2 rounded-lg border">Cancel</button>
@@ -993,6 +1073,7 @@ const AddCustomer = () => {
         </div>
       )}
 
+
       {/* Toasts */}
       <ToastContainer
         position="top-right"
@@ -1010,4 +1091,8 @@ const AddCustomer = () => {
   );
 };
 
+
 export default AddCustomer;
+
+
+

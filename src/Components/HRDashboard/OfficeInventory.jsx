@@ -247,6 +247,7 @@ const OfficeInventory = () => {
 
   const fetchAllInventory = async () => {
     try {
+      setLoading(true);
       const token = sessionStorage.getItem('token') || localStorage.getItem('authToken');
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/office-inventory/inventory`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -301,6 +302,8 @@ const OfficeInventory = () => {
         }
       ]);
       setTotalStats({ totalItems: 2, assignedItems: 0, availableItems: 2 });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -593,7 +596,23 @@ const OfficeInventory = () => {
 
 
 
-
+  // Loading state
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Office Inventory...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -701,8 +720,14 @@ const OfficeInventory = () => {
 
       {/* Enhanced Modal */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-transparent p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative scrollbar-hide">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-transparent p-4"
+          onClick={handleClose}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative scrollbar-hide"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -969,19 +994,32 @@ const OfficeInventory = () => {
        {viewModalOpen && (
          <>
            {viewLoading && (
-             <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center">
-               <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4">
+             <div 
+               className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center"
+               onClick={() => setViewLoading(false)}
+             >
+               <div 
+                 className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4"
+                 onClick={(e) => e.stopPropagation()}
+               >
                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                  <p className="text-lg font-semibold text-gray-800">Loading Item Details...</p>
                  <p className="text-sm text-gray-600">Please wait while we fetch the complete data</p>
                </div>
              </div>
            )}
-           <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-             <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" style={{
-               scrollbarWidth: 'none',
-               msOverflowStyle: 'none',
-             }}>
+           <div 
+             className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+             onClick={handleCloseViewModal}
+           >
+             <div 
+               className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" 
+               style={{
+                 scrollbarWidth: 'none',
+                 msOverflowStyle: 'none',
+               }}
+               onClick={(e) => e.stopPropagation()}
+             >
                {/* Header */}
                <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
                  <div className="flex justify-between items-center">
@@ -1364,3 +1402,5 @@ const OfficeInventory = () => {
 };
 
 export default OfficeInventory;
+
+

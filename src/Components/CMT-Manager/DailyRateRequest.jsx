@@ -6,6 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { Clock, CheckCircle, Search, Calendar, DollarSign } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 
+
 const statusColors = {
   Pending: 'bg-yellow-500',
   PendingApproval: 'bg-blue-600',
@@ -16,8 +17,10 @@ const statusColors = {
   delivered: 'bg-indigo-500',
 };
 
+
 const fmtMoney = (n) =>
   typeof n === 'number' ? n.toLocaleString() : (Number(n || 0) || 0).toLocaleString();
+
 
 const toISODate = (d = new Date()) => {
   const y = d.getFullYear();
@@ -26,13 +29,16 @@ const toISODate = (d = new Date()) => {
   return `${y}-${m}-${dd}`;
 };
 
+
 // short id helper
 const shortId = (id, prefix) => (id ? `${prefix}-${String(id).slice(-4)}` : '—');
+
 
 const DailyRateRequest = () => {
   const [date, setDate] = useState(toISODate());
   const [search, setSearch] = useState('');
   const [isFetching, setIsFetching] = useState(true);
+
 
   // API state
   const [apiData, setApiData] = useState({
@@ -45,11 +51,13 @@ const DailyRateRequest = () => {
     recentBids: [],
   });
 
+
   // ---------- Fetch (NEW API ONLY) ----------
   const fetchTodayBids = async (selectedDate) => {
     console.log('[DailyRateRequest] fetchTodayBids');
     try {
       setIsFetching(true);
+
 
       const token =
         localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -58,27 +66,33 @@ const DailyRateRequest = () => {
         return;
       }
 
+
       const headers = {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       };
       const url = `${API_CONFIG.BASE_URL}/api/v1/bid/today-count?date=${selectedDate}`;
 
+
       console.log('➡️ GET URL:', url);
       console.log('➡️ Headers: ', headers);
+
 
       const t0 = performance.now();
       const res = await axios.get(url, { headers });
       const t1 = performance.now();
 
+
       console.log('⏱️ API time:', t1 - t0, 'ms');
       console.log('✅ Raw response: ', res);
       console.log('✅ Response.data: ', res?.data);
+
 
       const data = res?.data || {};
       const recentBids = data?.recentBids || [];
       console.log('📦 recentBids (' + recentBids.length + ')');
       console.log(recentBids);
+
 
       setApiData({
         success: !!data.success,
@@ -97,11 +111,13 @@ const DailyRateRequest = () => {
     }
   };
 
+
   useEffect(() => {
     console.log('[DailyRateRequest] date changed -> fetchTodayBids', date);
     fetchTodayBids(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
+
 
   // ---------- Map + Filter ----------
   const rows = useMemo(() => {
@@ -119,8 +135,10 @@ const DailyRateRequest = () => {
         b?.approvedByInhouseUser?.empId ||
         '—';
 
+
       const fullBidId = b?._id || '';
       const fullLoadId = b?.load?._id || '';
+
 
       return {
         // ids
@@ -128,6 +146,7 @@ const DailyRateRequest = () => {
         fullLoadId,
         bidIdShort: shortId(fullBidId, 'B'),
         loadIdShort: shortId(fullLoadId, 'L'),
+
 
         // fields
         rate: b?.rate ?? 0,
@@ -150,8 +169,10 @@ const DailyRateRequest = () => {
       };
     });
 
+
     console.log('🧩 mapped rows (' + mapped.length + ')');
     console.log(mapped);
+
 
     const term = search.trim().toLowerCase();
     const out = !term
@@ -169,15 +190,18 @@ const DailyRateRequest = () => {
         );
       });
 
+
     console.log(`[filter] term="${term}" -> input=${mapped.length}, output=${out.length}`);
     return out;
   }, [apiData.recentBids, search]);
+
 
   const pendingCount = apiData.bidsByStatus?.Pending || 0;
   const pendingApprovalCount = apiData.bidsByStatus?.PendingApproval || 0;
   const totalBids = apiData.totalBids || 0;
   const totalRate = apiData.additionalStats?.totalRate || 0;
   const avgRate = apiData.additionalStats?.avgRate || 0;
+
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -186,6 +210,9 @@ const DailyRateRequest = () => {
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Daily Rate Request</h1>
         {/* <p className="text-gray-600">Manage daily bids (new API)</p> */}
       </div>
+
+
+
 
 
 
@@ -203,6 +230,7 @@ const DailyRateRequest = () => {
             </div>
           </div>
 
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <DollarSign className="text-purple-600" size={20} />
@@ -212,6 +240,7 @@ const DailyRateRequest = () => {
               </div>
             </div>
           </div>
+
 
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
@@ -223,6 +252,7 @@ const DailyRateRequest = () => {
             </div>
           </div>
 
+
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <Clock className="text-yellow-600" size={20} />
@@ -232,6 +262,7 @@ const DailyRateRequest = () => {
               </div>
             </div>
           </div>
+
 
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
@@ -244,6 +275,7 @@ const DailyRateRequest = () => {
           </div>
         </div>
 
+
         {/* Controls: date + search */}
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -255,6 +287,7 @@ const DailyRateRequest = () => {
               className="w-48 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
             />
           </div>
+
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -269,10 +302,20 @@ const DailyRateRequest = () => {
         </div>
       </div>
 
+
       {/* Single Table */}
       <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
         {isFetching ? (
-          <div className="p-8 text-center text-gray-500">Loading...</div>
+          <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+            </div>
+            <div className="mt-6 text-center">
+              <p className="text-xl font-semibold text-gray-800 mb-2">Loading Rate Requests...</p>
+              <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+            </div>
+          </div>
         ) : (
           <table className="min-w-full table-auto text-sm text-left">
             <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
@@ -330,6 +373,7 @@ const DailyRateRequest = () => {
                 </tr>
               ))}
 
+
               {rows.length === 0 && (
                 <tr>
                   <td colSpan="13" className="text-center py-12">
@@ -351,4 +395,8 @@ const DailyRateRequest = () => {
   );
 };
 
+
 export default DailyRateRequest;
+
+
+

@@ -5,6 +5,7 @@ import API_CONFIG from '../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 
+
 export default function Consignment() {
   const [consignments, setConsignments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,9 +17,11 @@ export default function Consignment() {
   const [dropImages, setDropImages] = useState(null);
   const [previewImg, setPreviewImg] = useState(null);
 
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
+
 
   // Listen for assignment accepted event to refresh data
   useEffect(() => {
@@ -31,20 +34,22 @@ export default function Consignment() {
     };
   }, []);
 
+
   // Fetch consignments from API
   const fetchConsignments = async () => {
     try {
       setLoading(true);
-      
+     
       // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
+     
       console.log('Token:', token); // Debug token
-      
+     
       if (!token) {
         alertify.error('Authentication required. Please login again.');
         return;
       }
+
 
       // Fetch data from the new API endpoint for CMT assigned loads
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/cmt-assigned-loads/${sessionStorage.getItem('empId')}`, {
@@ -55,24 +60,26 @@ export default function Consignment() {
         // Removed withCredentials to avoid CORS issues
       });
 
+
       console.log('API Response:', response); // Debug response
       console.log('Response Data:', response.data); // Debug response data
+
 
       // Check if response has data property
       if (response.data && response.data.success) {
         const assignedLoads = response.data.data?.assignedLoads || [];
         console.log('Assigned Loads:', assignedLoads); // Debug assigned loads
-        
+       
         if (Array.isArray(assignedLoads)) {
           // Filter out entries where load is null and transform the rest
           const transformedData = assignedLoads
             .filter((assignedLoad) => assignedLoad.load !== null && assignedLoad.load !== undefined)
             .map((assignedLoad, index) => {
               const load = assignedLoad.load;
-              
+             
               // Find accepted trucker or fallback to first trucker
               const acceptedTrucker = load.truckers?.find(trucker => trucker.status === 'Accepted') || load.truckers?.[0];
-              
+             
               // Build origin address
               let originAddress = 'N/A';
               if (load.origin) {
@@ -82,7 +89,7 @@ export default function Consignment() {
                   originAddress = `${load.origin.city}, ${load.origin.state || ''}`.trim().replace(/^,\s*|,\s*$/g, '');
                 }
               }
-              
+             
               // Build destination address
               let destinationAddress = 'N/A';
               if (load.destination) {
@@ -92,7 +99,7 @@ export default function Consignment() {
                   destinationAddress = `${load.destination.city}, ${load.destination.state || ''}`.trim().replace(/^,\s*|,\s*$/g, '');
                 }
               }
-              
+             
               return {
                 id: assignedLoad._id || `load-${index}`,
                 sNo: index + 1, // Index is already sequential after filter
@@ -122,14 +129,15 @@ export default function Consignment() {
               };
             });
 
+
           console.log('Transformed Data:', transformedData); // Debug transformed data
           console.log('Transformed Data Count:', transformedData.length); // Debug count
-          
+         
           if (transformedData.length === 0) {
             console.warn('No valid loads found after filtering null loads');
             alertify.warning('No consignments with valid load data found');
           }
-          
+         
           setConsignments(transformedData);
         } else {
           console.log('Assigned Loads is not an array:', assignedLoads);
@@ -145,7 +153,7 @@ export default function Consignment() {
       console.error('Error fetching loads:', error);
       console.error('Error response:', error.response);
       console.error('Error message:', error.message);
-      
+     
       if (error.response) {
         console.error('Response status:', error.response.status);
         console.error('Response data:', error.response.data);
@@ -162,22 +170,25 @@ export default function Consignment() {
     }
   };
 
+
   useEffect(() => {
     fetchConsignments();
   }, []);
+
 
   // Fetch images for a specific shipment
   const fetchShipmentImages = async (shipmentNumber) => {
     try {
       setViewLoading(true);
-      
+     
       // Get authentication token
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
+     
       if (!token) {
         alertify.error('Authentication required. Please login again.');
         return null;
       }
+
 
       console.log('Fetching images for shipment:', shipmentNumber);
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${shipmentNumber}/images`, {
@@ -187,7 +198,9 @@ export default function Consignment() {
         }
       });
 
+
       console.log('Images API Response:', response.data);
+
 
       if (response.data && response.data.success) {
         console.log('Images data:', response.data.images);
@@ -206,6 +219,7 @@ export default function Consignment() {
     }
   };
 
+
   // Handle view pickup details
   const handleViewPickup = async (consignment) => {
     console.log('Opening pickup view for:', consignment.shipmentNo);
@@ -214,7 +228,7 @@ export default function Consignment() {
       viewType: 'pickup'
     });
     setShowViewModal(true);
-    
+   
     // Fetch pickup images
     const images = await fetchShipmentImages(consignment.shipmentNo);
     console.log('Pickup images received:', images);
@@ -222,6 +236,7 @@ export default function Consignment() {
       setPickupImages(images);
     }
   };
+
 
   // Handle view drop details
   const handleViewDrop = async (consignment) => {
@@ -231,7 +246,7 @@ export default function Consignment() {
       viewType: 'drop'
     });
     setShowViewModal(true);
-    
+   
     // Fetch drop images
     const images = await fetchShipmentImages(consignment.shipmentNo);
     console.log('Drop images received:', images);
@@ -239,6 +254,7 @@ export default function Consignment() {
       setDropImages(images);
     }
   };
+
 
   // Filter consignments based on search term and sort by creation date (latest first - LIFO)
   const filteredConsignments = consignments
@@ -252,21 +268,25 @@ export default function Consignment() {
     )
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
+
   // Pagination calculations
   const totalPages = Math.ceil(filteredConsignments.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentConsignments = filteredConsignments.slice(startIndex, endIndex);
 
+
   // Handle page change
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
 
+
   // Reset to first page when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
 
   // Get status color
   const getStatusColor = (status) => {
@@ -283,6 +303,7 @@ export default function Consignment() {
     }
   };
 
+
   // Render image gallery
   const renderImageGallery = (images, title) => {
     if (!images || images.length === 0) {
@@ -293,12 +314,13 @@ export default function Consignment() {
       );
     }
 
+
     return (
       <div className="grid grid-cols-2 gap-4">
         {images.map((imageUrl, index) => (
           <div key={index} className="relative group">
             {/* Simple direct image display */}
-            <div 
+            <div
               className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
               onClick={() => setPreviewImg(imageUrl)}
             >
@@ -312,7 +334,7 @@ export default function Consignment() {
                   e.target.nextSibling.style.display = 'flex';
                 }}
               />
-              <div 
+              <div
                 className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                 style={{ display: 'none' }}
               >
@@ -338,6 +360,7 @@ export default function Consignment() {
     );
   };
 
+
   // Individual image component with proper loading states
   const ImageItem = ({ imageUrl, title, index }) => {
     const [imageLoaded, setImageLoaded] = useState(false);
@@ -346,6 +369,7 @@ export default function Consignment() {
     const [retryCount, setRetryCount] = useState(0);
     const [currentImageUrl, setCurrentImageUrl] = useState(imageUrl);
     const [objectUrl, setObjectUrl] = useState(null);
+
 
     // Load image as blob to bypass CORS
     const loadImageAsBlob = async (url) => {
@@ -358,7 +382,7 @@ export default function Consignment() {
           },
           mode: 'cors'
         });
-        
+       
         if (response.ok) {
           const blob = await response.blob();
           const url = URL.createObjectURL(blob);
@@ -371,11 +395,13 @@ export default function Consignment() {
       }
     };
 
+
     const handleImageLoad = () => {
       setImageLoaded(true);
       setIsLoading(false);
       setImageError(false);
     };
+
 
     const handleImageError = () => {
       console.log('Image failed to load:', currentImageUrl);
@@ -408,6 +434,7 @@ export default function Consignment() {
       }
     };
 
+
     const retryImage = () => {
       setRetryCount(0);
       setCurrentImageUrl(imageUrl);
@@ -420,6 +447,7 @@ export default function Consignment() {
       }
     };
 
+
     // Cleanup object URL on unmount
     React.useEffect(() => {
       return () => {
@@ -429,6 +457,7 @@ export default function Consignment() {
       };
     }, [objectUrl]);
 
+
     return (
       <div className="relative group">
         {/* Loading state */}
@@ -437,6 +466,7 @@ export default function Consignment() {
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
           </div>
         )}
+
 
         {/* Image */}
         {retryCount < 2 ? (
@@ -452,7 +482,7 @@ export default function Consignment() {
             crossOrigin={retryCount === 0 ? "anonymous" : undefined}
           />
         ) : (
-          <div 
+          <div
             className="w-full h-32 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100"
             onClick={() => window.open(imageUrl, '_blank')}
             style={{
@@ -467,6 +497,7 @@ export default function Consignment() {
             </div>
           </div>
         )}
+
 
         {/* Error state */}
         {imageError && (
@@ -490,6 +521,7 @@ export default function Consignment() {
           </div>
         )}
 
+
         {/* Hover overlay */}
         {imageLoaded && (
           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
@@ -500,12 +532,14 @@ export default function Consignment() {
     );
   };
 
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Consignment Management</h1>
       </div>
+
 
       {/* Stats and Actions */}
       <div className="flex justify-between items-center mb-6">
@@ -569,13 +603,19 @@ export default function Consignment() {
         </div>
       </div>
 
+
       {/* Consignments Table */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-500 text-lg">Loading consignments...</p>
-            <p className="text-gray-400 text-sm">Please wait while we fetch the data</p>
+          <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+            </div>
+            <div className="mt-6 text-center">
+              <p className="text-xl font-semibold text-gray-800 mb-2">Loading Consignments...</p>
+              <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+            </div>
           </div>
         ) : (
           <>
@@ -629,8 +669,8 @@ export default function Consignment() {
                            onClick={() => handleViewPickup(consignment)}
                            disabled={viewLoading}
                            className={`px-3 py-1 text-blue-600 text-xs rounded-md transition-colors border border-blue-300 hover:bg-blue-50 ${
-                             viewLoading 
-                               ? 'opacity-50 cursor-not-allowed' 
+                             viewLoading
+                               ? 'opacity-50 cursor-not-allowed'
                                : ''
                            }`}
                          >
@@ -642,8 +682,8 @@ export default function Consignment() {
                            onClick={() => handleViewDrop(consignment)}
                            disabled={viewLoading}
                            className={`px-3 py-1 text-green-600 text-xs rounded-md transition-colors border border-green-300 hover:bg-green-50 ${
-                             viewLoading 
-                               ? 'opacity-50 cursor-not-allowed' 
+                             viewLoading
+                               ? 'opacity-50 cursor-not-allowed'
                                : ''
                            }`}
                          >
@@ -669,6 +709,7 @@ export default function Consignment() {
           </>
         )}
       </div>
+
 
       {/* Pagination */}
       {totalPages > 1 && filteredConsignments.length > 0 && (
@@ -708,10 +749,21 @@ export default function Consignment() {
         </div>
       )}
 
+
       {/* View Details Modal */}
       {showViewModal && selectedConsignment && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => {
+            setShowViewModal(false);
+            setPickupImages(null);
+            setDropImages(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -741,8 +793,10 @@ export default function Consignment() {
               </div>
             </div>
 
+
             {/* Content */}
             <div className="p-6">
+
 
               {/* Images Section */}
               <div className="mt-6">
@@ -762,16 +816,16 @@ export default function Consignment() {
                           </div>
                         ) : (
                           <>
-                        
+                       
                         {/* All Pickup Images in one section */}
                         <div className="bg-white p-4 rounded-lg border border-gray-200">
                           <h4 className="text-md font-semibold text-gray-700 mb-3">Pickup Images</h4>
-                          
+                         
                           <div className="grid grid-cols-2 gap-4">
                             {/* Empty Truck Images */}
                             {pickupImages.emptyTruckImages && pickupImages.emptyTruckImages.map((imageUrl, index) => (
                               <div key={`empty-${index}`} className="relative group">
-                                <div 
+                                <div
                                   className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
                                   onClick={() => setPreviewImg(imageUrl)}
                                 >
@@ -787,7 +841,7 @@ export default function Consignment() {
                                       e.target.nextSibling.style.display = 'flex';
                                     }}
                                   />
-                                  <div 
+                                  <div
                                     className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                                     style={{ display: 'none' }}
                                   >
@@ -811,10 +865,11 @@ export default function Consignment() {
                               </div>
                             ))}
 
+
                             {/* EIR Tickets */}
                             {pickupImages.eirTickets && pickupImages.eirTickets.map((imageUrl, index) => (
                               <div key={`eir-${index}`} className="relative group">
-                                <div 
+                                <div
                                   className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
                                   onClick={() => setPreviewImg(imageUrl)}
                                 >
@@ -829,7 +884,7 @@ export default function Consignment() {
                                       e.target.src = imageUrl;
                                     }}
                                   />
-                                  <div 
+                                  <div
                                     className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                                     style={{ display: 'none' }}
                                   >
@@ -853,10 +908,11 @@ export default function Consignment() {
                               </div>
                             ))}
 
+
                             {/* Container Images */}
                             {pickupImages.containerImages && pickupImages.containerImages.map((imageUrl, index) => (
                               <div key={`container-${index}`} className="relative group">
-                                <div 
+                                <div
                                   className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
                                   onClick={() => setPreviewImg(imageUrl)}
                                 >
@@ -871,7 +927,7 @@ export default function Consignment() {
                                       e.target.src = imageUrl;
                                     }}
                                   />
-                                  <div 
+                                  <div
                                     className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                                     style={{ display: 'none' }}
                                   >
@@ -895,10 +951,11 @@ export default function Consignment() {
                               </div>
                             ))}
 
+
                             {/* Seal Images */}
                             {pickupImages.sealImages && pickupImages.sealImages.map((imageUrl, index) => (
                               <div key={`seal-${index}`} className="relative group">
-                                <div 
+                                <div
                                   className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
                                   onClick={() => setPreviewImg(imageUrl)}
                                 >
@@ -913,7 +970,7 @@ export default function Consignment() {
                                       e.target.src = imageUrl;
                                     }}
                                   />
-                                  <div 
+                                  <div
                                     className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                                     style={{ display: 'none' }}
                                   >
@@ -939,6 +996,7 @@ export default function Consignment() {
                           </div>
                         </div>
 
+
                         {/* Pickup Notes */}
                         {pickupImages.notes && (
                           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -951,6 +1009,7 @@ export default function Consignment() {
                       </div>
                     )}
 
+
                     {selectedConsignment.viewType === 'drop' && (
                       <div className="space-y-6">
                         <h3 className="text-lg font-semibold text-gray-800">Drop Location Images</h3>
@@ -960,16 +1019,16 @@ export default function Consignment() {
                           </div>
                         ) : (
                           <>
-                        
+                       
                         {/* All Drop Images in one section */}
                         <div className="bg-white p-4 rounded-lg border border-gray-200">
                           <h4 className="text-md font-semibold text-gray-700 mb-3">Drop Images</h4>
-                          
+                         
                           <div className="grid grid-cols-2 gap-4">
                             {/* POD Images */}
                             {dropImages.dropLocationImages.podImages && dropImages.dropLocationImages.podImages.map((imageUrl, index) => (
                               <div key={`pod-${index}`} className="relative group">
-                                <div 
+                                <div
                                   className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
                                   onClick={() => setPreviewImg(imageUrl)}
                                 >
@@ -984,7 +1043,7 @@ export default function Consignment() {
                                       e.target.nextSibling.style.display = 'flex';
                                     }}
                                   />
-                                  <div 
+                                  <div
                                     className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                                     style={{ display: 'none' }}
                                   >
@@ -1008,10 +1067,11 @@ export default function Consignment() {
                               </div>
                             ))}
 
+
                             {/* Loaded Truck Images */}
                             {dropImages.dropLocationImages.loadedTruckImages && dropImages.dropLocationImages.loadedTruckImages.map((imageUrl, index) => (
                               <div key={`loaded-${index}`} className="relative group">
-                                <div 
+                                <div
                                   className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
                                   onClick={() => setPreviewImg(imageUrl)}
                                 >
@@ -1026,7 +1086,7 @@ export default function Consignment() {
                                       e.target.nextSibling.style.display = 'flex';
                                     }}
                                   />
-                                  <div 
+                                  <div
                                     className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                                     style={{ display: 'none' }}
                                   >
@@ -1050,10 +1110,11 @@ export default function Consignment() {
                               </div>
                             ))}
 
+
                             {/* Drop Location Images */}
                             {dropImages.dropLocationImages.dropLocationImages && dropImages.dropLocationImages.dropLocationImages.map((imageUrl, index) => (
                               <div key={`droploc-${index}`} className="relative group">
-                                <div 
+                                <div
                                   className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
                                   onClick={() => setPreviewImg(imageUrl)}
                                 >
@@ -1068,7 +1129,7 @@ export default function Consignment() {
                                       e.target.nextSibling.style.display = 'flex';
                                     }}
                                   />
-                                  <div 
+                                  <div
                                     className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                                     style={{ display: 'none' }}
                                   >
@@ -1092,10 +1153,11 @@ export default function Consignment() {
                               </div>
                             ))}
 
+
                             {/* Empty Truck Images */}
                             {dropImages.dropLocationImages.emptyTruckImages && dropImages.dropLocationImages.emptyTruckImages.map((imageUrl, index) => (
                               <div key={`empty-drop-${index}`} className="relative group">
-                                <div 
+                                <div
                                   className="w-full h-40 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 relative overflow-hidden"
                                   onClick={() => setPreviewImg(imageUrl)}
                                 >
@@ -1110,7 +1172,7 @@ export default function Consignment() {
                                       e.target.nextSibling.style.display = 'flex';
                                     }}
                                   />
-                                  <div 
+                                  <div
                                     className="absolute inset-0 bg-red-50 flex flex-col items-center justify-center text-red-500 text-sm h-40"
                                     style={{ display: 'none' }}
                                   >
@@ -1136,6 +1198,7 @@ export default function Consignment() {
                           </div>
                         </div>
 
+
                         {/* Drop Notes */}
                         {dropImages.dropLocationImages.notes && (
                           <div className="bg-green-50 p-4 rounded-lg border border-green-200">
@@ -1155,14 +1218,21 @@ export default function Consignment() {
         </div>
       )}
 
+
       {/* Image Preview Modal */}
       {previewImg && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4">
-          <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl max-h-[90vh]">
-            <img 
-              src={previewImg} 
-              alt="Image Preview" 
-              className="max-h-[80vh] w-full object-contain rounded-xl shadow-lg" 
+        <div
+          className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4"
+          onClick={() => setPreviewImg(null)}
+        >
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-4xl max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={previewImg}
+              alt="Image Preview"
+              className="max-h-[80vh] w-full object-contain rounded-xl shadow-lg"
             />
             <button
               onClick={() => setPreviewImg(null)}

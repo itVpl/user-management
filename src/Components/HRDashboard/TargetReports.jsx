@@ -4,6 +4,7 @@ import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
 
+
 export default function TargetReports() {
   const API_BASE_URL = `${API_CONFIG.BASE_URL}`;
   const [activeTab, setActiveTab] = useState('sales');
@@ -12,17 +13,18 @@ export default function TargetReports() {
   const [salesData, setSalesData] = useState(null);
   const [cmtData, setCmtData] = useState(null);
 
+
   // Check if user is logged in
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  
+ 
   if (!token) {
     return (
       <div className="p-6 text-center">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
           <h3 className="text-lg font-semibold text-red-800 mb-2">Authentication Required</h3>
           <p className="text-red-600 mb-4">Please login to access the target reports.</p>
-          <button 
-            onClick={() => window.location.href = '/login'} 
+          <button
+            onClick={() => window.location.href = '/login'}
             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
             Go to Login
@@ -31,6 +33,7 @@ export default function TargetReports() {
       </div>
     );
   }
+
 
   // Fetch Sales Report
   const fetchSalesReport = async (date) => {
@@ -43,7 +46,9 @@ export default function TargetReports() {
         }
       });
 
+
       const data = await response.json();
+
 
       if (data.success) {
         setSalesData(data.data);
@@ -58,6 +63,7 @@ export default function TargetReports() {
     }
   };
 
+
   // Fetch CMT Report
   const fetchCMTReport = async (date) => {
     try {
@@ -69,7 +75,9 @@ export default function TargetReports() {
         }
       });
 
+
       const data = await response.json();
+
 
       if (data.success) {
         setCmtData(data.data);
@@ -84,6 +92,7 @@ export default function TargetReports() {
     }
   };
 
+
   // Fetch data based on active tab
   const fetchReport = async () => {
     if (activeTab === 'sales') {
@@ -93,12 +102,15 @@ export default function TargetReports() {
     }
   };
 
+
   useEffect(() => {
     fetchReport();
   }, [activeTab, selectedDate]);
 
+
   // Get current data based on active tab
   const currentData = activeTab === 'sales' ? salesData : cmtData;
+
 
   // Helper function to get status color
   const getStatusColor = (status) => {
@@ -109,6 +121,7 @@ export default function TargetReports() {
     }
   };
 
+
   // Helper function to get status icon
   const getStatusIcon = (status) => {
     switch (status) {
@@ -117,6 +130,7 @@ export default function TargetReports() {
       default: return <Clock size={16} />;
     }
   };
+
 
   return (
     <div className="p-6">
@@ -131,7 +145,7 @@ export default function TargetReports() {
             <p className="text-gray-600">Monitor daily targets and performance</p>
           </div>
         </div>
-        
+       
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Calendar className="text-gray-500" size={18} />
@@ -152,6 +166,7 @@ export default function TargetReports() {
           </button>
         </div>
       </div>
+
 
       {/* Tabs */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 mb-6">
@@ -185,15 +200,22 @@ export default function TargetReports() {
         </div>
       </div>
 
+
       {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading {activeTab === 'sales' ? 'Sales' : 'CMT'} report...</p>
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+          </div>
+          <div className="mt-6 text-center">
+            <p className="text-xl font-semibold text-gray-800 mb-2">Loading {activeTab === 'sales' ? 'Sales' : 'CMT'} Report...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
           </div>
         </div>
       ) : currentData ? (
         <>
+
+
 
 
           {/* Targets Summary */}
@@ -221,6 +243,7 @@ export default function TargetReports() {
                 </div>
               </div>
 
+
               <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-xl">
                 <div className="flex items-center gap-3 mb-3">
                   {activeTab === 'sales' ? (
@@ -236,7 +259,7 @@ export default function TargetReports() {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Required:</span>
                     <span className="font-medium">
-                      {activeTab === 'sales' 
+                      {activeTab === 'sales'
                         ? currentData.summary.targets.deliveryOrders.required
                         : currentData.summary.targets.truckers.required
                       }
@@ -245,7 +268,7 @@ export default function TargetReports() {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Achieved:</span>
                     <span className="font-medium">
-                      {activeTab === 'sales' 
+                      {activeTab === 'sales'
                         ? currentData.summary.targets.deliveryOrders.total
                         : currentData.summary.targets.truckers.total
                       }
@@ -254,7 +277,7 @@ export default function TargetReports() {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Average:</span>
                     <span className="font-medium">
-                      {activeTab === 'sales' 
+                      {activeTab === 'sales'
                         ? currentData.summary.targets.deliveryOrders.avg
                         : currentData.summary.targets.truckers.avg.toFixed(1)
                       }
@@ -265,13 +288,14 @@ export default function TargetReports() {
             </div>
           </div>
 
+
           {/* Employees Table */}
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-800">Employee Performance</h3>
               <p className="text-gray-600 text-sm">Detailed breakdown for {currentData.date}</p>
             </div>
-            
+           
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -312,7 +336,7 @@ export default function TargetReports() {
                             {activeTab === 'sales' ? employee.deliveryOrdersCount : employee.truckerCount}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {activeTab === 'sales' 
+                            {activeTab === 'sales'
                               ? `${employee.targets.deliveryOrders.current}/${employee.targets.deliveryOrders.required}`
                               : `${employee.targets.truckers.current}/${employee.targets.truckers.required}`
                             }
@@ -346,4 +370,5 @@ export default function TargetReports() {
       )}
     </div>
   );
-} 
+}
+

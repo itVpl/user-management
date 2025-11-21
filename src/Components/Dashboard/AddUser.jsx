@@ -3,6 +3,8 @@ import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
 
 
+
+
 const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   // === Regex & helpers ===
   const EMPID_ALNUM = /^[A-Za-z0-9]+$/;
@@ -14,6 +16,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;           // SBIN0XXXXXX
   // 10 MB in BYTES
   const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
 
   const ID_DOCS = [
     { key: 'pancard', label: 'PAN Card', required: false, icon: '🆔' },
@@ -31,6 +34,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   };
   const maxDOB = minusYears(18); // DOB must be ≤ this
   const maxDOJ = todayStr();     // DOJ must be ≤ today
+
 
   const initialFields = [
     { name: 'empId', placeholder: 'e.g., VPL001', required: true, label: 'Employee ID', icon: '👤' },
@@ -54,9 +58,11 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     { name: 'basicSalary', placeholder: 'Basic Salary', label: 'Basic Salary', icon: '💰' }
   ];
 
+
   const [formData, setFormData] = useState(
     initialFields.reduce((acc, field) => ({ ...acc, [field.name]: '' }), { role: 'superadmin' })
   );
+
 
   const [files, setFiles] = useState({
     pancard: null,
@@ -68,6 +74,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     bankStatementOrSalarySlip: [],
   });
 
+
   const [uploadStatus, setUploadStatus] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
@@ -78,6 +85,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   const [errorModal, setErrorModal] = useState(null);       // in-app error modal
   const [interceptedAlert, setInterceptedAlert] = useState(''); // blocks native alerts
 
+
   // Block any window.alert while this modal is open (route to in-app notice)
   useEffect(() => {
     const originalAlert = window.alert;
@@ -85,32 +93,40 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     return () => { window.alert = originalAlert; };
   }, []);
 
+
   const setErr = (k, m) => setErrors(p => ({ ...p, [k]: m }));
   const clearErr = (k) => setErrors(p => { const n = { ...p }; delete n[k]; return n; });
+
 
   const handleInputChange = (e) => {
     const { name } = e.target;
     let { value } = e.target;
+
 
     // Name: only letters + single spaces
     if (name === 'accountHolderName' || name === 'employeeName' || name === 'aliasName' || name === 'department' || name === 'designation') {
       value = value.replace(/[^A-Za-z\s]/g, '').replace(/\s{2,}/g, ' ').slice(0, 50);
     }
 
+
     if (name === 'email') value = value.replace(/\s+/g, '');
+
 
     // Mobiles: only digits, max 10
     if (['mobileNo', 'alternateNo', 'emergencyNo'].includes(name)) {
       value = value.replace(/\D+/g, '').slice(0, 10);
     }
 
+
     // EmpId: no spaces
     if (name === 'empId') value = value.replace(/\s+/g, '');
+
 
     // Banking
     if (name === 'accountNumber') value = value.replace(/\D/g, '').slice(0, 18);
     if (name === 'ifscCode') value = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11);
     if (name === 'basicSalary') value = value.replace(/\D/g, '');
+
 
     // Password: hard cap 14
     if (name === 'password' || name === 'confirmPassword') value = value.slice(0, 14);
@@ -162,7 +178,9 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     }
     setFormData(prev => ({ ...prev, [name]: value }));
 
+
   };
+
 
   const validateFile = (file, maxSizeBytes = MAX_FILE_BYTES) => {
     const allowedTypes = [
@@ -180,10 +198,12 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     return { valid: true };
   };
 
+
   const handleFileChange = (e) => {
     const { name, files: selected } = e.target;
     if (!selected || selected.length === 0) return;
     const list = Array.from(selected);
+
 
     const firstBad = list.map((f) => validateFile(f, MAX_FILE_BYTES)).find((r) => !r.valid);
     if (firstBad) {
@@ -194,16 +214,20 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
       return;
     }
 
+
     const isMulti = name === 'educationalDocs' || name === 'bankStatementOrSalarySlip';
     const value = isMulti ? list : list[0];
     setFiles((prev) => ({ ...prev, [name]: value }));
+
 
     const displayNames = isMulti ? list.map((f) => f.name).join(', ') : list[0].name;
     setFileNames((prev) => ({ ...prev, [name]: displayNames }));
     setUploadStatus((prev) => ({ ...prev, [name]: { status: 'selected', fileName: displayNames } }));
 
+
     setFileErrors((prev) => { const n = { ...prev }; delete n[name]; return n; });
   };
+
 
   // === Field validators ===
   const validateEmpId = () => {
@@ -282,6 +306,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     return true;
   };
 
+
   const validateDesignation = () => {
     const v = formData.designation.trim();
     if (!v) return setErr('designation', 'Pleas enter the designation  name.'), false;
@@ -313,6 +338,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     clearErr('basicSalary'); return true;
   };
 
+
   const handleBlur = (field) => {
     const map = {
       empId: validateEmpId,
@@ -336,6 +362,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     map[field]?.();
   };
 
+
   const validateDob = () => {
     const v = formData.dateOfBirth;
     if (!v || v > maxDOB) return setErr('dateOfBirth', 'Please select the date of birth.'), false;
@@ -347,6 +374,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     clearErr('dateOfJoining'); return true;
   };
 
+
   // Function to convert date from YYYY-MM-DD to DD-MM-YYYY format
   const formatDateForAPI = (dateString) => {
     if (!dateString) return '';
@@ -357,6 +385,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     return `${day}-${month}-${year}`;
   };
 
+
   // === Scroll-to-first-invalid setup ===
   const fieldRefs = useRef({});
   const fieldOrder = useMemo(() => [
@@ -365,6 +394,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     // banking
     'accountHolderName', 'accountNumber', 'ifscCode', 'basicSalary'
   ], []);
+
 
   const validatorsMap = {
     empId: validateEmpId,
@@ -386,6 +416,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     basicSalary: validateBasicSalary,
   };
 
+
   const scrollToField = (name) => {
     const el = fieldRefs.current[name];
     if (!el) return;
@@ -395,8 +426,10 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     setTimeout(() => el.classList.remove('ring-2', 'ring-red-400'), 1200);
   };
 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
 
     // validators in order
     let firstInvalid = null;
@@ -406,10 +439,13 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     }
     if (firstInvalid) { scrollToField(firstInvalid); return; }
 
+
     setIsSubmitting(true);
+
 
     try {
       const submitData = new FormData();
+
 
       // Dates => DD-MM-YYYY (API requirement)
       Object.entries(formData).forEach(([key, val]) => {
@@ -419,6 +455,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
           submitData.append(key, val);
         }
       });
+
 
       // Files + upload status
       Object.entries(files).forEach(([key, val]) => {
@@ -438,6 +475,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         }
       });
 
+
       // API call
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/inhouseUser`,
@@ -453,7 +491,9 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         }
       );
 
+
       console.log('API Response:', response.data);
+
 
       // Mark success for any selected file
       Object.keys(files).forEach((key) => {
@@ -469,10 +509,13 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         }
       });
 
+
       setShowSuccess(true);
+
 
     } catch (err) {
       console.error('Error details:', err);
+
 
       // Mark error for any selected file
       Object.keys(files).forEach((key) => {
@@ -488,11 +531,13 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         }
       });
 
+
       // ---- Field-wise error mapping (duplicates + enums etc.) ----
       const res = err?.response;
       const rawMsg = res?.data?.message || res?.data || err?.message || '';
       const msg = String(rawMsg);
       let handledFieldError = false;
+
 
       // Mongo duplicate key pattern: E11000 ... dup key: { email: "x@y.com" }
       const dupKeyMatch = msg.match(/dup key:\s*\{\s*([^:]+):\s*"?([^"}]+)"?\s*\}/i);
@@ -514,12 +559,14 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         }
       }
 
+
       if (!handledFieldError) {
         const lower = msg.toLowerCase();
         const setInline = (k, text) => {
           setErrors((p) => ({ ...p, [k]: text }));
           scrollToField(k);
         };
+
 
         // Human-readable duplicate messages
         if (!handledFieldError && lower.includes('emp') && lower.includes('already')) {
@@ -552,11 +599,13 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         }
       }
 
+
       // Agar field-level error handle ho gaya, to generic popup NAHIN dikhana
       if (handledFieldError) {
         setIsSubmitting(false);
         return;
       }
+
 
       // Fallback generic modal
       let errorMessage = 'Failed to add user';
@@ -572,6 +621,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
       setIsSubmitting(false);
     }
   };
+
 
   const getFileStatusIcon = (status) => {
     switch (status) {
@@ -592,6 +642,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     }
   };
 
+
   // helper for key filtering
   const allowKey = (e, type) => {
     const nav = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
@@ -600,15 +651,23 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     if (type === 'ifsc' && !/^[A-Za-z0-9]$/.test(e.key)) e.preventDefault();
   };
 
+
   // success text (create vs update)
   const successTitle = mode === 'create' ? 'User Created Successfully!' : 'User Updated Successfully!';
   const successSubtitle = mode === 'create'
     ? 'The user has been added to the system.'
     : 'The user details have been saved.';
 
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm overflow-hidden">
-      <div className="bg-white rounded-3xl shadow-2xl w-[98%] max-w-7xl h-[95vh] flex flex-col overflow-hidden">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm overflow-hidden"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl shadow-2xl w-[98%] max-w-7xl h-[95vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white p-8 rounded-t-3xl flex-shrink-0">
           <div className="flex justify-between items-center">
@@ -625,8 +684,9 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
           </div>
         </div>
 
+
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto scrollbar-hide ">
           <form noValidate onSubmit={handleSubmit} className="p-8 space-y-10">
             {/* Employee Details */}
             <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-8 shadow-xl border border-blue-200">
@@ -647,12 +707,14 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                   const isEmail = field.name === 'email';
                   const isMobileish = ['mobileNo', 'alternateNo', 'emergencyNo'].includes(field.name);
 
+
                   return (
                     <div key={field.name} className="space-y-3">
                       <label className="block text-sm font-bold text-gray-700 flex items-center">
                         <span className="mr-2 text-lg">{field.icon}</span>
                         {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
                       </label>
+
 
                       {/* GENDER DROPDOWN */}
                       {isGender ? (
@@ -738,6 +800,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                                 : (['employeeName', 'department', 'designation'].includes(field.name) ? 50 : undefined)
                             }
 
+
                             className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-300 bg-white shadow-sm hover:shadow-md"
                           />
                           {errors[field.name] && <p className="text-red-600 text-xs">{errors[field.name]}</p>}
@@ -748,6 +811,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                 })}
               </div>
             </div>
+
 
             {/* Identity Docs */}
             <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-2xl p-8 shadow-xl border border-green-200">
@@ -767,6 +831,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                       <span className="mr-2 text-lg">{doc.icon}</span>
                       {doc.label} {doc.required && <span className="text-red-500 ml-1">*</span>}
                     </label>
+
 
                     <div className="relative">
                       <input
@@ -794,6 +859,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                         </div>
                       </label>
 
+
                       {fileNames[doc.key] && (
                         <p className="text-xs mt-2 text-gray-600 truncate">Selected: {fileNames[doc.key]}</p>
                       )}
@@ -805,6 +871,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                 ))}
               </div>
             </div>
+
 
             {/* Previous Company Docs */}
             <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 rounded-2xl p-8 shadow-xl border border-purple-200">
@@ -836,6 +903,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                       <p className="text-xs mt-1 text-red-600">{fileErrors[doc.key]}</p>
                     )}
 
+
                     <div className="relative">
                       <input
                         type="file"
@@ -864,6 +932,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                         </div>
                       </label>
 
+
                       {/* File Status Display */}
                       {uploadStatus[doc.key] && (
                         <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -890,6 +959,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
               </div>
             </div>
 
+
             {/* Banking Details */}
             <div className="bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 rounded-2xl p-8 shadow-xl border border-orange-200">
               <div className="flex items-center mb-8">
@@ -902,10 +972,12 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                 </div>
               </div>
 
+
               <div className="grid grid-cols-3 gap-6">
                 {initialFields.slice(13).map((field) => {
                   const isNumeric = field.name === 'accountNumber' || field.name === 'basicSalary';
                   const isIFSC = field.name === 'ifscCode';
+
 
                   return (
                     <div key={field.name} className="space-y-3">
@@ -913,6 +985,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                         <span className="mr-2 text-lg">{field.icon}</span>
                         {field.label}
                       </label>
+
 
                       <input
                         ref={(el) => (fieldRefs.current[field.name] = el)}
@@ -938,11 +1011,15 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
 
 
 
+
+
+
                     </div>
                   );
                 })}
               </div>
             </div>
+
 
             {/* Debug: File Upload Status */}
             <div className="bg-gradient-to-br from-gray-50 via-slate-50 to-zinc-50 rounded-2xl p-6 shadow-xl border border-gray-200">
@@ -955,6 +1032,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                   <p className="text-gray-600 text-sm">Check which files are ready for upload</p>
                 </div>
               </div>
+
 
               <div className="grid grid-cols-2 gap-4">
                 {Object.entries(files).map(([key, file]) => {
@@ -991,12 +1069,14 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                 })}
               </div>
 
+
               {Object.values(files).every(file => !file || (Array.isArray(file) && file.length === 0)) && (
                 <div className="text-center py-4 text-gray-500 text-sm">
                   No files selected for upload
                 </div>
               )}
             </div>
+
 
             {/* Submit */}
             <div className="flex justify-end space-x-6 pt-8 border-t-2 border-gray-200">
@@ -1031,10 +1111,17 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         </div>
       </div>
 
+
       {/* Styled SUCCESS modal (no window popup) */}
       {showSuccess && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl p-6 w-[90%] max-w-md shadow-2xl text-center">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+          onClick={() => setShowSuccess(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-[90%] max-w-md shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">✅</div>
             <h3 className="text-lg font-bold mb-1">{successTitle}</h3>
             <p className="text-sm text-gray-600 mb-5">{successSubtitle}</p>
@@ -1048,10 +1135,17 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         </div>
       )}
 
+
       {/* Intercepted window.alert → show as in-app notice */}
       {interceptedAlert && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl p-6 w-[90%] max-w-md shadow-2xl text-center">
+        <div
+          className="fixed inset-0 z-[65] flex items-center justify-center bg-black/40"
+          onClick={() => setInterceptedAlert(null)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-[90%] max-w-md shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-bold mb-2">Notice</h3>
             <p className="text-sm text-gray-700 mb-5">{interceptedAlert}</p>
             <button
@@ -1064,10 +1158,17 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         </div>
       )}
 
+
       {/* Error modal (instead of alert) */}
       {errorModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl p-6 w-[90%] max-w-md shadow-2xl text-center">
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50"
+          onClick={() => setErrorModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-[90%] max-w-md shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">❌</div>
             <h3 className="text-lg font-bold mb-1">Error</h3>
             <p className="text-sm text-gray-700 mb-5">{errorModal}</p>
@@ -1084,4 +1185,8 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   );
 };
 
+
 export default AddUserModal;
+
+
+
