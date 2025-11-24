@@ -63,7 +63,7 @@ const Layout = () => {
         />
       )}
       
-      {/* Load Assignment Popup for CMT users - positioned on left */}
+      {/* Load Assignment Popup for CMT users - positioned on right */}
       {isCMTUser && newAssignment && (
         <LoadAssignmentPopup 
           assignment={newAssignment} 

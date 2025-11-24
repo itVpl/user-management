@@ -12,7 +12,7 @@ const LoadAssignmentPopup = ({ assignment, onClose }) => {
 
   return (
     <div 
-      className="fixed bottom-8 left-8 z-[9999] transition-all duration-300 ease-out" 
+      className="fixed bottom-8 right-32 z-[9999] transition-all duration-300 ease-out" 
       style={{ 
         animation: 'slideInUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)',
       }}
