@@ -32,7 +32,18 @@ export const useAssignmentNotification = (empId, enabled = true) => {
         );
 
         if (response.data?.success) {
-          const assignedLoads = response.data.data?.assignedLoads || [];
+          // Filter to only include loads assigned to the current user's empId
+          // The API endpoint already filters by empId, but adding extra safety check
+          const allAssignedLoads = response.data.data?.assignedLoads || [];
+          const assignedLoads = allAssignedLoads.filter((assignedLoad) => {
+            // Verify the assignment is for the current user
+            // Check if there's an empId field in the assignment or in cmtAssignment
+            const assignmentEmpId = assignedLoad.empId || 
+                                   assignedLoad.cmtAssignment?.empId || 
+                                   assignedLoad.cmtAssignment?.assignedCMTUser?.empId;
+            // If empId is present, verify it matches; otherwise trust the API endpoint filter
+            return !assignmentEmpId || assignmentEmpId === empId;
+          });
           
           // Find new assignments (not in previous set)
           const currentAssignmentIds = new Set(

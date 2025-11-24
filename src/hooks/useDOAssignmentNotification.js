@@ -36,7 +36,12 @@ export const useDOAssignmentNotification = (empId, enabled = true) => {
         );
 
         if (response.data?.success && response.data.data) {
-          const assignedDOs = response.data.data?.assignedDOs || [];
+          // Filter to only include DOs assigned to the current user's empId
+          const allAssignedDOs = response.data.data?.assignedDOs || [];
+          const assignedDOs = allAssignedDOs.filter((doItem) => {
+            // Check if this DO is assigned to the current user
+            return doItem.empId === empId;
+          });
 
           // Find new assignments (not in previous set)
           const currentDOIds = new Set(
