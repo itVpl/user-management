@@ -2324,6 +2324,7 @@ const validateForm = (mode = formMode) => {
         const carrierId = typeof fullOrderData.carrierId === 'object' ? fullOrderData.carrierId?._id : fullOrderData.carrierId;
 
         // Handle customers - convert other array back to single value for form
+        // IMPORTANT: Preserve ALL original customer fields to avoid "missing required fields" error
         const editCustomers = (fullOrderData.customers || []).map(c => {
           const lh = Number(c.lineHaul) || 0;
           const fsc = Number(c.fsc) || 0;
@@ -2331,6 +2332,10 @@ const validateForm = (mode = formMode) => {
           const oth = Array.isArray(c.other) 
             ? (c.otherTotal || c.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
             : (Number(c.other) || 0);
+          
+          // Log original customer data for debugging
+          console.log('Original customer from API:', c);
+          
           return {
             billTo: c.billTo || '',
             dispatcherName: c.dispatcherName || '',
@@ -2339,13 +2344,17 @@ const validateForm = (mode = formMode) => {
             fsc: ensureMoney2dp(String(fsc)),
             other: ensureMoney2dp(String(oth)),
             totalAmount: lh + fsc + oth,
+            // DO NOT set loadNo, fax, phone, etc. here - they're not form fields
+            // They will be preserved from _originalData when building update payload
             // Store the original other array for charges popup
             chargeRows: Array.isArray(c.other) ? c.other.map(item => ({
               name: item?.name || '',
               quantity: String(item?.quantity || 0),
               amt: String(item?.amount || 0),
               total: Number(item?.total || 0)
-            })) : []
+            })) : [],
+            // Preserve the COMPLETE original customer object - this is critical!
+            _originalData: c
           };
         });
 
@@ -2743,6 +2752,7 @@ const handleUpdateOrder = async (e) => {
     const empId = user.empId || "EMP001";
 
     // --- FIXED: Customers data preparation with proper validation ---
+    // IMPORTANT: Include ALL customer fields to avoid "missing required fields" error
     const customers = (formData.customers || []).map((c, idx) => {
       // Ensure all required fields have values
       const billTo = (c.billTo || '').trim();
@@ -2762,19 +2772,49 @@ const handleUpdateOrder = async (e) => {
         total: oth
       }] : [];
 
-      // Create customer object with all required fields
+      // Get original data if available (from edit mode) - preserve ALL original fields
+      const originalData = c._originalData || {};
+      
+      // Debug: Log original data to see what fields are available
+      if (idx === 0) {
+        console.log('Original customer data from API:', originalData);
+      }
+
+      // Start with original data to preserve all fields, then update with form values
+      // IMPORTANT: Don't override fields that don't exist in form (like loadNo, fax, phone, etc.)
+      // Only override fields that are actually in the form
       const customerData = {
-        billTo: billTo,
-        dispatcherName: dispatcherName,
-        workOrderNo: workOrderNo,
+        // Preserve all original fields first (this includes loadNo, fax, phone, email, address, etc.)
+        ...originalData,
+        // Override ONLY the form fields (these take priority for editable fields)
+        billTo: billTo || originalData.billTo || '',
+        dispatcherName: dispatcherName || originalData.dispatcherName || '',
+        workOrderNo: workOrderNo || originalData.workOrderNo || '',
         lineHaul: lh,
         fsc: fsc,
         other: otherArray,
         otherTotal: oth,
         totalAmount: toNum2(lh + fsc + oth),
+        // DO NOT override loadNo, fax, phone, email, address, etc. - they're already in originalData
+        // Only override if form has a value for them (which it doesn't, so they stay from originalData)
       };
 
+      // Remove internal fields that shouldn't be sent to API
+      if (customerData._originalData) {
+        delete customerData._originalData;
+      }
+      if (customerData.chargeRows) {
+        delete customerData.chargeRows;
+      }
+      
+      // Ensure loadNo is present (required field) - use original if available
+      // Don't set to empty string if it doesn't exist - let API handle it
+      if (!customerData.loadNo && originalData.loadNo) {
+        customerData.loadNo = originalData.loadNo;
+      }
+
       console.log(`Customer ${idx + 1} data:`, customerData);
+      console.log(`Customer ${idx + 1} loadNo:`, customerData.loadNo, '(from original:', originalData.loadNo, ')');
       return customerData;
     });
 
@@ -4331,7 +4371,6 @@ const handleUpdateOrder = async (e) => {
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPPER NAME</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEES</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
@@ -4350,9 +4389,6 @@ const handleUpdateOrder = async (e) => {
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{order.clientName}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.shipperName}</span>
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{order.carrierName}</span>
