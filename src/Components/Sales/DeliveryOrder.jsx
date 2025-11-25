@@ -3569,7 +3569,7 @@ const handleUpdateOrder = async (e) => {
       // ---- ONLY customer rates ----
       const LH = Number(cust.lineHaul) || 0;
       const FSC = Number(cust.fsc) || 0;
-      const OTH = Number(cust.other) || 0;
+      const OTH = Number(cust.otherTotal) || 0;
       const CUSTOMER_TOTAL = LH + FSC + OTH;
 
       // helpers
