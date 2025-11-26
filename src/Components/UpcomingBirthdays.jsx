@@ -32,6 +32,9 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
   const getUpcomingBirthdays = () => {
     return employees
       .filter(emp => {
+        // Filter only active employees
+        if (emp.status !== 'active') return false;
+        
         if (!emp.dateOfBirth) return false;
         const today = new Date();
         const birthday = new Date(emp.dateOfBirth);
