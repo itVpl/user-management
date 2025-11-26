@@ -171,6 +171,12 @@ export default function CarrierApproval() {
   const shouldShowActionButtons = (carrierStatus) => {
     const isFinance = currentUserDepartment === "Finance" || currentUserDepartment === "finance";
     const isAccountantApproved = carrierStatus?.toLowerCase() === "accountant_approved";
+    const isRejectedStatus = isRejected(carrierStatus);
+   
+    // If Finance department user and status is rejected (by them), show buttons
+    if (isFinance && isRejectedStatus) {
+      return true;
+    }
    
     // If Finance department user and status is accountant_approved, hide buttons
     if (isFinance && isAccountantApproved) {
