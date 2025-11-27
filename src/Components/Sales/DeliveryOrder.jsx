@@ -785,20 +785,21 @@ export default function DeliveryOrder() {
 
       // Handle customers - convert other array back to single value for form
       const prefCustomers = (src.customers || []).map(c => {
-        const lh = Number(c.lineHaul) || 0;
-        const fsc = Number(c.fsc) || 0;
-        // If other is an array, sum it up; otherwise use the value directly
-        const oth = Array.isArray(c.other) 
-          ? (c.otherTotal || c.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
-          : (Number(c.other) || 0);
+          const lh = Number(c.lineHaul) || 0;
+          const fscPercent = Number(c.fsc) || 0;
+          const fscAmount = lh * (fscPercent / 100); // FSC is percentage of Line Haul
+          // If other is an array, sum it up; otherwise use the value directly
+          const oth = Array.isArray(c.other) 
+            ? (c.otherTotal || c.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
+            : (Number(c.other) || 0);
         return {
           billTo: c.billTo || '',
           dispatcherName: c.dispatcherName || '',
           workOrderNo: c.workOrderNo || '',
           lineHaul: String(lh),
-          fsc: String(fsc),
+          fsc: String(fscPercent),
           other: String(oth),
-          totalAmount: lh + fsc + oth,
+          totalAmount: lh + fscAmount + oth,
           // Store the original other array for charges popup
           chargeRows: Array.isArray(c.other) ? c.other.map(item => ({
             name: item?.name || '',
@@ -1225,9 +1226,10 @@ export default function DeliveryOrder() {
 
       // Calculate total amount for this customer
       const lh = parseFloat(updatedCustomers[index].lineHaul) || 0;
-      const fsc = parseFloat(updatedCustomers[index].fsc) || 0;
+      const fscPercent = parseFloat(updatedCustomers[index].fsc) || 0;
+      const fscAmount = lh * (fscPercent / 100); // FSC is percentage of Line Haul
       const oth = parseFloat(updatedCustomers[index].other) || 0;
-      updatedCustomers[index].totalAmount = +(lh + fsc + oth).toFixed(2); // 3.66
+      updatedCustomers[index].totalAmount = +(lh + fscAmount + oth).toFixed(2);
 
 
       return {
@@ -1611,9 +1613,12 @@ export default function DeliveryOrder() {
               amount: parseFloat(ch.amt) || 0,
               total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
             })),
-            totalAmount: toNum2(updatedCustomers[currentCustomerIndex].lineHaul || 0) + 
-                        toNum2(updatedCustomers[currentCustomerIndex].fsc || 0) + 
-                        toNum2(totalCharges)
+            totalAmount: (() => {
+              const lh = toNum2(updatedCustomers[currentCustomerIndex].lineHaul || 0);
+              const fscPercent = toNum2(updatedCustomers[currentCustomerIndex].fsc || 0);
+              const fscAmount = lh * (fscPercent / 100); // FSC is percentage of Line Haul
+              return toNum2(lh + fscAmount + totalCharges);
+            })()
           };
         }
         return { ...prev, customers: updatedCustomers };
@@ -1774,7 +1779,8 @@ export default function DeliveryOrder() {
       // customers - convert other field to array format
       const customersWithTotals = formData.customers.map(c => {
         const lh = toNum2(c.lineHaul);
-        const fsc = toNum2(c.fsc);
+        const fscPercent = toNum2(c.fsc);
+        const fscAmount = lh * (fscPercent / 100); // FSC is percentage of Line Haul
         const oth = toNum2(c.other);
         
         // Convert other (single value) to array format as required by API
@@ -1789,10 +1795,10 @@ export default function DeliveryOrder() {
           dispatcherName: c.dispatcherName,
           workOrderNo: c.workOrderNo,
           lineHaul: lh,
-          fsc: fsc,
+          fsc: fscPercent, // Store percentage value
           other: otherArray,
           otherTotal: oth,
-          totalAmount: toNum2(lh + fsc + oth),
+          totalAmount: toNum2(lh + fscAmount + oth),
         };
       });
 
@@ -2327,7 +2333,8 @@ const validateForm = (mode = formMode) => {
         // IMPORTANT: Preserve ALL original customer fields to avoid "missing required fields" error
         const editCustomers = (fullOrderData.customers || []).map(c => {
           const lh = Number(c.lineHaul) || 0;
-          const fsc = Number(c.fsc) || 0;
+          const fscPercent = Number(c.fsc) || 0;
+          const fscAmount = lh * (fscPercent / 100); // FSC is percentage of Line Haul
           // If other is an array, sum it up; otherwise use the value directly
           const oth = Array.isArray(c.other) 
             ? (c.otherTotal || c.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
@@ -2341,9 +2348,9 @@ const validateForm = (mode = formMode) => {
             dispatcherName: c.dispatcherName || '',
             workOrderNo: c.workOrderNo || '',
             lineHaul: ensureMoney2dp(String(lh)),
-            fsc: ensureMoney2dp(String(fsc)),
+            fsc: ensureMoney2dp(String(fscPercent)),
             other: ensureMoney2dp(String(oth)),
-            totalAmount: lh + fsc + oth,
+            totalAmount: lh + fscAmount + oth,
             // DO NOT set loadNo, fax, phone, etc. here - they're not form fields
             // They will be preserved from _originalData when building update payload
             // Store the original other array for charges popup
@@ -2761,7 +2768,8 @@ const handleUpdateOrder = async (e) => {
       
       // Convert money fields with proper fallbacks
       const lh = toNum2(c.lineHaul || '0');
-      const fsc = toNum2(c.fsc || '0');
+      const fscPercent = toNum2(c.fsc || '0');
+      const fscAmount = lh * (fscPercent / 100); // FSC is percentage of Line Haul
       const oth = toNum2(c.other || '0');
 
       // Convert other to array format as expected by API
@@ -2791,10 +2799,10 @@ const handleUpdateOrder = async (e) => {
         dispatcherName: dispatcherName || originalData.dispatcherName || '',
         workOrderNo: workOrderNo || originalData.workOrderNo || '',
         lineHaul: lh,
-        fsc: fsc,
+        fsc: fscPercent, // Store percentage value
         other: otherArray,
         otherTotal: oth,
-        totalAmount: toNum2(lh + fsc + oth),
+        totalAmount: toNum2(lh + fscAmount + oth),
         // DO NOT override loadNo, fax, phone, email, address, etc. - they're already in originalData
         // Only override if form has a value for them (which it doesn't, so they stay from originalData)
       };
@@ -3568,7 +3576,8 @@ const handleUpdateOrder = async (e) => {
 
       // ---- ONLY customer rates ----
       const LH = Number(cust.lineHaul) || 0;
-      const FSC = Number(cust.fsc) || 0;
+      const FSC_PERCENT = Number(cust.fsc) || 0;
+      const FSC = LH * (FSC_PERCENT / 100); // FSC is percentage of Line Haul
       const OTH = Number(cust.otherTotal) || 0;
       const CUSTOMER_TOTAL = LH + FSC + OTH;
 
@@ -5205,7 +5214,7 @@ const handleUpdateOrder = async (e) => {
                             inputMode="decimal"
                             onKeyDown={blockMoneyChars}
                             className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.fsc ? 'border-red-400' : 'border-gray-300'}`}
-                            placeholder="FSC *"
+                            placeholder="FSC (%) *"
                           />
                           {cErr.fsc && <p className="text-red-600 text-xs mt-1">{cErr.fsc}</p>}
                         </div>
