@@ -1,8 +1,13 @@
 import React from 'react';
 import { CheckCircle, Package } from 'lucide-react';
 
-const DOAssignmentPopup = ({ assignment, onClose }) => {
+const DOAssignmentPopup = ({ assignment, onClose, hasBothPopups = false }) => {
   if (!assignment) return null;
+
+  // Calculate position: if both popups, stay at right; if only this one, also at right
+  // Both popups: DO at right-8, Load at left of DO
+  // Only DO: DO at right-8
+  const rightPosition = hasBothPopups ? 'right-8' : 'right-8';
 
   // Utility function for location display (Kept for functionality)
   const getLocationDisplay = (location, fallbackLocations) => {
@@ -16,9 +21,10 @@ const DOAssignmentPopup = ({ assignment, onClose }) => {
 
   return (
     <div 
-      className="fixed bottom-8 right-8 z-[9999] transition-all duration-300 ease-out" 
+      className={`fixed bottom-8 ${rightPosition} z-[9999] transition-all duration-300 ease-out`}
       style={{ 
-        animation: 'slideInUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)', // Custom bezier for smoothness
+        animation: 'slideInUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)',
+        maxWidth: 'calc(100vw - 2rem)',
       }}
     >
       <style>{`
@@ -49,7 +55,7 @@ const DOAssignmentPopup = ({ assignment, onClose }) => {
           </div>
           <div className="flex-1 pt-0.5">
             {/* Title/Subtitle Typography: Pure white, minimalist font weight */}
-            <h3 className="text-xl font-light text-white tracking-widest uppercase">Assignment Alert</h3>
+            <h3 className="text-xl font-light text-white tracking-widest uppercase">New Delivery Order Assigned</h3>
             <p className="text-sm text-gray-400 mt-1">A high-priority Delivery Order has been secured.</p>
           </div>
         </div>

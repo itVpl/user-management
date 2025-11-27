@@ -11,10 +11,28 @@ const getAuthToken = () =>
 export const useDOAssignmentNotification = (empId, enabled = true) => {
   const [newDOAssignment, setNewDOAssignment] = useState(null);
   const previousDOIdsRef = useRef(new Set());
+  const acknowledgedDOIdsRef = useRef(new Set()); // Track DO IDs that user has acknowledged
   const intervalRef = useRef(null);
+  const previousEmpIdRef = useRef(null);
 
   useEffect(() => {
-    if (!enabled || !empId) return;
+    if (!enabled || !empId) {
+      setNewDOAssignment(null);
+      previousEmpIdRef.current = null;
+      return;
+    }
+
+    // Reset tracking only when empId actually changes (user switches)
+    if (previousEmpIdRef.current !== empId) {
+      console.log('🔄 DO EmpId changed, resetting tracking:', { 
+        previous: previousEmpIdRef.current, 
+        current: empId 
+      });
+      previousDOIdsRef.current = new Set();
+      acknowledgedDOIdsRef.current = new Set();
+      setNewDOAssignment(null);
+      previousEmpIdRef.current = empId;
+    }
 
     const checkForNewDOAssignments = async () => {
       try {
@@ -58,9 +76,14 @@ export const useDOAssignmentNotification = (empId, enabled = true) => {
           if (previousDOIds.size === 0) {
             previousDOIdsRef.current = currentDOIds;
           } else {
-            // Find new DO assignments
+            // Find new DO assignments (skip if already acknowledged)
             const newDOs = assignedDOs.filter((doItem) => {
               const doId = doItem._id || doItem.doId;
+              // Skip if already acknowledged
+              if (doId && acknowledgedDOIdsRef.current.has(doId)) {
+                console.log('✅ DO already acknowledged, skipping:', doId);
+                return false;
+              }
               return doId && !previousDOIds.has(doId);
             });
 
@@ -139,6 +162,11 @@ export const useDOAssignmentNotification = (empId, enabled = true) => {
   }, [empId, enabled]);
 
   const clearNotification = () => {
+    // Mark the current DO as acknowledged so it doesn't show again
+    if (newDOAssignment?.doId) {
+      console.log('✅ Marking DO as acknowledged:', newDOAssignment.doId);
+      acknowledgedDOIdsRef.current.add(newDOAssignment.doId);
+    }
     setNewDOAssignment(null);
   };
 

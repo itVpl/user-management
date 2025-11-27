@@ -1,8 +1,22 @@
 import React from 'react';
 import { CheckCircle, Truck } from 'lucide-react';
 
-const LoadAssignmentPopup = ({ assignment, onClose }) => {
+const LoadAssignmentPopup = ({ assignment, onClose, hasBothPopups = false }) => {
+  // Log when popup is rendered for debugging
+  React.useEffect(() => {
+    if (assignment) {
+      console.log('🎯 LoadAssignmentPopup rendered:', assignment);
+    }
+  }, [assignment]);
+
   if (!assignment) return null;
+
+  // Calculate position: 
+  // If both popups: Load on left (right-[27rem] = 432px), DO on right (right-8 = 32px)
+  // Popup width is max-w-sm (384px), so Load ends at 48px from right, DO starts at 32px
+  // This gives a 16px gap between popups
+  // If only Load: Load at bottom right (right-8)
+  const rightPosition = hasBothPopups ? 'right-[27rem]' : 'right-8';
 
   // Utility function for location display
   const getLocationDisplay = (locationString) => {
@@ -12,9 +26,10 @@ const LoadAssignmentPopup = ({ assignment, onClose }) => {
 
   return (
     <div 
-      className="fixed bottom-8 right-32 z-[9999] transition-all duration-300 ease-out" 
+      className={`fixed bottom-8 ${rightPosition} z-[9999] transition-all duration-300 ease-out`}
       style={{ 
         animation: 'slideInUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)',
+        maxWidth: 'calc(100vw - 2rem)',
       }}
     >
       <style>{`
@@ -45,8 +60,14 @@ const LoadAssignmentPopup = ({ assignment, onClose }) => {
           </div>
           <div className="flex-1 pt-0.5">
             {/* Title/Subtitle Typography: Pure white, minimalist font weight */}
-            <h3 className="text-xl font-light text-white tracking-widest uppercase">Load Assignment</h3>
-            <p className="text-sm text-gray-400 mt-1">A new load has been assigned to you.</p>
+            <h3 className="text-xl font-light text-white tracking-widest uppercase">
+              {assignment.isReassignment ? 'Load Reassigned' : 'Load Assigned'}
+            </h3>
+            <p className="text-sm text-gray-400 mt-1">
+              {assignment.isReassignment 
+                ? 'A load has been reassigned to you.' 
+                : 'A new load has been assigned to you.'}
+            </p>
           </div>
         </div>
 

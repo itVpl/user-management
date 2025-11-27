@@ -2459,7 +2459,7 @@ const validateForm = (mode = formMode) => {
           fullData: fullOrderData
         });
         setFormMode('edit');
-        setShowEditModal(true);
+        setShowAddOrderForm(true);
       } else {
         alertify.error('Failed to fetch order details for editing');
       }
@@ -3202,6 +3202,10 @@ const handleUpdateOrder = async (e) => {
       if (!d) return 'N/A';
       try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return 'N/A'; }
     };
+    const formatTimeStr = (d) => {
+      if (!d) return 'N/A';
+      try { return new Date(d).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); } catch { return 'N/A'; }
+    };
     const formatAddr = (l) => {
       if (!l) return 'N/A';
       const parts = [l.address, l.city, l.state, l.zipCode].filter(Boolean);
@@ -3450,6 +3454,63 @@ const handleUpdateOrder = async (e) => {
 
     <!-- Drop Locations (each separately) -->
     ${dropSectionsHTML}
+
+    <!-- Return Location (only for DRAYAGE if exists) -->
+    ${(() => {
+      const returnLoc = order.returnLocation || {};
+      const loadType = order.loadType || '';
+      
+      // Only show if loadType is DRAYAGE and return location has data
+      if (loadType !== 'DRAYAGE' || !returnLoc) {
+        return '';
+      }
+      
+      // Check if return location has any meaningful data
+      const hasReturnData = returnLoc.address || returnLoc.returnFullAddress || 
+                           returnLoc.city || returnLoc.state || returnLoc.zipCode;
+      
+      if (!hasReturnData) {
+        return '';
+      }
+      
+      // Format return location address line (same as pickup/drop)
+      const returnAddrLine = formatLocLine({
+        name: returnLoc.locationName || '',
+        address: returnLoc.returnFullAddress || returnLoc.address || '',
+        city: returnLoc.city || '',
+        state: returnLoc.state || '',
+        zipCode: returnLoc.zipCode || ''
+      });
+      const returnDateStr = formatDateStr(returnLoc.returnDate);
+      const returnTimeStr = returnLoc.returnDate ? formatTimeStr(returnLoc.returnDate) : 'N/A';
+      const hoursLabel = 'Return Hours';
+      
+      return (
+        '<table class="rates-table">' +
+        '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Return Location</th></tr></thead>' +
+        '<tbody>' +
+        '<tr>' +
+        '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + returnAddrLine + '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="width:50%;padding:8px;">' +
+        '<strong>Date:</strong> ' + returnDateStr + '<br>' +
+        '<strong>Time:</strong> ' + returnTimeStr + '<br>' +
+        '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
+        '<strong>Quantity:</strong> 1<br>' +
+        '<strong>Weight:</strong> ' + (returnLoc.weight ? returnLoc.weight + ' lbs' : 'N/A') +
+        '</td>' +
+        '<td style="width:50%;padding:8px;">' +
+        '<strong>Purchase Order #:</strong> N/A<br>' +
+        '<strong>' + hoursLabel + ':</strong> N/A<br>' +
+        '<strong>Appointment:</strong> No<br>' +
+        '<strong>Container/Trailer Number:</strong> ' + (ship.containerNo || 'N/A') +
+        '</td>' +
+        '</tr>' +
+        '</tbody>' +
+        '</table>'
+      );
+    })()}
 
     <!-- Dispatcher Notes -->
     <div style="margin-top: 20px;">
@@ -3734,6 +3795,77 @@ const handleUpdateOrder = async (e) => {
       </table>
     </div>
 
+    <!-- Return Location (only for DRAYAGE if exists) -->
+    ${(() => {
+      const returnLoc = order.returnLocation || {};
+      const loadType = order.loadType || '';
+      
+      // Only show if loadType is DRAYAGE and return location has data
+      if (loadType !== 'DRAYAGE' || !returnLoc) {
+        return '';
+      }
+      
+      // Check if return location has any meaningful data
+      const hasReturnData = returnLoc.address || returnLoc.returnFullAddress || 
+                           returnLoc.city || returnLoc.state || returnLoc.zipCode;
+      
+      if (!hasReturnData) {
+        return '';
+      }
+      
+      const fullAddr = (loc) => {
+        if (!loc) return 'N/A';
+        const parts = [loc.address, loc.city, loc.state, loc.zipCode].filter(Boolean);
+        return parts.length ? parts.join(', ') : 'N/A';
+      };
+      
+      const fmtDate = (d) => {
+        if (!d) return 'N/A';
+        const dt = new Date(d);
+        return isNaN(dt) ? 'N/A' : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      };
+      
+      const returnAddr = fullAddr({
+        address: returnLoc.returnFullAddress || returnLoc.address || '',
+        city: returnLoc.city || '',
+        state: returnLoc.state || '',
+        zipCode: returnLoc.zipCode || ''
+      });
+      const weight = (returnLoc.weight ?? '') !== '' && returnLoc.weight !== null ? returnLoc.weight : 'N/A';
+      const contNo = order.shipper?.containerNo || 'N/A';
+      const contTp = order.shipper?.containerType || 'N/A';
+      const qty = 1;
+      const dateSrc = returnLoc.returnDate;
+      
+      return `
+    <div class="section">
+      <table class="tbl">
+        <thead>
+          <tr>
+           
+            <th>Address</th>
+           
+            <th>Container No</th>
+            <th>Container Type</th>
+            <th>Qty</th>
+            <th>Return Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+           
+            <td>${returnAddr}</td>
+            
+            <td>${contNo}</td>
+            <td>${contTp}</td>
+            <td>${qty}</td>
+            <td>${fmtDate(dateSrc)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+    })()}
+
     <!-- Charges: ONLY customer information rates -->
     <div class="section">
       <table class="tbl">
@@ -3970,6 +4102,8 @@ const handleUpdateOrder = async (e) => {
         </tbody>
       </table>
     </div>
+
+  
 
     <!-- Footer & Signatures -->
     <div class="footer">
@@ -6034,7 +6168,7 @@ const handleUpdateOrder = async (e) => {
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">FSC</p>
-                              <p className="font-medium text-gray-800">${customer?.fsc || 0}</p>
+                              <p className="font-medium text-gray-800">{customer?.fsc || 0}%</p>
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">Other</p>
@@ -6046,7 +6180,7 @@ const handleUpdateOrder = async (e) => {
                             </div>
                             <div className="col-span-2">
                               <p className="text-sm text-gray-600">Total Amount</p>
-                              <p className="font-bold text-lg text-green-600">${customer?.calculatedTotal || 0}</p>
+                              <p className="font-bold text-lg text-green-600">${customer?.totalAmount || 0}</p>
                             </div>
                           </div>
 
@@ -6191,8 +6325,8 @@ const handleUpdateOrder = async (e) => {
                           <User className="text-orange-600" size={16} />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">Shipper Name</p>
-                          <p className="font-semibold text-gray-800">{selectedOrder.shipper?.name || 'N/A'}</p>
+                          <p className="text-sm text-gray-600">Shipment No</p>
+                          <p className="font-semibold text-gray-800">{selectedOrder.shipper?.shipmentNo || 'N/A'}</p>
                         </div>
                       </div>
 
@@ -6871,1231 +7005,89 @@ const handleUpdateOrder = async (e) => {
       )}
 
 
-
-      {/* Edit Order Modal */}
-      {showEditModal && editingOrder && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          {/* Hide scrollbar for modal content */}
-          <style>{`
-      .hide-scrollbar::-webkit-scrollbar { display: none; }
-      .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-    `}</style>
-
-          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar">
+      {/* Delete Order Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
             {/* Header */}
-            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+            <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 rounded-t-2xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Edit Delivery Order</h2>
-                    <p className="text-green-100">Update delivery order details</p>
+                    <h2 className="text-xl font-bold">Delete Delivery Order</h2>
+                    <p className="text-red-100">Confirm deletion</p>
                   </div>
                 </div>
-                <button onClick={handleCloseEditModal} className="text-white hover:text-gray-200 text-2xl font-bold">×</button>
+                <button
+                  onClick={closeDeleteModal}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
               </div>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleUpdateOrder} className="p-6 space-y-6">
-              {/* Customer Information */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-blue-800">Customer Information</h3>
-                  <button
-                    type="button"
-                    onClick={addCustomer}
-                    className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition"
-                  >
-                    + Add Customer
-                  </button>
+            {/* Content */}
+            <div className="p-6">
+              <div className="mb-6">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                    <span className="text-red-700 font-medium">Warning</span>
+                  </div>
+                  <p className="text-red-600 text-sm mt-2">This action cannot be undone. The delivery order will be permanently deleted.</p>
                 </div>
-
-                {formData.customers.map((customer, customerIndex) => (
-                  <div key={customerIndex} className="bg-white p-4 rounded-lg mb-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-md font-semibold text-gray-800">Customer {customerIndex + 1}</h4>
-                      {formData.customers.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeCustomer(customerIndex)}
-                          className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-4">
-                      {/* Bill To (Company) */}
-                      <div>
-                        {shippers.length > 0 ? (
-                          <div className={errBox(!!errors.customers?.[customerIndex]?.billTo)}>
-                            <SearchableDropdown
-                              value={customer.billTo || ''}
-                              onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
-                              options={[
-                                ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
-                                  ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
-                                  : []
-                                ),
-                                ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
-                              ]}
-                              placeholder="Select Company *"
-                              disabled={loadingShippers}
-                              loading={loadingShippers}
-                              searchPlaceholder="Search companies..."
-                              className="w-full"
-                            />
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={customer.billTo}
-                            onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                            className={errCls(!!errors.customers?.[customerIndex]?.billTo)}
-                            placeholder={loadingShippers ? "Loading companies..." : "Bill To *"}
-                          />
-                        )}
-                        {errors.customers?.[customerIndex]?.billTo && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].billTo}</p>
-                        )}
-                      </div>
-
-                      {/* Dispatcher */}
-                      <div>
-                        {dispatchers.length > 0 ? (
-                          <div className={errBox(!!errors.customers?.[customerIndex]?.dispatcherName)}>
-                            <SearchableDropdown
-                              value={customer.dispatcherName || ''}
-                              onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
-                              options={[
-                                ...(customer.dispatcherName &&
-                                  !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
-                                  ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
-                                  : []
-                                ),
-                                ...dispatchers
-                                  .filter(d => (d.status || '').toLowerCase() === 'active')
-                                  .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
-                                  .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
-                              ]}
-                              placeholder="Select Dispatcher *"
-                              disabled={loadingDispatchers}
-                              loading={loadingDispatchers}
-                              searchPlaceholder="Search dispatchers..."
-                              className="w-full"
-                            />
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={customer.dispatcherName}
-                            onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                            className={errCls(!!errors.customers?.[customerIndex]?.dispatcherName)}
-                            placeholder={loadingDispatchers ? 'Loading dispatchers...' : 'Dispatcher Name *'}
-                          />
-                        )}
-                        {errors.customers?.[customerIndex]?.dispatcherName && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].dispatcherName}</p>
-                        )}
-                      </div>
-
-                      {/* Work Order No (alphanumeric only) */}
-                      <div>
-                        <input
-                          type="text"
-                          value={customer.workOrderNo}
-                          onChange={(e) => handleCustomerChange(customerIndex, 'workOrderNo', e.target.value)}
-                          className={errCls(!!errors.customers?.[customerIndex]?.workOrderNo)}
-                          placeholder="Work Order No *"
-                        />
-                        {errors.customers?.[customerIndex]?.workOrderNo && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].workOrderNo}</p>
-                        )}
-                      </div>
-
-                      {/* Line Haul */}
-                      <div>
-                        <input
-                          type="text"
-                          value={String(customer.lineHaul ?? '')}
-                          onKeyDown={blockMoneyChars}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'lineHaul', e.target.value)
-                          }
-                          onBlur={(e) =>
-                            handleCustomerChange(customerIndex, 'lineHaul', ensureMoney2dp(e.target.value))
-                          }
-                          className={errCls(!!errors.customers?.[customerIndex]?.lineHaul)}
-                          placeholder="Line Haul *"
-                          inputMode="decimal"
-                        />
-                        {errors.customers?.[customerIndex]?.lineHaul && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].lineHaul}</p>
-                        )}
-                      </div>
-
-                      {/* FSC */}
-                      <div>
-                        <input
-                          type="text"
-                          value={String(customer.fsc ?? '')}
-                          onKeyDown={blockMoneyChars}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'fsc', e.target.value)
-                          }
-                          onBlur={(e) =>
-                            handleCustomerChange(customerIndex, 'fsc', ensureMoney2dp(e.target.value))
-                          }
-                          className={errCls(!!errors.customers?.[customerIndex]?.fsc)}
-                          placeholder="FSC *"
-                          inputMode="decimal"
-                        />
-                        {errors.customers?.[customerIndex]?.fsc && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].fsc}</p>
-                        )}
-                      </div>
-
-                      {/* Other */}
-                      <div>
-                        <input
-                          type="text"
-                          value={String(customer.other ?? '')}
-                          onKeyDown={blockMoneyChars}
-                          onChange={(e) =>
-                            handleCustomerChange(customerIndex, 'other', e.target.value)
-                          }
-                          onBlur={(e) =>
-                            handleCustomerChange(customerIndex, 'other', ensureMoney2dp(e.target.value))
-                          }
-                          className={errCls(!!errors.customers?.[customerIndex]?.other)}
-                          placeholder="Other *"
-                          inputMode="decimal"
-                        />
-                        {errors.customers?.[customerIndex]?.other && (
-                          <p className="mt-1 text-xs text-red-600">{errors.customers[customerIndex].other}</p>
-                        )}
-                      </div>
-
-                      {/* Total */}
-                      <div className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg">
-                        <span className="text-gray-700 font-medium">Total: ${customer.totalAmount.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Carrier (Trucker) Information */}
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  {/* Carrier Name */}
-                  <div>
-                    <input
-                      type="text"
-                      name="carrierName"
-                      value={formData.carrierName}
-                      onChange={handleInputChange}
-                      className={errCls(!!errors.carrier?.carrierName)}
-                      placeholder="Carrier Name *"
-                    />
-                    {errors.carrier?.carrierName && (
-                      <p className="mt-1 text-xs text-red-600">{errors.carrier.carrierName}</p>
-                    )}
-                  </div>
-
-                  {/* Equipment Type */}
-                  <div>
-                    <SearchableDropdown
-                      value={formData.equipmentType || ''}
-                      onChange={(value) => setFormData(prev => ({ ...prev, equipmentType: value }))}
-                      options={
-                        selectedLoadType === 'OTR' 
-                          ? [
-                              { value: 'Dry Van', label: 'Dry Van' },
-                              { value: 'Reefer', label: 'Reefer' },
-                              { value: 'Step Deck', label: 'Step Deck' },
-                              { value: 'Double Drop / Lowboy', label: 'Double Drop / Lowboy' },
-                              { value: 'Conestoga', label: 'Conestoga' },
-                              { value: 'Livestock Trailer', label: 'Livestock Trailer' },
-                              { value: 'Car Hauler', label: 'Car Hauler' },
-                              { value: 'Container Chassis', label: 'Container Chassis' },
-                              { value: 'End Dump', label: 'End Dump' },
-                              { value: 'Side Dump', label: 'Side Dump' },
-                              { value: 'Hopper Bottom', label: 'Hopper Bottom' }
-                            ]
-                          : [
-                              { value: "20' Standard", label: "20' Standard" },
-                              { value: "40' Standard", label: "40' Standard" },
-                              { value: "45' Standard", label: "45' Standard" },
-                              { value: "20' Reefer", label: "20' Reefer" },
-                              { value: "40' Reefer", label: "40' Reefer" },
-                              { value: 'Open Top Container', label: 'Open Top Container' },
-                              { value: 'Flat Rack Container', label: 'Flat Rack Container' },
-                              { value: 'Tank Container', label: 'Tank Container' },
-                              { value: "40' High Cube", label: "40' High Cube" },
-                              { value: "45' High Cube", label: "45' High Cube" }
-                            ]
-                      }
-                      placeholder="Select Equipment Type *"
-                      searchPlaceholder="Search equipment type..."
-                      className={errors.carrier?.equipmentType ? errBox(true) : ''}
-                    />
-                    {errors.carrier?.equipmentType && (
-                      <p className="mt-1 text-xs text-red-600">{errors.carrier.equipmentType}</p>
-                    )}
-                  </div>
-
-                  {/* Carrier Fees - shows total rates and opens charges calculator on click */}
-                  <div>
-                    <input
-                      type="text"
-                      name="carrierFees"
-                      value={formData.totalRates ? `$${formData.totalRates}` : formData.carrierFees}
-                      onClick={handleChargesClick}
-                      readOnly
-                      className={`${errCls(!!errors.carrier?.fees)} cursor-pointer`}
-                      placeholder="Carrier Fees * (Click to add charges)"
-                      aria-invalid={!!errors.carrier?.fees}
-                    />
-                    {errors.carrier?.fees && (
-                      <p className="mt-1 text-xs text-red-600">{errors.carrier.fees}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Bol Information */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-blue-800 mb-4">BOL Information</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <input
-                      type="text"
-                      value={formData.bols?.[0]?.bolNo || ''}
-                      onChange={(e) =>
-                        setFormData(prev => {
-                          const arr = prev.bols && prev.bols.length ? [...prev.bols] : [{ bolNo: '' }];
-                          arr[0] = { bolNo: e.target.value };
-                          return { ...prev, bols: arr };
-                        })
-                      }
-                      className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
-                      placeholder="Enter BOL number"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Load Reference Section */}
-              <div className="bg-orange-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-orange-800 mb-4">Load Reference</h3>
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <SearchableDropdown
-                      value={formData.selectedLoad || ''}
-                      onChange={handleLoadChange}
-                      options={loads.map(load => ({ 
-                        value: load._id, 
-                        label: `${load.shipmentNumber || 'Load'} - ${load.origins?.[0]?.city || 'Origin'} to ${load.destinations?.[0]?.city || 'Destination'} (${load.commodity || 'N/A'})` 
-                      }))}
-                      placeholder={loadingLoads ? "Loading loads..." : loadingSelectedLoad ? "Loading load data..." : "Select Assigned Load"}
-                      disabled={loadingLoads || loadingSelectedLoad}
-                      loading={loadingLoads || loadingSelectedLoad}
-                      searchPlaceholder="Search loads..."
-                    />
-                    {/* Debug info - remove this later */}
-                    {process.env.NODE_ENV === 'development' && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Loads: {loads.length} | Loading: {loadingLoads ? 'Yes' : 'No'} | Selected: {formData.selectedLoad || 'None'} | Selected Load Data: {selectedLoadData ? 'Loaded' : 'None'}
-                      </div>
-                    )}
-
-                    {/* Selected Load Data Display - Hidden per user request */}
-                    {false && selectedLoadData && (
-                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <h4 className="text-sm font-semibold text-green-800 mb-3">Selected Load Information</h4>
-                        
-                        {/* Basic Load Information */}
-                        <div className="mb-4">
-                          <h5 className="text-xs font-semibold text-gray-700 mb-2">Basic Information</h5>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-                            <div>
-                              <span className="font-medium text-gray-600">Load ID:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData._id}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Status:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.status}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Load Type:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.loadType}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Vehicle Type:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.vehicleType}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Rate Type:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.rateType}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Total Rate:</span>
-                              <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.rate}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Weight:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.weight} lbs</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Commodity:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.commodity}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Container No:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.containerNo || 'N/A'}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">PO Number:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.poNumber || 'N/A'}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">BOL Number:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.bolNumber || 'N/A'}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Shipment Number:</span>
-                              <span className="ml-2 text-gray-800">{selectedLoadData.shipmentNumber || 'N/A'}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Rate Details */}
-                        {selectedLoadData.rateDetails && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Rate Breakdown</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-600">Line Haul:</span>
-                                <span className="ml-2 text-gray-800">${selectedLoadData.rateDetails.lineHaul}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">FSC:</span>
-                                <span className="ml-2 text-gray-800">${selectedLoadData.rateDetails.fsc}</span>
-                              </div>
-                              <div className="md:col-span-2">
-                                <span className="font-medium text-gray-600">Total Rates:</span>
-                                <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.rateDetails.totalRates}</span>
-                              </div>
-                              {selectedLoadData.rateDetails.other && selectedLoadData.rateDetails.other.length > 0 && (
-                                <div className="md:col-span-2">
-                                  <span className="font-medium text-gray-600">Other Charges:</span>
-                                  <div className="ml-2 mt-1">
-                                    {selectedLoadData.rateDetails.other.map((charge, index) => (
-                                      <div key={index} className="text-gray-800">
-                                        {charge.name}: ${charge.total} ({charge.quantity} × ${charge.amount})
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Shipper Information */}
-                        {selectedLoadData.shipper && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Shipper Details</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-600">Company:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.compName}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">MC/DOT:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.mc_dot_no}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Location:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.city}, {selectedLoadData.shipper.state}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Phone:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.phoneNo}</span>
-                              </div>
-                              <div className="md:col-span-2">
-                                <span className="font-medium text-gray-600">Email:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.shipper.email}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Assigned To Information */}
-                        {selectedLoadData.assignedTo && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Assigned Carrier</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-600">Company:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.compName}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">MC/DOT:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.mc_dot_no}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Location:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.city}, {selectedLoadData.assignedTo.state}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Phone:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.phoneNo}</span>
-                              </div>
-                              <div className="md:col-span-2">
-                                <span className="font-medium text-gray-600">Email:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.assignedTo.email}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Accepted Bid Information */}
-                        {selectedLoadData.acceptedBid && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Accepted Bid Details</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-600">Driver:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.driverName}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Driver Phone:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.driverPhone}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Vehicle:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.vehicleNumber}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Vehicle Type:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.vehicleType}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Bid Rate:</span>
-                                <span className="ml-2 text-gray-800 font-semibold">${selectedLoadData.acceptedBid.rate}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Bid Status:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.status}</span>
-                              </div>
-                              <div className="md:col-span-2">
-                                <span className="font-medium text-gray-600">Message:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.acceptedBid.message}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Est. Pickup:</span>
-                                <span className="ml-2 text-gray-800">
-                                  {selectedLoadData.acceptedBid.estimatedPickupDate ? 
-                                    new Date(selectedLoadData.acceptedBid.estimatedPickupDate).toLocaleDateString() : 'N/A'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Est. Delivery:</span>
-                                <span className="ml-2 text-gray-800">
-                                  {selectedLoadData.acceptedBid.estimatedDeliveryDate ? 
-                                    new Date(selectedLoadData.acceptedBid.estimatedDeliveryDate).toLocaleDateString() : 'N/A'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Origins */}
-                        {selectedLoadData.origins && selectedLoadData.origins.length > 0 && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Pickup Locations</h5>
-                            {selectedLoadData.origins.map((origin, index) => (
-                              <div key={index} className="mb-2 p-2 bg-white rounded border text-xs">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  <div>
-                                    <span className="font-medium text-gray-600">Address:</span>
-                                    <span className="ml-2 text-gray-800">
-                                      {origin.addressLine1} {origin.addressLine2 && `, ${origin.addressLine2}`}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-600">City, State, ZIP:</span>
-                                    <span className="ml-2 text-gray-800">
-                                      {origin.city}, {origin.state} {origin.zip}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-600">Weight:</span>
-                                    <span className="ml-2 text-gray-800">{origin.weight} lbs</span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-600">Commodity:</span>
-                                    <span className="ml-2 text-gray-800">{origin.commodity}</span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-600">Pickup Date:</span>
-                                    <span className="ml-2 text-gray-800">
-                                      {origin.pickupDate ? new Date(origin.pickupDate).toLocaleDateString() : 'N/A'}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-600">Delivery Date:</span>
-                                    <span className="ml-2 text-gray-800">
-                                      {origin.deliveryDate ? new Date(origin.deliveryDate).toLocaleDateString() : 'N/A'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Destinations */}
-                        {selectedLoadData.destinations && selectedLoadData.destinations.length > 0 && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Delivery Locations</h5>
-                            {selectedLoadData.destinations.map((destination, index) => (
-                              <div key={index} className="mb-2 p-2 bg-white rounded border text-xs">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  <div>
-                                    <span className="font-medium text-gray-600">Address:</span>
-                                    <span className="ml-2 text-gray-800">
-                                      {destination.addressLine1} {destination.addressLine2 && `, ${destination.addressLine2}`}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-600">City, State, ZIP:</span>
-                                    <span className="ml-2 text-gray-800">
-                                      {destination.city}, {destination.state} {destination.zip}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-600">Weight:</span>
-                                    <span className="ml-2 text-gray-800">{destination.weight} lbs</span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-600">Commodity:</span>
-                                    <span className="ml-2 text-gray-800">{destination.commodity}</span>
-                                  </div>
-                                  <div className="md:col-span-2">
-                                    <span className="font-medium text-gray-600">Delivery Date:</span>
-                                    <span className="ml-2 text-gray-800">
-                                      {destination.deliveryDate ? new Date(destination.deliveryDate).toLocaleDateString() : 'N/A'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* CMT Assignment Details */}
-                        {selectedLoadData.cmtAssignmentDetails && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">CMT Assignment</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-600">Assigned CMT:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.employeeName}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Approval Status:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.approvalStatus}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Employee ID:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.empId}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Email:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.email}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Mobile:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.mobileNo}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Department:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.cmtAssignmentDetails.assignedCMTUser?.department}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Timer Status */}
-                        {selectedLoadData.timerStatus && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Timer Status</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-600">Has Timer:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.hasTimer ? 'Yes' : 'No'}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Is Expired:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.isExpired ? 'Yes' : 'No'}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Remaining Minutes:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.timerStatus.remainingMinutes}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Deadline:</span>
-                                <span className="ml-2 text-gray-800">
-                                  {selectedLoadData.timerStatus.deadline ? 
-                                    new Date(selectedLoadData.timerStatus.deadline).toLocaleString() : 'N/A'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Created By Information */}
-                        {selectedLoadData.createdBySalesUser && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Created By</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-600">Employee ID:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.empId}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Name:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.empName}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Department:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.createdBySalesUser.department}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Customer Added By */}
-                        {selectedLoadData.customerAddedBy && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Customer Added By</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-600">Employee ID:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.empId}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Name:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.empName}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-600">Department:</span>
-                                <span className="ml-2 text-gray-800">{selectedLoadData.customerAddedBy.department}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Dates */}
-                        <div className="mb-4">
-                          <h5 className="text-xs font-semibold text-gray-700 mb-2">Important Dates</h5>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                            <div>
-                              <span className="font-medium text-gray-600">Pickup Date:</span>
-                              <span className="ml-2 text-gray-800">
-                                {selectedLoadData.pickupDate ? new Date(selectedLoadData.pickupDate).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Delivery Date:</span>
-                              <span className="ml-2 text-gray-800">
-                                {selectedLoadData.deliveryDate ? new Date(selectedLoadData.deliveryDate).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Bid Deadline:</span>
-                              <span className="ml-2 text-gray-800">
-                                {selectedLoadData.bidDeadline ? new Date(selectedLoadData.bidDeadline).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Created At:</span>
-                              <span className="ml-2 text-gray-800">
-                                {selectedLoadData.createdAt ? new Date(selectedLoadData.createdAt).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-600">Updated At:</span>
-                              <span className="ml-2 text-gray-800">
-                                {selectedLoadData.updatedAt ? new Date(selectedLoadData.updatedAt).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Company Section */}
-              <div className="bg-teal-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-teal-800 mb-4">Company</h3>
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <SearchableDropdown
-                      value={formData.company || ''}
-                      onChange={handleCompanyChange}
-                      options={[
-                        { value: 'V Power Logistics', label: 'V Power Logistics' },
-                        { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' }
-                      ]}
-                      placeholder="Select Company"
-                      searchPlaceholder="Search companies..."
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Shipper Information */}
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-purple-800 mb-4">Shipper Information</h3>
-
-                {/* Shipper Basic */}
-                <div className="grid grid-cols-4 gap-4 mb-4">
-                  {/* Shipper Name (alpha only) */}
-                  <div>
-                    <input
-                      type="text"
-                      name="shipperName"
-                      value={formData.shipperName}
-                      onChange={handleShipperNameChange}
-                      onKeyDown={blockNonAlphaKeys}
-                      className={errCls(!!errors.shipper?.shipperName)}
-                      placeholder="Shipper Name *"
-                    />
-                    {errors.shipper?.shipperName && (
-                      <p className="mt-1 text-xs text-red-600">{errors.shipper.shipperName}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <input
-                      type="text"
-                      name="containerNo"
-                      value={formData.containerNo}
-                      onChange={handleInputChange}
-                      className={errCls(!!errors.shipper?.containerNo)}
-                      placeholder="Container No *"
-                    />
-                    {errors.shipper?.containerNo && (
-                      <p className="mt-1 text-xs text-red-600">{errors.shipper.containerNo}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <input
-                      type="text"
-                      name="containerType"
-                      value={formData.containerType}
-                      onChange={handleInputChange}
-                      className={errCls(!!errors.shipper?.containerType)}
-                      placeholder="Container Type *"
-                    />
-                    {errors.shipper?.containerType && (
-                      <p className="mt-1 text-xs text-red-600">{errors.shipper.containerType}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Pickup Locations */}
-                <div className="bg-white p-4 rounded-lg mb-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-md font-semibold text-gray-800">Pickup Locations</h4>
-                    <button
-                      type="button"
-                      onClick={addPickupLocation}
-                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                    >
-                      + Add Location
-                    </button>
-                  </div>
-
-                  {formData.pickupLocations.map((location, locationIndex) => (
-                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-                      <div className="flex justify-between items-center mb-3">
-                        <h5 className="text-sm font-semibold text-gray-700">Pickup Location {locationIndex + 1}</h5>
-                        {formData.pickupLocations.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removePickupLocation(locationIndex)}
-                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4">
-                        {/* Name */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.name}
-                            onChange={(e) => handlePickupLocationChange(locationIndex, 'name', e.target.value)}
-                            className={errCls(!!errors.pickups?.[locationIndex]?.name)}
-                            placeholder="Location Name *"
-                          />
-                          {errors.pickups?.[locationIndex]?.name && (
-                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].name}</p>
-                          )}
-                        </div>
-
-                        {/* Address */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.address}
-                            onChange={(e) => handlePickupLocationChange(locationIndex, 'address', e.target.value)}
-                            className={errCls(!!errors.pickups?.[locationIndex]?.address)}
-                            placeholder="Address *"
-                          />
-                          {errors.pickups?.[locationIndex]?.address && (
-                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].address}</p>
-                          )}
-                        </div>
-
-                        {/* City */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.city}
-                            onChange={(e) => handlePickupLocationChange(locationIndex, 'city', e.target.value)}
-                            className={errCls(!!errors.pickups?.[locationIndex]?.city)}
-                            placeholder="City *"
-                          />
-                          {errors.pickups?.[locationIndex]?.city && (
-                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].city}</p>
-                          )}
-                        </div>
-
-                        {/* State */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.state}
-                            onChange={(e) => handlePickupLocationChange(locationIndex, 'state', e.target.value)}
-                            className={errCls(!!errors.pickups?.[locationIndex]?.state)}
-                            placeholder="State *"
-                          />
-                          {errors.pickups?.[locationIndex]?.state && (
-                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].state}</p>
-                          )}
-                        </div>
-
-                        {/* Zip */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.zipCode}
-                            onChange={(e) => handlePickupLocationChange(locationIndex, 'zipCode', e.target.value)}
-                            className={errCls(!!errors.pickups?.[locationIndex]?.zipCode)}
-                            placeholder="Zip Code *"
-                          />
-                          {errors.pickups?.[locationIndex]?.zipCode && (
-                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].zipCode}</p>
-                          )}
-                        </div>
-
-                        {/* Weight */}
-                        <div>
-                          <input
-                            type="number"
-                            value={location.weight}
-                            onKeyDown={(e) => {
-                              // Allow decimal point, but block negative signs and scientific notation
-                              if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-                            }}
-                            onChange={(e) => handlePickupLocationChange(locationIndex, 'weight', e.target.value)}
-                            className={errCls(!!errors.pickups?.[locationIndex]?.weight)}
-                            placeholder="Weight (lbs) *"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                          />
-                          {errors.pickups?.[locationIndex]?.weight && (
-                            <p className="mt-1 text-xs text-red-600">{errors.pickups[locationIndex].weight}</p>
-                          )}
-                        </div>
-
-                        {/* Date - fully clickable */}
-                        <div className="col-span-3">
-                          <ClickableDateInput
-                            value={location.pickUpDate}
-                            onChange={(v) => handlePickupLocationChange(locationIndex, 'pickUpDate', v)}
-                            error={errors.pickups?.[locationIndex]?.pickUpDate}
-                            mode="datetime"
-                            className={errors.pickups?.[locationIndex]?.pickUpDate ? 'error-field' : ''}
-                            placeholder="Pickup Date & Time *"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Remarks */}
-                      <textarea
-                        value={location.remarks || ''}
-                        onChange={(e) => handlePickupLocationChange(locationIndex, 'remarks', e.target.value)}
-                        className="col-span-3 w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        placeholder="Pickup remarks (optional)"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Drop Locations */}
-                <div className="bg-white p-4 rounded-lg">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-md font-semibold text-gray-800">Drop Locations</h4>
-                    <button
-                      type="button"
-                      onClick={addDropLocation}
-                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                    >
-                      + Add Location
-                    </button>
-                  </div>
-
-                  {formData.dropLocations.map((location, locationIndex) => (
-                    <div key={locationIndex} className="bg-gray-50 p-4 rounded-lg mb-3">
-                      <div className="flex justify-between items-center mb-3">
-                        <h5 className="text-sm font-semibold text-gray-700">Drop Location {locationIndex + 1}</h5>
-                        {formData.dropLocations.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeDropLocation(locationIndex)}
-                            className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4">
-                        {/* Name */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.name}
-                            onChange={(e) => handleDropLocationChange(locationIndex, 'name', e.target.value)}
-                            className={errCls(!!errors.drops?.[locationIndex]?.name)}
-                            placeholder="Location Name *"
-                          />
-                          {errors.drops?.[locationIndex]?.name && (
-                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].name}</p>
-                          )}
-                        </div>
-
-                        {/* Address */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.address}
-                            onChange={(e) => handleDropLocationChange(locationIndex, 'address', e.target.value)}
-                            className={errCls(!!errors.drops?.[locationIndex]?.address)}
-                            placeholder="Address *"
-                          />
-                          {errors.drops?.[locationIndex]?.address && (
-                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].address}</p>
-                          )}
-                        </div>
-
-                        {/* City */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.city}
-                            onChange={(e) => handleDropLocationChange(locationIndex, 'city', e.target.value)}
-                            className={errCls(!!errors.drops?.[locationIndex]?.city)}
-                            placeholder="City *"
-                          />
-                          {errors.drops?.[locationIndex]?.city && (
-                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].city}</p>
-                          )}
-                        </div>
-
-                        {/* State */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.state}
-                            onChange={(e) => handleDropLocationChange(locationIndex, 'state', e.target.value)}
-                            className={errCls(!!errors.drops?.[locationIndex]?.state)}
-                            placeholder="State *"
-                          />
-                          {errors.drops?.[locationIndex]?.state && (
-                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].state}</p>
-                          )}
-                        </div>
-
-                        {/* Zip */}
-                        <div>
-                          <input
-                            type="text"
-                            value={location.zipCode}
-                            onChange={(e) => handleDropLocationChange(locationIndex, 'zipCode', e.target.value)}
-                            className={errCls(!!errors.drops?.[locationIndex]?.zipCode)}
-                            placeholder="Zip Code *"
-                          />
-                          {errors.drops?.[locationIndex]?.zipCode && (
-                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].zipCode}</p>
-                          )}
-                        </div>
-
-                        {/* Weight */}
-                        <div>
-                          <input
-                            type="number"
-                            value={location.weight}
-                            onKeyDown={(e) => {
-                              // Allow decimal point, but block negative signs and scientific notation
-                              if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-                            }}
-                            onChange={(e) => handleDropLocationChange(locationIndex, 'weight', e.target.value)}
-                            className={errCls(!!errors.drops?.[locationIndex]?.weight)}
-                            placeholder="Weight (lbs) *"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                          />
-                          {errors.drops?.[locationIndex]?.weight && (
-                            <p className="mt-1 text-xs text-red-600">{errors.drops[locationIndex].weight}</p>
-                          )}
-                        </div>
-
-                        {/* Date - fully clickable */}
-                        <div className="col-span-3">
-                          <ClickableDateInput
-                            value={location.dropDate}
-                            onChange={(v) => handleDropLocationChange(locationIndex, 'dropDate', v)}
-                            error={errors.drops?.[locationIndex]?.dropDate}
-                            mode="datetime"
-                            className={errors.drops?.[locationIndex]?.dropDate ? 'error-field' : ''}
-                            placeholder="Drop Date & Time *"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Remarks */}
-                      <textarea
-                        value={location.remarks || ''}
-                        onChange={(e) => handleDropLocationChange(locationIndex, 'remarks', e.target.value)}
-                        className="col-span-3 w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        placeholder="Drop remarks (optional)"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Document Upload (optional in Edit) */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  Document Upload <span className="text-gray-500 text-sm font-normal">(optional in Edit)</span>
-                </h3>
-                <p className="text-xs text-gray-500 -mt-3 mb-3">Allowed: PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-center w-full">
-                    <label
-                      htmlFor="file-upload-edit"
-                      className={`flex flex-col items-center justify-center w-full h-32 border-2 ${errors.docs ? 'border-red-500 bg-red-50' : 'border-gray-300'} border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors`}
-                    >
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                          <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
-                        </svg>
-                        <p className="mb-2 text-sm text-gray-500">
-                          <span className="font-semibold">Click to upload</span> or drag and drop
-                        </p>
-                        <p className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (MAX. 10MB)</p>
-                      </div>
-                      <input
-                        id="file-upload-edit"
-                        type="file"
-                        className="hidden"
-                        onChange={handleFileChange}
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      />
-                    </label>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Reason for Deletion *</label>
+                    <textarea
+                      value={deleteReason}
+                      onChange={(e) => setDeleteReason(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                      rows="4"
+                      placeholder="Please provide a reason for deleting this delivery order..."
+                    />
                   </div>
-
-                  {errors.docs && (
-                    <p className="text-xs text-red-600">{errors.docs}</p>
-                  )}
-
-                  {formData.docs && (
-                    <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
-                          <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, docs: null }))}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* Form Actions */}
-              <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
+              <div className="flex justify-end gap-4">
                 <button
                   type="button"
-                  onClick={handleCloseEditModal}
-                  disabled={submitting}
-                  className={`px-6 py-3 border border-gray-300 rounded-lg transition-colors ${submitting ? 'opacity-50 cursor-not-allowed text-gray-400' : 'text-gray-700 hover:bg-gray-50'}`}
+                  onClick={closeDeleteModal}
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
-            <button
-  type="submit"
-  disabled={submitting}
-  className={`px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold transition-colors ${
-    submitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-green-600 hover:to-green-700'
-  }`}
->
-  {submitting ? (
-    <span className="flex items-center gap-2">
-      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-      Updating...
-    </span>
-  ) : (
-    'Update Delivery Order'
-  )}
-</button>
+                <button
+                  type="button"
+                  onClick={handleDeleteOrder}
+                  disabled={!deleteReason.trim() || submitting}
+                  className={`px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold transition-colors ${
+                    !deleteReason.trim() || submitting
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:from-red-600 hover:to-red-700'
+                  }`}
+                >
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                      Deleting...
+                    </span>
+                  ) : (
+                    'Delete Delivery Order'
+                  )}
+                </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -8137,60 +7129,48 @@ const handleUpdateOrder = async (e) => {
                     </svg>
                     <span className="text-red-700 font-medium">Warning</span>
                   </div>
-                  <p className="text-red-600 text-sm mt-2">
-                    You are about to delete the delivery order <strong>{orderToDelete?.id}</strong>
-                    {orderToDelete?.customers?.[0]?.loadNo && (
-                      <> with Load Number <strong>{orderToDelete.customers[0].loadNo}</strong></>
-                    )}.
-                    This action will mark the order as inactive.
-                  </p>
+                  <p className="text-red-600 text-sm mt-2">This action cannot be undone. The delivery order will be permanently deleted.</p>
                 </div>
 
-                <div className="mb-4">
-                  <label htmlFor="delete-reason" className="block text-sm font-medium text-gray-700 mb-2">
-                    Reason for deletion <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    id="delete-reason"
-                    value={deleteReason}
-                    onChange={(e) => setDeleteReason(e.target.value)}
-                    rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
-                    placeholder="Please provide a reason for deleting this delivery order..."
-                    required
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Reason for Deletion *</label>
+                    <textarea
+                      value={deleteReason}
+                      onChange={(e) => setDeleteReason(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                      rows="4"
+                      placeholder="Please provide a reason for deleting this delivery order..."
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <div className="flex justify-end gap-4">
                 <button
                   type="button"
                   onClick={closeDeleteModal}
-                  disabled={submitting}
-                  className={`px-6 py-2 border border-gray-300 rounded-lg transition-colors ${submitting
-                    ? 'opacity-50 cursor-not-allowed text-gray-400'
-                    : 'text-gray-700 hover:bg-gray-50'
-                    }`}
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleDeleteOrder}
-                  disabled={submitting || !deleteReason.trim()}
-                  className={`px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold transition-colors ${submitting || !deleteReason.trim()
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:from-red-600 hover:to-red-700'
-                    }`}
+                  disabled={!deleteReason.trim() || submitting}
+                  className={`px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold transition-colors ${
+                    !deleteReason.trim() || submitting
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:from-red-600 hover:to-red-700'
+                  }`}
                 >
                   {submitting ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
                       Deleting...
-                    </div>
+                    </span>
                   ) : (
-                    'Delete Order'
+                    'Delete Delivery Order'
                   )}
                 </button>
               </div>
@@ -8200,26 +7180,29 @@ const handleUpdateOrder = async (e) => {
       )}
 
       {/* Assign Order Modal */}
-      {showAssignModal && (
+      {showAssignModal && orderToAssign && (
         <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
             {/* Header */}
-            <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-2xl">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-2xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Assign Order</h2>
-                    <p className="text-purple-100 text-sm">Assign this delivery order to CMT team</p>
+                    <h2 className="text-xl font-bold">Assign Delivery Order</h2>
+                    <p className="text-blue-100">Assign to dispatcher</p>
                   </div>
                 </div>
                 <button
-                  onClick={handleCancelAssign}
-                  className="text-white/80 hover:text-white text-2xl font-bold"
+                  onClick={() => {
+                    setShowAssignModal(false);
+                    setOrderToAssign(null);
+                  }}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
                 >
                   ×
                 </button>
@@ -8228,49 +7211,57 @@ const handleUpdateOrder = async (e) => {
 
             {/* Content */}
             <div className="p-6">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  Are you sure you want to assign this DO to CMT team?
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Order ID: <span className="font-semibold text-purple-600">{orderToAssign?.id}</span>
-                </p>
-                <p className="text-gray-500 text-xs mt-2">
-                  This action will assign the delivery order to the CMT team for processing.
-                </p>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Dispatcher *</label>
+                {dispatchers.length > 0 ? (
+                  <SearchableDropdown
+                    value={orderToAssign?.assignedDispatcherId || ''}
+                    onChange={(value) => {
+                      setOrderToAssign(prev => ({ ...prev, assignedDispatcherId: value }));
+                    }}
+                    options={dispatchers
+                      .filter(d => (d.status || '').toLowerCase() === 'active')
+                      .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
+                      .map(d => ({ 
+                        value: d._id, 
+                        label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` 
+                      }))}
+                    placeholder="Select Dispatcher"
+                    searchPlaceholder="Search dispatchers..."
+                  />
+                ) : (
+                  <p className="text-sm text-gray-500">Loading dispatchers...</p>
+                )}
               </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <div className="flex justify-end gap-4">
                 <button
                   type="button"
-                  onClick={handleCancelAssign}
-                  disabled={assigningOrder}
-                  className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => {
+                    setShowAssignModal(false);
+                    setOrderToAssign(null);
+                  }}
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmAssign}
-                  disabled={assigningOrder}
-                  className={`px-6 py-2 rounded-lg transition-all duration-200 font-semibold ${assigningOrder
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
-                    }`}
+                  onClick={handleAssignOrder}
+                  disabled={!orderToAssign?.assignedDispatcherId || assigningOrder}
+                  className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors ${
+                    !orderToAssign?.assignedDispatcherId || assigningOrder
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:from-blue-600 hover:to-blue-700'
+                  }`}
                 >
                   {assigningOrder ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
                       Assigning...
-                    </div>
+                    </span>
                   ) : (
-                    'Assign'
+                    'Assign Order'
                   )}
                 </button>
               </div>
@@ -8280,4 +7271,4 @@ const handleUpdateOrder = async (e) => {
       )}
     </div>
   );
-} 
+};

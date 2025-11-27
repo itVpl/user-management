@@ -19,8 +19,23 @@ const Layout = () => {
       try {
         const userData = JSON.parse(userString);
         setUser(userData);
-        const department = userData?.department || userData?.department?.name || '';
-        setIsCMTUser(department.toLowerCase() === 'cmt');
+        
+        // Check department - handle both string and object formats
+        const department = typeof userData?.department === 'string' 
+          ? userData.department 
+          : userData?.department?.name || '';
+        
+        const departmentLower = department.toLowerCase();
+        const isCMT = departmentLower === 'cmt' || departmentLower.includes('cmt');
+        
+        console.log('👤 User Department Check:', {
+          department,
+          departmentLower,
+          isCMT,
+          userData: userData?.department
+        });
+        
+        setIsCMTUser(isCMT);
       } catch (error) {
         console.error("Error parsing user data:", error);
       }
@@ -46,6 +61,20 @@ const Layout = () => {
     clearLoadNotification();
   };
 
+  // Debug logs
+  useEffect(() => {
+    if (isCMTUser) {
+      console.log('🔍 Layout Debug:', {
+        isCMTUser,
+        hasUser: !!user,
+        empId: user?.empId || user?.employeeId,
+        newDOAssignment: !!newDOAssignment,
+        newAssignment: !!newAssignment,
+        assignmentData: newAssignment,
+      });
+    }
+  }, [isCMTUser, user, newDOAssignment, newAssignment]);
+
   return (
     <div className="flex">
       <Sidebar />
@@ -55,20 +84,39 @@ const Layout = () => {
           <Outlet />
         </main>
       </div>
-      {/* DO Assignment Popup for CMT users - positioned on right */}
+      {/* DO Assignment Popup for CMT users */}
       {isCMTUser && newDOAssignment && (
         <DOAssignmentPopup 
           assignment={newDOAssignment} 
           onClose={handleCloseDOPopup}
+          hasBothPopups={!!(newDOAssignment && newAssignment)}
         />
       )}
       
-      {/* Load Assignment Popup for CMT users - positioned on right */}
+      {/* Load Assignment Popup - Show if assignment exists and user is CMT */}
       {isCMTUser && newAssignment && (
         <LoadAssignmentPopup 
           assignment={newAssignment} 
           onClose={handleCloseLoadPopup}
+          hasBothPopups={!!(newDOAssignment && newAssignment)}
         />
+      )}
+      
+      {/* Debug info in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <>
+          {newAssignment && !isCMTUser && (
+            <div className="fixed top-4 left-4 bg-yellow-500 text-black p-2 rounded z-[99999] text-xs max-w-xs">
+              ⚠️ Debug: Assignment found but isCMTUser={String(isCMTUser)}. 
+              Showing popup anyway in dev mode.
+            </div>
+          )}
+          {isCMTUser && newAssignment && (
+            <div className="fixed top-4 left-4 bg-green-500 text-white p-2 rounded z-[99999] text-xs">
+              ✅ Load Assignment Popup should be visible
+            </div>
+          )}
+        </>
       )}
     </div>
   );
