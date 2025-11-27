@@ -37,6 +37,7 @@ import LogoutConfirmationModal from "./LogoutConfirmationModal";
 
 const menuItems = [
   { name: "Dashboard", icon: DashboardImage, whiteIcon: WhiteDashboard, path: "/dashboard" },
+  { name: "Companies", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/companies" },
   { name: "Tracking", icon: LiveTracker, whiteIcon: WhiteLiveTracker, path: "/live-tracker" },
   { name: "Manage Users", icon: ManageUser, whiteIcon: WhiteManageUser, path: "/manage-users" },
   { name: "Users Permissions", icon: UserPermision, whiteIcon: WhiteUserPermission, path: "/permissions" },
@@ -139,7 +140,7 @@ const Sidebar = () => {
           console.error("❌ No user data found");
           // Fallback: show basic menus when no user data
           const basicMenus = menuItems.filter(item => 
-            ['Dashboard', 'Tracking'].includes(item.name)
+            ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
           );
           setFilteredMenuItems(basicMenus);
           setLoading(false);
@@ -177,21 +178,35 @@ const Sidebar = () => {
 
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
           
+          // Always include Companies menu item
+          const companiesMenuItem = menuItems.find(item => item.name === 'Companies');
+          
           // If no modules matched, show basic menus as fallback
           if (matchedMenus.length === 0) {
             console.warn("⚠️ No modules matched, showing basic menus");
             const basicMenus = menuItems.filter(item => 
-              ['Dashboard', 'Tracking'].includes(item.name)
+              ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
             );
             setFilteredMenuItems(basicMenus);
           } else {
+            // Add Companies to matched menus if not already included
+            const hasCompanies = matchedMenus.some(item => item.name === 'Companies');
+            if (!hasCompanies && companiesMenuItem) {
+              // Insert Companies after Dashboard
+              const dashboardIndex = matchedMenus.findIndex(item => item.name === 'Dashboard');
+              if (dashboardIndex >= 0) {
+                matchedMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
+              } else {
+                matchedMenus.unshift(companiesMenuItem);
+              }
+            }
             setFilteredMenuItems(matchedMenus);
           }
         } else {
           console.error("❌ API response not successful:", data);
           // Fallback: show basic menus if API fails
           const basicMenus = menuItems.filter(item => 
-            ['Dashboard', 'Tracking'].includes(item.name)
+            ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
           );
           setFilteredMenuItems(basicMenus);
         }
@@ -199,7 +214,7 @@ const Sidebar = () => {
         console.error("❌ Failed to fetch modules:", err);
         // Fallback: show basic menus on error
         const basicMenus = menuItems.filter(item => 
-          ['Dashboard', 'Tracking'].includes(item.name)
+          ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
         );
         setFilteredMenuItems(basicMenus);
       } finally {

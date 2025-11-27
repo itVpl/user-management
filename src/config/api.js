@@ -22,6 +22,12 @@ const API_CONFIG = {
     CMT_USERS: '/api/v1/inhouseUser/department/CMT',
     ACCEPT_TERMS: '/api/v1/inhouseUser/terms/accept',
     GET_LOAD_BY_ID: '/api/v1/load',
+    
+    // Tally Company endpoints
+    COMPANY_BASE: '/api/v1/tally/company',
+    COMPANY_CREATE: '/api/v1/tally/company/create',
+    COMPANY_ALL: '/api/v1/tally/company/all',
+    COMPANY_DEFAULT: '/api/v1/tally/company/default/get',
   },
   
   // Helper function to get full URL
