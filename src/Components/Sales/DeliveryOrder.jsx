@@ -3825,12 +3825,19 @@ const handleUpdateOrder = async (e) => {
         return isNaN(dt) ? 'N/A' : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
       };
       
-      const returnAddr = fullAddr({
-        address: returnLoc.returnFullAddress || returnLoc.address || '',
-        city: returnLoc.city || '',
-        state: returnLoc.state || '',
-        zipCode: returnLoc.zipCode || ''
-      });
+      // If returnFullAddress exists, use only that (it already contains full address)
+      // Otherwise, construct from individual parts to avoid duplication
+      let returnAddr = 'N/A';
+      if (returnLoc.returnFullAddress && returnLoc.returnFullAddress.trim()) {
+        returnAddr = returnLoc.returnFullAddress.trim();
+      } else {
+        returnAddr = fullAddr({
+          address: returnLoc.address || '',
+          city: returnLoc.city || '',
+          state: returnLoc.state || '',
+          zipCode: returnLoc.zipCode || ''
+        });
+      }
       const weight = (returnLoc.weight ?? '') !== '' && returnLoc.weight !== null ? returnLoc.weight : 'N/A';
       const contNo = order.shipper?.containerNo || 'N/A';
       const contTp = order.shipper?.containerType || 'N/A';
@@ -3843,7 +3850,7 @@ const handleUpdateOrder = async (e) => {
         <thead>
           <tr>
            
-            <th>Address</th>
+            <th>Return Address</th>
            
             <th>Container No</th>
             <th>Container Type</th>

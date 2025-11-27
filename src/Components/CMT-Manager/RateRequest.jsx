@@ -3,8 +3,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign, BarChart3, FileText, PlusCircle } from 'lucide-react';
+import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign, BarChart3, FileText, PlusCircle, MessageCircle } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
+import LoadChatModalCMT from '../CMT/LoadChatModalCMT.jsx';
  const getAuthToken = () =>
    localStorage.getItem('authToken') ||
    sessionStorage.getItem('authToken') ||
@@ -84,6 +85,14 @@ const RateRequest = () => {
   const [loadTimers, setLoadTimers] = useState({});
   const [uploadedFile, setUploadedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  
+  // Chat Modal State
+  const [chatModal, setChatModal] = useState({
+    visible: false,
+    loadId: null,
+    receiverEmpId: null,
+    receiverName: null
+  });
   
   // Charges Calculator popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
@@ -256,6 +265,7 @@ const autoAcceptingRef = useRef(new Set());
         return {
           _id: approval._id, // approval id
           loadId, // real load id for timers
+          actualLoadId: loadId, // Store actual MongoDB load ID for chat API calls
           shipmentNumber: approval.loadId.shipmentNumber || null,
           weight: approval.loadId.weight || 0,
           origin: originData,
@@ -278,7 +288,14 @@ const autoAcceptingRef = useRef(new Set());
           returnAddress: approval.loadId?.returnAddress || null,
           returnCity: approval.loadId?.returnCity || null,
           returnState: approval.loadId?.returnState || null,
-          returnZip: approval.loadId?.returnZip || approval.loadId?.returnZipCode || null
+          returnZip: approval.loadId?.returnZip || approval.loadId?.returnZipCode || null,
+          // Add sales user info for chat - try multiple possible paths
+          salesUserInfo: approval.loadId?.createdBySalesUser || 
+                        approval.loadId?.createdBy || 
+                        approval.createdBySalesUser || 
+                        approval.createdBy || 
+                        approval.salesUser ||
+                        null
         };
       });
 
@@ -295,6 +312,9 @@ const autoAcceptingRef = useRef(new Set());
         console.log('Debug - approval object:', approval);
         console.log('Debug - approval.loadId:', approval.loadId);
         console.log('Debug - loadId:', loadId);
+        console.log('Debug - createdBySalesUser:', approval.loadId?.createdBySalesUser);
+        console.log('Debug - approval.createdBySalesUser:', approval.createdBySalesUser);
+        console.log('Debug - approval.salesUser:', approval.salesUser);
 
         if (!approval.loadId) {
           return {
@@ -317,7 +337,12 @@ const autoAcceptingRef = useRef(new Set());
             expiresAt: approval.expiresAt,
             userApprovalStatus: approval.userApprovalStatus,
             userAction: approval.userAction,
-            userActionAt: approval.userActionAt
+            userActionAt: approval.userActionAt,
+            // Add sales user info for chat - try multiple possible paths
+            salesUserInfo: approval.createdBySalesUser || 
+                          approval.createdBy || 
+                          approval.salesUser ||
+                          null
           };
         }
 
@@ -365,6 +390,7 @@ const autoAcceptingRef = useRef(new Set());
         return {
           _id: approval._id, // approval id
           loadId, // real load id for timers
+          actualLoadId: loadId, // Store actual MongoDB load ID for chat API calls
           shipmentNumber: approval.loadId.shipmentNumber || null,
           weight: approval.loadId.weight || 0,
           origin: originData,
@@ -387,7 +413,14 @@ const autoAcceptingRef = useRef(new Set());
           returnAddress: approval.loadId?.returnAddress || null,
           returnCity: approval.loadId?.returnCity || null,
           returnState: approval.loadId?.returnState || null,
-          returnZip: approval.loadId?.returnZip || approval.loadId?.returnZipCode || null
+          returnZip: approval.loadId?.returnZip || approval.loadId?.returnZipCode || null,
+          // Add sales user info for chat - try multiple possible paths
+          salesUserInfo: approval.loadId?.createdBySalesUser || 
+                        approval.loadId?.createdBy || 
+                        approval.createdBySalesUser || 
+                        approval.createdBy || 
+                        approval.salesUser ||
+                        null
         };
       });
 // ---- broadcast new pending approvals (cross-tab + same tab) ----
@@ -515,11 +548,50 @@ try {
     setBidDetailsLoading(false);
   };
 
+  // Fetch load details to get sales user info
+  const fetchLoadDetailsForChat = async (loadId) => {
+    try {
+       const token = sessionStorage.getItem('authToken') || 
+                    localStorage.getItem('authToken') || 
+                    sessionStorage.getItem('token') || 
+                    localStorage.getItem('token');
+      if (!token) {
+        console.error('No token for fetching load details');
+        return null;
+      }
+
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/load/${loadId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('Load details response:', response.data);
+      
+      if (response.data && response.data.success) {
+        const load = response.data.data || response.data.load;
+        return load?.createdBySalesUser || load?.createdBy || null;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching load details for chat:', error);
+      return null;
+    }
+  };
+
   // Fetch bid details for a specific load
   const fetchBidDetails = async (loadId) => {
     try {
       setBidDetailsLoading(true);
-      const token = getAuthToken();
+       const token = sessionStorage.getItem('authToken') || 
+                    localStorage.getItem('authToken') || 
+                    sessionStorage.getItem('token') || 
+                    localStorage.getItem('token');
       
       if (!token) {
         toast.error('Authentication required. Please login again.');
@@ -1826,6 +1898,66 @@ useEffect(() => {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
+                          {/* Chat Button */}
+                          <button
+                            onClick={async () => {
+                              console.log('RateRequest (Pending Tab): Chat button clicked', {
+                                item,
+                                loadId: item.loadId,
+                                salesUserInfo: item.salesUserInfo
+                              });
+                              
+                              // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
+                              const loadId = item.actualLoadId || item.loadId;
+                              
+                              if (!loadId) {
+                                console.error('RateRequest (Pending Tab): Missing loadId', item);
+                                toast.error('Unable to determine load ID. Please check the request information.');
+                                return;
+                              }
+
+                              let receiverEmpId = item.salesUserInfo?.empId;
+                              let receiverName = item.salesUserInfo?.empName || item.salesUserInfo?.employeeName || 'Sales User';
+
+                              // If salesUserInfo is missing, try to fetch it from load details
+                              if (!receiverEmpId && loadId) {
+                                toast.info('Fetching load details...', { autoClose: 2000 });
+                                const salesUserInfo = await fetchLoadDetailsForChat(loadId);
+                                
+                                if (salesUserInfo) {
+                                  receiverEmpId = salesUserInfo.empId || salesUserInfo._id;
+                                  receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
+                                  console.log('RateRequest: Fetched sales user info:', { receiverEmpId, receiverName });
+                                }
+                              }
+
+                              if (!receiverEmpId) {
+                                console.error('RateRequest (Pending Tab): Missing receiverEmpId after fetch', item);
+                                toast.error('Unable to determine receiver. Sales user information not available for this load.');
+                                return;
+                              }
+
+                              console.log('RateRequest (Pending Tab): Opening chat modal', {
+                                loadId,
+                                receiverEmpId,
+                                receiverName,
+                                actualLoadId: item.actualLoadId
+                              });
+
+                              setChatModal({
+                                visible: true,
+                                loadId: loadId, // Use actual MongoDB loadId for API calls
+                                receiverEmpId: receiverEmpId,
+                                receiverName: receiverName
+                              });
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+                            title="Chat"
+                          >
+                            <MessageCircle size={14} />
+                            <span>Chat</span>
+                          </button>
+                          
                           {item.status !== 'approved' ? (
                             <div className="flex items-center gap-2">
                               {(loadTimers[item._id] ?? 0) > 0 ? (
@@ -2044,6 +2176,67 @@ useEffect(() => {
                       {/* <td className="px-4 py-3">{renderTimerChip(item.loadId)}</td> */}
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
+                          {/* Chat Button */}
+                          <button
+                            onClick={async () => {
+                              console.log('RateRequest (Rate Tab): Chat button clicked', {
+                                item,
+                                actualLoadId: item.actualLoadId,
+                                loadId: item.loadId,
+                                salesUserInfo: item.salesUserInfo
+                              });
+                              
+                              // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
+                              const loadId = item.actualLoadId || item.loadId;
+                              
+                              if (!loadId) {
+                                console.error('RateRequest (Rate Tab): Missing loadId', item);
+                                toast.error('Unable to determine load ID. Please check the request information.');
+                                return;
+                              }
+
+                              let receiverEmpId = item.salesUserInfo?.empId;
+                              let receiverName = item.salesUserInfo?.empName || item.salesUserInfo?.employeeName || 'Sales User';
+
+                              // If salesUserInfo is missing, try to fetch it from load details
+                              if (!receiverEmpId && loadId) {
+                                toast.info('Fetching load details...', { autoClose: 2000 });
+                                const salesUserInfo = await fetchLoadDetailsForChat(loadId);
+                                
+                                if (salesUserInfo) {
+                                  receiverEmpId = salesUserInfo.empId || salesUserInfo._id;
+                                  receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
+                                  console.log('RateRequest: Fetched sales user info:', { receiverEmpId, receiverName });
+                                }
+                              }
+
+                              if (!receiverEmpId) {
+                                console.error('RateRequest (Rate Tab): Missing receiverEmpId after fetch', item);
+                                toast.error('Unable to determine receiver. Sales user information not available for this load.');
+                                return;
+                              }
+
+                              console.log('RateRequest (Rate Tab): Opening chat modal', {
+                                loadId,
+                                receiverEmpId,
+                                receiverName,
+                                actualLoadId: item.actualLoadId
+                              });
+
+                              setChatModal({
+                                visible: true,
+                                loadId: loadId, // Use actual MongoDB loadId for API calls
+                                receiverEmpId: receiverEmpId,
+                                receiverName: receiverName
+                              });
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+                            title="Chat"
+                          >
+                            <MessageCircle size={14} />
+                            <span>Chat</span>
+                          </button>
+                          
                           <button
                             onClick={() => openModal(item)}
                             className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
@@ -3340,6 +3533,14 @@ useEffect(() => {
         </div>
       )}
 
+      {/* Chat Modal */}
+      <LoadChatModalCMT
+        isOpen={chatModal.visible}
+        onClose={() => setChatModal({ visible: false, loadId: null, receiverEmpId: null, receiverName: null })}
+        loadId={chatModal.loadId}
+        receiverEmpId={chatModal.receiverEmpId}
+        receiverName={chatModal.receiverName}
+      />
     </div>
   );
 };

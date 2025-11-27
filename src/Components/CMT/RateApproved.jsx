@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, MessageCircle } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import PendingBids from './PendingBids.jsx';
+import LoadChatModal from './LoadChatModal.jsx';
 const alphaOnly = /^[A-Za-z\s]+$/;            // alphabets + space
 const alphaNum = /^[A-Za-z0-9\s-]+$/;        // letters, numbers, space, dash
 // Sanitizers
@@ -62,6 +63,14 @@ export default function RateApproved() {
   const [negotiationHistory, setNegotiationHistory] = useState([]);
   const [negotiationHistoryLoading, setNegotiationHistoryLoading] = useState(false);
   const [chatContainerRef, setChatContainerRef] = useState(null);
+
+  // Chat Modal State
+  const [chatModal, setChatModal] = useState({
+    visible: false,
+    loadId: null,
+    receiverEmpId: null,
+    receiverName: null
+  });
   const setFormFieldSanitized = (field, value, mode) => {
     const cleaned = mode === 'alnum' ? sanitizeAlphaNum(value) : sanitizeAlpha(value);
     setAcceptBidForm(prev => ({ ...prev, [field]: cleaned }));
@@ -603,6 +612,7 @@ export default function RateApproved() {
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          actualLoadId: bid.load?._id || null, // Store actual MongoDB load ID for API calls
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? (() => {
             if (bid.load.origin && bid.load.origin.city) {
@@ -2068,6 +2078,37 @@ export default function RateApproved() {
                         </td>
                         <td className="py-2 px-3">
                           <div className="flex gap-2">
+                            {/* Chat Button */}
+                            <button
+                              onClick={() => {
+                                // Use actualLoadId if available, otherwise try to extract from loadId
+                                const loadId = rate.actualLoadId || rate.loadId?.replace(/^L-/, '') || rate.loadId || rate.rateNum;
+                                const receiverEmpId = rate.salesUserInfo?.empId || rate.load?.createdBySalesUser?.empId;
+                                const receiverName = rate.salesUserInfo?.empName || rate.salesUserInfo?.employeeName || rate.load?.createdBySalesUser?.empName || 'Sales User';
+                                
+                                if (!receiverEmpId) {
+                                  alertify.error('Unable to determine receiver. Please check the bid information.');
+                                  return;
+                                }
+
+                                if (!loadId) {
+                                  alertify.error('Unable to determine load ID. Please check the bid information.');
+                                  return;
+                                }
+
+                                setChatModal({
+                                  visible: true,
+                                  loadId: loadId,
+                                  receiverEmpId: receiverEmpId,
+                                  receiverName: receiverName
+                                });
+                              }}
+                              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+                              title="Chat"
+                            >
+                              <MessageCircle size={14} />
+                              <span>Chat</span>
+                            </button>
                             {/* Manual Approve Button */}
                             <button
                               onClick={() => {
@@ -3380,6 +3421,15 @@ export default function RateApproved() {
           </div>
         </div>
       )}
+
+      {/* Chat Modal */}
+      <LoadChatModal
+        isOpen={chatModal.visible}
+        onClose={() => setChatModal({ visible: false, loadId: null, receiverEmpId: null, receiverName: null })}
+        loadId={chatModal.loadId}
+        receiverEmpId={chatModal.receiverEmpId}
+        receiverName={chatModal.receiverName}
+      />
     </div>
   );
 }
