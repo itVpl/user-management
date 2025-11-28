@@ -49,8 +49,8 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     { name: 'emergencyNo', placeholder: 'Emergency no.', required: true, label: 'Emergency Contact', icon: '🚨' },
     { name: 'department', placeholder: 'Department', required: true, label: 'Department', icon: '🏢' },
     { name: 'designation', placeholder: 'Enter Designation', required: true, label: 'Designation', icon: '💼' },
-    { name: 'dateOfBirth', placeholder: 'Date of Birth', type: 'date', required: true, label: 'Date of Birth', icon: '🎂' },
-    { name: 'dateOfJoining', placeholder: 'Date of Joining', type: 'date', required: true, label: 'Date of Joining', icon: '📅' },
+    { name: 'dateOfBirth', placeholder: 'mm/dd/yyyy', type: 'date', required: true, label: 'Date of Birth', icon: '🎂' },
+    { name: 'dateOfJoining', placeholder: 'mm/dd/yyyy', type: 'date', required: true, label: 'Date of Joining', icon: '�' },
     // Banking set
     { name: 'accountHolderName', placeholder: 'Account Holder Name', label: 'Account Holder Name', icon: '👤' },
     { name: 'accountNumber', placeholder: 'Account Number', label: 'Account Number', icon: '🏦' },
@@ -792,7 +792,24 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                                 ? (field.name === 'dateOfBirth' ? maxDOB : field.name === 'dateOfJoining' ? maxDOJ : undefined)
                                 : undefined
                             }
-                            onClick={(e) => { if (isDate) e.target.showPicker?.(); }}
+                            onClick={(e) => { 
+                              if (isDate) {
+                                try {
+                                  e.target.showPicker?.();
+                                } catch (err) {
+                                  console.log('Picker not available');
+                                }
+                              }
+                            }}
+                            onFocus={(e) => { 
+                              if (isDate) {
+                                try {
+                                  e.target.showPicker?.();
+                                } catch (err) {
+                                  console.log('Picker not available');
+                                }
+                              }
+                            }}
                             inputMode={isMobileish ? 'numeric' : undefined}
                             maxLength={
                               isMobileish
@@ -977,28 +994,48 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                 {initialFields.slice(13).map((field) => {
                   const isNumeric = field.name === 'accountNumber' || field.name === 'basicSalary';
                   const isIFSC = field.name === 'ifscCode';
+                  const isDate = field.type === 'date';
 
 
                   return (
                     <div key={field.name} className="space-y-3">
                       <label className="block text-sm font-bold text-gray-700 flex items-center">
                         <span className="mr-2 text-lg">{field.icon}</span>
-                        {field.label}
+                        {field.label} {field.required && <span className="text-red-500 ml-1">*</span>}
                       </label>
 
 
                       <input
                         ref={(el) => (fieldRefs.current[field.name] = el)}
                         name={field.name}
-                        type="text"
+                        type={field.type || 'text'}
                         placeholder={field.placeholder}
                         value={formData[field.name]}
                         onChange={handleInputChange}
                         onBlur={() => handleBlur(field.name)}
+                        onClick={(e) => { 
+                          if (isDate) {
+                            try {
+                              e.target.showPicker?.();
+                            } catch (err) {
+                              console.log('Picker not available');
+                            }
+                          }
+                        }}
+                        onFocus={(e) => { 
+                          if (isDate) {
+                            try {
+                              e.target.showPicker?.();
+                            } catch (err) {
+                              console.log('Picker not available');
+                            }
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (isNumeric) allowKey(e, 'digit');
                           if (isIFSC) allowKey(e, 'ifsc');
                         }}
+                        max={isDate && field.name === 'dateOfJoining' ? maxDOJ : undefined}
                         inputMode={isNumeric ? 'numeric' : undefined}
                         pattern={isNumeric ? '\\d*' : isIFSC ? '[A-Za-z0-9]*' : undefined}
                         maxLength={field.name === 'accountNumber' ? 18 : field.name === 'ifscCode' ? 11 : undefined}
