@@ -137,6 +137,20 @@ export default function ConsignmentTracker() {
       };
       setTruckPopupData(truckData);
 
+      // Zoom to truck location
+      if (trackingData.currentLocation && 
+          trackingData.currentLocation.lat != null && 
+          trackingData.currentLocation.lon != null) {
+        const map = e.target._map;
+        if (map) {
+          map.setView(
+            [trackingData.currentLocation.lat, trackingData.currentLocation.lon],
+            15, // Zoom level (15 is a good close-up view)
+            { animate: true, duration: 1 } // Smooth animation
+          );
+        }
+      }
+
       // Calculate popup position relative to the map container
       const mapContainer = document.querySelector('.leaflet-container');
       if (mapContainer) {
@@ -403,8 +417,8 @@ export default function ConsignmentTracker() {
   // Initial + 10s interval fetch
   useEffect(() => {
     fetchConsignments();
-    // const interval = setInterval(fetchConsignments, 10000); // every 10s
-    // return () => clearInterval(interval);
+    const interval = setInterval(fetchConsignments, 10000); // every 10s
+    return () => clearInterval(interval);
   }, [searchTerm]);
 
   function RecenterMap({ lat, lng }) {
@@ -417,12 +431,14 @@ export default function ConsignmentTracker() {
     return null;
   }
 
-  // Function to fit map bounds to show all markers
+  // Function to fit map bounds to show all markers (only on initial load)
   function FitBounds({ trackingData, routeCoordinates, currentLocationRoute }) {
     const map = useMap();
+    const [hasInitialized, setHasInitialized] = useState(false);
 
     useEffect(() => {
-      if (trackingData && (routeCoordinates.length > 0 || currentLocationRoute.length > 0)) {
+      // Only fit bounds once when data first loads, not on every update
+      if (!hasInitialized && trackingData && (routeCoordinates.length > 0 || currentLocationRoute.length > 0)) {
         const bounds = L.latLngBounds();
 
         // Add origin and destination with validation
@@ -461,9 +477,10 @@ export default function ConsignmentTracker() {
         // Only fit bounds if we have valid coordinates
         if (bounds.isValid()) {
           map.fitBounds(bounds, { padding: [50, 50] });
+          setHasInitialized(true);
         }
       }
-    }, [trackingData, routeCoordinates, currentLocationRoute, map]);
+    }, [trackingData, routeCoordinates, currentLocationRoute, map, hasInitialized]);
 
     return null;
   }
@@ -685,12 +702,12 @@ export default function ConsignmentTracker() {
         <div className="absolute top-6 right-6 z-20 bg-white/95 backdrop-blur-xl rounded-3xl p-4 shadow-2xl border border-white/30">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-              <span className="text-xs font-medium text-gray-700">Main Route</span>
+              <img src={truckImg} alt="Truck" className="w-6 h-4 object-contain" />
+              <span className="text-xs font-medium text-gray-700">Current Location</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-              <span className="text-xs font-medium text-gray-700">Current Location</span>
+              <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+              <span className="text-xs font-medium text-gray-700">Route</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-4 h-4 bg-green-500 rounded-full"></div>
@@ -754,16 +771,7 @@ export default function ConsignmentTracker() {
             />
           )}
 
-          {/* Current Location to Route Polyline */}
-          {currentLocationRoute.length > 0 && (
-            <Polyline
-              positions={currentLocationRoute}
-              color="red"
-              weight={3}
-              opacity={0.9}
-              dashArray="10, 5"
-            />
-          )}
+          {/* Current Location to Route Polyline - Removed to prevent visual issues */}
 
           {/* Fit map bounds to show all markers */}
           <FitBounds
@@ -772,9 +780,7 @@ export default function ConsignmentTracker() {
             currentLocationRoute={currentLocationRoute}
           />
 
-          {selectedShipment && (
-            <RecenterMap lat={selectedShipment.lat} lng={selectedShipment.lng} />
-          )}
+          {/* RecenterMap removed - FitBounds handles initial view, user controls zoom after */}
         </MapContainer>
       </div>
 
