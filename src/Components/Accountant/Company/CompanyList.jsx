@@ -1,8 +1,9 @@
-  import React, { useState, useEffect } from 'react';
-import { Search, Plus, Edit, Trash2, Power, Eye, RefreshCw, Building } from 'lucide-react';
+  import { useState, useEffect } from 'react';
+import { Search, Plus, Power, RefreshCw, Building, Settings } from 'lucide-react';
 import companyService from '../../../services/companyService';
 import CompanyForm from './CompanyForm';
 import CompanyDetails from './CompanyDetails';
+import CompanyFeaturesModal from './CompanyFeaturesModal';
 
 const CompanyList = () => {
   const [companies, setCompanies] = useState([]);
@@ -17,6 +18,7 @@ const CompanyList = () => {
   // Modals
   const [showForm, setShowForm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [formMode, setFormMode] = useState('create');
 
@@ -69,6 +71,11 @@ const CompanyList = () => {
   const handleView = (company) => {
     setSelectedCompany(company);
     setShowDetails(true);
+  };
+
+  const handleManageFeatures = (company) => {
+    setSelectedCompany(company);
+    setShowFeatures(true);
   };
 
   const handleDelete = async (companyId) => {
@@ -275,6 +282,14 @@ const CompanyList = () => {
                           >
                             Delete
                           </button>
+                          <button
+                            onClick={() => handleManageFeatures(company)}
+                            className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                            title="Manage Features"
+                          >
+                            <Settings size={14} />
+                            Features
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -346,6 +361,21 @@ const CompanyList = () => {
           onEdit={() => {
             setShowDetails(false);
             handleEdit(selectedCompany);
+          }}
+        />
+      )}
+
+      {showFeatures && selectedCompany && (
+        <CompanyFeaturesModal
+          company={selectedCompany}
+          onClose={() => {
+            setShowFeatures(false);
+            setSelectedCompany(null);
+          }}
+          onSuccess={() => {
+            setShowFeatures(false);
+            setSelectedCompany(null);
+            fetchCompanies();
           }}
         />
       )}

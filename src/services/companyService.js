@@ -82,6 +82,65 @@ class CompanyService {
     localStorage.removeItem('currentCompanyId');
     localStorage.removeItem('currentCompany');
   }
+
+  // Company Features Management
+  async getCompanyFeatures(companyId) {
+    return apiService.get(`/api/v1/tally/company-features/${companyId}`);
+  }
+
+  async updateCompanyFeatures(companyId, features) {
+    return apiService.put(`/api/v1/tally/company-features/${companyId}/update`, features);
+  }
+
+  async enableFeature(companyId, featureName) {
+    return apiService.post(`/api/v1/tally/company-features/${companyId}/enable/${featureName}`);
+  }
+
+  async disableFeature(companyId, featureName) {
+    return apiService.post(`/api/v1/tally/company-features/${companyId}/disable/${featureName}`);
+  }
+
+  async getAvailableFeatures() {
+    return apiService.get('/api/v1/tally/company-features/available');
+  }
+
+  // Company GST Configuration Management
+  async getGSTConfig(companyId) {
+    return apiService.get(`/api/v1/tally/company-gst-config/${companyId}`);
+  }
+
+  async updateGSTConfig(companyId, configData) {
+    return apiService.put(`/api/v1/tally/company-gst-config/${companyId}/update`, configData);
+  }
+
+  async updateHsnSac(companyId, hsnSacData) {
+    return apiService.put(`/api/v1/tally/company-gst-config/${companyId}/hsn-sac`, hsnSacData);
+  }
+
+  async updateGSTRate(companyId, gstRateData) {
+    return apiService.put(`/api/v1/tally/company-gst-config/${companyId}/gst-rate`, gstRateData);
+  }
+
+  async updateAdditionalConfig(companyId, additionalConfigData) {
+    return apiService.put(`/api/v1/tally/company-gst-config/${companyId}/additional-config`, additionalConfigData);
+  }
+
+  // Company TDS Configuration Management
+  async getTDSConfig(companyId) {
+    return apiService.get(`/api/v1/tally/company-gst-config/${companyId}/tds`);
+  }
+
+  async updateTDSConfig(companyId, configData) {
+    return apiService.put(`/api/v1/tally/company-gst-config/${companyId}/tds/update`, configData);
+  }
+
+  async updateTDSDeductorDetails(companyId, deductorData) {
+    return apiService.put(`/api/v1/tally/company-gst-config/${companyId}/tds/deductor-details`, deductorData);
+  }
+
+  async updateTDSRateExemption(companyId, rateExemptionData) {
+    return apiService.put(`/api/v1/tally/company-gst-config/${companyId}/tds/rate-exemption`, rateExemptionData);
+  }
 }
 
 // Create and export singleton instance
