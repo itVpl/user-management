@@ -510,7 +510,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
           </div>
 
           {/* Features - Pink Section */}
-          <div className="bg-pink-50 p-4 rounded-lg">
+          {/* <div className="bg-pink-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold text-pink-800 mb-4">Features</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="flex items-center gap-4 p-4 bg-white rounded-xl border-2 border-gray-200 cursor-pointer hover:border-pink-400 hover:shadow-md transition-all">
@@ -544,7 +544,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
                   <span className="text-sm font-semibold text-gray-800">Enable TCS</span>
                 </label>
               </div>
-          </div>
+          </div> */}
 
           {/* Footer with Action Buttons */}
           <div className="flex justify-end gap-4 mt-8 pt-8 border-t-2 border-gray-200">
