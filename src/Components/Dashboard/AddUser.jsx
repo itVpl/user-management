@@ -13,7 +13,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;   // supports .com.in
   const MOBILE_PATTERN = /^[6-9]\d{9}$/;                   // 10 digits, start 6–9
   const PASSWORD_COMBO = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,14}$/; // 8–14
-  const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;           // SBIN0XXXXXX
+
   // 10 MB in BYTES
   const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -124,7 +124,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
 
     // Banking
     if (name === 'accountNumber') value = value.replace(/\D/g, '').slice(0, 18);
-    if (name === 'ifscCode') value = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11);
+    if (name === 'ifscCode') value = value.toUpperCase();
     if (name === 'basicSalary') value = value.replace(/\D/g, '');
 
 
@@ -141,11 +141,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
       if (v && (v.length < 9 || v.length > 18)) setErr('accountNumber', 'Please enter the valid account number.');
       else clearErr('accountNumber');
     }
-    if (name === 'ifscCode') {
-      const v = value;
-      if (v && (v.length !== 11 || !IFSC_PATTERN.test(v))) setErr('ifscCode', 'Please enter the valid IFSC Code.');
-      else clearErr('ifscCode');
-    }
+
     if (name === 'basicSalary') {
       const v = value;
       if (v && +v <= 0) setErr('basicSalary', 'Please enter basic salary more than 0.');
@@ -325,12 +321,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     if (v.length < 9 || v.length > 18) return setErr('accountNumber', 'Please enter the valid account number.'), false;
     clearErr('accountNumber'); return true;
   };
-  const validateIfsc = () => {
-    const v = (formData.ifscCode || '').trim();
-    if (!v) { clearErr('ifscCode'); return true; }
-    if (v.length !== 11 || !IFSC_PATTERN.test(v)) return setErr('ifscCode', 'Please enter the valid IFSC Code.'), false;
-    clearErr('ifscCode'); return true;
-  };
+
   const validateBasicSalary = () => {
     const v = (formData.basicSalary || '').trim();
     if (!v) { clearErr('basicSalary'); return true; }
@@ -356,7 +347,6 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
       dateOfJoining: validateDoj,
       accountHolderName: validateAccountHolderName,
       accountNumber: validateAccountNumber,
-      ifscCode: validateIfsc,
       basicSalary: validateBasicSalary,
     };
     map[field]?.();
@@ -412,7 +402,6 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     dateOfJoining: validateDoj,
     accountHolderName: validateAccountHolderName,
     accountNumber: validateAccountNumber,
-    ifscCode: validateIfsc,
     basicSalary: validateBasicSalary,
   };
 
