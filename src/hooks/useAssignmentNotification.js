@@ -11,7 +11,7 @@ const getAuthToken = () =>
 export const useAssignmentNotification = (empId, enabled = true) => {
   const [newAssignment, setNewAssignment] = useState(null);
   const previousAssignmentIdsRef = useRef(new Set());
-  const assignmentTimestampsRef = useRef(new Map()); // Track assignment timestamp
+  const assignmentTimestampsRef = useRef(new Map()); // Track assignment timestampss
   const acknowledgedLoadIdsRef = useRef(new Set()); // Track loadIds that user has acknowledged
   const intervalRef = useRef(null);
 
