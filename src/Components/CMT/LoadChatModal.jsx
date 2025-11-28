@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { X, Send, MessageCircle, RefreshCw } from 'lucide-react';
+import { X, Send, MessageCircle, RefreshCw, User } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 
 const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName }) => {
@@ -10,9 +10,11 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const isInitialLoadRef = useRef(true);
+  const pollingIntervalRef = useRef(null);
+  const lastFetchTimeRef = useRef(null);
+  
   const currentUserEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
   
-  // Debug: Log current user and receiver info when modal opens
   useEffect(() => {
     if (isOpen && loadId) {
       console.log('LoadChatModal: Modal opened with context:', {
@@ -24,19 +26,16 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
     }
   }, [isOpen, loadId, currentUserEmpId, receiverEmpId, receiverName]);
 
-  // Scroll to bottom only when new message is added (prevent blinking)
   const prevMessagesLengthRef = useRef(0);
   
   useEffect(() => {
-    // Only scroll if a new message was actually added (length increased)
     if (messages.length > prevMessagesLengthRef.current && messages.length > 0) {
-      // Use requestAnimationFrame for smoother scroll
       requestAnimationFrame(() => {
         scrollToBottom();
       });
     }
     prevMessagesLengthRef.current = messages.length;
-  }, [messages.length]); // Only depend on length to prevent unnecessary scrolls
+  }, [messages.length]);
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -44,8 +43,29 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
     }
   };
 
-  // Fetch all chat messages for this load - NO POLLING, only called explicitly
-  const fetchChatMessages = useCallback(async (isFirstLoad = false) => {
+  // Start polling when modal opens
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    
+    // Poll every 2 seconds for real-time updates
+    pollingIntervalRef.current = setInterval(() => {
+      if (isOpen && loadId) {
+        fetchChatMessages(false, true); // Silent background fetch
+      }
+    }, 2000);
+  }, [isOpen, loadId]);
+
+  // Stop polling when modal closes
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  };
+
+  const fetchChatMessages = useCallback(async (isFirstLoad = false, isBackgroundFetch = false) => {
     if (!loadId) {
       return;
     }
@@ -53,7 +73,7 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
     const currentInitialLoad = isFirstLoad || isInitialLoadRef.current;
     
     try {
-      if (currentInitialLoad) {
+      if (currentInitialLoad && !isBackgroundFetch) {
         setLoading(true);
         isInitialLoadRef.current = false;
       }
@@ -64,31 +84,31 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
                     localStorage.getItem('token');
       
       if (!token) {
-        if (currentInitialLoad) {
+        if (currentInitialLoad && !isBackgroundFetch) {
           setLoading(false);
         }
         return;
       }
 
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/load/${loadId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/public/load/${loadId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          params: isBackgroundFetch ? {
+            lastUpdate: lastFetchTimeRef.current
+          } : {}
         }
       );
 
-      // Handle different API response structures
       let messagesData = [];
       
       if (response.data) {
-        // Check if response has success flag
         if (response.data.success) {
           messagesData = response.data.data || response.data.messages || [];
         } else {
-          // If no success flag, check if data is directly in response.data
           if (Array.isArray(response.data)) {
             messagesData = response.data;
           } else if (Array.isArray(response.data.data)) {
@@ -99,27 +119,24 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
         }
       }
       
-      // Ensure messagesData is an array
       if (!Array.isArray(messagesData)) {
         messagesData = [];
       }
       
-      // Filter out any null/undefined messages and ensure all have required fields
       messagesData = messagesData.filter(msg => msg && (msg.message || msg.text || msg.content));
       
-      // Sort messages by timestamp (oldest first)
+      // Update last fetch time
+      lastFetchTimeRef.current = Date.now();
+      
       messagesData.sort((a, b) => {
         const timeA = new Date(a.createdAt || a.timestamp || a.created_at || 0).getTime();
         const timeB = new Date(b.createdAt || b.timestamp || b.created_at || 0).getTime();
         return timeA - timeB;
       });
       
-      
-      // Smart update - only update if messages actually changed (prevents blinking)
       setMessages(prevMessages => {
-        // Quick check: same length and same IDs means no change
-        if (prevMessages.length === messagesData.length && prevMessages.length > 0) {
-          // Create simple hash from last message for quick comparison
+        // If no new messages and this is background fetch, don't update
+        if (isBackgroundFetch && prevMessages.length === messagesData.length && prevMessages.length > 0) {
           const prevLast = prevMessages[prevMessages.length - 1];
           const newLast = messagesData[messagesData.length - 1];
           
@@ -127,54 +144,85 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
           const newHash = `${newLast._id || newLast.id || ''}-${newLast.message || ''}-${newLast.createdAt || newLast.timestamp || ''}`;
           
           if (prevHash === newHash) {
-            // No change detected - return previous to prevent re-render
             return prevMessages;
           }
         }
         
-        // Messages changed or first load - update them
         return messagesData;
       });
       
     } catch (error) {
       console.error('LoadChatModal: Error fetching chat messages:', error);
-      if (currentInitialLoad) {
+      if (currentInitialLoad && !isBackgroundFetch) {
         setMessages([]);
       }
     } finally {
-      if (currentInitialLoad) {
+      if (currentInitialLoad && !isBackgroundFetch) {
         setLoading(false);
       }
     }
   }, [loadId, currentUserEmpId, receiverEmpId]);
 
-  // Fetch messages ONLY when modal opens or loadId changes - NO POLLING
   useEffect(() => {
     if (isOpen && loadId) {
-      // Reset messages and initial load flag when modal opens
       setMessages([]);
       isInitialLoadRef.current = true;
-      
-      // Initial fetch ONLY when modal opens - no automatic polling
+      lastFetchTimeRef.current = null;
       fetchChatMessages(true);
+      startPolling();
     } else {
-      // Clear messages when modal closes
       setMessages([]);
       isInitialLoadRef.current = true;
+      lastFetchTimeRef.current = null;
+      stopPolling();
     }
-  }, [isOpen, loadId, fetchChatMessages]);
 
-  // Send message
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+    };
+  }, [isOpen, loadId, fetchChatMessages, startPolling]);
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     
     if (!message.trim() || !receiverEmpId || !loadId || sending) {
-      // Cannot send - missing data
       return;
     }
 
+    const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const optimisticMessage = {
+      _id: tempMessageId,
+      senderEmpId: currentUserEmpId,
+      receiverEmpId: receiverEmpId,
+      message: message.trim(),
+      createdAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+      isOptimistic: true,
+      sender: { 
+        empId: currentUserEmpId, 
+        employeeName: 'You' 
+      }
+    };
+
     try {
       setSending(true);
+      
+      // Immediately add optimistic message
+      setMessages(prev => {
+        const alreadyExists = prev.some(m => 
+          m._id === tempMessageId || 
+          (m.message === message.trim() && 
+           m.senderEmpId === currentUserEmpId &&
+           Math.abs(new Date(m.createdAt || m.timestamp).getTime() - Date.now()) < 5000)
+        );
+        if (alreadyExists) return prev;
+        return [...prev, optimisticMessage];
+      });
+      
+      setMessage('');
+      setTimeout(() => scrollToBottom(), 50);
+
       const token = sessionStorage.getItem('authToken') || 
                     localStorage.getItem('authToken') || 
                     sessionStorage.getItem('token') || 
@@ -182,6 +230,8 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
       
       if (!token) {
         console.error('LoadChatModal: No auth token found');
+        // Remove optimistic message if no token
+        setMessages(prev => prev.filter(msg => msg._id !== tempMessageId));
         alert('Authentication required. Please login again.');
         setSending(false);
         return;
@@ -206,47 +256,56 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
 
       console.log('LoadChatModal: Send message response:', response.data);
 
-      // Check if message was sent successfully (handle both success flag and status codes)
       if (response.data && (response.data.success || response.status === 200 || response.status === 201)) {
-        const sentMessageText = message.trim();
-        setMessage('');
-        
-        // Optimistically add message to UI immediately (smooth UX, no blinking)
-        const optimisticMessage = {
-          _id: `temp-${Date.now()}-${Math.random()}`,
+        // Replace optimistic message with real one
+        const realMessage = response.data.message || response.data.data || {
+          _id: response.data.messageId || tempMessageId.replace('temp-', 'real-'),
           senderEmpId: currentUserEmpId,
           receiverEmpId: receiverEmpId,
-          message: sentMessageText,
+          message: message.trim(),
           createdAt: new Date().toISOString(),
           timestamp: new Date().toISOString(),
-          isOptimistic: true // Mark as temporary
+          sender: { 
+            empId: currentUserEmpId, 
+            employeeName: 'You' 
+          }
         };
+
+        setMessages(prev => 
+          prev.map(msg => 
+            msg._id === tempMessageId 
+              ? { ...realMessage, isOptimistic: false }
+              : msg
+          )
+        );
+
+        // Force immediate refresh to sync with server
+        setTimeout(() => {
+          fetchChatMessages(false, false);
+        }, 100);
         
-        setMessages(prev => {
-          // Check if message already exists to prevent duplicates
-          const alreadyExists = prev.some(m => 
-            m.message === sentMessageText && 
-            m.senderEmpId === currentUserEmpId &&
-            Math.abs(new Date(m.createdAt || m.timestamp).getTime() - Date.now()) < 5000
-          );
-          if (alreadyExists) return prev;
-          return [...prev, optimisticMessage];
-        });
-        
-        // Scroll to bottom after adding message
-        setTimeout(() => scrollToBottom(), 50);
-        
-        // Fetch updated messages after sending (to get server-confirmed message and any new ones)
-        // Only called after sending message - NO automatic polling
-        setTimeout(async () => {
-          await fetchChatMessages(false);
-        }, 300);
       } else {
         console.error('LoadChatModal: Failed to send message:', response.data?.message);
+        // Mark optimistic message as failed
+        setMessages(prev => 
+          prev.map(msg => 
+            msg._id === tempMessageId 
+              ? { ...msg, isOptimistic: false, failed: true }
+              : msg
+          )
+        );
         alert(response.data?.message || 'Failed to send message. Please try again.');
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Mark optimistic message as failed
+      setMessages(prev => 
+        prev.map(msg => 
+          msg._id === tempMessageId 
+            ? { ...msg, isOptimistic: false, failed: true }
+            : msg
+        )
+      );
       alert('Error sending message. Please try again.');
     } finally {
       setSending(false);
@@ -277,18 +336,15 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Improved function to determine if message is from current user
   const isMessageFromCurrentUser = (msg) => {
     if (!msg || !currentUserEmpId) return false;
     
-    // Check multiple possible fields for sender ID
     const senderId = msg.senderEmpId || 
                    msg.sender?.empId || 
                    msg.sender?._id ||
                    msg.sender_id ||
                    (typeof msg.sender === 'string' ? msg.sender : null);
     
-    // Also check if sender is an object with empId nested
     const nestedSenderId = msg.sender && typeof msg.sender === 'object' && (
       msg.sender.empId || 
       msg.sender._id || 
@@ -299,29 +355,16 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
     const finalSenderId = String(senderId || nestedSenderId || '').trim();
     const currentUserId = String(currentUserEmpId || '').trim();
     
-    // Debug log for sender comparison
-    if (finalSenderId && currentUserId) {
-      console.log('Sender comparison:', {
-        finalSenderId,
-        currentUserId,
-        isMatch: finalSenderId === currentUserId,
-        message: msg.message?.substring(0, 20)
-      });
-    }
-    
     return finalSenderId === currentUserId;
   };
 
-  // Get sender name for display
   const getSenderName = (msg) => {
     if (!msg) return 'Unknown';
     
-    // If message is from current user, show "You"
     if (isMessageFromCurrentUser(msg)) {
       return 'You';
     }
     
-    // Otherwise, get sender name from message data
     return msg.senderName || 
            msg.sender?.employeeName || 
            msg.sender?.empName ||
@@ -333,91 +376,161 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl h-[600px] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-              <MessageCircle className="text-blue-600" size={20} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{
+      backgroundColor: 'rgba(0, 0, 0, 0.75)',
+      backdropFilter: 'blur(8px)'
+    }}>
+      <div className="w-full max-w-3xl h-[700px] flex flex-col rounded-2xl overflow-hidden shadow-2xl" style={{
+        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.1)'
+      }}>
+        {/* Premium Header with Gradient */}
+        <div className="relative px-8 py-6" style={{
+          background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #3b82f6 100%)',
+          boxShadow: '0 4px 20px rgba(139, 92, 246, 0.3)'
+        }}>
+          <div className="absolute inset-0" style={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%)'
+          }}></div>
+          
+          <div className="relative flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg" style={{
+                background: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <User className="text-purple-600" size={28} strokeWidth={2.5} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white tracking-tight" style={{
+                  textShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+                }}>
+                  {receiverName || 'User'}
+                </h2>
+                <p className="text-purple-100 text-sm mt-1 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-400 shadow-lg animate-pulse"></span>
+                  Real-time chat active
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">Chat</h2>
-              <p className="text-sm text-blue-100">{receiverName || 'User'}</p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchChatMessages(false)}
+                className="text-white rounded-xl p-3 transition-all duration-200 hover:scale-110" style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(10px)'
+                }}
+                title="Refresh messages"
+              >
+                <RefreshCw size={20} />
+              </button>
+              <button
+                onClick={onClose}
+                className="text-white rounded-xl p-3 transition-all duration-200 hover:scale-110" style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(10px)'
+                }}
+              >
+                <X size={22} />
+              </button>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                // Manual refresh - only called when user clicks refresh button
-                fetchChatMessages(false);
-              }}
-              className="text-white hover:bg-blue-700 rounded-full p-2 transition-colors"
-              title="Refresh messages"
-            >
-              <RefreshCw size={18} />
-            </button>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-blue-700 rounded-full p-2 transition-colors"
-            >
-              <X size={20} />
-            </button>
           </div>
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+        {/* Messages Area with Premium Styling */}
+        <div className="flex-1 overflow-y-auto px-8 py-6" style={{
+          background: 'linear-gradient(to bottom, #0f172a 0%, #1e293b 100%)',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(139, 92, 246, 0.5) transparent'
+        }}>
           {loading && messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-gray-500">Loading messages...</div>
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{
+                  background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                  animation: 'pulse 2s ease-in-out infinite'
+                }}>
+                  <MessageCircle className="text-white" size={32} />
+                </div>
+                <p className="text-gray-400 text-lg">Loading messages...</p>
+              </div>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <MessageCircle size={48} className="text-gray-300 mb-4" />
-              <p>No messages yet</p>
-              <p className="text-sm">Start a conversation...</p>
+            <div className="flex flex-col items-center justify-center h-full">
+              <div className="w-24 h-24 mb-6 rounded-3xl flex items-center justify-center" style={{
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)',
+                border: '2px solid rgba(139, 92, 246, 0.3)'
+              }}>
+                <MessageCircle size={48} className="text-purple-400" />
+              </div>
+              <p className="text-gray-300 text-xl font-semibold mb-2">No messages yet</p>
+              <p className="text-gray-500">Start a conversation with {receiverName}</p>
             </div>
           ) : (
-            <div className="space-y-4" style={{ willChange: 'auto' }}>
+            <div className="space-y-6">
               {messages.map((msg, index) => {
                 const isCurrentUser = isMessageFromCurrentUser(msg);
                 const messageText = msg.message || msg.text || msg.content || '';
                 const senderName = getSenderName(msg);
                 
-                // Use unique key for messages - use stable key to prevent re-renders
                 const msgKey = msg._id || msg.id || `msg-${msg.createdAt || msg.timestamp || index}-${isCurrentUser ? 'me' : 'other'}`;
                 
-                // Skip if no message text
                 if (!messageText) return null;
                 
                 return (
                   <div
                     key={msgKey}
                     className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-                    style={{ animation: 'none' }}
                   >
-                    <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        isCurrentUser
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-white text-gray-800 border border-gray-200'
-                      }`}
-                      style={{ 
-                        animation: 'none',
-                        transition: 'none'
-                      }}
-                    >
+                    <div className={`max-w-lg ${isCurrentUser ? '' : 'flex items-start gap-3'}`}>
                       {!isCurrentUser && (
-                        <div className="text-xs font-semibold mb-1 text-gray-600">
-                          {senderName}
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1" style={{
+                          background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                          boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)'
+                        }}>
+                          <User className="text-white" size={20} />
                         </div>
                       )}
-                      <p className="text-sm whitespace-pre-wrap break-words">{messageText}</p>
-                      <p className={`text-xs mt-1 ${isCurrentUser ? 'text-blue-100' : 'text-gray-500'}`}>
-                        {formatTime(msg.createdAt || msg.timestamp || msg.created_at || msg.date)}
-                        {msg.isOptimistic && ' • Sending...'}
-                      </p>
+                      
+                      <div className={`px-6 py-4 rounded-2xl ${
+                        isCurrentUser ? 'rounded-br-md' : 'rounded-bl-md'
+                      } ${msg.failed ? 'border-2 border-red-500 opacity-80' : ''}`} style={{
+                        background: isCurrentUser 
+                          ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                          : 'rgba(255, 255, 255, 0.05)',
+                        backdropFilter: 'blur(10px)',
+                        border: isCurrentUser ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: isCurrentUser 
+                          ? '0 8px 24px rgba(139, 92, 246, 0.4)' 
+                          : '0 4px 12px rgba(0, 0, 0, 0.3)'
+                      }}>
+                        {!isCurrentUser && (
+                          <div className="text-xs font-semibold mb-2 text-purple-300">
+                            {senderName}
+                          </div>
+                        )}
+                        <p className={`text-base leading-relaxed whitespace-pre-wrap break-words ${
+                          isCurrentUser ? 'text-white' : 'text-gray-200'
+                        }`}>
+                          {messageText}
+                          {msg.failed && (
+                            <span className="block text-xs text-red-300 mt-1">
+                              ❌ Failed to send - Click to retry
+                            </span>
+                          )}
+                        </p>
+                        <p className={`text-xs mt-2 ${
+                          isCurrentUser ? 'text-purple-200' : 'text-gray-500'
+                        }`}>
+                          {formatTime(msg.createdAt || msg.timestamp || msg.created_at || msg.date)}
+                          {msg.isOptimistic && (
+                            <span className="ml-2 inline-flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
+                              Sending
+                            </span>
+                          )}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 );
@@ -427,39 +540,86 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
           )}
         </div>
 
-        {/* Input Area */}
-        <div className="border-t border-gray-200 p-4 bg-white">
-          <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type a message..."
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={sending || !receiverEmpId}
-            />
+        {/* Premium Input Area */}
+        <div className="px-8 py-6" style={{
+          background: 'linear-gradient(to top, #0f172a 0%, #1e293b 100%)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.3)'
+        }}>
+          <form onSubmit={handleSendMessage} className="flex items-center gap-4">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type your message..."
+                className="w-full px-6 py-4 rounded-2xl text-gray-200 placeholder-gray-500 focus:outline-none transition-all duration-200"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.2)'
+                }}
+                disabled={sending || !receiverEmpId}
+              />
+            </div>
             <button
               type="submit"
               disabled={!message.trim() || sending || !receiverEmpId}
-              className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+              className={`px-8 py-4 rounded-2xl transition-all duration-300 flex items-center gap-3 font-semibold ${
                 message.trim() && !sending && receiverEmpId
-                  ? 'bg-blue-500 text-white hover:bg-blue-600'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ? 'hover:scale-105 shadow-lg'
+                  : 'opacity-50 cursor-not-allowed'
               }`}
+              style={{
+                background: message.trim() && !sending && receiverEmpId
+                  ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                  : 'rgba(255, 255, 255, 0.1)',
+                boxShadow: message.trim() && !sending && receiverEmpId
+                  ? '0 8px 24px rgba(139, 92, 246, 0.4)'
+                  : 'none'
+              }}
             >
               {sending ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <>
+                  <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-white">Sending</span>
+                </>
               ) : (
                 <>
-                  <Send size={18} />
-                  <span>Send</span>
+                  <Send size={20} className="text-white" />
+                  <span className="text-white">Send</span>
                 </>
               )}
             </button>
           </form>
         </div>
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+        
+        div::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        div::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        div::-webkit-scrollbar-thumb {
+          background: rgba(139, 92, 246, 0.5);
+          border-radius: 10px;
+        }
+        
+        div::-webkit-scrollbar-thumb:hover {
+          background: rgba(139, 92, 246, 0.7);
+        }
+      `}</style>
     </div>
   );
 };
