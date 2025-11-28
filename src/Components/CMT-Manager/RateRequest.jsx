@@ -549,40 +549,71 @@ try {
   };
 
   // Fetch load details to get sales user info
-  const fetchLoadDetailsForChat = async (loadId) => {
-    try {
-       const token = sessionStorage.getItem('authToken') || 
-                    localStorage.getItem('authToken') || 
-                    sessionStorage.getItem('token') || 
-                    localStorage.getItem('token');
-      if (!token) {
-        console.error('No token for fetching load details');
-        return null;
-      }
-
-      const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/load/${loadId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      console.log('Load details response:', response.data);
-      
-      if (response.data && response.data.success) {
-        const load = response.data.data || response.data.load;
-        return load?.createdBySalesUser || load?.createdBy || null;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error fetching load details for chat:', error);
+ // Fetch load details to get sales user info - IMPROVED VERSION
+const fetchLoadDetailsForChat = async (loadId) => {
+  try {
+    const token = sessionStorage.getItem('authToken') || 
+                  localStorage.getItem('authToken') || 
+                  sessionStorage.getItem('token') || 
+                  localStorage.getItem('token');
+    
+    if (!token) {
+      console.error('No token for fetching load details');
       return null;
     }
-  };
+
+    console.log('🔄 Fetching load details for chat, loadId:', loadId);
+
+    const response = await axios.get(
+      `${API_CONFIG.BASE_URL}/api/v1/load/${loadId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('📦 Load details API response:', response.data);
+    
+    if (response.data && response.data.success) {
+      const load = response.data.data || response.data.load;
+      console.log('🔍 Load object structure:', {
+        load,
+        hasCreatedBySalesUser: !!load?.createdBySalesUser,
+        hasCreatedBy: !!load?.createdBy,
+        createdBySalesUser: load?.createdBySalesUser,
+        createdBy: load?.createdBy,
+        allKeys: load ? Object.keys(load) : 'no load'
+      });
+      
+      // Try multiple possible paths for sales user info
+      const salesUserInfo = load?.createdBySalesUser || 
+                           load?.createdBy || 
+                           load?.salesUser ||
+                           load?.assignedTo; // Sometimes assignedTo has the user info
+      
+      if (salesUserInfo) {
+        console.log('✅ Found sales user info in load details:', salesUserInfo);
+        return salesUserInfo;
+      } else {
+        console.warn('⚠️ No sales user info found in load details');
+        return null;
+      }
+    }
+    
+    console.warn('⚠️ Load details API response not successful');
+    return null;
+  } catch (error) {
+    console.error('❌ Error fetching load details for chat:', error);
+    console.error('Error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    return null;
+  }
+};
 
   // Fetch bid details for a specific load
   const fetchBidDetails = async (loadId) => {
@@ -2177,65 +2208,109 @@ useEffect(() => {
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           {/* Chat Button */}
-                          <button
-                            onClick={async () => {
-                              console.log('RateRequest (Rate Tab): Chat button clicked', {
-                                item,
-                                actualLoadId: item.actualLoadId,
-                                loadId: item.loadId,
-                                salesUserInfo: item.salesUserInfo
-                              });
-                              
-                              // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
-                              const loadId = item.actualLoadId || item.loadId;
-                              
-                              if (!loadId) {
-                                console.error('RateRequest (Rate Tab): Missing loadId', item);
-                                toast.error('Unable to determine load ID. Please check the request information.');
-                                return;
-                              }
+                         <button
+  onClick={async () => {
+    console.log('🔍 RateRequest (Pending Tab): Chat button clicked - FULL ITEM OBJECT:', item);
+    console.log('🔍 SalesUserInfo structure:', {
+      salesUserInfo: item.salesUserInfo,
+      hasSalesUserInfo: !!item.salesUserInfo,
+      salesUserInfoType: typeof item.salesUserInfo,
+      salesUserInfoKeys: item.salesUserInfo ? Object.keys(item.salesUserInfo) : 'none'
+    });
+    
+    // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
+    const loadId = item.actualLoadId || item.loadId;
+    
+    if (!loadId) {
+      console.error('❌ RateRequest (Pending Tab): Missing loadId', item);
+      toast.error('Unable to determine load ID. Please check the request information.');
+      return;
+    }
 
-                              let receiverEmpId = item.salesUserInfo?.empId;
-                              let receiverName = item.salesUserInfo?.empName || item.salesUserInfo?.employeeName || 'Sales User';
+    // Enhanced receiver extraction with multiple fallbacks
+    let receiverEmpId = null;
+    let receiverName = 'Sales User';
 
-                              // If salesUserInfo is missing, try to fetch it from load details
-                              if (!receiverEmpId && loadId) {
-                                toast.info('Fetching load details...', { autoClose: 2000 });
-                                const salesUserInfo = await fetchLoadDetailsForChat(loadId);
-                                
-                                if (salesUserInfo) {
-                                  receiverEmpId = salesUserInfo.empId || salesUserInfo._id;
-                                  receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
-                                  console.log('RateRequest: Fetched sales user info:', { receiverEmpId, receiverName });
-                                }
-                              }
+    // Try multiple possible paths for sales user info
+    if (item.salesUserInfo) {
+      receiverEmpId = item.salesUserInfo.empId || 
+                     item.salesUserInfo._id || 
+                     item.salesUserInfo.id;
+      receiverName = item.salesUserInfo.empName || 
+                    item.salesUserInfo.employeeName || 
+                    item.salesUserInfo.name || 
+                    item.salesUserInfo.username || 
+                    'Sales User';
+      
+      console.log('✅ Found salesUserInfo in item:', { receiverEmpId, receiverName });
+    }
+    
+    // If still no receiverEmpId, try fetch from load details
+    if (!receiverEmpId && loadId) {
+      console.log('🔄 No receiverEmpId found, fetching load details...');
+      toast.info('Fetching load details...', { autoClose: 2000 });
+      const salesUserInfo = await fetchLoadDetailsForChat(loadId);
+      
+      if (salesUserInfo) {
+        receiverEmpId = salesUserInfo.empId || salesUserInfo._id || salesUserInfo.id;
+        receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
+        console.log('✅ Fetched sales user info from API:', { receiverEmpId, receiverName });
+      }
+    }
 
-                              if (!receiverEmpId) {
-                                console.error('RateRequest (Rate Tab): Missing receiverEmpId after fetch', item);
-                                toast.error('Unable to determine receiver. Sales user information not available for this load.');
-                                return;
-                              }
+    // Final fallback - check if there's any user info in the item itself
+    if (!receiverEmpId) {
+      console.log('🔍 Checking for alternative user info paths in item...');
+      
+      // Check common alternative paths in your data structure
+      const alternativePaths = [
+        item.createdBySalesUser,
+        item.createdBy,
+        item.salesUser,
+        item.user,
+        item.shipper?.createdBy, // Sometimes shipper has creator info
+      ];
+      
+      for (const alt of alternativePaths) {
+        if (alt && (alt.empId || alt._id)) {
+          receiverEmpId = alt.empId || alt._id;
+          receiverName = alt.empName || alt.employeeName || alt.name || 'Sales User';
+          console.log('✅ Found receiver info in alternative path:', { receiverEmpId, receiverName, path: alt });
+          break;
+        }
+      }
+    }
 
-                              console.log('RateRequest (Rate Tab): Opening chat modal', {
-                                loadId,
-                                receiverEmpId,
-                                receiverName,
-                                actualLoadId: item.actualLoadId
-                              });
+    if (!receiverEmpId) {
+      console.error('❌ RateRequest (Pending Tab): Missing receiverEmpId after all attempts', {
+        item,
+        loadId,
+        availableKeys: Object.keys(item)
+      });
+      toast.error('Unable to determine receiver. Sales user information not available for this load.');
+      return;
+    }
 
-                              setChatModal({
-                                visible: true,
-                                loadId: loadId, // Use actual MongoDB loadId for API calls
-                                receiverEmpId: receiverEmpId,
-                                receiverName: receiverName
-                              });
-                            }}
-                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
-                            title="Chat"
-                          >
-                            <MessageCircle size={14} />
-                            <span>Chat</span>
-                          </button>
+    console.log('🎯 RateRequest (Pending Tab): Opening chat modal with final data', {
+      loadId,
+      receiverEmpId,
+      receiverName,
+      actualLoadId: item.actualLoadId
+    });
+
+    setChatModal({
+      visible: true,
+      loadId: loadId,
+      receiverEmpId: receiverEmpId,
+      receiverName: receiverName
+    });
+  }}
+  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+  title="Chat"
+>
+  <MessageCircle size={14} />
+  <span>Chat</span>
+</button>
                           
                           <button
                             onClick={() => openModal(item)}
