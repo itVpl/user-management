@@ -61,6 +61,8 @@ const ManageUser = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [confirmAction, setConfirmAction] = useState('');
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewingUser, setViewingUser] = useState(null);
   const usersPerPage = 10;
 
 
@@ -94,7 +96,9 @@ const ManageUser = () => {
   }, []);
 
   const toggleExpand = (idx) => {
-    setExpandedIndex(idx === expandedIndex ? null : idx);
+    const user = users[idx];
+    setViewingUser(user);
+    setShowViewModal(true);
   };
 
   const toggleStatus = async (idx) => {
@@ -424,12 +428,6 @@ const ManageUser = () => {
         />
       )}
       <div className="flex justify-between items-center mb-4">
-        <button
-          className="border px-4 py-2 rounded-full text-blue-600 font-semibold"
-          onClick={() => setShowModal(true)}
-        >
-          + Add User
-        </button>
         <input
           type="text"
           placeholder="Search Employees"
@@ -437,6 +435,15 @@ const ManageUser = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
+        <button
+          className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+          onClick={() => setShowModal(true)}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
+          </svg>
+          Add User
+        </button>
       </div>
       {loading ? (
         <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
@@ -451,194 +458,151 @@ const ManageUser = () => {
         </div>
       ) : (
         <>
-          <table className="w-full text-sm text-left">
-            <thead className="bg-blue-50">
-              <tr>
-                <th className="p-3">User</th>
-                <th className="p-3">Role</th>
-                <th className="p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentUsers.length === 0 ? (
-                <tr>
-                  <td colSpan="3" className="p-6 text-center text-gray-600">
-                    No Employee Found.
-                  </td>
-                </tr>
-              ) : (
-                currentUsers.map((user, idx) => {
-                  const globalIndex = indexOfFirstUser + idx;
-                  return (
-                    <React.Fragment key={user._id}>
-                      <tr className="border-b">
-                        <td className="flex items-center p-3">
-                          <button onClick={() => toggleExpand(globalIndex)} className="mr-2">
-                            <img src={ArrowDown} alt="" />
-                          </button>
-                          <img src={AdminIcon} className="w-6 h-6 mr-2" alt="Admin" />
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                  <tr>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Name</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Department</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Role</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="py-12 text-center">
+                        <div className="flex flex-col items-center gap-4">
+                          <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                          </svg>
                           <div>
-                            <div className="font-semibold">{user.employeeName}</div>
-                            <div className="text-xs text-gray-500">{user.email}</div>
+                            <p className="text-gray-500 text-lg">
+                              {searchTerm ? 'No employees found matching your search' : 'No employees found'}
+                            </p>
+                            <p className="text-gray-400 text-sm">
+                              {searchTerm ? 'Try adjusting your search terms' : 'Add your first employee to get started'}
+                            </p>
                           </div>
-                        </td>
-                        <td className="p-3">
-                          <select
-                            value={user.role}
-                            onChange={(e) => handleRoleChange(user.empId, e.target.value)}
-                            className="d px-2 py-1 text-sm"
-                          >
-                            <option value="superadmin">Superadmin</option>
-                            <option value="admin">Admin</option>
-                            <option value="employee">Employee</option>
-                            <option value="hr">HR</option>
-                            <option value="teamlead">Team Lead</option>
-                            {/* Add more roles as needed */}
-                          </select>
-                        </td>
-
-                        <td className="p-3">
-                          <div className="flex items-center space-x-2">
-                            <div className="inline-flex bg-gray-200 rounded-full overflow-hidden text-xs font-medium">
-                              <button
-                                onClick={() => toggleStatus(globalIndex)}
-                                className={`cursor-pointer px-4 py-1 transition ${user.isActive ? 'bg-green-600 text-white' : 'text-gray-500 hover:bg-gray-100'
-                                  }`}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    currentUsers.map((user, idx) => {
+                      const globalIndex = indexOfFirstUser + idx;
+                      const isExpanded = expandedIndex === globalIndex;
+                      return (
+                        <React.Fragment key={user._id}>
+                          <tr className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                            <td className="py-2 px-3">
+                              <span className="font-medium text-gray-700">{user.empId}</span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="font-semibold text-gray-800">{user.employeeName}</span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="font-medium text-gray-700">{user.email}</span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="font-medium text-gray-700">{user.department}</span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <select
+                                value={user.role}
+                                onChange={(e) => handleRoleChange(user.empId, e.target.value)}
+                                className="px-3 py-1 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-400 transition-colors"
                               >
-                                Active
-                              </button>
-                              <button
-                                onClick={() => toggleStatus(globalIndex)}
-                                className={`px-4 cursor-pointer py-1 transition ${!user.isActive ? 'bg-gray-500 text-white' : 'text-gray-500 hover:bg-gray-100'
+                                <option value="superadmin">Superadmin</option>
+                                <option value="admin">Admin</option>
+                                <option value="employee">Employee</option>
+                                <option value="hr">HR</option>
+                                <option value="teamlead">Team Lead</option>
+                              </select>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                user.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {user.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => toggleExpand(globalIndex)}
+                                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  View
+                                </button>
+                                <button
+                                  onClick={() => handleEditUser(user)}
+                                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => toggleStatus(globalIndex)}
+                                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                                    user.isActive 
+                                      ? 'bg-red-500 hover:bg-red-600 text-white' 
+                                      : 'bg-blue-500 hover:bg-blue-600 text-white'
                                   }`}
-                              >
-                                De-Activate
-                              </button>
-                            </div>
-                            <button
-                              onClick={() => handleEditUser(user)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors duration-200 flex items-center space-x-1"
-                              title="Edit User"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                              </svg>
-                              <span>Edit</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {expandedIndex === globalIndex && (() => {
-                        const allDocs = [
-                          ...extractDocumentUrls(user.identityDocs),
-                          ...extractDocumentUrls(user.previousCompanyDocs)
-                        ];
-                        return (
-                          <tr className="bg-gray-50">
-                            <td colSpan="3" className="p-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <h3 className="font-semibold text-lg mb-2">Personal Details</h3>
-                                  <ul className="text-sm space-y-1">
-                                    <li><strong>Employee ID:</strong> {user.empId}</li>
-                                    <li><strong>Name:</strong> {user.employeeName}</li>
-                                    <li><strong>Department:</strong> {user.department}</li>
-                                    <li><strong>Designation:</strong> {user.designation}</li>
-                                    <li><strong>Date of Joining:</strong> {formatDateDisplay(user.dateOfJoining)}</li>
-                                    {user.dateOfBirth && (
-                                      <li><strong>Date of Birth:</strong> {formatDateDisplay(user.dateOfBirth)}</li>
-                                    )}
-                                    <li><strong>Mobile:</strong> {user.mobileNo}</li>
-                                    <li><strong>Alternate No:</strong> {user.alternateNo}</li>
-                                    <li><strong>Account No:</strong> {user.bankDetails.accountNumber}</li>
-                                    <li><strong>Emergency Number:</strong> {user.emergencyNo}</li>
-                                    <li><strong>Email:</strong> {user.email}</li>
-                                    <li><strong>Sex:</strong> {user.sex}</li>
-                                    <li><strong>Account holder name:</strong> {user.bankDetails.accountHolderName}</li>
-                                    <li><strong>IFSC Code:</strong> {user.bankDetails.ifscCode}</li>
-                                  </ul>
-                                </div>
-
-                                <div>
-                                  <h3 className="font-semibold text-lg mb-2">Documents</h3>
-                                  <div className="grid grid-cols-4 gap-4 mb-4">
-                                    {allDocs.map((doc, i) => (
-                                      <div key={i} className="flex flex-col items-center">
-                                        <span className="text-xs text-gray-700 mb-2 font-semibold text-center capitalize">
-                                          {doc.name.replace(/([A-Z])/g, ' $1').trim()}
-                                        </span>
-                                        {getFilePreview(doc)}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <button
-                                    onClick={async () => {
-                                      try {
-                                        setDownloading(true);
-                                        await downloadAllFiles(allDocs);   // aapka existing function
-                                      } finally {
-                                        setDownloading(false);
-                                      }
-                                    }}
-                                    disabled={downloading}
-                                    className={`px-6 py-2 rounded-lg font-semibold transition-colors duration-200 flex items-center space-x-2
-              ${downloading ? 'bg-blue-400 cursor-not-allowed text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
-                                    title={downloading ? 'Preparing…' : 'Download all documents as ZIP'}
-                                  >
-                                    {downloading ? (
-                                      <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        <span>Preparing…</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <span>Download All</span>
-                                      </>
-                                    )}
-                                  </button>
-
-                                </div>
+                                >
+                                  {user.isActive ? 'Deactivate' : 'Activate'}
+                                </button>
                               </div>
                             </td>
                           </tr>
-                        );
-                      })()}
-                    </React.Fragment>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-
-          <div className="flex justify-between items-center mt-4 text-sm">
-            <span>
-              {filteredUsers.length === 0
-                ? 'Showing 0 of 0 entries'
-                : `Showing ${indexOfFirstUser + 1} to ${Math.min(indexOfLastUser, filteredUsers.length)} of ${filteredUsers.length} entries`}
-            </span>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 border rounded disabled:opacity-50"
-              >
-                Prev
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 border rounded disabled:opacity-50"
-              >
-                Next
-              </button>
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
+
+          {totalPages > 1 && filteredUsers.length > 0 && (
+            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="text-sm text-gray-600">
+                Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, filteredUsers.length)} of {filteredUsers.length} employees
+                {searchTerm && ` (filtered from ${users.length} total)`}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                >
+                  Previous
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-2 rounded-lg transition-colors ${
+                      currentPage === page
+                        ? 'bg-blue-500 text-white'
+                        : 'border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </>)}
 
       {/* Confirmation Modal */}
@@ -686,6 +650,196 @@ const ManageUser = () => {
                   className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transform hover:scale-105 transition-all duration-200"
                 >
                   Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Employee Modal */}
+      {showViewModal && viewingUser && (
+        <div 
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-md"
+          onClick={() => setShowViewModal(false)}
+        >
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar mx-4"
+            onClick={(e) => e.stopPropagation()}
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl sticky top-0 z-10">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Employee Details</h2>
+                    <p className="text-blue-100">{viewingUser.employeeName}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                {/* Personal Details */}
+                <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800">Personal Details</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Employee ID</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.empId}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Name</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.employeeName}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Department</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.department}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Designation</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.designation}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Date of Joining</p>
+                      <p className="font-semibold text-gray-800">{formatDateDisplay(viewingUser.dateOfJoining)}</p>
+                    </div>
+                    {viewingUser.dateOfBirth && (
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-gray-600 text-xs mb-1">Date of Birth</p>
+                        <p className="font-semibold text-gray-800">{formatDateDisplay(viewingUser.dateOfBirth)}</p>
+                      </div>
+                    )}
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Mobile</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.mobileNo}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Alternate No</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.alternateNo}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Emergency No</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.emergencyNo}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Gender</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.sex}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg col-span-2">
+                      <p className="text-gray-600 text-xs mb-1">Email</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.email}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Account Number</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.bankDetails?.accountNumber}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Account Holder</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.bankDetails?.accountHolderName}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg col-span-2">
+                      <p className="text-gray-600 text-xs mb-1">IFSC Code</p>
+                      <p className="font-semibold text-gray-800">{viewingUser.bankDetails?.ifscCode}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Documents */}
+                <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-800">Documents</h3>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        try {
+                          setDownloading(true);
+                          const allDocs = [
+                            ...extractDocumentUrls(viewingUser.identityDocs),
+                            ...extractDocumentUrls(viewingUser.previousCompanyDocs)
+                          ];
+                          await downloadAllFiles(allDocs);
+                        } finally {
+                          setDownloading(false);
+                        }
+                      }}
+                      disabled={downloading}
+                      className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-md ${
+                        downloading ? 'bg-blue-400 cursor-not-allowed text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      }`}
+                    >
+                      {downloading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Preparing…</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span>Download All</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {(() => {
+                      const allDocs = [
+                        ...extractDocumentUrls(viewingUser.identityDocs),
+                        ...extractDocumentUrls(viewingUser.previousCompanyDocs)
+                      ];
+                      return allDocs.map((doc, i) => (
+                        <div key={i} className="flex flex-col items-center">
+                          <span className="text-xs text-gray-700 mb-2 font-semibold text-center capitalize">
+                            {doc.name.replace(/([A-Z])/g, ' $1').trim()}
+                          </span>
+                          {getFilePreview(doc)}
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-4 border-t">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+                >
+                  Close
                 </button>
               </div>
             </div>
