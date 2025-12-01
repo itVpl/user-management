@@ -95,6 +95,9 @@ const menuItems = [
   { name: "Finance Dashboard", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/finance-dashboard" },
   { name: "Call Records (Id)", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CallingReport" },
   { name: "Add Fleet", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddFleet" },
+  { name: "Ledger", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ladger" },
+  { name: "Voucher", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/tally-management" },
+  
  
 ];
 

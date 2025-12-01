@@ -229,7 +229,7 @@ export const useAssignmentNotification = (empId, enabled = true) => {
               // Check if it's a new assignment (loadId not in previous set)
               const isNewAssignment = !previousAssignmentIds.has(loadId);
 
-              // Check if it's a reassignment (same loadId but different/updated timestamp or different assignment ID)
+              // Check if it's a reassignment (same loadId but different/updated timestamp or different assignment IDs)
               const previousAssignmentId = previousTimestamps.get(
                 loadId + "_assignmentId"
               );
