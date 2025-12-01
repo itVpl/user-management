@@ -1877,7 +1877,7 @@ export default function TallyManagement() {
                 </div>
                 <div className="flex justify-end gap-4 pt-4 border-t">
                   <button
-                    type="button"
+                    type="button"       
                     onClick={handleResetFilters}
                     className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
                   >

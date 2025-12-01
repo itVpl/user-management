@@ -5,7 +5,7 @@ import { ArrowDown } from '../../assets/image';
 import AddUserModal from './AddUser';
 import API_CONFIG from '../../config/api.js';
 
-// ---- helpers: date & sort ----
+// ---- helpers: date & sort ---------
 const parseDateFlexible = (val) => {
   if (!val) return null;
   if (val instanceof Date) return val;
