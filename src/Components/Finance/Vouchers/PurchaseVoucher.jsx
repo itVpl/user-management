@@ -133,7 +133,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function PurchaseVoucher() {
+export default function PurchaseVoucher({ selectedCompanyId = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -142,7 +142,7 @@ export default function PurchaseVoucher() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState(null);
-  const [companyId, setCompanyId] = useState(null);
+  const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
@@ -337,11 +337,22 @@ export default function PurchaseVoucher() {
     }
   }, [searchTerm, data]);
 
+  // Sync with parent selectedCompanyId
+  useEffect(() => {
+    if (selectedCompanyId && selectedCompanyId !== companyId) {
+      setCompanyId(selectedCompanyId);
+      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+    }
+  }, [selectedCompanyId]);
+
   useEffect(() => {
     const loadCompanies = async () => {
       const defaultCompanyId = await fetchAllCompanies();
-      if (defaultCompanyId) {
+      if (defaultCompanyId && !selectedCompanyId) {
         setFormData(prev => ({ ...prev, company: defaultCompanyId }));
+      } else if (selectedCompanyId) {
+        setCompanyId(selectedCompanyId);
+        setFormData(prev => ({ ...prev, company: selectedCompanyId }));
       }
     };
     loadCompanies();
@@ -751,28 +762,7 @@ export default function PurchaseVoucher() {
           </div> */}
         </div>
         <div className="flex items-center gap-4">
-          {/* Company Selector */}
-          {companies.length > 0 && (
-            <div className="relative">
-              <select
-                value={companyId || ''}
-                onChange={(e) => {
-                  const selectedCompanyId = e.target.value;
-                  setCompanyId(selectedCompanyId);
-                  setFormData(prev => ({ ...prev, company: selectedCompanyId }));
-                  setTimeout(() => fetchData(), 100);
-                }}
-                className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white text-sm font-medium"
-              >
-                <option value="">All Companies</option>
-                {companies.map((company) => (
-                  <option key={company._id || company.id} value={company._id || company.id}>
-                    {company.companyName} {company.isDefault ? '(Default)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Company Selector - Now in TallyManagement Sidebar */}
           
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -1495,208 +1485,231 @@ export default function PurchaseVoucher() {
         </div>
       )}
 
-      {/* View Modal - Green Gradient Header */}
       {showViewModal && selectedVoucher && (
-        <div 
-          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => {
-            setShowViewModal(false);
-            setSelectedVoucher(null);
-          }}
-        >
-          <style>{`
-            .hide-scrollbar::-webkit-scrollbar { display: none; }
-            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-          `}</style>
-          <div
-            className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            onClick={(e) => e.stopPropagation()}
+  <div
+    className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+    onClick={() => {
+      setShowViewModal(false);
+      setSelectedVoucher(null);
+    }}
+  >
+    <style>{`
+      .hide-scrollbar::-webkit-scrollbar { display: none; }
+      .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+    `}</style>
+
+    <div
+      className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+              <Eye className="text-white" size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Purchase Voucher Details</h2>
+              <p className="text-green-100">View complete purchase information</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setShowViewModal(false);
+              setSelectedVoucher(null);
+            }}
+            className="text-white hover:text-gray-200 text-2xl font-bold"
           >
-            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <Eye className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Purchase Voucher Details</h2>
-                    <p className="text-green-100">View complete voucher information</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setSelectedVoucher(null);
-                  }}
-                  className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
-                >
-                  <X size={24} />
-                </button>
-              </div>
+            ×
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-6 space-y-6">
+        
+        {/* Voucher Information */}
+        <div className="bg-green-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold text-green-800 mb-4">Voucher Information</h3>
+
+          <div className="grid grid-cols-2 gap-4 bg-white p-4 border border-green-200 rounded-2xl">
+            <div>
+              <p className="text-sm text-gray-600">Voucher Number</p>
+              <p className="font-semibold">{selectedVoucher.voucherNumber}</p>
             </div>
 
-            <div className="p-6 space-y-6">
-              {/* Basic Information */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gradient-to-br from-orange-50 to-white rounded-2xl border border-orange-100">
-                <div>
-                  <p className="text-sm text-gray-600">Voucher Number</p>
-                  <p className="font-semibold">{selectedVoucher.voucherNumber}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Invoice Number</p>
-                  <p className="font-semibold">{selectedVoucher.invoiceNumber || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Date</p>
-                  <p className="font-semibold">
-                    {new Date(selectedVoucher.voucherDate).toLocaleDateString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Purchase Type</p>
-                  <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                    selectedVoucher.purchaseType === 'Cash' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                  }`}>
-                    {selectedVoucher.purchaseType}
-                  </span>
-                </div>
-              </div>
+            <div>
+              <p className="text-sm text-gray-600">Invoice Number</p>
+              <p className="font-semibold">{selectedVoucher.invoiceNumber || 'N/A'}</p>
+            </div>
 
-              {/* Account Information */}
-              <div className="p-4 bg-gradient-to-br from-red-50 to-white rounded-2xl border border-red-100">
-                <h3 className="text-lg font-semibold text-red-800 mb-3">Account Information</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {selectedVoucher.purchaseType === 'Credit' ? (
-                    <div>
-                      <p className="text-sm text-gray-600">Supplier Account</p>
-                      <p className="font-semibold">{selectedVoucher.supplierAccount?.name || '-'}</p>
-                      <p className="text-xs text-gray-500">{selectedVoucher.supplierAccount?.accountType || ''}</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <p className="text-sm text-gray-600">Cash/Bank Account</p>
-                        <p className="font-semibold">{selectedVoucher.cashBankAccount?.name || '-'}</p>
-                        <p className="text-xs text-gray-500">{selectedVoucher.cashBankAccount?.accountType || ''}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Payment Mode</p>
-                        <p className="font-semibold">{selectedVoucher.paymentMode || '-'}</p>
-                        {selectedVoucher.chequeNumber && (
-                          <p className="text-xs text-gray-500">Cheque: {selectedVoucher.chequeNumber}</p>
-                        )}
-                        {selectedVoucher.referenceNumber && (
-                          <p className="text-xs text-gray-500">Ref: {selectedVoucher.referenceNumber}</p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
+            <div>
+              <p className="text-sm text-gray-600">Date</p>
+              <p className="font-semibold">
+                {new Date(selectedVoucher.voucherDate).toLocaleDateString()}
+              </p>
+            </div>
 
-              {/* Purchase Entries */}
-              <div className="p-4 bg-gradient-to-br from-purple-50 to-white rounded-2xl border border-purple-100">
-                <h3 className="text-lg font-semibold text-purple-800 mb-3">Purchase Entries</h3>
-                <div className="space-y-3">
-                  {selectedVoucher.entries?.map((entry, index) => (
-                    <div key={index} className="p-3 bg-white rounded-lg border border-gray-200">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="font-semibold text-gray-800">{entry.account?.name || '-'}</p>
-                          <p className="text-xs text-gray-500">{entry.accountType}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-gray-800">₹{entry.amount?.toLocaleString() || '0'}</p>
-                          {entry.quantity && entry.rate && (
-                            <p className="text-xs text-gray-500">{entry.quantity} × ₹{entry.rate}</p>
-                          )}
-                        </div>
-                      </div>
-                      {entry.narration && (
-                        <p className="text-sm text-gray-600 mb-2">{entry.narration}</p>
-                      )}
-                      
-                      {/* GST Info */}
-                      {entry.gst?.applicable && (
-                        <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-                          <p className="font-medium text-blue-800">Input GST: {entry.gst.gstType}</p>
-                          <p className="text-blue-700">
-                            Rate: {entry.gst.gstRate}% | Amount: ₹{entry.gst.gstAmount?.toLocaleString() || '0'}
-                          </p>
-                        </div>
-                      )}
+            <div>
+              <p className="text-sm text-gray-600">Purchase Type</p>
+              <span className="inline-flex px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm font-medium">
+                {selectedVoucher.purchaseType}
+              </span>
+            </div>
 
-                      {/* TDS Info */}
-                      {entry.tds?.applicable && (
-                        <div className="mt-2 p-2 bg-yellow-50 rounded text-sm">
-                          <p className="font-medium text-yellow-800">TDS: Section {entry.tds.section}</p>
-                          <p className="text-yellow-700">
-                            Rate: {entry.tds.rate}% | Amount: ₹{entry.tds.amount?.toLocaleString() || '0'}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div>
+              <p className="text-sm text-gray-600">Status</p>
+              <span
+                className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
+                  selectedVoucher.isPosted
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}
+              >
+                {selectedVoucher.isPosted ? 'Posted' : 'Unposted'}
+              </span>
+            </div>
 
-              {/* Additional Information */}
-              {(selectedVoucher.narration || selectedVoucher.remarks) && (
-                <div className="p-4 bg-gradient-to-br from-yellow-50 to-white rounded-2xl border border-yellow-100">
-                  <h3 className="text-lg font-semibold text-yellow-800 mb-3">Additional Information</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {selectedVoucher.narration && (
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Narration</p>
-                        <p className="text-gray-800">{selectedVoucher.narration}</p>
-                      </div>
-                    )}
-                    {selectedVoucher.remarks && (
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Remarks</p>
-                        <p className="text-gray-800">{selectedVoucher.remarks}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Total Amount */}
-              <div className="p-6 bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl shadow-xl">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold text-white">Total Amount:</span>
-                  <span className="text-3xl font-bold text-white">
-                    ₹{selectedVoucher.totalAmount?.toLocaleString() || '0'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Status Information */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">Status</p>
-                  <span className={`inline-block mt-1 px-2 py-1 text-xs rounded-full ${
-                    selectedVoucher.isPosted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {selectedVoucher.isPosted ? 'Posted' : 'Unposted'}
-                  </span>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">Created By</p>
-                  <p className="font-semibold mt-1">{selectedVoucher.createdBy?.name || '-'}</p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">Created At</p>
-                  <p className="font-semibold mt-1">
-                    {selectedVoucher.createdAt ? new Date(selectedVoucher.createdAt).toLocaleString() : '-'}
-                  </p>
-                </div>
-              </div>
+            <div>
+              <p className="text-sm text-gray-600">Total Amount</p>
+              <p className="text-xl font-bold text-purple-600">
+                ₹{selectedVoucher.totalAmount?.toLocaleString()}
+              </p>
             </div>
           </div>
         </div>
-      )}
+
+        {/* Account Information */}
+        <div className="bg-purple-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold text-purple-800 mb-4">Account Information</h3>
+
+          <div className="bg-white border border-purple-200 p-4 rounded-2xl grid grid-cols-2 gap-4">
+            {selectedVoucher.purchaseType === "Credit" ? (
+              <div>
+                <p className="text-sm text-gray-600">Supplier Account</p>
+                <p className="font-semibold">{selectedVoucher.supplierAccount?.name || "N/A"}</p>
+                <p className="text-xs text-gray-500">
+                  {selectedVoucher.supplierAccount?.accountType}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm text-gray-600">Cash/Bank Account</p>
+                  <p className="font-semibold">{selectedVoucher.cashBankAccount?.name || 'N/A'}</p>
+                  <p className="text-xs text-gray-500">{selectedVoucher.cashBankAccount?.accountType}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600">Payment Mode</p>
+                  <p className="font-semibold">{selectedVoucher.paymentMode}</p>
+
+                  {selectedVoucher.chequeNumber && (
+                    <p className="text-xs text-gray-500">Cheque: {selectedVoucher.chequeNumber}</p>
+                  )}
+                  {selectedVoucher.referenceNumber && (
+                    <p className="text-xs text-gray-500">Ref: {selectedVoucher.referenceNumber}</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Entries */}
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold text-blue-800 mb-4">Purchase Entries</h3>
+
+          {selectedVoucher.entries?.map((entry, index) => (
+            <div key={index} className="bg-white border border-blue-200 p-4 rounded-2xl mb-3">
+              <div className="flex justify-between">
+                <div>
+                  <p className="font-semibold text-gray-900">{entry.account?.name}</p>
+                  <p className="text-xs text-gray-500">Type: {entry.accountType}</p>
+
+                  {entry.narration && (
+                    <p className="text-sm text-gray-600 mt-1">{entry.narration}</p>
+                  )}
+
+                  {entry.quantity && entry.rate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {entry.quantity} × ₹{entry.rate}
+                    </p>
+                  )}
+
+                  {entry.gst?.applicable && (
+                    <p className="text-xs text-blue-600 mt-2">
+                      GST: {entry.gst.gstType} @ {entry.gst.gstRate}% = ₹{entry.gst.gstAmount}
+                    </p>
+                  )}
+
+                  {entry.tds?.applicable && (
+                    <p className="text-xs text-yellow-600 mt-1">
+                      TDS Section {entry.tds.section} @ {entry.tds.rate}% = ₹{entry.tds.amount}
+                    </p>
+                  )}
+                </div>
+
+                <p className="text-xl font-bold text-green-600">
+                  ₹{entry.amount?.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Additional Info */}
+        {(selectedVoucher.narration || selectedVoucher.remarks) && (
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Additional Details</h3>
+
+            <div className="bg-white p-4 border border-gray-300 rounded-2xl grid grid-cols-2 gap-6">
+              {selectedVoucher.narration && (
+                <div>
+                  <p className="text-sm text-gray-600">Narration</p>
+                  <p className="font-semibold text-gray-900">{selectedVoucher.narration}</p>
+                </div>
+              )}
+
+              {selectedVoucher.remarks && (
+                <div>
+                  <p className="text-sm text-gray-600">Remarks</p>
+                  <p className="font-semibold text-gray-900">{selectedVoucher.remarks}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Footer Buttons */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <button
+            onClick={() => {
+              setShowViewModal(false);
+              setSelectedVoucher(null);
+            }}
+            className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50"
+          >
+            Close
+          </button>
+
+          <button
+            onClick={() => {
+              setShowViewModal(false);
+              handleEditPurchase(selectedVoucher);
+            }}
+            className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold shadow hover:from-green-600 hover:to-green-700"
+          >
+            Edit
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 }

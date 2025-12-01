@@ -133,7 +133,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function DebitNoteVoucher() {
+export default function DebitNoteVoucher({ selectedCompanyId = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -149,7 +149,7 @@ export default function DebitNoteVoucher() {
     debitNoteType: '',
     isPosted: ''
   });
-  const [companyId, setCompanyId] = useState(null);
+  const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
@@ -401,11 +401,22 @@ export default function DebitNoteVoucher() {
   }, [searchTerm, data]);
 
   // Fetch companies on mount
+  // Sync with parent selectedCompanyId
+  useEffect(() => {
+    if (selectedCompanyId && selectedCompanyId !== companyId) {
+      setCompanyId(selectedCompanyId);
+      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+    }
+  }, [selectedCompanyId]);
+
   useEffect(() => {
     const loadCompanies = async () => {
       const defaultCompanyId = await fetchAllCompanies();
-      if (defaultCompanyId) {
+      if (defaultCompanyId && !selectedCompanyId) {
         setFormData(prev => ({ ...prev, company: defaultCompanyId }));
+      } else if (selectedCompanyId) {
+        setCompanyId(selectedCompanyId);
+        setFormData(prev => ({ ...prev, company: selectedCompanyId }));
       }
     };
     loadCompanies();
@@ -843,28 +854,7 @@ export default function DebitNoteVoucher() {
         </div>
         
         <div className="flex items-center gap-4">
-          {/* Company Selector */}
-          {companies.length > 0 && (
-            <div className="relative">
-              <select
-                value={companyId || ''}
-                onChange={(e) => {
-                  const selectedCompanyId = e.target.value;
-                  setCompanyId(selectedCompanyId);
-                  setFormData(prev => ({ ...prev, company: selectedCompanyId }));
-                  setTimeout(() => fetchData(), 100);
-                }}
-                className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-sm font-medium"
-              >
-                <option value="">Select Company</option>
-                {companies.map((company) => (
-                  <option key={company._id || company.id} value={company._id || company.id}>
-                    {company.companyName} {company.isDefault ? '(Default)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Company Selector - Now in TallyManagement Sidebar */}
           
           {/* Search Bar */}
           <div className="relative">
@@ -1642,9 +1632,9 @@ export default function DebitNoteVoucher() {
             {/* Modal Body */}
             <div className="p-6 space-y-6">
               {/* Voucher Information */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Voucher Information</h3>
-                <div className="grid grid-cols-2 gap-4">
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-green-800 mb-4">Voucher Information</h3>
+                <div className="grid grid-cols-2 gap-4 bg-white border border-green-200 rounded-2xl p-4">
                   <div>
                     <p className="text-sm text-gray-600">Voucher Number</p>
                     <p className="text-base font-semibold text-gray-900">{selectedVoucher.voucherNumber || 'N/A'}</p>
@@ -1690,16 +1680,17 @@ export default function DebitNoteVoucher() {
 
               {/* Suppliers */}
               <div className="bg-red-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-red-800 mb-4">Suppliers (Debit Side)</h3>
+                <h3 className="text-lg font-semibold text-black mb-4">Suppliers (Debit Side)</h3>
                 {selectedVoucher.suppliers?.map((supplier, index) => (
-                  <div key={index} className="bg-white p-3 rounded-lg mb-2">
+                  <div key={index} className="bg-white p-3 rounded-lg mb-2 border border-red-200 rounded-2xl">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-semibold text-gray-900">{supplier.account?.name || supplier.account || 'N/A'}</p>
-                        {supplier.narration && <p className="text-sm text-gray-600 mt-1">{supplier.narration}</p>}
+                        
                         {supplier.originalInvoiceNumber && (
                           <p className="text-xs text-gray-500 mt-1">Original Invoice: {supplier.originalInvoiceNumber}</p>
                         )}
+                        {supplier.narration && <p className="text-sm text-gray-600 mt-1">{supplier.narration}</p>}
                       </div>
                       <p className="text-lg font-bold text-red-600">
                         ₹{Number(supplier.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1713,7 +1704,7 @@ export default function DebitNoteVoucher() {
               <div className="bg-green-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-green-800 mb-4">Credit Entries</h3>
                 {selectedVoucher.entries?.map((entry, index) => (
-                  <div key={index} className="bg-white p-3 rounded-lg mb-2">
+                  <div key={index} className="bg-white p-3 rounded-lg mb-2 border border-green-300 rounded-2xl">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <p className="font-semibold text-gray-900">{entry.account?.name || entry.account || 'N/A'}</p>
@@ -1746,29 +1737,41 @@ export default function DebitNoteVoucher() {
               </div>
 
               {/* Additional Details */}
-              {(selectedVoucher.narration || selectedVoucher.remarks || selectedVoucher.referenceNumber) && (
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Additional Details</h3>
-                  {selectedVoucher.referenceNumber && (
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-600">Reference Number</p>
-                      <p className="text-base font-semibold text-gray-900">{selectedVoucher.referenceNumber}</p>
-                    </div>
-                  )}
-                  {selectedVoucher.narration && (
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-600">Narration</p>
-                      <p className="text-base text-gray-900">{selectedVoucher.narration}</p>
-                    </div>
-                  )}
-                  {selectedVoucher.remarks && (
-                    <div>
-                      <p className="text-sm text-gray-600">Remarks</p>
-                      <p className="text-base text-gray-900">{selectedVoucher.remarks}</p>
-                    </div>
-                  )}
-                </div>
-              )}
+             {(selectedVoucher.narration || selectedVoucher.remarks || selectedVoucher.referenceNumber) && (
+  <div className="bg-gray-50 p-4 rounded-lg">
+    <h3 className="text-lg font-semibold text-gray-800 mb-4">Additional Details</h3>
+
+    <div className="grid grid-cols-3 gap-6 bg-white p-4 border border-gray-300 rounded-2xl">
+      {selectedVoucher.referenceNumber && (
+        <div>
+          <p className="text-sm text-gray-600">Reference Number</p>
+          <p className="text-base font-semibold text-gray-900">
+            {selectedVoucher.referenceNumber}
+          </p>
+        </div>
+      )}
+
+      {selectedVoucher.narration && (
+        <div>
+          <p className="text-sm text-gray-600">Narration</p>
+          <p className="text-base text-gray-900">
+            {selectedVoucher.narration}
+          </p>
+        </div>
+      )}
+
+      {selectedVoucher.remarks && (
+        <div>
+          <p className="text-sm text-gray-600">Remarks</p>
+          <p className="text-base text-gray-900">
+            {selectedVoucher.remarks}
+          </p>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">

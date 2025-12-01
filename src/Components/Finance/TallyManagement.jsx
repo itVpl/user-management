@@ -1075,6 +1075,35 @@ export default function TallyManagement() {
         <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600">
           <h2 className="text-xl font-bold text-white">Payment Voucher</h2>
         </div>
+        
+        {/* Company Selector in Sidebar */}
+        <div className="p-4 border-b border-gray-200 bg-blue-50">
+          <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
+            Select Company
+          </label>
+          {companies.length > 0 ? (
+            <SearchableDropdown
+              value={companyId || ''}
+              onChange={(value) => {
+                setCompanyId(value);
+                setFormData(prev => ({ ...prev, company: value }));
+              }}
+              options={companies.map(company => ({
+                value: company._id || company.id,
+                label: `${company.companyName}${company.isDefault ? ' ⭐' : ''}`
+              }))}
+              placeholder="Choose Company"
+              searchPlaceholder="Search companies..."
+              compact={true}
+              className="w-full"
+            />
+          ) : (
+            <div className="text-xs text-gray-500 italic px-2 py-2 bg-white rounded-lg border border-gray-200">
+              Loading companies...
+            </div>
+          )}
+        </div>
+        
         <nav className="p-4 space-y-2">
           {sidebarItems.map((item) => {
             const Icon = item.icon;
@@ -1112,21 +1141,21 @@ export default function TallyManagement() {
                 </div>
               </div>
             ) : activeSection === 'payment' ? (
-              <PaymentVoucher />
+              <PaymentVoucher selectedCompanyId={companyId} />
             ) : activeSection === 'contra' ? (
-              <ContraVoucher />
+              <ContraVoucher selectedCompanyId={companyId} />
             ) : activeSection === 'receipt' ? (
-              <ReceiptVoucher />
+              <ReceiptVoucher selectedCompanyId={companyId} />
             ) : activeSection === 'journal' ? (
-              <JournalVoucher />
+              <JournalVoucher selectedCompanyId={companyId} />
             ) : activeSection === 'debit' ? (
-              <DebitNoteVoucher />
+              <DebitNoteVoucher selectedCompanyId={companyId} />
             ) : activeSection === 'credit' ? (
-              <CreditNoteVoucher />
+              <CreditNoteVoucher selectedCompanyId={companyId} />
             ) : activeSection === 'sale' ? (
-              <SalesVoucher />
+              <SalesVoucher selectedCompanyId={companyId} />
             ) : activeSection === 'purchase' ? (
-              <PurchaseVoucher />
+              <PurchaseVoucher selectedCompanyId={companyId} />
             ) : (
               <div className="p-12 text-center">
                 <div className="flex flex-col items-center justify-center">
