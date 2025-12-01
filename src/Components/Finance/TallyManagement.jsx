@@ -1789,9 +1789,6 @@ export default function TallyManagement() {
         });
       
       voucherData.totalAmount = parseFloat(totalAmount) || 0;
-        }),
-        totalAmount: parseFloat(totalAmount)
-      };
 
       // Add optional fields only if they have values
       if (formData.chequeNumber && formData.chequeNumber.trim() !== '') {
