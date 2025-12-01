@@ -1,19 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
-import { Search, PlusCircle, FileText, DollarSign, Receipt, BookOpen, ArrowLeftRight, CreditCard, ShoppingCart, Wallet, Edit, Trash2, Eye, CheckCircle, XCircle, Calendar, Filter } from 'lucide-react';
-import API_CONFIG from '../../config/api.js';
+import { Search, PlusCircle, DollarSign, Edit, Eye, Filter } from 'lucide-react';
+import API_CONFIG from '../../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
-
-// Import Voucher Components
-import ContraVoucher from './Vouchers/ContraVoucher.jsx';
-import PaymentVoucher from './Vouchers/PaymentVoucher.jsx';
-import ReceiptVoucher from './Vouchers/ReceiptVoucher.jsx';
-import JournalVoucher from './Vouchers/JournalVoucher.jsx';
-import DebitNoteVoucher from './Vouchers/DebitNoteVoucher.jsx';
-import CreditNoteVoucher from './Vouchers/CreditNoteVoucher.jsx';
-import SalesVoucher from './Vouchers/SalesVoucher.jsx';
-import PurchaseVoucher from './Vouchers/PurchaseVoucher.jsx';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -142,21 +132,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function TallyManagement() {
-  // Sidebar navigation items
-  const sidebarItems = [
-   
-    { id: 'payment', label: 'Payment', icon: DollarSign },
-     { id: 'contra', label: 'Contra', icon: FileText },
-    { id: 'receipt', label: 'Receipt', icon: Receipt },
-    { id: 'journal', label: 'Journal', icon: BookOpen },
-    { id: 'debit', label: 'Debit', icon: ArrowLeftRight },
-    { id: 'credit', label: 'Credit', icon: CreditCard },
-    { id: 'sale', label: 'Sale', icon: ShoppingCart },
-    { id: 'purchase', label: 'Purchase', icon: Wallet },
-  ];
-
-  const [activeSection, setActiveSection] = useState('payment');
+export default function PaymentVoucher() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -210,17 +186,6 @@ export default function TallyManagement() {
     remarks: ''
   });
 
-  // API Functions - Ready for actual API integration
-  const fetchContaData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/conta`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
-  };
-
   // Fetch all companies
   const fetchAllCompanies = async () => {
     try {
@@ -231,11 +196,9 @@ export default function TallyManagement() {
           'Content-Type': 'application/json'
         }
       });
-      // Handle response structure: { success, message, companies, pagination }
       const companiesList = response.data?.companies || response.data?.data || [];
       setCompanies(companiesList);
       
-      // Set default company (first active company or one marked as default)
       const defaultCompany = companiesList.find(c => c.isDefault) || companiesList[0];
       if (defaultCompany) {
         setCompanyId(defaultCompany._id || defaultCompany.id);
@@ -302,7 +265,6 @@ export default function TallyManagement() {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
       let url = `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/payment/all`;
       
-      // Add query parameters if filters are provided
       const queryParams = new URLSearchParams();
       if (companyId) queryParams.append('company', companyId);
       if (filterParams.startDate) queryParams.append('startDate', filterParams.startDate);
@@ -319,7 +281,6 @@ export default function TallyManagement() {
           'Content-Type': 'application/json'
         }
       });
-      // Handle response structure: { success, message, vouchers, pagination, summary }
       return response.data?.vouchers || response.data?.data || [];
     } catch (error) {
       console.error('Error fetching payment data:', error);
@@ -336,7 +297,6 @@ export default function TallyManagement() {
           'Content-Type': 'application/json'
         }
       });
-      // Handle response structure: { success, message, voucher }
       return response.data?.voucher || response.data?.data || response.data;
     } catch (error) {
       console.error('Error fetching payment voucher:', error);
@@ -353,22 +313,15 @@ export default function TallyManagement() {
       }
 
       const apiUrl = `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/payment/create`;
-      console.log('API URL:', apiUrl);
-      console.log('Creating payment voucher with data:', JSON.stringify(voucherData, null, 2));
-      console.log('Auth token present:', !!token);
       
       const response = await axios.post(apiUrl, voucherData, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        timeout: 30000 // 30 seconds timeout
+        timeout: 30000
       });
       
-      console.log('API Response:', response);
-      console.log('Response data:', response.data);
-      
-      // Handle response structure: { success, message, voucher }
       if (response.data?.success === false) {
         throw new Error(response.data?.message || 'Failed to create payment voucher');
       }
@@ -376,22 +329,13 @@ export default function TallyManagement() {
       return response.data?.voucher || response.data?.data || response.data;
     } catch (error) {
       console.error('Error creating payment voucher:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        statusText: error.response?.statusText
-      });
       
       if (error.response) {
-        // Server responded with error
         const errorMsg = error.response.data?.message || error.response.data?.error || `Server error: ${error.response.status}`;
         throw new Error(errorMsg);
       } else if (error.request) {
-        // Request made but no response
         throw new Error('No response from server. Please check your internet connection.');
       } else {
-        // Error in request setup
         throw new Error(error.message || 'Failed to create payment voucher');
       }
     }
@@ -406,7 +350,6 @@ export default function TallyManagement() {
           'Content-Type': 'application/json'
         }
       });
-      // Handle response structure: { success, message, voucher }
       return response.data?.voucher || response.data?.data || response.data;
     } catch (error) {
       console.error('Error updating payment voucher:', error);
@@ -462,113 +405,23 @@ export default function TallyManagement() {
     }
   };
 
-  const fetchReceiptData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/receipt`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
-  };
-
-  const fetchJournalData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/journal`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
-  };
-
-  const fetchDebitData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/debit`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
-  };
-
-  const fetchCreditData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/credit`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
-  };
-
-  const fetchSaleData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/sale`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
-  };
-
-  const fetchPurchaseData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/purchase`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
-  };
-
-  // Fetch data based on active section
+  // Fetch data based on filters
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      
-      let result = [];
-      switch (activeSection) {
-        case 'conta':
-          result = await fetchContaData();
-          break;
-        case 'payment':
-          result = await fetchPaymentData(filters);
-          break;
-        case 'receipt':
-          result = await fetchReceiptData();
-          break;
-        case 'journal':
-          result = await fetchJournalData();
-          break;
-        case 'debit':
-          result = await fetchDebitData();
-          break;
-        case 'credit':
-          result = await fetchCreditData();
-          break;
-        case 'sale':
-          result = await fetchSaleData();
-          break;
-        case 'purchase':
-          result = await fetchPurchaseData();
-          break;
-        default:
-          result = [];
-      }
-      
+      const result = await fetchPaymentData(filters);
       setData(result);
       setFilteredData(result);
     } catch (error) {
-      console.error(`Error fetching ${activeSection} data:`, error);
-      const errorMessage = error.response?.data?.message || error.message || `Failed to load ${activeSection} data`;
+      console.error('Error fetching payment data:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to load payment data';
       alertify.error(errorMessage);
       setData([]);
       setFilteredData([]);
     } finally {
       setLoading(false);
     }
-  }, [activeSection, filters, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter data based on search term
   useEffect(() => {
@@ -576,7 +429,6 @@ export default function TallyManagement() {
       setFilteredData(data);
     } else {
       const filtered = data.filter(item => {
-        // Generic search - adjust based on actual data structure
         const searchableText = JSON.stringify(item).toLowerCase();
         return searchableText.includes(searchTerm.toLowerCase());
       });
@@ -591,7 +443,6 @@ export default function TallyManagement() {
       if (defaultCompanyId) {
         setFormData(prev => ({ ...prev, company: defaultCompanyId }));
       } else {
-        // Fallback to default company API if companies list is empty
         const company = await fetchDefaultCompany();
         if (company) {
           setCompanyId(company);
@@ -609,27 +460,15 @@ export default function TallyManagement() {
     }
   }, [companyId]);
 
-  // Fetch data when section changes
+  // Fetch data when companyId is available
   useEffect(() => {
-    // Reset data when switching sections
-    setData([]);
-    setFilteredData([]);
-    
-    // Fetch data based on active section
-    if (activeSection === 'payment') {
-      // Only fetch payment data if companyId is available
-      if (companyId) {
-        fetchData();
-      }
-    } else {
-      // For other sections, fetch data (even if empty for now)
+    if (companyId) {
       fetchData();
     }
-  }, [activeSection, companyId, fetchData]);
+  }, [companyId, fetchData]);
 
   // Handle create payment
   const handleCreatePayment = () => {
-    // Use selected company or default to first company
     const defaultCompanyId = companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
     
     setFormData({
@@ -664,7 +503,6 @@ export default function TallyManagement() {
       narration: '',
       remarks: ''
     });
-    // Fetch ledgers for the selected company
     if (defaultCompanyId) {
       fetchAllLedgers(defaultCompanyId);
     }
@@ -677,7 +515,6 @@ export default function TallyManagement() {
       setLoading(true);
       const voucherData = await getPaymentVoucherById(voucher._id || voucher.id);
       
-      // Extract IDs from nested objects if present
       const paymentAccountId = voucherData.paymentAccount && typeof voucherData.paymentAccount === 'object' && voucherData.paymentAccount !== null
         ? voucherData.paymentAccount._id || voucherData.paymentAccount.id 
         : voucherData.paymentAccount;
@@ -721,7 +558,6 @@ export default function TallyManagement() {
         remarks: voucherData.remarks || ''
       });
       
-      // Fetch ledgers for the company when editing
       if (editCompanyId) {
         fetchAllLedgers(editCompanyId);
       }
@@ -800,12 +636,10 @@ export default function TallyManagement() {
     }
   };
 
-  // Handle form submit (create/update)
+  // Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    console.log('Form submit triggered', { formData, companyId });
     
     // Validate required fields
     const selectedCompany = formData.company || companyId;
@@ -850,7 +684,6 @@ export default function TallyManagement() {
     
     try {
       setLoading(true);
-      console.log('Starting payment voucher creation...');
       
       // Calculate total amount if not provided
       let totalAmount = formData.totalAmount;
@@ -867,7 +700,7 @@ export default function TallyManagement() {
         }, 0);
       }
 
-      // Prepare voucher data matching API structure exactly
+      // Prepare voucher data
       const voucherData = {
         company: selectedCompany,
         voucherDate: formData.voucherDate,
@@ -879,7 +712,6 @@ export default function TallyManagement() {
             amount: parseFloat(entry.amount)
           };
 
-          // Add optional fields only if they have values
           if (entry.narration && entry.narration.trim() !== '') {
             entryData.narration = entry.narration.trim();
           }
@@ -890,7 +722,6 @@ export default function TallyManagement() {
             entryData.billReference = entry.billReference.trim();
           }
 
-          // Add TDS only if applicable
           if (entry.tds?.applicable === true) {
             entryData.tds = {
               applicable: true,
@@ -903,7 +734,6 @@ export default function TallyManagement() {
             }
           }
 
-          // Add GST only if applicable
           if (entry.gst?.applicable === true) {
             entryData.gst = {
               applicable: true,
@@ -918,7 +748,6 @@ export default function TallyManagement() {
         totalAmount: parseFloat(totalAmount)
       };
 
-      // Add optional fields only if they have values
       if (formData.chequeNumber && formData.chequeNumber.trim() !== '') {
         voucherData.chequeNumber = formData.chequeNumber.trim();
       }
@@ -935,21 +764,15 @@ export default function TallyManagement() {
         voucherData.remarks = formData.remarks.trim();
       }
 
-      console.log('Voucher data prepared:', JSON.stringify(voucherData, null, 2));
-
       if (showEditModal && selectedVoucher) {
-        console.log('Updating payment voucher...');
         await updatePaymentVoucher(selectedVoucher._id || selectedVoucher.id, voucherData);
         alertify.success('Payment voucher updated successfully');
         setShowEditModal(false);
         setSelectedVoucher(null);
       } else {
-        console.log('Creating payment voucher...');
-        const result = await createPaymentVoucher(voucherData);
-        console.log('Payment voucher created successfully:', result);
+        await createPaymentVoucher(voucherData);
         alertify.success('Payment voucher created successfully');
         setShowCreateModal(false);
-        // Reset form after successful creation
         setFormData({
           company: companyId || '',
           voucherDate: new Date().toISOString().split('T')[0],
@@ -984,18 +807,11 @@ export default function TallyManagement() {
         });
       }
       
-      // Refresh the data list
       await fetchData();
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to save payment voucher';
       alertify.error(errorMessage);
-      
-      // Log detailed error for debugging
-      if (error.response) {
-        console.error('API Error Response:', error.response.data);
-        console.error('API Error Status:', error.response.status);
-      }
     } finally {
       setLoading(false);
     }
@@ -1054,100 +870,224 @@ export default function TallyManagement() {
     setFormData({ ...formData, entries: updatedEntries });
   };
 
-  // Get section title
-  const getSectionTitle = () => {
-    const item = sidebarItems.find(item => item.id === activeSection);
-    return item ? item.label : 'Management';
-  };
-
-  // Get section icon
-  const getSectionIcon = () => {
-    const item = sidebarItems.find(item => item.id === activeSection);
-    return item ? item.icon : FileText;
-  };
-
-  const SectionIcon = getSectionIcon();
-
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 shadow-lg flex-shrink-0">
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600">
-          <h2 className="text-xl font-bold text-white">Payment Voucher</h2>
-        </div>
-        <nav className="p-4 space-y-2">
-          {sidebarItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                  isActive
-                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
-                    : 'text-gray-700 hover:bg-gray-100 hover:shadow-md'
-                }`}
-              >
-                <Icon size={20} />
-                <span className="font-medium">{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-2">
-          {/* Content Area */}
-          <div className="rounded-2xl  overflow-hidden">
-            {loading ? (
-              <div className="p-12">
-                <div className="flex justify-center items-center">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading {getSectionTitle().toLowerCase()}...</p>
-                  </div>
-                </div>
+    <div className="p-6">
+      {/* Header with Search and Create Button */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-6">
+          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                <DollarSign className="text-blue-600" size={20} />
               </div>
-            ) : activeSection === 'payment' ? (
-              <PaymentVoucher />
-            ) : activeSection === 'contra' ? (
-              <ContraVoucher />
-            ) : activeSection === 'receipt' ? (
-              <ReceiptVoucher />
-            ) : activeSection === 'journal' ? (
-              <JournalVoucher />
-            ) : activeSection === 'debit' ? (
-              <DebitNoteVoucher />
-            ) : activeSection === 'credit' ? (
-              <CreditNoteVoucher />
-            ) : activeSection === 'sale' ? (
-              <SalesVoucher />
-            ) : activeSection === 'purchase' ? (
-              <PurchaseVoucher />
-            ) : (
-              <div className="p-12 text-center">
-                <div className="flex flex-col items-center justify-center">
-                  <SectionIcon className="w-16 h-16 text-gray-300 mb-4" />
-                  <p className="text-gray-500 text-lg">
-                    {getSectionTitle()} section is coming soon
-                  </p>
-                  <p className="text-gray-400 text-sm mt-2">
-                    This feature is under development
-                  </p>
-                </div>
+              <div>
+                <p className="text-sm text-gray-600">Total Payment</p>
+                <p className="text-xl font-bold text-gray-800">{filteredData.length}</p>
               </div>
-            )}
+            </div>
           </div>
         </div>
+        
+        <div className="flex items-center gap-4">
+          {/* Company Selector */}
+          {companies.length > 0 && (
+            <div className="relative">
+              <select
+                value={companyId || ''}
+                onChange={(e) => {
+                  const selectedCompanyId = e.target.value;
+                  setCompanyId(selectedCompanyId);
+                  setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+                  setTimeout(() => fetchData(), 100);
+                }}
+                className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm font-medium"
+              >
+                <option value="">Select Company</option>
+                {companies.map((company) => (
+                  <option key={company._id || company.id} value={company._id || company.id}>
+                    {company.companyName} {company.isDefault ? '(Default)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search payment..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          
+          {/* Filter Button */}
+          <button
+            onClick={() => setShowFilterModal(true)}
+            className="flex items-center gap-2 px-5 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold shadow hover:bg-gray-50 transition"
+          >
+            <Filter size={20} /> Filter
+          </button>
+          
+          {/* Create Payment Button */}
+          <button
+            onClick={handleCreatePayment}
+            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+          >
+            <PlusCircle size={20} /> Create Payment
+          </button>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="p-12">
+            <div className="flex justify-center items-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading payment...</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                <tr>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Voucher Number</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Account</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Mode</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Reference</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Amount</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredData.length > 0 ? (
+                  filteredData.map((item, index) => {
+                    const voucherId = item._id || item.id || 'N/A';
+                    const voucherNumber = item.voucherNumber || 'N/A';
+                    const voucherDate = item.voucherDate || item.date || '';
+                    const paymentAccount = item.paymentAccount && typeof item.paymentAccount === 'object' && item.paymentAccount !== null
+                      ? (item.paymentAccount.name || item.paymentAccount._id || 'N/A')
+                      : (item.paymentAccount || 'N/A');
+                    const paymentMode = item.paymentMode || 'N/A';
+                    const referenceNumber = item.referenceNumber || item.chequeNumber || 'N/A';
+                    const totalAmount = item.totalAmount || 0;
+                    const isPosted = item.isPosted !== undefined ? item.isPosted : false;
+                    
+                    return (
+                      <tr
+                        key={voucherId}
+                        className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                      >
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{voucherNumber}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">
+                            {voucherDate ? new Date(voucherDate).toLocaleDateString() : 'N/A'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{paymentAccount}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{paymentMode}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">{referenceNumber}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-medium text-gray-700">
+                            ₹{Number(totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              isPosted
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            {isPosted ? 'Posted' : 'Unposted'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleViewPayment(item)}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => handleEditPayment(item)}
+                              className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              Edit
+                            </button>
+                            {isPosted ? (
+                              <button
+                                onClick={() => handleUnpostPayment(item)}
+                                className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                Unpost
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handlePostPayment(item)}
+                                className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                Post
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeletePayment(item)}
+                              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="8" className="py-12 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <DollarSign className="w-16 h-16 text-gray-300 mb-4" />
+                        <p className="text-gray-500 text-lg">
+                          {searchTerm
+                            ? 'No payment found matching your search'
+                            : 'No payment found'}
+                        </p>
+                        <p className="text-gray-400 text-sm mt-2">
+                          {searchTerm
+                            ? 'Try adjusting your search terms'
+                            : 'Create your first entry to get started'}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Create/Edit Payment Modal */}
       {(showCreateModal || showEditModal) && (
         <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          {/* Hide scrollbar for modal content */}
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1196,7 +1136,6 @@ export default function TallyManagement() {
                             const selectedCompanyId = e.target.value;
                             setFormData({ ...formData, company: selectedCompanyId, paymentAccount: '' });
                             setCompanyId(selectedCompanyId);
-                            // Fetch ledgers for the selected company
                             if (selectedCompanyId) {
                               fetchAllLedgers(selectedCompanyId);
                             } else {
@@ -1558,13 +1497,6 @@ export default function TallyManagement() {
                   </button>
                   <button
                     type="submit"
-                    onClick={(e) => {
-                      // Backup handler - form onSubmit should handle it, but this ensures it works
-                      if (loading) {
-                        e.preventDefault();
-                        return;
-                      }
-                    }}
                     disabled={loading}
                     className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold shadow transition ${
                       loading
@@ -1590,7 +1522,6 @@ export default function TallyManagement() {
       {/* View Payment Modal */}
       {showViewModal && selectedVoucher && (
         <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          {/* Hide scrollbar for modal content */}
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1628,7 +1559,7 @@ export default function TallyManagement() {
               {/* Voucher Information */}
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-2">
                 <div className="flex items-center gap-2 mb-4">
-                  <FileText className="text-blue-600" size={20} />
+                  <DollarSign className="text-blue-600" size={20} />
                   <h3 className="text-lg font-bold text-gray-800">Voucher Information</h3>
                 </div>
 
@@ -1899,6 +1830,5 @@ export default function TallyManagement() {
     </div>
   );
 }
-
 
 
