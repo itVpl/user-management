@@ -132,7 +132,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function PaymentVoucher() {
+export default function PaymentVoucher({ selectedCompanyId = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -147,7 +147,7 @@ export default function PaymentVoucher() {
     endDate: '',
     isPosted: ''
   });
-  const [companyId, setCompanyId] = useState(null);
+  const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
@@ -436,12 +436,23 @@ export default function PaymentVoucher() {
     }
   }, [searchTerm, data]);
 
+  // Sync with parent selectedCompanyId
+  useEffect(() => {
+    if (selectedCompanyId && selectedCompanyId !== companyId) {
+      setCompanyId(selectedCompanyId);
+      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+    }
+  }, [selectedCompanyId]);
+
   // Fetch companies on mount
   useEffect(() => {
     const loadCompanies = async () => {
       const defaultCompanyId = await fetchAllCompanies();
-      if (defaultCompanyId) {
+      if (defaultCompanyId && !selectedCompanyId) {
         setFormData(prev => ({ ...prev, company: defaultCompanyId }));
+      } else if (selectedCompanyId) {
+        setCompanyId(selectedCompanyId);
+        setFormData(prev => ({ ...prev, company: selectedCompanyId }));
       } else {
         const company = await fetchDefaultCompany();
         if (company) {
@@ -889,28 +900,7 @@ export default function PaymentVoucher() {
         </div>
         
         <div className="flex items-center gap-4">
-          {/* Company Selector */}
-          {companies.length > 0 && (
-            <div className="relative">
-              <select
-                value={companyId || ''}
-                onChange={(e) => {
-                  const selectedCompanyId = e.target.value;
-                  setCompanyId(selectedCompanyId);
-                  setFormData(prev => ({ ...prev, company: selectedCompanyId }));
-                  setTimeout(() => fetchData(), 100);
-                }}
-                className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm font-medium"
-              >
-                <option value="">Select Company</option>
-                {companies.map((company) => (
-                  <option key={company._id || company.id} value={company._id || company.id}>
-                    {company.companyName} {company.isDefault ? '(Default)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Company Selector - Now in TallyManagement Sidebar */}
           
           {/* Search Bar */}
           <div className="relative">

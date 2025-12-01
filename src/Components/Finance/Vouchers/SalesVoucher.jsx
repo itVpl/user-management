@@ -133,7 +133,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function SalesVoucher() {
+export default function SalesVoucher({ selectedCompanyId = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -142,7 +142,7 @@ export default function SalesVoucher() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState(null);
-  const [companyId, setCompanyId] = useState(null);
+  const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
@@ -337,11 +337,22 @@ export default function SalesVoucher() {
     }
   }, [searchTerm, data]);
 
+  // Sync with parent selectedCompanyId
+  useEffect(() => {
+    if (selectedCompanyId && selectedCompanyId !== companyId) {
+      setCompanyId(selectedCompanyId);
+      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+    }
+  }, [selectedCompanyId]);
+
   useEffect(() => {
     const loadCompanies = async () => {
       const defaultCompanyId = await fetchAllCompanies();
-      if (defaultCompanyId) {
+      if (defaultCompanyId && !selectedCompanyId) {
         setFormData(prev => ({ ...prev, company: defaultCompanyId }));
+      } else if (selectedCompanyId) {
+        setCompanyId(selectedCompanyId);
+        setFormData(prev => ({ ...prev, company: selectedCompanyId }));
       }
     };
     loadCompanies();
@@ -707,28 +718,7 @@ export default function SalesVoucher() {
           </div> */}
         </div>
         <div className="flex items-center gap-4">
-          {/* Company Selector */}
-          {companies.length > 0 && (
-            <div className="relative">
-              <select
-                value={companyId || ''}
-                onChange={(e) => {
-                  const selectedCompanyId = e.target.value;
-                  setCompanyId(selectedCompanyId);
-                  setFormData(prev => ({ ...prev, company: selectedCompanyId }));
-                  setTimeout(() => fetchData(), 100);
-                }}
-                className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white text-sm font-medium"
-              >
-                <option value="">All Companies</option>
-                {companies.map((company) => (
-                  <option key={company._id || company.id} value={company._id || company.id}>
-                    {company.companyName} {company.isDefault ? '(Default)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Company Selector - Now in TallyManagement Sidebar */}
           
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -1425,9 +1415,9 @@ export default function SalesVoucher() {
             <div className="p-6 space-y-6">
               {/* Company Information */}
               {selectedVoucher.company && (
-                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                  <h3 className="text-lg font-semibold text-orange-800 mb-3">Company Information</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50 p-4">
+                  <h3 className="text-lg font-semibold text-green-800 mb-3">Company Information</h3>
+                  <div className="grid grid-cols-2 gap-4 bg-white border border-green-200 rounded-2xl p-4">
                     <div>
                       <p className="text-sm text-gray-600">Company Name</p>
                       <p className="font-semibold text-gray-800">{selectedVoucher.company.companyName}</p>
@@ -1441,9 +1431,9 @@ export default function SalesVoucher() {
               )}
 
               {/* Basic Information */}
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="bg-blue-50 p-4 ">
                 <h3 className="text-lg font-semibold text-blue-800 mb-3">Basic Information</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white border border-blue-100 rounded-2xl p-4">
                   <div>
                     <p className="text-sm text-gray-600">Voucher Number</p>
                     <p className="font-semibold text-gray-800">{selectedVoucher.voucherNumber}</p>
@@ -1470,11 +1460,11 @@ export default function SalesVoucher() {
               </div>
 
               {/* Customer/Cash Account Information */}
-              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <div className="bg-green-50 p-4 ">
                 <h3 className="text-lg font-semibold text-green-800 mb-3">
                   {selectedVoucher.salesType === 'Credit' ? 'Customer Information' : 'Cash/Bank Account'}
                 </h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-2xl border border-green-200">
                   {selectedVoucher.customerAccount && (
                     <>
                       <div>
@@ -1503,7 +1493,7 @@ export default function SalesVoucher() {
               </div>
 
               {/* Entries */}
-              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+              <div className="bg-purple-50 p-4 0">
                 <h3 className="text-lg font-semibold text-purple-800 mb-3">Sales Entries</h3>
                 <div className="space-y-3">
                   {selectedVoucher.entries?.map((entry, index) => (
@@ -1584,31 +1574,35 @@ export default function SalesVoucher() {
               </div>
 
               {/* Additional Information */}
-              {(selectedVoucher.narration || selectedVoucher.remarks) && (
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Additional Information</h3>
-                  <div className="space-y-3">
-                    {selectedVoucher.narration && (
-                      <div>
-                        <p className="text-sm text-gray-600">Narration</p>
-                        <p className="font-medium text-gray-800">{selectedVoucher.narration}</p>
-                      </div>
-                    )}
-                    {selectedVoucher.remarks && (
-                      <div>
-                        <p className="text-sm text-gray-600">Remarks</p>
-                        <p className="font-medium text-gray-800">{selectedVoucher.remarks}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+             {(selectedVoucher.narration || selectedVoucher.remarks) && (
+  <div className="bg-gray-50 p-4 ">
+    <h3 className="text-lg font-semibold text-gray-800 mb-3">Additional Information</h3>
+
+    <div className="grid grid-cols-2 gap-6 bg-white rounded-lg border border-gray-200 p-4">
+      {selectedVoucher.narration && (
+        <div>
+          <p className="text-sm text-gray-600">Narration</p>
+          <p className="font-medium text-gray-800">{selectedVoucher.narration}</p>
+        </div>
+      )}
+
+      {selectedVoucher.remarks && (
+        <div>
+          <p className="text-sm text-gray-600">Remarks</p>
+          <p className="font-medium text-gray-800">{selectedVoucher.remarks}</p>
+        </div>
+      )}
+    </div>
+
+  </div>
+)}
+
 
               {/* Total Amount */}
-              <div className="p-6 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl shadow-xl">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold text-white">Total Amount:</span>
-                  <span className="text-3xl font-bold text-white">
+              <div className="p-6 bg-gradient-to-r from-green-50 to-green-50 rounded-2xl shadow-xl">
+                <div className="flex justify-between items-center bg-white p-4">
+                  <span className="text-lg font-semibold text-black">Total Amount:</span>
+                  <span className="text-3xl font-bold text-black">
                     ₹{Number(selectedVoucher.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>

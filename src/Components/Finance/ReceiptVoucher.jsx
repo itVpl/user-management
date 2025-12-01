@@ -131,7 +131,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function ReceiptVoucher() {
+export default function ReceiptVoucher({ selectedCompanyId = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -146,7 +146,7 @@ export default function ReceiptVoucher() {
     endDate: '',
     isPosted: ''
   });
-  const [companyId, setCompanyId] = useState(null);
+  const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
@@ -525,12 +525,23 @@ export default function ReceiptVoucher() {
     }
   }, [formData.entries, showCreateModal, showEditModal]);
 
+  // Sync with parent selectedCompanyId
+  useEffect(() => {
+    if (selectedCompanyId && selectedCompanyId !== companyId) {
+      setCompanyId(selectedCompanyId);
+      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+    }
+  }, [selectedCompanyId]);
+
   // Fetch companies on mount
   useEffect(() => {
     const loadCompanies = async () => {
       const defaultCompanyId = await fetchAllCompanies();
-      if (defaultCompanyId) {
+      if (defaultCompanyId && !selectedCompanyId) {
         setFormData(prev => ({ ...prev, company: defaultCompanyId }));
+      } else if (selectedCompanyId) {
+        setCompanyId(selectedCompanyId);
+        setFormData(prev => ({ ...prev, company: selectedCompanyId }));
       } else {
         const company = await fetchDefaultCompany();
         if (company) {

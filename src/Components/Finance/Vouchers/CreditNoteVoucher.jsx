@@ -133,7 +133,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function CreditNoteVoucher() {
+export default function CreditNoteVoucher({ selectedCompanyId = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -149,7 +149,7 @@ export default function CreditNoteVoucher() {
     creditNoteType: '',
     isPosted: ''
   });
-  const [companyId, setCompanyId] = useState(null);
+  const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
@@ -401,11 +401,22 @@ export default function CreditNoteVoucher() {
   }, [searchTerm, data]);
 
   // Fetch companies on mount
+  // Sync with parent selectedCompanyId
+  useEffect(() => {
+    if (selectedCompanyId && selectedCompanyId !== companyId) {
+      setCompanyId(selectedCompanyId);
+      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+    }
+  }, [selectedCompanyId]);
+
   useEffect(() => {
     const loadCompanies = async () => {
       const defaultCompanyId = await fetchAllCompanies();
-      if (defaultCompanyId) {
+      if (defaultCompanyId && !selectedCompanyId) {
         setFormData(prev => ({ ...prev, company: defaultCompanyId }));
+      } else if (selectedCompanyId) {
+        setCompanyId(selectedCompanyId);
+        setFormData(prev => ({ ...prev, company: selectedCompanyId }));
       }
     };
     loadCompanies();
@@ -843,28 +854,7 @@ export default function CreditNoteVoucher() {
         </div>
         
         <div className="flex items-center gap-4">
-          {/* Company Selector */}
-          {companies.length > 0 && (
-            <div className="relative">
-              <select
-                value={companyId || ''}
-                onChange={(e) => {
-                  const selectedCompanyId = e.target.value;
-                  setCompanyId(selectedCompanyId);
-                  setFormData(prev => ({ ...prev, company: selectedCompanyId }));
-                  setTimeout(() => fetchData(), 100);
-                }}
-                className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm font-medium"
-              >
-                <option value="">Select Company</option>
-                {companies.map((company) => (
-                  <option key={company._id || company.id} value={company._id || company.id}>
-                    {company.companyName} {company.isDefault ? '(Default)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Company Selector - Now in TallyManagement Sidebar */}
           
           {/* Search Bar */}
           <div className="relative">
@@ -1611,7 +1601,7 @@ export default function CreditNoteVoucher() {
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
           <div 
-            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1642,9 +1632,9 @@ export default function CreditNoteVoucher() {
             {/* Modal Body */}
             <div className="p-6 space-y-6">
               {/* Voucher Information */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Voucher Information</h3>
-                <div className="grid grid-cols-2 gap-4">
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-green-800 mb-4">Voucher Information</h3>
+                <div className="grid grid-cols-2 gap-4 bg-white p-4 border border-green-200 rounded-2xl">
                   <div>
                     <p className="text-sm text-gray-600">Voucher Number</p>
                     <p className="text-base font-semibold text-gray-900">{selectedVoucher.voucherNumber || 'N/A'}</p>
@@ -1689,17 +1679,18 @@ export default function CreditNoteVoucher() {
               </div>
 
               {/* Customers */}
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-green-800 mb-4">Customers (Credit Side)</h3>
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-blue-800 mb-4">Customers (Credit Side)</h3>
                 {selectedVoucher.customers?.map((customer, index) => (
-                  <div key={index} className="bg-white p-3 rounded-lg mb-2">
+                  <div key={index} className="bg-white p-4 rounded-lg mb-2 border border-blue-200 rounded-3xl">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-semibold text-gray-900">{customer.account?.name || customer.account || 'N/A'}</p>
-                        {customer.narration && <p className="text-sm text-gray-600 mt-1">{customer.narration}</p>}
+                        
                         {customer.originalInvoiceNumber && (
-                          <p className="text-xs text-gray-500 mt-1">Original Invoice: {customer.originalInvoiceNumber}</p>
+                          <p className="text-sm text-gray-900 mt-1">Original Invoice: {customer.originalInvoiceNumber}</p>
                         )}
+                        {customer.narration && <p className="text-sm text-gray-600 mt-1">{customer.narration}</p>}
                       </div>
                       <p className="text-lg font-bold text-green-600">
                         ₹{Number(customer.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1713,7 +1704,7 @@ export default function CreditNoteVoucher() {
               <div className="bg-red-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-red-800 mb-4">Debit Entries</h3>
                 {selectedVoucher.entries?.map((entry, index) => (
-                  <div key={index} className="bg-white p-3 rounded-lg mb-2">
+                  <div key={index} className="bg-white p-3 rounded-lg mb-2 border border-red-200 rounded-2xl">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <p className="font-semibold text-gray-900">{entry.account?.name || entry.account || 'N/A'}</p>
@@ -1746,29 +1737,43 @@ export default function CreditNoteVoucher() {
               </div>
 
               {/* Additional Details */}
-              {(selectedVoucher.narration || selectedVoucher.remarks || selectedVoucher.referenceNumber) && (
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Additional Details</h3>
-                  {selectedVoucher.referenceNumber && (
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-600">Reference Number</p>
-                      <p className="text-base font-semibold text-gray-900">{selectedVoucher.referenceNumber}</p>
-                    </div>
-                  )}
-                  {selectedVoucher.narration && (
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-600">Narration</p>
-                      <p className="text-base text-gray-900">{selectedVoucher.narration}</p>
-                    </div>
-                  )}
-                  {selectedVoucher.remarks && (
-                    <div>
-                      <p className="text-sm text-gray-600">Remarks</p>
-                      <p className="text-base text-gray-900">{selectedVoucher.remarks}</p>
-                    </div>
-                  )}
-                </div>
-              )}
+             {(selectedVoucher.narration || selectedVoucher.remarks || selectedVoucher.referenceNumber) && (
+  <div className="bg-gray-50 p-4 rounded-lg">
+    <h3 className="text-lg font-semibold text-gray-800 mb-4">Additional Details</h3>
+
+    <div className="grid grid-cols-3 md:grid-cols-3 gap-6 bg-white p-4 border border-gray-300 rounded-2xl">
+
+      {selectedVoucher.referenceNumber && (
+        <div>
+          <p className="text-sm text-gray-600">Reference Number</p>
+          <p className="text-base font-semibold text-gray-900">
+            {selectedVoucher.referenceNumber}
+          </p>
+        </div>
+      )}
+
+      {selectedVoucher.narration && (
+        <div>
+          <p className="text-sm text-gray-600">Narration</p>
+          <p className="text-base text-gray-900">
+            {selectedVoucher.narration}
+          </p>
+        </div>
+      )}
+
+      {selectedVoucher.remarks && (
+        <div>
+          <p className="text-sm text-gray-600">Remarks</p>
+          <p className="text-base text-gray-900">
+            {selectedVoucher.remarks}
+          </p>
+        </div>
+      )}
+
+    </div>
+  </div>
+)}
+
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">

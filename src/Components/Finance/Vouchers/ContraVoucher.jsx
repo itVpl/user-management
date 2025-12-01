@@ -145,7 +145,7 @@ const SearchableDropdown = ({
 };
 
 
-export default function ContraVoucher() {
+export default function ContraVoucher({ selectedCompanyId = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -160,7 +160,7 @@ export default function ContraVoucher() {
     endDate: '',
     isPosted: ''
   });
-  const [companyId, setCompanyId] = useState(null);
+  const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
@@ -425,12 +425,23 @@ export default function ContraVoucher() {
   }, [searchTerm, data]);
 
 
+  // Sync with parent selectedCompanyId
+  useEffect(() => {
+    if (selectedCompanyId && selectedCompanyId !== companyId) {
+      setCompanyId(selectedCompanyId);
+      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+    }
+  }, [selectedCompanyId]);
+
   // Fetch companies on mount
   useEffect(() => {
     const loadCompanies = async () => {
       const defaultCompanyId = await fetchAllCompanies();
-      if (defaultCompanyId) {
+      if (defaultCompanyId && !selectedCompanyId) {
         setFormData(prev => ({ ...prev, company: defaultCompanyId }));
+      } else if (selectedCompanyId) {
+        setCompanyId(selectedCompanyId);
+        setFormData(prev => ({ ...prev, company: selectedCompanyId }));
       }
     };
     loadCompanies();
@@ -703,28 +714,7 @@ export default function ContraVoucher() {
         </div>
        
         <div className="flex items-center gap-4">
-          {/* Company Selector */}
-          {companies.length > 0 && (
-            <div className="relative">
-              <select
-                value={companyId || ''}
-                onChange={(e) => {
-                  const selectedCompanyId = e.target.value;
-                  setCompanyId(selectedCompanyId);
-                  setFormData(prev => ({ ...prev, company: selectedCompanyId }));
-                  setTimeout(() => fetchData(), 100);
-                }}
-                className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm font-medium"
-              >
-                <option value="">Select Company</option>
-                {companies.map((company) => (
-                  <option key={company._id || company.id} value={company._id || company.id}>
-                    {company.companyName} {company.isDefault ? '(Default)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Company Selector - Now in TallyManagement Sidebar */}
          
           {/* Search Bar */}
           <div className="relative">
@@ -1133,12 +1123,12 @@ export default function ContraVoucher() {
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
-          <div 
-            className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
+            {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -1161,145 +1151,99 @@ export default function ContraVoucher() {
                 </button>
               </div>
             </div>
-
-
-            {/* Modal Body */}
+            
+            {/* Content */}
             <div className="p-6 space-y-6">
               {/* Voucher Information */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Voucher Information</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Voucher Number</p>
-                    <p className="text-base font-semibold text-gray-900">{selectedVoucher.voucherNumber || 'N/A'}</p>
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-2">
+                <div className="flex items-center gap-2 mb-4">
+                  <ArrowLeftRight className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Voucher Information</h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 bg-white border border-blue-200 rounded-xl">
+                  <div className="bg-white rounded-xl p-2 mt-4 ml-4">
+                    <p className="text-sm text-gray-600 mb-1">Voucher Number</p>
+                    <p className="font-semibold text-gray-800">{selectedVoucher.voucherNumber || selectedVoucher._id || selectedVoucher.id || 'N/A'}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Voucher Date</p>
-                    <p className="text-base font-semibold text-gray-900">
+                  <div className="bg-white rounded-xl p-2 ml-4 mt-4">
+                    <p className="text-sm text-gray-600 mb-1">Company</p>
+                    <p className="font-semibold text-gray-800">
+                      {selectedVoucher.company && typeof selectedVoucher.company === 'object' && selectedVoucher.company !== null
+                        ? (selectedVoucher.company.companyName || selectedVoucher.company._id || 'N/A')
+                        : (companies.find(c => (c._id || c.id) === selectedVoucher.company)?.companyName || selectedVoucher.company || 'N/A')}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-xl p-1 ml-4">
+                    <p className="text-sm text-gray-600 mb-1">Voucher Date</p>
+                    <p className="font-semibold text-gray-800">
                       {selectedVoucher.voucherDate ? new Date(selectedVoucher.voucherDate).toLocaleDateString() : 'N/A'}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Company</p>
-                    <p className="text-base font-semibold text-gray-900">
-                      {selectedVoucher.company?.companyName || selectedVoucher.company || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Status</p>
-                    <span
-                      className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        selectedVoucher.isPosted
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}
-                    >
-                      {selectedVoucher.isPosted ? 'Posted' : 'Unposted'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-
-              {/* Transaction Details */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-blue-800 mb-4">Transaction Details</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-                    <div>
-                      <p className="text-sm text-gray-600">From Account (Debit)</p>
-                      <p className="text-base font-semibold text-gray-900">
-                        {selectedVoucher.fromAccount?.name || selectedVoucher.fromAccount || 'N/A'}
-                      </p>
-                      {selectedVoucher.fromAccount?.accountType && (
-                        <p className="text-xs text-gray-500">Type: {selectedVoucher.fromAccount.accountType}</p>
-                      )}
-                    </div>
-                    <ArrowLeftRight className="text-blue-500" size={24} />
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">To Account (Credit)</p>
-                      <p className="text-base font-semibold text-gray-900">
-                        {selectedVoucher.toAccount?.name || selectedVoucher.toAccount || 'N/A'}
-                      </p>
-                      {selectedVoucher.toAccount?.accountType && (
-                        <p className="text-xs text-gray-500">Type: {selectedVoucher.toAccount.accountType}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-white rounded-lg">
-                    <p className="text-sm text-gray-600">Amount</p>
-                    <p className="text-2xl font-bold text-blue-600">
+                  <div className="bg-white rounded-xl p-1 ml-4">
+                    <p className="text-sm text-gray-600 mb-1">Amount</p>
+                    <p className="font-semibold text-gray-800">
                       ₹{Number(selectedVoucher.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                   {selectedVoucher.reference && (
-                    <div className="p-3 bg-white rounded-lg">
-                      <p className="text-sm text-gray-600">Reference Number</p>
-                      <p className="text-base font-semibold text-gray-900">{selectedVoucher.reference}</p>
+                    <div className="bg-white rounded-xl p-1 ml-4">
+                      <p className="text-sm text-gray-600 mb-1">Reference Number</p>
+                      <p className="font-semibold text-gray-800">{selectedVoucher.reference}</p>
                     </div>
                   )}
+                  <div className="bg-white rounded-xl p-1 ml-4">
+                    <p className="text-sm text-gray-600 mb-1">Status</p>
+                    <p className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      selectedVoucher.isPosted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {selectedVoucher.isPosted ? 'Posted' : 'Unposted'}
+                    </p>
+                  </div>
                   {selectedVoucher.narration && (
-                    <div className="p-3 bg-white rounded-lg">
-                      <p className="text-sm text-gray-600">Narration</p>
-                      <p className="text-base text-gray-900">{selectedVoucher.narration}</p>
+                    <div className="col-span-2 bg-white rounded-xl p-1 ml-4 mb-4">
+                      <p className="text-sm text-gray-600 mb-1">Narration</p>
+                      <p className="font-semibold text-gray-800">{selectedVoucher.narration}</p>
                     </div>
                   )}
                 </div>
               </div>
-
-
-              {/* Audit Information */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Audit Information</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Created By</p>
-                    <p className="text-base font-semibold text-gray-900">
-                      {selectedVoucher.createdBy?.name || selectedVoucher.createdBy || 'N/A'}
-                    </p>
-                    {selectedVoucher.createdAt && (
-                      <p className="text-xs text-gray-500">
-                        {new Date(selectedVoucher.createdAt).toLocaleString()}
+              
+              {/* Transaction Details */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ArrowLeftRight className="text-green-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Transaction Details</h3>
+                </div>
+                <div className="bg-white rounded-xl p-4 border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-600 mb-1">From Account (Debit)</p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedVoucher.fromAccount && typeof selectedVoucher.fromAccount === 'object' && selectedVoucher.fromAccount !== null
+                          ? (selectedVoucher.fromAccount.name || selectedVoucher.fromAccount._id || 'N/A')
+                          : (selectedVoucher.fromAccount || 'N/A')}
                       </p>
-                    )}
-                  </div>
-                  {selectedVoucher.updatedBy && (
-                    <div>
-                      <p className="text-sm text-gray-600">Updated By</p>
-                      <p className="text-base font-semibold text-gray-900">
-                        {selectedVoucher.updatedBy?.name || selectedVoucher.updatedBy || 'N/A'}
-                      </p>
-                      {selectedVoucher.updatedAt && (
-                        <p className="text-xs text-gray-500">
-                          {new Date(selectedVoucher.updatedAt).toLocaleString()}
-                        </p>
+                      {selectedVoucher.fromAccount?.accountType && (
+                        <p className="text-xs text-gray-500 mt-1">Type: {selectedVoucher.fromAccount.accountType}</p>
                       )}
                     </div>
-                  )}
+                    <div className="px-4">
+                      <ArrowLeftRight className="text-blue-500" size={32} />
+                    </div>
+                    <div className="flex-1 text-right">
+                      <p className="text-sm text-gray-600 mb-1">To Account (Credit)</p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedVoucher.toAccount && typeof selectedVoucher.toAccount === 'object' && selectedVoucher.toAccount !== null
+                          ? (selectedVoucher.toAccount.name || selectedVoucher.toAccount._id || 'N/A')
+                          : (selectedVoucher.toAccount || 'N/A')}
+                      </p>
+                      {selectedVoucher.toAccount?.accountType && (
+                        <p className="text-xs text-gray-500 mt-1">Type: {selectedVoucher.toAccount.accountType}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setSelectedVoucher(null);
-                  }}
-                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    handleEditContra(selectedVoucher);
-                  }}
-                  className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white font-semibold shadow hover:from-green-600 hover:to-green-700 transition"
-                >
-                  Edit
-                </button>
               </div>
             </div>
           </div>
