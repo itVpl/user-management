@@ -210,6 +210,78 @@ export default function TallyManagement() {
     remarks: ''
   });
 
+  // Helper function to get current financial year (India: April to March)
+  const getCurrentFinancialYear = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    
+    // Financial year in India: April (4) to March (3)
+    // If month is Jan-Mar (1-3), FY is (prevYear-nextYear)
+    // If month is Apr-Dec (4-12), FY is (currentYear-nextYear)
+    if (currentMonth >= 4) {
+      // April to December: 2024-25
+      return `${currentYear}-${String(currentYear + 1).slice(-2)}`;
+    } else {
+      // January to March: 2024-25 (for year 2025)
+      return `${currentYear - 1}-${String(currentYear).slice(-2)}`;
+    }
+  };
+
+  // Function to generate next voucher number
+  const generateNextVoucherNumber = async (companyIdParam, voucherType = 'PAYMENT') => {
+    try {
+      if (!companyIdParam) {
+        // If no company, return default format
+        const fy = getCurrentFinancialYear();
+        return `${voucherType}/${fy}/00001`;
+      }
+
+      // Fetch vouchers based on type
+      let existingVouchers;
+      if (voucherType === 'RECEIPT') {
+        existingVouchers = await fetchReceiptData({}, companyIdParam);
+      } else if (voucherType === 'JOURNAL') {
+        existingVouchers = await fetchJournalData({}, companyIdParam);
+      } else {
+        existingVouchers = await fetchPaymentData({}, companyIdParam);
+      }
+      
+      const currentFY = getCurrentFinancialYear();
+      const prefix = `${voucherType}/${currentFY}/`;
+      
+      // Filter vouchers that match current financial year pattern
+      const matchingVouchers = existingVouchers.filter(voucher => {
+        const voucherNum = voucher.voucherNumber || '';
+        return voucherNum.startsWith(prefix);
+      });
+
+      // Extract sequence numbers and find the maximum
+      let maxSequence = 0;
+      matchingVouchers.forEach(voucher => {
+        const voucherNum = voucher.voucherNumber || '';
+        if (voucherNum.startsWith(prefix)) {
+          const sequenceStr = voucherNum.replace(prefix, '');
+          const sequenceNum = parseInt(sequenceStr, 10);
+          if (!isNaN(sequenceNum) && sequenceNum > maxSequence) {
+            maxSequence = sequenceNum;
+          }
+        }
+      });
+
+      // Generate next sequence number (pad with zeros to 5 digits)
+      const nextSequence = maxSequence + 1;
+      const sequenceStr = String(nextSequence).padStart(5, '0');
+      
+      return `${prefix}${sequenceStr}`;
+    } catch (error) {
+      console.error('Error generating voucher number:', error);
+      // Fallback: return default voucher number
+      const fy = getCurrentFinancialYear();
+      return `PAYMENT/${fy}/00001`;
+    }
+  };
+
   // API Functions - Ready for actual API integration
   const fetchContaData = async () => {
     // TODO: Replace with actual API
@@ -462,24 +534,307 @@ export default function TallyManagement() {
     }
   };
 
-  const fetchReceiptData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/receipt`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
+  // Receipt Voucher API Functions
+  const fetchReceiptData = async (filterParams = {}, companyIdParam = null) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      let url = `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/receipt/all`;
+      
+      const queryParams = new URLSearchParams();
+      const selectedCompanyId = companyIdParam !== null ? companyIdParam : companyId;
+      if (selectedCompanyId && selectedCompanyId.trim() !== '') {
+        queryParams.append('company', selectedCompanyId);
+      }
+      if (filterParams.startDate) queryParams.append('startDate', filterParams.startDate);
+      if (filterParams.endDate) queryParams.append('endDate', filterParams.endDate);
+      if (filterParams.isPosted !== '') queryParams.append('isPosted', filterParams.isPosted === 'true');
+      
+      if (queryParams.toString()) {
+        url += `?${queryParams.toString()}`;
+      }
+      
+      const response = await axios.get(url, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.vouchers || response.data?.data || [];
+    } catch (error) {
+      console.error('Error fetching receipt data:', error);
+      throw error;
+    }
   };
 
-  const fetchJournalData = async () => {
-    // TODO: Replace with actual API
-    // const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    // const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/journal`, {
-    //   headers: { 'Authorization': `Bearer ${token}` }
-    // });
-    // return response.data?.data || [];
-    return [];
+  const getReceiptVoucherById = async (voucherId) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/receipt/${voucherId}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.voucher || response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error fetching receipt voucher:', error);
+      throw error;
+    }
+  };
+
+  const createReceiptVoucher = async (voucherData) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      
+      if (!token) {
+        throw new Error('Authentication token not found. Please login again.');
+      }
+
+      const apiUrl = `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/receipt/create`;
+      console.log('Creating receipt voucher with data:', JSON.stringify(voucherData, null, 2));
+      
+      const response = await axios.post(apiUrl, voucherData, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+      
+      if (response.data?.success === false) {
+        const errorMsg = response.data?.message || 'Failed to create receipt voucher';
+        throw new Error(errorMsg);
+      }
+      
+      return response.data?.voucher || response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error creating receipt voucher:', error);
+      
+      if (error.response) {
+        const errorMsg = error.response.data?.message || error.response.data?.error || `Server error: ${error.response.status}`;
+        throw new Error(errorMsg);
+      } else if (error.request) {
+        throw new Error('No response from server. Please check your internet connection.');
+      } else {
+        throw new Error(error.message || 'Failed to create receipt voucher');
+      }
+    }
+  };
+
+  const updateReceiptVoucher = async (voucherId, voucherData) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/receipt/${voucherId}/update`, voucherData, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.voucher || response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error updating receipt voucher:', error);
+      throw error;
+    }
+  };
+
+  const deleteReceiptVoucher = async (voucherId) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.delete(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/receipt/${voucherId}/delete`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting receipt voucher:', error);
+      throw error;
+    }
+  };
+
+  const postReceiptVoucher = async (voucherId) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/receipt/${voucherId}/post`, {}, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error posting receipt voucher:', error);
+      throw error;
+    }
+  };
+
+  const unpostReceiptVoucher = async (voucherId) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/receipt/${voucherId}/unpost`, {}, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error unposting receipt voucher:', error);
+      throw error;
+    }
+  };
+
+  // Journal Voucher API Functions
+  const fetchJournalData = async (filterParams = {}, companyIdParam = null) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      let url = `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/journal/all`;
+      
+      const queryParams = new URLSearchParams();
+      const selectedCompanyId = companyIdParam !== null ? companyIdParam : companyId;
+      if (selectedCompanyId && selectedCompanyId.trim() !== '') {
+        queryParams.append('company', selectedCompanyId);
+      }
+      if (filterParams.startDate) queryParams.append('startDate', filterParams.startDate);
+      if (filterParams.endDate) queryParams.append('endDate', filterParams.endDate);
+      if (filterParams.isPosted !== '') queryParams.append('isPosted', filterParams.isPosted === 'true');
+      if (filterParams.journalType) queryParams.append('journalType', filterParams.journalType);
+      
+      if (queryParams.toString()) {
+        url += `?${queryParams.toString()}`;
+      }
+      
+      const response = await axios.get(url, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.vouchers || response.data?.data || [];
+    } catch (error) {
+      console.error('Error fetching journal data:', error);
+      throw error;
+    }
+  };
+
+  const getJournalVoucherById = async (voucherId) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/journal/${voucherId}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.voucher || response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error fetching journal voucher:', error);
+      throw error;
+    }
+  };
+
+  const createJournalVoucher = async (voucherData) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      
+      if (!token) {
+        throw new Error('Authentication token not found. Please login again.');
+      }
+
+      const apiUrl = `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/journal/create`;
+      console.log('Creating journal voucher with data:', JSON.stringify(voucherData, null, 2));
+      
+      const response = await axios.post(apiUrl, voucherData, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+      
+      if (response.data?.success === false) {
+        const errorMsg = response.data?.message || 'Failed to create journal voucher';
+        throw new Error(errorMsg);
+      }
+      
+      return response.data?.voucher || response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error creating journal voucher:', error);
+      
+      if (error.response) {
+        const errorMsg = error.response.data?.message || error.response.data?.error || `Server error: ${error.response.status}`;
+        throw new Error(errorMsg);
+      } else if (error.request) {
+        throw new Error('No response from server. Please check your internet connection.');
+      } else {
+        throw new Error(error.message || 'Failed to create journal voucher');
+      }
+    }
+  };
+
+  const updateJournalVoucher = async (voucherId, voucherData) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/journal/${voucherId}/update`, voucherData, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.voucher || response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error updating journal voucher:', error);
+      throw error;
+    }
+  };
+
+  const deleteJournalVoucher = async (voucherId) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.delete(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/journal/${voucherId}/delete`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting journal voucher:', error);
+      throw error;
+    }
+  };
+
+  const postJournalVoucher = async (voucherId) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/journal/${voucherId}/post`, {}, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error posting journal voucher:', error);
+      throw error;
+    }
+  };
+
+  const unpostJournalVoucher = async (voucherId) => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/tally/voucher/journal/${voucherId}/unpost`, {}, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('Error unposting journal voucher:', error);
+      throw error;
+    }
   };
 
   const fetchDebitData = async () => {
@@ -536,10 +891,10 @@ export default function TallyManagement() {
           result = await fetchPaymentData(filters);
           break;
         case 'receipt':
-          result = await fetchReceiptData();
+          result = await fetchReceiptData(filters, companyId);
           break;
         case 'journal':
-          result = await fetchJournalData();
+          result = await fetchJournalData(filters, companyId);
           break;
         case 'debit':
           result = await fetchDebitData();
@@ -677,6 +1032,33 @@ export default function TallyManagement() {
       setLoading(true);
       const voucherData = await getPaymentVoucherById(voucher._id || voucher.id);
       
+      // Check if voucher is posted
+      if (voucherData.isPosted) {
+        const shouldUnpost = window.confirm(
+          'This payment voucher is posted. Posted vouchers cannot be edited directly.\n\n' +
+          'Would you like to unpost it first to make changes?'
+        );
+        
+        if (shouldUnpost) {
+          try {
+            await unpostPaymentVoucher(voucher._id || voucher.id);
+            alertify.success('Payment voucher unposted successfully. You can now edit it.');
+            // Refresh the voucher data after unposting
+            const updatedVoucherData = await getPaymentVoucherById(voucher._id || voucher.id);
+            voucherData.isPosted = updatedVoucherData.isPosted;
+          } catch (unpostError) {
+            console.error('Error unposting voucher:', unpostError);
+            const errorMessage = unpostError.response?.data?.message || unpostError.message || 'Failed to unpost voucher';
+            alertify.error(errorMessage);
+            setLoading(false);
+            return;
+          }
+        } else {
+          setLoading(false);
+          return;
+        }
+      }
+      
       // Extract IDs from nested objects if present
       const paymentAccountId = voucherData.paymentAccount && typeof voucherData.paymentAccount === 'object' && voucherData.paymentAccount !== null
         ? voucherData.paymentAccount._id || voucherData.paymentAccount.id 
@@ -800,12 +1182,438 @@ export default function TallyManagement() {
     }
   };
 
+  // Receipt Handlers
+  const handleCreateReceipt = async () => {
+    const defaultCompanyId = companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
+    
+    let autoGeneratedVoucherNumber = '';
+    try {
+      autoGeneratedVoucherNumber = await generateNextVoucherNumber(defaultCompanyId, 'RECEIPT');
+    } catch (error) {
+      console.error('Error generating voucher number:', error);
+      const fy = getCurrentFinancialYear();
+      autoGeneratedVoucherNumber = `RECEIPT/${fy}/00001`;
+    }
+    
+    setFormData({
+      company: defaultCompanyId,
+      voucherNumber: autoGeneratedVoucherNumber,
+      voucherDate: new Date().toISOString().split('T')[0],
+      receiptAccount: '',
+      receiptMode: '',
+      chequeNumber: '',
+      chequeDate: '',
+      referenceNumber: '',
+      entries: [{
+        account: '',
+        amount: '',
+        billWise: '',
+        billReference: '',
+        tds: {
+          applicable: false,
+          section: '',
+          rate: '',
+          amount: '',
+          tdsAccount: ''
+        },
+        gst: {
+          applicable: false,
+          gstType: '',
+          gstRate: '',
+          gstAmount: ''
+        },
+        narration: ''
+      }],
+      totalAmount: '',
+      narration: '',
+      remarks: ''
+    });
+    if (defaultCompanyId) {
+      fetchAllLedgers(defaultCompanyId);
+    }
+    setShowCreateModal(true);
+  };
+
+  const handleEditReceipt = async (voucher) => {
+    try {
+      setLoading(true);
+      const voucherData = await getReceiptVoucherById(voucher._id || voucher.id);
+      
+      // Check if voucher is posted
+      if (voucherData.isPosted) {
+        const shouldUnpost = window.confirm(
+          'This receipt voucher is posted. Posted vouchers cannot be edited directly.\n\n' +
+          'Would you like to unpost it first to make changes?'
+        );
+        
+        if (shouldUnpost) {
+          try {
+            await unpostReceiptVoucher(voucher._id || voucher.id);
+            alertify.success('Receipt voucher unposted successfully. You can now edit it.');
+            // Refresh the voucher data after unposting
+            const updatedVoucherData = await getReceiptVoucherById(voucher._id || voucher.id);
+            voucherData.isPosted = updatedVoucherData.isPosted;
+          } catch (unpostError) {
+            console.error('Error unposting voucher:', unpostError);
+            const errorMessage = unpostError.response?.data?.message || unpostError.message || 'Failed to unpost voucher';
+            alertify.error(errorMessage);
+            setLoading(false);
+            return;
+          }
+        } else {
+          setLoading(false);
+          return;
+        }
+      }
+      
+      const receiptAccountId = voucherData.receiptAccount && typeof voucherData.receiptAccount === 'object' && voucherData.receiptAccount !== null
+        ? voucherData.receiptAccount._id || voucherData.receiptAccount.id 
+        : voucherData.receiptAccount;
+      
+      const editCompanyId = voucherData.company?._id || voucherData.company || companyId || '';
+      
+      setFormData({
+        company: editCompanyId,
+        voucherNumber: voucherData.voucherNumber || '',
+        voucherDate: voucherData.voucherDate ? new Date(voucherData.voucherDate).toISOString().split('T')[0] : '',
+        receiptAccount: receiptAccountId || '',
+        receiptMode: voucherData.receiptMode || '',
+        chequeNumber: voucherData.chequeNumber || '',
+        chequeDate: voucherData.chequeDate ? new Date(voucherData.chequeDate).toISOString().split('T')[0] : '',
+        referenceNumber: voucherData.referenceNumber || '',
+        entries: (voucherData.entries || []).map(entry => ({
+          account: entry.account && typeof entry.account === 'object' && entry.account !== null 
+            ? (entry.account._id || entry.account.id) 
+            : entry.account,
+          amount: entry.amount || '',
+          billWise: entry.billWise || '',
+          billReference: entry.billReference || '',
+          tds: entry.tds?.applicable ? {
+            applicable: true,
+            section: entry.tds.section || '',
+            rate: entry.tds.rate || '',
+            amount: entry.tds.amount || '',
+            tdsAccount: entry.tds.tdsAccount && typeof entry.tds.tdsAccount === 'object' && entry.tds.tdsAccount !== null 
+              ? (entry.tds.tdsAccount._id || entry.tds.tdsAccount.id) 
+              : entry.tds.tdsAccount || ''
+          } : { applicable: false, section: '', rate: '', amount: '', tdsAccount: '' },
+          gst: entry.gst?.applicable ? {
+            applicable: true,
+            gstType: entry.gst.gstType || '',
+            gstRate: entry.gst.gstRate || '',
+            gstAmount: entry.gst.gstAmount || ''
+          } : { applicable: false, gstType: '', gstRate: '', gstAmount: '' },
+          narration: entry.narration || ''
+        })),
+        totalAmount: voucherData.totalAmount || '',
+        narration: voucherData.narration || '',
+        remarks: voucherData.remarks || ''
+      });
+      
+      if (editCompanyId) {
+        fetchAllLedgers(editCompanyId);
+      }
+      
+      setSelectedVoucher(voucher);
+      setShowEditModal(true);
+    } catch (err) {
+      console.error('Error loading voucher:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to load voucher details';
+      alertify.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewReceipt = async (voucher) => {
+    try {
+      setLoading(true);
+      const voucherData = await getReceiptVoucherById(voucher._id || voucher.id);
+      setSelectedVoucher(voucherData);
+      setShowViewModal(true);
+    } catch (err) {
+      console.error('Error loading voucher:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to load voucher details';
+      alertify.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteReceipt = async (voucher) => {
+    if (window.confirm('Are you sure you want to delete this receipt voucher?')) {
+      try {
+        setLoading(true);
+        await deleteReceiptVoucher(voucher._id || voucher.id);
+        alertify.success('Receipt voucher deleted successfully');
+        fetchData();
+      } catch (error) {
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to delete receipt voucher';
+        alertify.error(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handlePostReceipt = async (voucher) => {
+    try {
+      setLoading(true);
+      await postReceiptVoucher(voucher._id || voucher.id);
+      alertify.success('Receipt voucher posted successfully');
+      fetchData();
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to post receipt voucher';
+      alertify.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnpostReceipt = async (voucher) => {
+    try {
+      setLoading(true);
+      await unpostReceiptVoucher(voucher._id || voucher.id);
+      alertify.success('Receipt voucher unposted successfully');
+      fetchData();
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to unpost receipt voucher';
+      alertify.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Journal Handlers
+  const handleCreateJournal = async () => {
+    const defaultCompanyId = companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
+    
+    let autoGeneratedVoucherNumber = '';
+    try {
+      autoGeneratedVoucherNumber = await generateNextVoucherNumber(defaultCompanyId, 'JOURNAL');
+    } catch (error) {
+      console.error('Error generating voucher number:', error);
+      const fy = getCurrentFinancialYear();
+      autoGeneratedVoucherNumber = `JOURNAL/${fy}/00001`;
+    }
+    
+    setFormData({
+      company: defaultCompanyId,
+      voucherNumber: autoGeneratedVoucherNumber,
+      voucherDate: new Date().toISOString().split('T')[0],
+      journalType: '',
+      referenceNumber: '',
+      entries: [
+        {
+          account: '',
+          entryType: 'Debit',
+          amount: '',
+          billWise: '',
+          billReference: '',
+          tds: {
+            applicable: false,
+            section: '',
+            rate: '',
+            amount: '',
+            tdsAccount: ''
+          },
+          gst: {
+            applicable: false,
+            gstType: '',
+            gstRate: '',
+            gstAmount: ''
+          },
+          narration: ''
+        },
+        {
+          account: '',
+          entryType: 'Credit',
+          amount: '',
+          billWise: '',
+          billReference: '',
+          tds: {
+            applicable: false,
+            section: '',
+            rate: '',
+            amount: '',
+            tdsAccount: ''
+          },
+          gst: {
+            applicable: false,
+            gstType: '',
+            gstRate: '',
+            gstAmount: ''
+          },
+          narration: ''
+        }
+      ],
+      totalAmount: '',
+      narration: '',
+      remarks: ''
+    });
+    if (defaultCompanyId) {
+      fetchAllLedgers(defaultCompanyId);
+    }
+    setShowCreateModal(true);
+  };
+
+  const handleEditJournal = async (voucher) => {
+    try {
+      setLoading(true);
+      const voucherData = await getJournalVoucherById(voucher._id || voucher.id);
+      
+      if (voucherData.isPosted) {
+        const shouldUnpost = window.confirm(
+          'This journal voucher is posted. Posted vouchers cannot be edited directly.\n\n' +
+          'Would you like to unpost it first to make changes?'
+        );
+        
+        if (shouldUnpost) {
+          try {
+            await unpostJournalVoucher(voucher._id || voucher.id);
+            alertify.success('Journal voucher unposted successfully. You can now edit it.');
+            const updatedVoucherData = await getJournalVoucherById(voucher._id || voucher.id);
+            voucherData.isPosted = updatedVoucherData.isPosted;
+          } catch (unpostError) {
+            console.error('Error unposting voucher:', unpostError);
+            const errorMessage = unpostError.response?.data?.message || unpostError.message || 'Failed to unpost voucher';
+            alertify.error(errorMessage);
+            setLoading(false);
+            return;
+          }
+        } else {
+          setLoading(false);
+          return;
+        }
+      }
+      
+      const editCompanyId = voucherData.company?._id || voucherData.company || companyId || '';
+      
+      setFormData({
+        company: editCompanyId,
+        voucherNumber: voucherData.voucherNumber || '',
+        voucherDate: voucherData.voucherDate ? new Date(voucherData.voucherDate).toISOString().split('T')[0] : '',
+        journalType: voucherData.journalType || '',
+        referenceNumber: voucherData.referenceNumber || '',
+        entries: (voucherData.entries || []).map(entry => ({
+          account: entry.account && typeof entry.account === 'object' && entry.account !== null 
+            ? (entry.account._id || entry.account.id) 
+            : entry.account,
+          entryType: entry.entryType || 'Debit',
+          amount: entry.amount || '',
+          billWise: entry.billWise || '',
+          billReference: entry.billReference || '',
+          tds: entry.tds?.applicable ? {
+            applicable: true,
+            section: entry.tds.section || '',
+            rate: entry.tds.rate || '',
+            amount: entry.tds.amount || '',
+            tdsAccount: entry.tds.tdsAccount && typeof entry.tds.tdsAccount === 'object' && entry.tds.tdsAccount !== null 
+              ? (entry.tds.tdsAccount._id || entry.tds.tdsAccount.id) 
+              : entry.tds.tdsAccount || ''
+          } : { applicable: false, section: '', rate: '', amount: '', tdsAccount: '' },
+          gst: entry.gst?.applicable ? {
+            applicable: true,
+            gstType: entry.gst.gstType || '',
+            gstRate: entry.gst.gstRate || '',
+            gstAmount: entry.gst.gstAmount || ''
+          } : { applicable: false, gstType: '', gstRate: '', gstAmount: '' },
+          narration: entry.narration || ''
+        })),
+        totalAmount: voucherData.totalAmount || '',
+        narration: voucherData.narration || '',
+        remarks: voucherData.remarks || ''
+      });
+      
+      if (editCompanyId) {
+        fetchAllLedgers(editCompanyId);
+      }
+      
+      setSelectedVoucher(voucher);
+      setShowEditModal(true);
+    } catch (err) {
+      console.error('Error loading voucher:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to load voucher details';
+      alertify.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewJournal = async (voucher) => {
+    try {
+      setLoading(true);
+      const voucherData = await getJournalVoucherById(voucher._id || voucher.id);
+      setSelectedVoucher(voucherData);
+      setShowViewModal(true);
+    } catch (err) {
+      console.error('Error loading voucher:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to load voucher details';
+      alertify.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteJournal = async (voucher) => {
+    if (window.confirm('Are you sure you want to delete this journal voucher?')) {
+      try {
+        setLoading(true);
+        await deleteJournalVoucher(voucher._id || voucher.id);
+        alertify.success('Journal voucher deleted successfully');
+        fetchData();
+      } catch (error) {
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to delete journal voucher';
+        alertify.error(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handlePostJournal = async (voucher) => {
+    try {
+      setLoading(true);
+      await postJournalVoucher(voucher._id || voucher.id);
+      alertify.success('Journal voucher posted successfully');
+      fetchData();
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to post journal voucher';
+      alertify.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnpostJournal = async (voucher) => {
+    try {
+      setLoading(true);
+      await unpostJournalVoucher(voucher._id || voucher.id);
+      alertify.success('Journal voucher unposted successfully');
+      fetchData();
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to unpost journal voucher';
+      alertify.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handle form submit (create/update)
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log('Form submit triggered', { formData, companyId });
+    console.log('Form submit triggered', { formData, companyId, activeSection });
+    
+    // Determine voucher type
+    const isReceipt = activeSection === 'receipt';
+    const isJournal = activeSection === 'journal';
+    const accountField = isReceipt ? 'receiptAccount' : 'paymentAccount';
+    const modeField = isReceipt ? 'receiptMode' : 'paymentMode';
+    let voucherType = 'Payment';
+    if (isReceipt) voucherType = 'Receipt';
+    if (isJournal) voucherType = 'Journal';
     
     // Validate required fields
     const selectedCompany = formData.company || companyId;
@@ -814,19 +1622,22 @@ export default function TallyManagement() {
       return;
     }
     
-    if (!formData.paymentAccount || formData.paymentAccount.trim() === '') {
-      alertify.error('Please select a Payment Account');
-      return;
-    }
-    
     if (!formData.voucherDate || formData.voucherDate.trim() === '') {
       alertify.error('Please select a Voucher Date');
       return;
     }
     
-    if (!formData.paymentMode || formData.paymentMode.trim() === '') {
-      alertify.error('Please select a Payment Mode');
-      return;
+    // Journal vouchers don't need account/mode fields
+    if (!isJournal) {
+      if (!formData[accountField] || formData[accountField].trim() === '') {
+        alertify.error(`Please select a ${voucherType} Account`);
+        return;
+      }
+      
+      if (!formData[modeField] || formData[modeField].trim() === '') {
+        alertify.error(`Please select a ${voucherType} Mode`);
+        return;
+      }
     }
     
     if (!formData.entries || formData.entries.length === 0) {
@@ -844,6 +1655,46 @@ export default function TallyManagement() {
       const amount = parseFloat(entry.amount);
       if (isNaN(amount) || amount <= 0) {
         alertify.error(`Please enter a valid Amount for Entry ${i + 1}`);
+        return;
+      }
+      
+      // Journal-specific validation
+      if (isJournal) {
+        if (!entry.entryType || (entry.entryType !== 'Debit' && entry.entryType !== 'Credit')) {
+          alertify.error(`Please select Entry Type (Debit/Credit) for Entry ${i + 1}`);
+          return;
+        }
+      }
+    }
+    
+    // Journal-specific: Validate debit/credit balance
+    if (isJournal) {
+      let totalDebit = 0;
+      let totalCredit = 0;
+      
+      formData.entries.forEach(entry => {
+        const amount = parseFloat(entry.amount) || 0;
+        if (entry.entryType === 'Debit') {
+          totalDebit += amount;
+        } else if (entry.entryType === 'Credit') {
+          totalCredit += amount;
+        }
+      });
+      
+      // Check if at least one debit and one credit entry exists
+      if (totalDebit === 0) {
+        alertify.error('At least one Debit entry is required');
+        return;
+      }
+      if (totalCredit === 0) {
+        alertify.error('At least one Credit entry is required');
+        return;
+      }
+      
+      // Check if debits equal credits (with tolerance for rounding)
+      const difference = Math.abs(totalDebit - totalCredit);
+      if (difference > 0.01) {
+        alertify.error(`Journal entry must balance: Total Debit (₹${totalDebit.toFixed(2)}) must equal Total Credit (₹${totalCredit.toFixed(2)})`);
         return;
       }
     }
@@ -869,15 +1720,36 @@ export default function TallyManagement() {
 
       // Prepare voucher data matching API structure exactly
       const voucherData = {
-        company: selectedCompany,
-        voucherDate: formData.voucherDate,
-        paymentAccount: formData.paymentAccount,
-        paymentMode: formData.paymentMode,
-        entries: formData.entries.map(entry => {
+        company: String(selectedCompany).trim(),
+        voucherDate: formData.voucherDate, // Already in YYYY-MM-DD format
+      };
+      
+      // Add account and mode fields based on voucher type (not for Journal)
+      if (!isJournal) {
+        if (isReceipt) {
+          voucherData.receiptAccount = String(formData.receiptAccount).trim();
+          voucherData.receiptMode = formData.receiptMode;
+        } else {
+          voucherData.paymentAccount = String(formData.paymentAccount).trim();
+          voucherData.paymentMode = formData.paymentMode;
+        }
+      }
+      
+      // Add journal-specific fields
+      if (isJournal && formData.journalType) {
+        voucherData.journalType = formData.journalType;
+      }
+      
+      voucherData.entries = formData.entries.map(entry => {
           const entryData = {
             account: entry.account,
             amount: parseFloat(entry.amount)
           };
+          
+          // Add entryType for Journal vouchers
+          if (isJournal) {
+            entryData.entryType = entry.entryType || 'Debit';
+          }
 
           // Add optional fields only if they have values
           if (entry.narration && entry.narration.trim() !== '') {
@@ -914,6 +1786,9 @@ export default function TallyManagement() {
           }
 
           return entryData;
+        });
+      
+      voucherData.totalAmount = parseFloat(totalAmount) || 0;
         }),
         totalAmount: parseFloat(totalAmount)
       };
@@ -935,19 +1810,74 @@ export default function TallyManagement() {
         voucherData.remarks = formData.remarks.trim();
       }
 
-      console.log('Voucher data prepared:', JSON.stringify(voucherData, null, 2));
+      // Final validation: Ensure all required fields are present
+      if (!voucherData.company || !voucherData.voucherDate) {
+        alertify.error('Missing required fields. Please check all required fields are filled.');
+        setLoading(false);
+        return;
+      }
+      
+      // Validate account and mode fields for Payment/Receipt (not for Journal)
+      if (!isJournal) {
+        const accountFieldValue = isReceipt ? voucherData.receiptAccount : voucherData.paymentAccount;
+        const modeFieldValue = isReceipt ? voucherData.receiptMode : voucherData.paymentMode;
+        
+        if (!accountFieldValue || !modeFieldValue) {
+          alertify.error('Missing required fields. Please check all required fields are filled.');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      if (!voucherData.entries || voucherData.entries.length === 0) {
+        alertify.error('At least one entry is required.');
+        setLoading(false);
+        return;
+      }
+      
+      // Validate entry amounts and Journal-specific fields
+      for (let i = 0; i < voucherData.entries.length; i++) {
+        const entry = voucherData.entries[i];
+        if (!entry.account || !entry.amount || entry.amount <= 0) {
+          alertify.error(`Entry ${i + 1} is missing required fields or has invalid amount.`);
+          setLoading(false);
+          return;
+        }
+        
+        // Journal-specific: Validate entry type
+        if (isJournal && (!entry.entryType || (entry.entryType !== 'Debit' && entry.entryType !== 'Credit'))) {
+          alertify.error(`Entry ${i + 1} must have Entry Type (Debit or Credit).`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      console.log(`${voucherType} voucher data prepared (matching API structure):`, JSON.stringify(voucherData, null, 2));
 
       if (showEditModal && selectedVoucher) {
-        console.log('Updating payment voucher...');
-        await updatePaymentVoucher(selectedVoucher._id || selectedVoucher.id, voucherData);
-        alertify.success('Payment voucher updated successfully');
+        console.log(`Updating ${voucherType.toLowerCase()} voucher...`);
+        if (isJournal) {
+          await updateJournalVoucher(selectedVoucher._id || selectedVoucher.id, voucherData);
+        } else if (isReceipt) {
+          await updateReceiptVoucher(selectedVoucher._id || selectedVoucher.id, voucherData);
+        } else {
+          await updatePaymentVoucher(selectedVoucher._id || selectedVoucher.id, voucherData);
+        }
+        alertify.success(`${voucherType} voucher updated successfully`);
         setShowEditModal(false);
         setSelectedVoucher(null);
       } else {
-        console.log('Creating payment voucher...');
-        const result = await createPaymentVoucher(voucherData);
-        console.log('Payment voucher created successfully:', result);
-        alertify.success('Payment voucher created successfully');
+        console.log(`Creating ${voucherType.toLowerCase()} voucher...`);
+        let result;
+        if (isJournal) {
+          result = await createJournalVoucher(voucherData);
+        } else if (isReceipt) {
+          result = await createReceiptVoucher(voucherData);
+        } else {
+          result = await createPaymentVoucher(voucherData);
+        }
+        console.log(`${voucherType} voucher created successfully:`, result);
+        alertify.success(`${voucherType} voucher created successfully`);
         setShowCreateModal(false);
         // Reset form after successful creation
         setFormData({
@@ -1099,7 +2029,135 @@ export default function TallyManagement() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-2">
+        <div className="p-6">
+          {/* Header with Search and Create Button */}
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-6">
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <SectionIcon className="text-blue-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total {getSectionTitle()}</p>
+                    <p className="text-xl font-bold text-gray-800">{filteredData.length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              {/* Company Selector - Show for payment, receipt, and journal sections */}
+              {(activeSection === 'payment' || activeSection === 'receipt' || activeSection === 'journal') && companies.length > 0 && (
+                <div className="relative">
+                  <select
+                    value={companyId || ''}
+                    onChange={(e) => {
+                      const selectedCompanyId = e.target.value;
+                      setCompanyId(selectedCompanyId);
+                      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+                      // Reset filters when company changes
+                      setFilters({
+                        startDate: '',
+                        endDate: '',
+                        isPosted: ''
+                      });
+                      // Refetch data for selected company immediately
+                      if (selectedCompanyId) {
+                        let fetchFunction, dataType;
+                        if (activeSection === 'receipt') {
+                          fetchFunction = fetchReceiptData;
+                          dataType = 'receipt';
+                        } else if (activeSection === 'journal') {
+                          fetchFunction = fetchJournalData;
+                          dataType = 'journal';
+                        } else {
+                          fetchFunction = fetchPaymentData;
+                          dataType = 'payment';
+                        }
+                        
+                        fetchFunction({}, selectedCompanyId).then(result => {
+                          setData(result);
+                          setFilteredData(result);
+                        }).catch(error => {
+                          console.error(`Error fetching ${dataType} data:`, error);
+                          const errorMessage = error.response?.data?.message || error.message || `Failed to load ${dataType} data`;
+                          alertify.error(errorMessage);
+                          setData([]);
+                          setFilteredData([]);
+                        });
+                      } else {
+                        // If no company selected, clear data
+                        setData([]);
+                        setFilteredData([]);
+                      }
+                    }}
+                    className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm font-medium"
+                  >
+                    <option value="">Select Company</option>
+                    {companies.map((company) => (
+                      <option key={company._id || company.id} value={company._id || company.id}>
+                        {company.companyName} {company.isDefault ? '(Default)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder={`Search ${getSectionTitle().toLowerCase()}...`}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              {/* Filter Button (for payment, receipt, and journal sections) */}
+              {(activeSection === 'payment' || activeSection === 'receipt' || activeSection === 'journal') && (
+                <button
+                  onClick={() => setShowFilterModal(true)}
+                  className="flex items-center gap-2 px-5 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold shadow hover:bg-gray-50 transition"
+                >
+                  <Filter size={20} /> Filter
+                </button>
+              )}
+              
+              {/* Create Payment Button */}
+              {activeSection === 'payment' && (
+              <button
+                onClick={handleCreatePayment}
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+              >
+                <PlusCircle size={20} /> Create Payment
+              </button>
+              )}
+              
+              {/* Create Receipt Button */}
+              {activeSection === 'receipt' && (
+              <button
+                onClick={handleCreateReceipt}
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+              >
+                <PlusCircle size={20} /> Create Receipt
+              </button>
+              )}
+              
+              {/* Create Journal Button */}
+              {activeSection === 'journal' && (
+              <button
+                onClick={handleCreateJournal}
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+              >
+                <PlusCircle size={20} /> Create Journal
+              </button>
+              )}
+            </div>
+          </div>
+
           {/* Content Area */}
           <div className="rounded-2xl  overflow-hidden">
             {loading ? (
@@ -1111,22 +2169,188 @@ export default function TallyManagement() {
                   </div>
                 </div>
               </div>
-            ) : activeSection === 'payment' ? (
-              <PaymentVoucher />
-            ) : activeSection === 'contra' ? (
-              <ContraVoucher />
-            ) : activeSection === 'receipt' ? (
-              <ReceiptVoucher />
-            ) : activeSection === 'journal' ? (
-              <JournalVoucher />
-            ) : activeSection === 'debit' ? (
-              <DebitNoteVoucher />
-            ) : activeSection === 'credit' ? (
-              <CreditNoteVoucher />
-            ) : activeSection === 'sale' ? (
-              <SalesVoucher />
-            ) : activeSection === 'purchase' ? (
-              <PurchaseVoucher />
+            ) : (activeSection === 'payment' || activeSection === 'receipt' || activeSection === 'journal') ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                    <tr>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Voucher Number</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
+                      {activeSection === 'journal' ? (
+                        <>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Journal Type</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Entries</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">{activeSection === 'receipt' ? 'Receipt' : 'Payment'} Account</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">{activeSection === 'receipt' ? 'Receipt' : 'Payment'} Mode</th>
+                        </>
+                      )}
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Reference</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Amount</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.length > 0 ? (
+                      filteredData.map((item, index) => {
+                        const voucherId = item._id || item.id || 'N/A';
+                        const voucherNumber = item.voucherNumber || 'N/A';
+                        const voucherDate = item.voucherDate || item.date || '';
+                        
+                        // Journal-specific data
+                        const journalType = item.journalType || 'Other';
+                        const entriesCount = item.entries ? item.entries.length : 0;
+                        const debitCount = item.entries ? item.entries.filter(e => e.entryType === 'Debit').length : 0;
+                        const creditCount = item.entries ? item.entries.filter(e => e.entryType === 'Credit').length : 0;
+                        
+                        // Payment/Receipt-specific data
+                        const accountField = activeSection === 'receipt' ? 'receiptAccount' : 'paymentAccount';
+                        const modeField = activeSection === 'receipt' ? 'receiptMode' : 'paymentMode';
+                        const account = item[accountField] && typeof item[accountField] === 'object' && item[accountField] !== null
+                          ? (item[accountField].name || item[accountField]._id || 'N/A')
+                          : (item[accountField] || 'N/A');
+                        const mode = item[modeField] || 'N/A';
+                        
+                        const referenceNumber = item.referenceNumber || item.chequeNumber || 'N/A';
+                        const totalAmount = item.totalAmount || 0;
+                        const isPosted = item.isPosted !== undefined ? item.isPosted : false;
+                        
+                        return (
+                          <tr
+                            key={voucherId}
+                            className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                          >
+                            <td className="py-2 px-3">
+                              <span className="font-medium text-gray-700">{voucherNumber}</span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="font-medium text-gray-700">
+                                {voucherDate ? new Date(voucherDate).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </td>
+                            {activeSection === 'journal' ? (
+                              <>
+                                <td className="py-2 px-3">
+                                  <span className="font-medium text-gray-700">{journalType}</span>
+                                </td>
+                                <td className="py-2 px-3">
+                                  <span className="font-medium text-gray-700">{debitCount}D / {creditCount}C ({entriesCount} total)</span>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="py-2 px-3">
+                                  <span className="font-medium text-gray-700">{account}</span>
+                                </td>
+                                <td className="py-2 px-3">
+                                  <span className="font-medium text-gray-700">{mode}</span>
+                                </td>
+                              </>
+                            )}
+                            <td className="py-2 px-3">
+                              <span className="font-medium text-gray-700">{referenceNumber}</span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="font-medium text-gray-700">
+                                ₹{Number(totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  isPosted
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}
+                              >
+                                {isPosted ? 'Posted' : 'Unposted'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    if (activeSection === 'journal') handleViewJournal(item);
+                                    else if (activeSection === 'receipt') handleViewReceipt(item);
+                                    else handleViewPayment(item);
+                                  }}
+                                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  View
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (activeSection === 'journal') handleEditJournal(item);
+                                    else if (activeSection === 'receipt') handleEditReceipt(item);
+                                    else handleEditPayment(item);
+                                  }}
+                                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  Edit
+                                </button>
+                                {isPosted ? (
+                                  <button
+                                    onClick={() => {
+                                      if (activeSection === 'journal') handleUnpostJournal(item);
+                                      else if (activeSection === 'receipt') handleUnpostReceipt(item);
+                                      else handleUnpostPayment(item);
+                                    }}
+                                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                  >
+                                    Unpost
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      if (activeSection === 'journal') handlePostJournal(item);
+                                      else if (activeSection === 'receipt') handlePostReceipt(item);
+                                      else handlePostPayment(item);
+                                    }}
+                                    className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                  >
+                                    Post
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    if (activeSection === 'journal') handleDeleteJournal(item);
+                                    else if (activeSection === 'receipt') handleDeleteReceipt(item);
+                                    else handleDeletePayment(item);
+                                  }}
+                                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan="8" className="py-12 text-center">
+                          <div className="flex flex-col items-center justify-center">
+                            <SectionIcon className="w-16 h-16 text-gray-300 mb-4" />
+                            <p className="text-gray-500 text-lg">
+                              {searchTerm
+                                ? `No ${getSectionTitle().toLowerCase()} found matching your search`
+                                : `No ${getSectionTitle().toLowerCase()} found`}
+                            </p>
+                            <p className="text-gray-400 text-sm mt-2">
+                              {searchTerm
+                                ? 'Try adjusting your search terms'
+                                : 'Create your first entry to get started'}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <div className="p-12 text-center">
                 <div className="flex flex-col items-center justify-center">
@@ -1164,8 +2388,8 @@ export default function TallyManagement() {
                     {showEditModal ? <Edit className="text-white" size={24} /> : <PlusCircle className="text-white" size={24} />}
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">{showEditModal ? 'Edit Payment' : 'Create Payment'}</h2>
-                    <p className="text-blue-100">{showEditModal ? 'Update payment voucher details' : 'Add a new payment voucher'}</p>
+                    <h2 className="text-xl font-bold">{showEditModal ? `Edit ${activeSection === 'journal' ? 'Journal' : activeSection === 'receipt' ? 'Receipt' : 'Payment'}` : `Create ${activeSection === 'journal' ? 'Journal' : activeSection === 'receipt' ? 'Receipt' : 'Payment'}`}</h2>
+                    <p className="text-blue-100">{showEditModal ? `Update ${activeSection === 'journal' ? 'journal' : activeSection === 'receipt' ? 'receipt' : 'payment'} voucher details` : `Add a new ${activeSection === 'journal' ? 'journal' : activeSection === 'receipt' ? 'receipt' : 'payment'} voucher`}</p>
                   </div>
                 </div>
                 <button
@@ -1217,53 +2441,33 @@ export default function TallyManagement() {
                   </div>
                 )}
                 
-                {/* Payment Details Section */}
+                {/* Payment/Receipt/Journal Details Section */}
                 <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-green-800 mb-4">Payment Details</h3>
+                  <h3 className="text-lg font-semibold text-green-800 mb-4">
+                    {activeSection === 'journal' ? 'Journal Details' : activeSection === 'receipt' ? 'Receipt Details' : 'Payment Details'}
+                  </h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <input
-                        type="date"
-                        required
-                        value={formData.voucherDate}
-                        onChange={(e) => setFormData({ ...formData, voucherDate: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Voucher Date *"
-                      />
-                    </div>
-                    <div>
-                      <SearchableDropdown
-                        value={formData.paymentAccount}
-                        onChange={(value) => setFormData({ ...formData, paymentAccount: value })}
-                        options={ledgers.map(ledger => ({ 
-                          value: ledger._id || ledger.id, 
-                          label: ledger.name || 'Unknown'
-                        }))}
-                        placeholder="Select Payment Account *"
-                        searchPlaceholder="Search ledgers..."
-                        loading={loadingLedgers}
-                        disabled={!formData.company || loadingLedgers}
-                      />
-                    </div>
-                    <div>
-                      <select
-                        required
-                        value={formData.paymentMode}
-                        onChange={(e) => setFormData({ ...formData, paymentMode: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select Payment Mode *</option>
-                        <option value="Cash">Cash</option>
-                        <option value="Bank">Bank</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="NEFT">NEFT</option>
-                        <option value="RTGS">RTGS</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Credit Card">Credit Card</option>
-                        <option value="Debit Card">Debit Card</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
+                    {/* Journal Type - Only for Journal */}
+                    {activeSection === 'journal' && (
+                      <div>
+                        <select
+                          value={formData.journalType || ''}
+                          onChange={(e) => setFormData({ ...formData, journalType: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Select Journal Type</option>
+                          <option value="Adjustment">Adjustment</option>
+                          <option value="Depreciation">Depreciation</option>
+                          <option value="Provision">Provision</option>
+                          <option value="Transfer">Transfer</option>
+                          <option value="Rectification">Rectification</option>
+                          <option value="Opening Balance">Opening Balance</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    )}
+                    
+                    {/* Reference Number */}
                     <div>
                       <input
                         type="text"
@@ -1274,27 +2478,66 @@ export default function TallyManagement() {
                       />
                     </div>
 
-                    {/* Cheque fields - show only if payment mode is Cheque */}
-                    {formData.paymentMode === 'Cheque' && (
+                    {/* Payment/Receipt specific fields - Hide for Journal */}
+                    {activeSection !== 'journal' && (
                       <>
                         <div>
-                          <input
-                            type="text"
-                            value={formData.chequeNumber}
-                            onChange={(e) => setFormData({ ...formData, chequeNumber: e.target.value })}
-                            placeholder="Cheque Number"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          <SearchableDropdown
+                            value={activeSection === 'receipt' ? formData.receiptAccount : formData.paymentAccount}
+                            onChange={(value) => setFormData({ ...formData, [activeSection === 'receipt' ? 'receiptAccount' : 'paymentAccount']: value })}
+                            options={ledgers.map(ledger => ({ 
+                              value: ledger._id || ledger.id, 
+                              label: ledger.name || 'Unknown'
+                            }))}
+                            placeholder={`Select ${activeSection === 'receipt' ? 'Receipt' : 'Payment'} Account *`}
+                            searchPlaceholder="Search ledgers..."
+                            loading={loadingLedgers}
+                            disabled={!formData.company || loadingLedgers}
                           />
                         </div>
                         <div>
-                          <input
-                            type="date"
-                            value={formData.chequeDate}
-                            onChange={(e) => setFormData({ ...formData, chequeDate: e.target.value })}
-                            placeholder="Cheque Date"
+                          <select
+                            required
+                            value={activeSection === 'receipt' ? formData.receiptMode : formData.paymentMode}
+                            onChange={(e) => setFormData({ ...formData, [activeSection === 'receipt' ? 'receiptMode' : 'paymentMode']: e.target.value })}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
+                          >
+                            <option value="">Select {activeSection === 'receipt' ? 'Receipt' : 'Payment'} Mode *</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Bank">Bank</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="NEFT">NEFT</option>
+                            <option value="RTGS">RTGS</option>
+                            <option value="UPI">UPI</option>
+                            <option value="Credit Card">Credit Card</option>
+                            <option value="Debit Card">Debit Card</option>
+                            <option value="Other">Other</option>
+                          </select>
                         </div>
+
+                        {/* Cheque fields - show only if mode is Cheque */}
+                        {((activeSection === 'receipt' ? formData.receiptMode : formData.paymentMode) === 'Cheque') && (
+                          <>
+                            <div>
+                              <input
+                                type="text"
+                                value={formData.chequeNumber}
+                                onChange={(e) => setFormData({ ...formData, chequeNumber: e.target.value })}
+                                placeholder="Cheque Number"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <input
+                                type="date"
+                                value={formData.chequeDate}
+                                onChange={(e) => setFormData({ ...formData, chequeDate: e.target.value })}
+                                placeholder="Cheque Date"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -1303,7 +2546,9 @@ export default function TallyManagement() {
                 {/* Entries Section */}
                 <div className="bg-green-50 p-4 rounded-lg">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-blue-800">Payment Entries</h3>
+                    <h3 className="text-lg font-semibold text-blue-800">
+                      {activeSection === 'journal' ? 'Journal Entries' : activeSection === 'receipt' ? 'Receipt Entries' : 'Payment Entries'}
+                    </h3>
                     <button
                       type="button"
                       onClick={handleAddEntry}
@@ -1316,7 +2561,16 @@ export default function TallyManagement() {
                   {formData.entries.map((entry, index) => (
                     <div key={index} className="bg-white p-4 rounded-lg mb-4">
                       <div className="flex justify-between items-center mb-3">
-                        <h4 className="text-md font-semibold text-gray-800">Entry {index + 1}</h4>
+                        <h4 className="text-md font-semibold text-gray-800">
+                          Entry {index + 1}
+                          {activeSection === 'journal' && entry.entryType && (
+                            <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
+                              entry.entryType === 'Debit' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                            }`}>
+                              {entry.entryType}
+                            </span>
+                          )}
+                        </h4>
                         {formData.entries.length > 1 && (
                           <button
                             type="button"
@@ -1329,6 +2583,21 @@ export default function TallyManagement() {
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4 mb-3">
+                        {/* Entry Type - Only for Journal */}
+                        {activeSection === 'journal' && (
+                          <div>
+                            <select
+                              required
+                              value={entry.entryType || 'Debit'}
+                              onChange={(e) => handleUpdateEntry(index, 'entryType', e.target.value)}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="Debit">Debit (Dr.)</option>
+                              <option value="Credit">Credit (Cr.)</option>
+                            </select>
+                          </div>
+                        )}
+                        
                         <div>
                           <SearchableDropdown
                             value={entry.account}
@@ -1578,7 +2847,7 @@ export default function TallyManagement() {
                         Saving...
                       </span>
                     ) : (
-                      showEditModal ? 'Update Payment' : 'Create Payment'
+                      showEditModal ? `Update ${activeSection === 'journal' ? 'Journal' : activeSection === 'receipt' ? 'Receipt' : 'Payment'}` : `Create ${activeSection === 'journal' ? 'Journal' : activeSection === 'receipt' ? 'Receipt' : 'Payment'}`
                     )}
                   </button>
                 </div>
