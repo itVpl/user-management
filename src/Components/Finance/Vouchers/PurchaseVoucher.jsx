@@ -5,10 +5,11 @@ import { FaArrowLeft, FaDownload } from 'react-icons/fa';
 import API_CONFIG from '../../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
-import { DateRange } from 'react-date-range';
+
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -147,14 +148,20 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
   
-  // Date range state
-  const [range, setRange] = useState({
-    startDate: addDays(new Date(), -29),
-    endDate: new Date(),
-    key: 'selection'
-  });
+  // Date range state - Default: Jan 1 of previous year to Jan 1 of next year
+  const getDefaultDateRange = () => {
+    const currentYear = new Date().getFullYear();
+    return {
+      startDate: new Date(currentYear - 1, 0, 1),
+      endDate: new Date(currentYear + 1, 0, 1),
+      key: 'selection'
+    };
+  };
+  
+  const [range, setRange] = useState(getDefaultDateRange());
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
+  const [dateFilterApplied, setDateFilterApplied] = useState(true);
 
   const presets = {
     'Today': [new Date(), new Date()],
@@ -774,43 +781,22 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
               className="w-48 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowPresetMenu(v => !v)}
-              className="w-40 text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
-            >
-              <span>
-                Coustom Date
-              </span>
-              <span className="ml-3">▼</span>
-            </button>
+          {/* Date Range Button */}
+          <button
+            onClick={() => setShowCustomRange(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+          >
+            <Calendar size={18} className="text-blue-600" />
+            <span className="text-sm font-medium">
+              {format(range.startDate, 'dd MMM yyyy')} - {format(range.endDate, 'dd MMM yyyy')}
+            </span>
+          </button>
 
-            {showPresetMenu && (
-              <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
-                {Object.keys(presets).map((lbl) => (
-                  <button
-                    key={lbl}
-                    onClick={() => applyPreset(lbl)}
-                    className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                  >
-                    {lbl}
-                  </button>
-                ))}
-                <div className="my-1 border-t" />
-                <button
-                  onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
-                  className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                >
-                  Custom Range
-                </button>
-              </div>
-            )}
-          </div>
-
+          {/* Custom Date Range Modal */}
           {showCustomRange && (
             <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
               <div className="bg-white rounded-xl shadow-2xl p-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Date Range</h3>
                 <DateRange
                   ranges={[range]}
                   onChange={(item) => setRange(item.selection)}
@@ -821,17 +807,22 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                 <div className="flex justify-end gap-2 mt-3">
                   <button
                     type="button"
-                    onClick={() => setShowCustomRange(false)}
+                    onClick={() => {
+                      setShowCustomRange(false);
+                      setRange(getDefaultDateRange());
+                    }}
                     className="px-4 py-2 border rounded-lg hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowCustomRange(false)}
+                    onClick={() => {
+                      setShowCustomRange(false);
+                    }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
-                    OK
+                    Apply Filter
                   </button>
                 </div>
               </div>

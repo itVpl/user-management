@@ -1,9 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
-import { Search, PlusCircle, Edit, Trash2, Eye, Filter, FileText, Plus, X } from 'lucide-react';
+import { Search, PlusCircle, Edit, Trash2, Eye, Filter, FileText, Plus, X, Calendar } from 'lucide-react';
 import API_CONFIG from '../../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import { DateRange } from 'react-date-range';
+import { addDays, format } from 'date-fns';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -144,11 +148,22 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
   const [selectedVoucher, setSelectedVoucher] = useState(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
     debitNoteType: '',
     isPosted: ''
   });
+  
+  const getDefaultDateRange = () => {
+    const currentYear = new Date().getFullYear();
+    return {
+      startDate: new Date(currentYear - 1, 0, 1),
+      endDate: new Date(currentYear + 1, 0, 1),
+      key: 'selection'
+    };
+  };
+  
+  const [range, setRange] = useState(getDefaultDateRange());
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [dateFilterApplied, setDateFilterApplied] = useState(true);
   const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
@@ -868,12 +883,23 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
             />
           </div>
           
-          {/* Filter Button */}
+          {/* Date Range Button */}
+          <button
+            onClick={() => setShowCustomRange(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+          >
+            <Calendar size={18} className="text-blue-600" />
+            <span className="text-sm font-medium">
+              {format(range.startDate, 'dd MMM yyyy')} - {format(range.endDate, 'dd MMM yyyy')}
+            </span>
+          </button>
+          
+          {/* Status Filter Button */}
           <button
             onClick={() => setShowFilterModal(true)}
             className="flex items-center gap-2 px-5 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold shadow hover:bg-gray-50 transition"
           >
-            <Filter size={20} /> Filter
+            <Filter size={20} /> Status Filter
           </button>
           
           {/* Create Debit Note Button */}
@@ -1799,7 +1825,42 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
         </div>
       )}
 
-      {/* Filter Modal */}
+      {/* Date Range Modal */}
+      {showCustomRange && (
+        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Date Range</h3>
+            <DateRange
+              ranges={[range]}
+              onChange={(item) => setRange(item.selection)}
+              moveRangeOnFirstSelection={false}
+              months={2}
+              direction="horizontal"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCustomRange(false);
+                  setRange(getDefaultDateRange());
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCustomRange(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Apply Filter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Filter Modal */}
       {showFilterModal && (
         <div 
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
@@ -1825,24 +1886,6 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
             </div>
 
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                <input
-                  type="date"
-                  value={filters.startDate}
-                  onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                <input
-                  type="date"
-                  value={filters.endDate}
-                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Debit Note Type</label>
                 <select

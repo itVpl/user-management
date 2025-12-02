@@ -1,9 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
-import { Search, PlusCircle, Edit, Trash2, Eye, Filter, FileText, Plus, X } from 'lucide-react';
+import { Search, PlusCircle, Edit, Trash2, Eye, Filter, FileText, Plus, X, Calendar } from 'lucide-react';
 import API_CONFIG from '../../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import { DateRange } from 'react-date-range';
+import { addDays, format } from 'date-fns';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -144,11 +148,22 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
   const [selectedVoucher, setSelectedVoucher] = useState(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
     creditNoteType: '',
     isPosted: ''
   });
+  
+  const getDefaultDateRange = () => {
+    const currentYear = new Date().getFullYear();
+    return {
+      startDate: new Date(currentYear - 1, 0, 1),
+      endDate: new Date(currentYear + 1, 0, 1),
+      key: 'selection'
+    };
+  };
+  
+  const [range, setRange] = useState(getDefaultDateRange());
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [dateFilterApplied, setDateFilterApplied] = useState(true);
   const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
@@ -276,7 +291,10 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
       }
 
       const apiUrl = `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/credit-note/create`;
-      console.log('Creating credit note with data:', JSON.stringify(voucherData, null, 2));
+      console.log('=== CREATE CREDIT NOTE DEBUG ===');
+      console.log('API URL:', apiUrl);
+      console.log('Token exists:', !!token);
+      console.log('Voucher Data:', JSON.stringify(voucherData, null, 2));
       
       const response = await axios.post(apiUrl, voucherData, {
         headers: { 
@@ -286,20 +304,31 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
         timeout: 30000
       });
       
+      console.log('Response:', response);
+      
       if (response.data?.success === false) {
         throw new Error(response.data?.message || 'Failed to create credit note');
       }
       
       return response.data?.voucher || response.data?.data || response.data;
     } catch (error) {
-      console.error('Error creating credit note:', error);
+      console.error('=== CREATE CREDIT NOTE ERROR ===');
+      console.error('Error object:', error);
+      console.error('Error response:', error.response);
+      console.error('Error request:', error.request);
+      console.error('Error message:', error.message);
       
       if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
         const errorMsg = error.response.data?.message || error.response.data?.error || `Server error: ${error.response.status}`;
         throw new Error(errorMsg);
       } else if (error.request) {
+        console.error('Request made but no response:', error.request);
         throw new Error('No response from server. Please check your internet connection.');
       } else {
+        console.error('Error setting up request:', error.message);
         throw new Error(error.message || 'Failed to create credit note');
       }
     }
@@ -673,6 +702,12 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
     e.preventDefault();
     e.stopPropagation();
     
+    console.log('=== HANDLE SUBMIT CALLED ===');
+    console.log('Form Data:', formData);
+    console.log('Company ID:', companyId);
+    console.log('Show Edit Modal:', showEditModal);
+    console.log('Show Create Modal:', showCreateModal);
+    
     const selectedCompany = formData.company || companyId;
     if (!selectedCompany || selectedCompany.trim() === '') {
       alertify.error('Please select a Company');
@@ -797,12 +832,18 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
         voucherData.referenceNumber = formData.referenceNumber.trim();
       }
 
+      console.log('=== ABOUT TO CALL API ===');
+      console.log('Is Edit Mode:', showEditModal && selectedVoucher);
+      console.log('Final Voucher Data:', JSON.stringify(voucherData, null, 2));
+      
       if (showEditModal && selectedVoucher) {
+        console.log('Calling UPDATE API...');
         await updateCreditNote(selectedVoucher._id || selectedVoucher.id, voucherData);
         alertify.success('Credit note updated successfully');
         setShowEditModal(false);
         setSelectedVoucher(null);
       } else {
+        console.log('Calling CREATE API...');
         await createCreditNote(voucherData);
         alertify.success('Credit note created successfully');
         setShowCreateModal(false);
@@ -868,12 +909,23 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
             />
           </div>
           
-          {/* Filter Button */}
+          {/* Date Range Button */}
+          <button
+            onClick={() => setShowCustomRange(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+          >
+            <Calendar size={18} className="text-blue-600" />
+            <span className="text-sm font-medium">
+              {format(range.startDate, 'dd MMM yyyy')} - {format(range.endDate, 'dd MMM yyyy')}
+            </span>
+          </button>
+          
+          {/* Status Filter Button */}
           <button
             onClick={() => setShowFilterModal(true)}
             className="flex items-center gap-2 px-5 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold shadow hover:bg-gray-50 transition"
           >
-            <Filter size={20} /> Filter
+            <Filter size={20} /> Status Filter
           </button>
           
           {/* Create Credit Note Button */}
@@ -1801,7 +1853,42 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
         </div>
       )}
 
-      {/* Filter Modal */}
+      {/* Date Range Modal */}
+      {showCustomRange && (
+        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Date Range</h3>
+            <DateRange
+              ranges={[range]}
+              onChange={(item) => setRange(item.selection)}
+              moveRangeOnFirstSelection={false}
+              months={2}
+              direction="horizontal"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCustomRange(false);
+                  setRange(getDefaultDateRange());
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCustomRange(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Apply Filter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Filter Modal */}
       {showFilterModal && (
         <div 
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
@@ -1827,24 +1914,6 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
             </div>
 
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                <input
-                  type="date"
-                  value={filters.startDate}
-                  onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                <input
-                  type="date"
-                  value={filters.endDate}
-                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Credit Note Type</label>
                 <select

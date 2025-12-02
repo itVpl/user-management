@@ -133,20 +133,18 @@ const SearchableDropdown = ({
   );
 };
 
-const LedgerManagement = () => {
+const LedgerManagement = ({ selectedCompanyId }) => {
   // Account Types
   const ACCOUNT_TYPES = [
     'Cash', 'Bank', 'Sales', 'Purchase', 'Expense', 'Income', 'Asset', 
-    'Liability', 'Capital', 'Sundry Debtor', 'Sundry Creditor', 
-    'Investment', 'Loan', 'Duty & Tax', 'Other'
+    'Liability', 'Capital', 'Sundry Debtor', 'Sundry Creditor', 'Investment', 'Loan', 'Duty & Tax', 'Other'
   ];
 
   // State Management
   const [loading, setLoading] = useState(false);
   const [ledgers, setLedgers] = useState([]);
   const [filteredLedgers, setFilteredLedgers] = useState([]);
-  const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState(null);
+  const [companies, setCompanies] = useState([]); // For modal dropdown
   const [searchTerm, setSearchTerm] = useState('');
   const [isActiveFilter, setIsActiveFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -212,7 +210,7 @@ const LedgerManagement = () => {
            sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
   };
 
-  // Fetch Companies
+  // Fetch Companies (for modal dropdown)
   const fetchCompanies = async () => {
     try {
       const token = getAuthToken();
@@ -224,31 +222,22 @@ const LedgerManagement = () => {
       });
       const companiesList = response.data?.companies || response.data?.data || [];
       setCompanies(companiesList);
-      
-      const defaultCompany = companiesList.find(c => c.isDefault) || companiesList[0];
-      if (defaultCompany) {
-        const id = defaultCompany._id || defaultCompany.id;
-        setCompanyId(id);
-        return id;
-      }
-      return null;
     } catch (error) {
       console.error('Error fetching companies:', error);
       alertify.error(error.response?.data?.message || 'Failed to load companies');
-      return null;
     }
   };
 
   // Fetch Stats (all ledgers without filters for counts)
   const fetchStats = async () => {
-    if (!companyId) {
+    if (!selectedCompanyId) {
       setStats({ total: 0, active: 0, inactive: 0 });
       return;
     }
 
     try {
       const token = getAuthToken();
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/ledger/all?company=${companyId}&page=1&limit=1000`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/ledger/all?company=${selectedCompanyId}&page=1&limit=1000`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -269,7 +258,7 @@ const LedgerManagement = () => {
 
   // Fetch All Ledgers
   const fetchLedgers = async (page = 1) => {
-    if (!companyId) {
+    if (!selectedCompanyId) {
       setLedgers([]);
       setFilteredLedgers([]);
       return;
@@ -279,7 +268,7 @@ const LedgerManagement = () => {
       setLoading(true);
       const token = getAuthToken();
       const params = new URLSearchParams({
-        company: companyId,
+        company: selectedCompanyId,
         page: page.toString(),
         limit: '10',
         sortBy: 'name',
@@ -534,7 +523,7 @@ const LedgerManagement = () => {
   // Reset Form
   const resetForm = () => {
     setFormData({
-      company: companyId || '',
+      company: selectedCompanyId || '',
       name: '',
       alias: '',
       accountCode: '',
@@ -578,7 +567,7 @@ const LedgerManagement = () => {
   // Open Create Modal
   const openCreateModal = () => {
     resetForm();
-    setFormData(prev => ({ ...prev, company: companyId || '' }));
+    setFormData(prev => ({ ...prev, company: selectedCompanyId || '' }));
     setShowCreateModal(true);
   };
 
@@ -667,19 +656,19 @@ const LedgerManagement = () => {
 
   // Effects
   useEffect(() => {
-    fetchCompanies();
+    fetchCompanies(); // Fetch companies for modal dropdown
   }, []);
 
   useEffect(() => {
-    if (companyId) {
+    if (selectedCompanyId) {
       fetchStats(); // Fetch stats for counts
       fetchLedgers(currentPage);
     }
-  }, [companyId, currentPage, isActiveFilter]);
+  }, [selectedCompanyId, currentPage, isActiveFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (companyId) {
+      if (selectedCompanyId) {
         setCurrentPage(1);
         fetchLedgers(1);
       }
@@ -691,10 +680,10 @@ const LedgerManagement = () => {
   if (loading && ledgers.length === 0) {
     return (
       <div className="p-6">
-        <div className="flex justify-center items-center h-64">
+        <div className="flex justify-center items-center" style={{ minHeight: '400px' }}>
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading ledger accounts...</p>
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-green-200 border-t-green-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading ledger accounts...</p>
           </div>
         </div>
       </div>
@@ -800,25 +789,6 @@ const LedgerManagement = () => {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {/* Company Selection */}
-          <div className="relative">
-            <SearchableDropdown
-              value={companyId || ''}
-              onChange={(value) => {
-                setCompanyId(value);
-                setCurrentPage(1);
-              }}
-              options={companies.map(c => ({ 
-                value: c._id || c.id, 
-                label: c.companyName || c.name || 'Unknown' 
-              }))}
-              placeholder="Select Company"
-              searchPlaceholder="Search companies..."
-              className="w-56"
-              compact={true}
-            />
-          </div>
-
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -864,14 +834,6 @@ const LedgerManagement = () => {
                     <div className="flex justify-center items-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                     </div>
-                  </td>
-                </tr>
-              ) : !companyId ? (
-                <tr>
-                  <td colSpan="8" className="py-20 text-center">
-                    <Building className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Company Selected</h3>
-                    <p className="text-gray-500">Please select a company to view ledgers</p>
                   </td>
                 </tr>
               ) : filteredLedgers.length === 0 ? (
@@ -979,7 +941,10 @@ const LedgerManagement = () => {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowCreateModal(false)}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -987,6 +952,7 @@ const LedgerManagement = () => {
           <div 
             className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -1366,7 +1332,10 @@ const LedgerManagement = () => {
 
       {/* Edit Modal */}
       {showEditModal && selectedLedger && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowEditModal(false)}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1374,6 +1343,7 @@ const LedgerManagement = () => {
           <div 
             className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -1728,7 +1698,10 @@ const LedgerManagement = () => {
 
       {/* View Modal */}
       {showViewModal && selectedLedger && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowViewModal(false)}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1736,6 +1709,7 @@ const LedgerManagement = () => {
           <div 
             className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -1973,7 +1947,10 @@ const LedgerManagement = () => {
 
       {/* Delete Modal */}
       {showDeleteModal && selectedLedger && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowDeleteModal(false)}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1981,6 +1958,7 @@ const LedgerManagement = () => {
           <div 
             className="bg-white rounded-3xl shadow-2xl max-w-md w-full"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
