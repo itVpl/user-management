@@ -21,7 +21,7 @@ import FleetTable from "./Components/Dashboard/Fleet.jsx";
 import AnalyticsReport from "./Components/Dashboard/AnalyticsReport.jsx";
 import CallDashboard from "./Components/Dashboard/CallDashboard.jsx";
 import ChatPage from "./Components/AgentDashboard/Chat.jsx";
-import Inbox from "./Components/AgentDashboard/Email.jsx";
+import Inbox from "./Components/Email/index.jsx";
 import AgentRevenueStatistics from "./Components/AgentDashboard/AgentRevenueStatistics.jsx";
 import EmployeeHygiene from "./Components/AgentDashboard/EmployeeHygine.jsx";
 import ShippersLDocuments from "./Components/AgentDashboard/Shipper-L-Document.jsx";
