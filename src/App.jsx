@@ -72,6 +72,7 @@ import  AssignDo  from "./Components/CMT-Manager/AssignDo.jsx";
 import CompanyList from "./Components/Accountant/Company/CompanyList.jsx";
 import TallyManagement from "./Components/Finance/TallyManagement.jsx";
 import LedgerManagement from "./Components/Finance/LedgerManagement.jsx";
+import InventoryManagement from "./Components/Finance/InventoryManagement.jsx";
 
 // Global Notification Component
 function GlobalAssignmentNotification() {
@@ -444,7 +445,8 @@ function App() {
           <Route path="assigndo" element={<AssignDo />} />
           <Route path="companies" element={<CompanyList />} />
           <Route path="tally-management" element={<TallyManagement />} />
-           <Route path="ladger" element={<LedgerManagement />} />
+          <Route path="ladger" element={<LedgerManagement />} />
+          <Route path="inventory-management" element={<InventoryManagement />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

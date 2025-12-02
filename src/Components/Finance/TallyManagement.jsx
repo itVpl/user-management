@@ -14,8 +14,9 @@ import DebitNoteVoucher from './Vouchers/DebitNoteVoucher.jsx';
 import CreditNoteVoucher from './Vouchers/CreditNoteVoucher.jsx';
 import SalesVoucher from './Vouchers/SalesVoucher.jsx';
 import PurchaseVoucher from './Vouchers/PurchaseVoucher.jsx';
+import Daybook from './Daybook.jsx';
 
-// Searchable Dropdown Component
+// Searchable Dropdown Components
 const SearchableDropdown = ({
   value,
   onChange,
@@ -154,6 +155,7 @@ export default function TallyManagement() {
     { id: 'credit', label: 'Credit', icon: CreditCard },
     { id: 'sale', label: 'Sale', icon: ShoppingCart },
     { id: 'purchase', label: 'Purchase', icon: Wallet },
+    { id: 'daybook', label: 'Daybook', icon: Calendar },
   ];
 
   const [activeSection, setActiveSection] = useState('payment');
@@ -1156,6 +1158,8 @@ export default function TallyManagement() {
               <SalesVoucher selectedCompanyId={companyId} />
             ) : activeSection === 'purchase' ? (
               <PurchaseVoucher selectedCompanyId={companyId} />
+            ) : activeSection === 'daybook' ? (
+              <Daybook />
             ) : (
               <div className="p-12 text-center">
                 <div className="flex flex-col items-center justify-center">
