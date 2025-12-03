@@ -100,9 +100,9 @@ export default function InventoryManagement() {
       return <AccountSummary selectedCompanyId={selectedCompanyId} />;
     }
 
-    // if (activeSection === 'statutoryReports') {
-    //   return <StatutoryReports selectedCompanyId={selectedCompanyId} />;
-    // }
+    if (activeSection === 'statutoryReports') {
+      return <StatutoryReports selectedCompanyId={selectedCompanyId} />;
+    }
 
     if (activeSection === 'balanceSheet') {
       return <BalanceSheet selectedCompanyId={selectedCompanyId} />;
@@ -253,7 +253,7 @@ export default function InventoryManagement() {
           </button>
 
           {/* Statutory Reports Option */}
-          {/* <button
+        <button
             onClick={() => {
               setActiveSection('statutoryReports');
               setIsVoucherDropdownOpen(false);
@@ -266,7 +266,7 @@ export default function InventoryManagement() {
           >
             <AlertCircle size={20} />
             <span className="font-medium">Statutory Reports</span>
-          </button> */}
+          </button> 
 
         
           <button
