@@ -3,6 +3,7 @@ import Notification from "./assets/Icons super admin/Nav Bar/Blue/Notification.p
 import ProfileIcon from "./assets/Icons super admin/ProfileIcon.png";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import API_CONFIG from "./config/api.js";
 
 const BREAK_DURATION = 60 * 60; // 60 mins in seconds
 
@@ -26,6 +27,12 @@ const Topbar = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [breakLoading, setBreakLoading] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
+  
+  // User department and checklist data
+  const [userDepartment, setUserDepartment] = useState(null);
+  const [checklistItems, setChecklistItems] = useState(['blank', 'blank', 'blank', 'blank']); // Default blank items
+  const [checklistTooltips, setChecklistTooltips] = useState(['', '', '', '']);
+  const [hoveredIndex, setHoveredIndex] = useState(null);
 
   const formatTime = (totalSeconds) => {
     const h = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
@@ -59,6 +66,209 @@ const Topbar = () => {
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
+
+  // Get user department
+  useEffect(() => {
+    const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
+    console.log("🔍 TopBar - User String:", userString);
+    if (userString) {
+      try {
+        const userData = JSON.parse(userString);
+        console.log("🔍 TopBar - User Data:", userData);
+        const department = typeof userData?.department === 'string' 
+          ? userData.department 
+          : userData?.department?.name || '';
+        console.log("🔍 TopBar - Department:", department);
+        const departmentLower = department.toLowerCase().trim();
+        console.log("🔍 TopBar - Department Lower:", departmentLower);
+        
+        if (departmentLower === 'sales' || departmentLower === 'cmt' || departmentLower.includes('sales') || departmentLower.includes('cmt')) {
+          const finalDept = departmentLower.includes('sales') ? 'sales' : 'cmt';
+          console.log("🔍 TopBar - Setting Department:", finalDept);
+          setUserDepartment(finalDept);
+        } else {
+          console.log("🔍 TopBar - Department not Sales or CMT:", departmentLower);
+        }
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    } else {
+      console.log("🔍 TopBar - No user string found");
+    }
+  }, []);
+
+  // Fetch checklist data based on department
+  useEffect(() => {
+    console.log("🔍 TopBar - userDepartment:", userDepartment);
+    if (!userDepartment) {
+      console.log("🔍 TopBar - No department, returning");
+      return;
+    }
+
+    const fetchChecklistData = async () => {
+      try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+        const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
+        console.log("🔍 TopBar - Token exists:", !!token);
+        console.log("🔍 TopBar - User string exists:", !!userString);
+        
+        if (!token || !userString) {
+          console.log("🔍 TopBar - Missing token or user string");
+          return;
+        }
+
+        const userData = JSON.parse(userString);
+        const empId = userData?.empId || userData?.employeeId;
+        console.log("🔍 TopBar - EmpId:", empId);
+        
+        if (!empId) {
+          console.log("🔍 TopBar - No empId found");
+          return;
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        };
+
+        // Use dedicated checklist API endpoints
+        const checklistEndpoint = userDepartment === 'sales' 
+          ? `${API_CONFIG.BASE_URL}/api/v1/checklist/sales?empId=${empId}&date=${today}`
+          : `${API_CONFIG.BASE_URL}/api/v1/checklist/cmt?empId=${empId}&date=${today}`;
+
+        console.log("🔍 TopBar - Checklist API:", checklistEndpoint);
+        
+        const checklistRes = await axios.get(checklistEndpoint, { headers }).catch((err) => {
+          console.error("🔍 TopBar - Checklist API Error:", err);
+          return { data: { success: false, data: [] } };
+        });
+
+        console.log("🔍 TopBar - Checklist API Response:", checklistRes.data);
+
+        if (checklistRes.data?.success && checklistRes.data?.data?.checklist) {
+          const checklist = checklistRes.data.data.checklist;
+          let items = [];
+          let tooltips = [];
+
+          if (userDepartment === 'sales') {
+            // Sales checklist: talktime4Hours, threePlusLoadSubmitted, attendance, rating
+            const getStatus = (item) => {
+              if (item?.status === true) return 'completed';
+              if (item?.status === false && (item?.actual > 0 || item?.actual !== null)) return 'wrong';
+              return 'blank';
+            };
+
+            items = [
+              getStatus(checklist.talktime4Hours),
+              getStatus(checklist.threePlusLoadSubmitted),
+              getStatus(checklist.attendance),
+              getStatus(checklist.rating)
+            ];
+
+            tooltips = [
+              `Talktime: ${(checklist.talktime4Hours?.hours || 0).toFixed(2)} hrs (Target: ${checklist.talktime4Hours?.required || 4} hrs)`,
+              `Loads Created: ${checklist.threePlusLoadSubmitted?.count || 0} (Target: ${checklist.threePlusLoadSubmitted?.required || 3}+)`,
+              checklist.attendance?.status 
+                ? 'Attendance: Present' 
+                : 'Attendance: Not marked',
+              checklist.rating?.status 
+                ? `Manager Rating: ${checklist.rating?.value || 'Completed'}` 
+                : 'Manager Rating: Pending'
+            ];
+          } else if (userDepartment === 'cmt') {
+            // CMT checklist: talktime3Hours, onePlusTruckerAdded, login (attendance), threePlusBidPosted
+            // Note: API mein login check nahi hai, so attendance API se check karenge
+            const getStatus = (item) => {
+              if (item?.status === true) return 'completed';
+              if (item?.status === false && (item?.actual > 0 || item?.actual !== null)) return 'wrong';
+              return 'blank';
+            };
+
+            // Fetch attendance separately for login check
+            let hasLogin = false;
+            try {
+              const attendanceRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/attendance/my?date=${today}`, { headers });
+              const attendanceData = attendanceRes.data;
+              hasLogin = attendanceData?.success && (
+                attendanceData?.attendance || 
+                attendanceData?.attendanceRecord ||
+                attendanceData?.date ||
+                (attendanceData?.status && attendanceData.status.toLowerCase() !== 'absent') ||
+                (attendanceData?.loginTime) ||
+                (attendanceData?.success === true)
+              );
+            } catch (err) {
+              console.log("🔍 TopBar - Attendance check failed:", err);
+            }
+
+            items = [
+              getStatus(checklist.talktime3Hours),
+              getStatus(checklist.onePlusTruckerAdded),
+              hasLogin ? 'completed' : 'blank',
+              getStatus(checklist.threePlusBidPosted)
+            ];
+
+            tooltips = [
+              `Talktime: ${(checklist.talktime3Hours?.hours || 0).toFixed(2)} hrs (Target: ${checklist.talktime3Hours?.required || 3} hrs)`,
+              `Truckers Added: ${checklist.onePlusTruckerAdded?.count || 0} (Target: ${checklist.onePlusTruckerAdded?.required || 1}+)`,
+              hasLogin ? 'Attendance: Present' : 'Attendance: Not marked',
+              `Bids Submitted: ${checklist.threePlusBidPosted?.count || 0} (Target: ${checklist.threePlusBidPosted?.required || 3}+)`
+            ];
+          }
+
+          console.log("🔍 TopBar - Checklist Items:", items);
+          console.log("🔍 TopBar - Checklist Tooltips:", tooltips);
+          setChecklistItems(items);
+          setChecklistTooltips(tooltips);
+        } else {
+          // Fallback: Set default blank items if API fails
+          console.log("🔍 TopBar - Using fallback checklist");
+          setChecklistItems(['blank', 'blank', 'blank', 'blank']);
+          if (userDepartment === 'sales') {
+            setChecklistTooltips([
+              'Talktime: 0.0 hrs (Target: 3+ hrs)',
+              'Loads Created: 0 (Target: 3+)',
+              'Attendance: Not marked',
+              'Manager Rating: Pending'
+            ]);
+          } else {
+            setChecklistTooltips([
+              'Talktime: 0.0 hrs (Target: 3 hrs)',
+              'Truckers Added: 0 (Target: 1+)',
+              'Attendance: Not marked',
+              'Bids Submitted: 0 (Target: 3+)'
+            ]);
+          }
+        }
+       } catch (error) {
+         console.error("Error fetching checklist data:", error);
+         // Set default blank items on error so checklist still shows
+         if (userDepartment === 'sales') {
+           setChecklistItems(['blank', 'blank', 'blank', 'blank']);
+           setChecklistTooltips([
+             'Talktime: 0.0 hrs (Target: 3+ hrs)',
+             'Loads Created: 0 (Target: 3+)',
+             'Attendance: Not marked',
+             'Manager Rating: Pending'
+           ]);
+         } else if (userDepartment === 'cmt') {
+           setChecklistItems(['blank', 'blank', 'blank', 'blank']);
+           setChecklistTooltips([
+             'Talktime: 0.0 hrs (Target: 3 hrs)',
+             'Truckers Added: 0 (Target: 1+)',
+             'Attendance: Not marked',
+             'Bids Submitted: 0 (Target: 3+)'
+           ]);
+         }
+       }
+    };
+
+    fetchChecklistData();
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchChecklistData, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [userDepartment]);
 
   const handleStartBreak = async () => {
     try {
@@ -129,8 +339,142 @@ const Topbar = () => {
 
 
   return (
-    <div className="fixed w-full top-0 right-0 h-20 bg-white shadow z-10 px-6 flex justify-end items-center pl-[220px]">
-      <div className="flex items-center justify-end gap-4">
+    <div className="fixed w-full top-0 right-0 h-20 bg-white shadow z-10 px-6 flex items-center pl-[220px]">
+      {/* Left Section - Empty for now */}
+      <div className="flex-1"></div>
+      
+      {/* Center Section - Checklist (Only for Sales and CMT) */}
+      {/* Debug Info - Remove after testing */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="absolute top-24 left-4 bg-yellow-100 p-2 text-xs z-50 rounded">
+          <div>Dept: {userDepartment || 'null'}</div>
+          <div>Items: {checklistItems.length}</div>
+          <div>Condition: {userDepartment && (userDepartment === 'sales' || userDepartment === 'cmt') && checklistItems.length > 0 ? 'TRUE' : 'FALSE'}</div>
+        </div>
+      )}
+      
+      {userDepartment && (userDepartment === 'sales' || userDepartment === 'cmt') && checklistItems.length > 0 && (
+        <div className="flex-1 flex justify-center items-center">
+          <div className="flex items-center gap-2">
+            {checklistItems.map((state, index) => {
+              // Get icon based on department and index
+              const getIcon = () => {
+                if (userDepartment === 'sales') {
+                  // Sales: Talktime, Loads, Attendance, Rating
+                  if (index === 0) {
+                    // Phone icon for Talktime
+                    return (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    );
+                  } else if (index === 1) {
+                    // Box/Package icon for Loads Created
+                    return (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    );
+                  } else if (index === 2) {
+                    // Clipboard with checkmark icon for Attendance
+                    return (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                    );
+                  } else if (index === 3) {
+                    // Star icon for Rating
+                    return (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                      </svg>
+                    );
+                  }
+                } else if (userDepartment === 'cmt') {
+                  // CMT: Talktime, Truckers, Attendance, Bids
+                  if (index === 0) {
+                    // Phone icon for Talktime
+                    return (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    );
+                  } else if (index === 1) {
+                    // Truck icon for Truckers  
+                    return (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                      </svg>
+                    );
+                  } else if (index === 2) {
+                    // Clipboard with checkmark icon for Attendance
+                    return (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                    );
+                  } else if (index === 3) {
+                    // Document/Bid icon for Bids
+                    return (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    );
+                  }
+                }
+                return null;
+              };
+
+              return (
+                <React.Fragment key={index}>
+                  {/* Checklist Item with Tooltip */}
+                  <div 
+                    className="relative"
+                    onMouseEnter={() => setHoveredIndex(index)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                  >
+                    {state === 'blank' && (
+                      <div className="w-8 h-8 rounded-full border-2 border-red-300 bg-red-50 flex items-center justify-center cursor-pointer hover:border-red-400 transition">
+                        {getIcon() && <span className="text-red-600">{getIcon()}</span>}
+                      </div>
+                    )}
+                    
+                    {state === 'completed' && (
+                      <div className="w-8 h-8 rounded-full bg-green-100 border-2 border-green-300 flex items-center justify-center cursor-pointer hover:bg-green-200 transition">
+                        {getIcon() && <span className="text-green-600">{getIcon()}</span>}
+                      </div>
+                    )}
+                    
+                    {state === 'wrong' && (
+                      <div className="w-8 h-8 rounded-full bg-red-100 border-2 border-red-300 flex items-center justify-center cursor-pointer hover:bg-red-200 transition">
+                        {getIcon() && <span className="text-red-600">{getIcon()}</span>}
+                      </div>
+                    )}
+
+                    {/* Tooltip - Bottom position */}
+                    {hoveredIndex === index && checklistTooltips[index] && (
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg whitespace-nowrap z-50">
+                        {checklistTooltips[index]}
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1">
+                          <div className="border-4 border-transparent border-b-gray-800"></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Connector - last item ke baad nahi */}
+                  {index < checklistItems.length - 1 && (
+                    <div className="w-8 h-0.5 bg-gray-200"></div>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      
+      {/* Right Section - Existing elements */}
+      <div className="flex-1 flex items-center justify-end gap-4">
         <div className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
           <span className="text-base">🕒</span>
           <span className="font-medium">{elapsedTime}</span>
