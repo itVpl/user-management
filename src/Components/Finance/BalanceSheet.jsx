@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
-import { Search, Calendar, Building, TrendingUp, TrendingDown, Wallet, DollarSign, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Calendar, TrendingUp, TrendingDown, Wallet, CheckCircle, XCircle, FileText } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import { DateRange } from 'react-date-range';
 import { format } from 'date-fns';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -138,8 +141,22 @@ const BalanceSheet = ({ selectedCompanyId }) => {
   // State Management
   const [loading, setLoading] = useState(false);
   const [balanceSheet, setBalanceSheet] = useState(null);
-  const [asOnDate, setAsOnDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [searchTerm, setSearchTerm] = useState('');
   const [includeZeroBalance, setIncludeZeroBalance] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // Date range state - Default: Current date
+  const getDefaultDateRange = () => {
+    const currentDate = new Date();
+    return {
+      startDate: currentDate,
+      endDate: currentDate,
+      key: 'selection'
+    };
+  };
+
+  const [range, setRange] = useState(getDefaultDateRange());
+  const [showCustomRange, setShowCustomRange] = useState(false);
 
   // Get Auth Token
   const getAuthToken = () => {
@@ -158,7 +175,7 @@ const BalanceSheet = ({ selectedCompanyId }) => {
       setLoading(true);
       const token = getAuthToken();
       const params = new URLSearchParams({
-        asOnDate,
+        asOnDate: format(range.endDate, 'yyyy-MM-dd'),
         includeZeroBalance: includeZeroBalance.toString()
       });
 
@@ -177,12 +194,79 @@ const BalanceSheet = ({ selectedCompanyId }) => {
     }
   };
 
+  // Filter accounts by search term
+  const filterAccounts = (accounts) => {
+    if (!searchTerm.trim() || !accounts) return accounts;
+    return accounts.filter(acc => 
+      acc.accountName?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  };
+
+  // Get all accounts for a category
+  const getCategoryAccounts = (category) => {
+    if (!balanceSheet?.balanceSheet) return [];
+    
+    let accounts = [];
+    switch(category) {
+      case 'assets':
+        if (balanceSheet.balanceSheet.assets?.fixedAssets?.accounts) {
+          accounts = [...accounts, ...balanceSheet.balanceSheet.assets.fixedAssets.accounts.map(a => ({...a, subCategory: 'Fixed Assets'}))];
+        }
+        if (balanceSheet.balanceSheet.assets?.currentAssets?.accounts) {
+          accounts = [...accounts, ...balanceSheet.balanceSheet.assets.currentAssets.accounts.map(a => ({...a, subCategory: 'Current Assets'}))];
+        }
+        if (balanceSheet.balanceSheet.assets?.investments?.accounts) {
+          accounts = [...accounts, ...balanceSheet.balanceSheet.assets.investments.accounts.map(a => ({...a, subCategory: 'Investments'}))];
+        }
+        if (balanceSheet.balanceSheet.assets?.loansAndAdvances?.accounts) {
+          accounts = [...accounts, ...balanceSheet.balanceSheet.assets.loansAndAdvances.accounts.map(a => ({...a, subCategory: 'Loans & Advances'}))];
+        }
+        break;
+      case 'liabilities':
+        if (balanceSheet.balanceSheet.liabilities?.longTermLiabilities?.accounts) {
+          accounts = [...accounts, ...balanceSheet.balanceSheet.liabilities.longTermLiabilities.accounts.map(a => ({...a, subCategory: 'Long-term Liabilities'}))];
+        }
+        if (balanceSheet.balanceSheet.liabilities?.currentLiabilities?.accounts) {
+          accounts = [...accounts, ...balanceSheet.balanceSheet.liabilities.currentLiabilities.accounts.map(a => ({...a, subCategory: 'Current Liabilities'}))];
+        }
+        break;
+      case 'capital':
+        if (balanceSheet.balanceSheet.capital?.accounts) {
+          accounts = [...accounts, ...balanceSheet.balanceSheet.capital.accounts.map(a => ({...a, subCategory: 'Capital'}))];
+        }
+        break;
+      default:
+        return [];
+    }
+    return accounts;
+  };
+
+  // Get category icon
+  const getCategoryIcon = (category) => {
+    const icons = {
+      assets: <TrendingUp className="text-green-600" size={20} />,
+      liabilities: <TrendingDown className="text-red-600" size={20} />,
+      capital: <Wallet className="text-purple-600" size={20} />
+    };
+    return icons[category] || <FileText className="text-gray-600" size={20} />;
+  };
+
+  // Get category color
+  const getCategoryColor = (category) => {
+    const colors = {
+      assets: 'bg-green-100 border-green-300',
+      liabilities: 'bg-red-100 border-red-300',
+      capital: 'bg-purple-100 border-purple-300'
+    };
+    return colors[category] || 'bg-gray-100 border-gray-300';
+  };
+
   // Effects
   useEffect(() => {
     if (selectedCompanyId) {
       fetchBalanceSheet();
     }
-  }, [selectedCompanyId, asOnDate, includeZeroBalance]);
+  }, [selectedCompanyId, range, includeZeroBalance]);
 
   // Loading State
   if (loading && !balanceSheet) {
@@ -190,13 +274,20 @@ const BalanceSheet = ({ selectedCompanyId }) => {
       <div className="p-6">
         <div className="flex justify-center items-center" style={{ minHeight: '400px' }}>
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-teal-200 border-t-teal-600 mx-auto mb-4"></div>
             <p className="text-gray-600 font-medium">Loading balance sheet...</p>
           </div>
         </div>
       </div>
     );
   }
+
+  const categories = [
+    { key: 'all', label: 'All Categories', count: (getCategoryAccounts('assets').length + getCategoryAccounts('liabilities').length + getCategoryAccounts('capital').length) },
+    { key: 'assets', label: 'Assets', count: getCategoryAccounts('assets').length },
+    { key: 'liabilities', label: 'Liabilities', count: getCategoryAccounts('liabilities').length },
+    { key: 'capital', label: 'Capital', count: getCategoryAccounts('capital').length }
+  ];
 
   return (
     <>
@@ -210,23 +301,18 @@ const BalanceSheet = ({ selectedCompanyId }) => {
         }
       `}</style>
       <div className="p-6 hide-scrollbar">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Balance Sheet</h1>
-          <p className="text-gray-600">Financial position statement showing Assets, Liabilities, and Capital</p>
-        </div>
-
         {/* Filters */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-4">
-            {/* Date Selection */}
-            <div className="flex items-center gap-2">
-              <Calendar size={18} className="text-gray-600" />
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               <input
-                type="date"
-                value={asOnDate}
-                onChange={(e) => setAsOnDate(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                type="text"
+                placeholder="Search accounts..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
 
@@ -241,312 +327,222 @@ const BalanceSheet = ({ selectedCompanyId }) => {
               <span className="text-sm text-gray-700">Include Zero Balance</span>
             </label>
           </div>
+
+          <div className="flex items-center gap-4">
+            {/* Date Range Button */}
+            <button
+              onClick={() => setShowCustomRange(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+            >
+              <Calendar size={18} className="text-blue-600" />
+              <span className="text-sm font-medium">
+                As on: {format(range.endDate, 'dd MMM yyyy')}
+              </span>
+            </button>
+          </div>
         </div>
 
-        {/* Balance Sheet Content */}
+        {/* Custom Date Range Modal */}
+        {showCustomRange && (
+          <div 
+            className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4"
+            onClick={() => setShowCustomRange(false)}
+          >
+            <div 
+              className="bg-white rounded-xl shadow-2xl p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Date</h3>
+              <DateRange
+                ranges={[range]}
+                onChange={(item) => setRange(item.selection)}
+                moveRangeOnFirstSelection={false}
+                months={1}
+                direction="horizontal"
+              />
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCustomRange(false);
+                    setRange(getDefaultDateRange());
+                  }}
+                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCustomRange(false)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Apply Filter
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Summary Cards */}
+        {balanceSheet && (
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-2xl shadow-xl p-4 border-2 border-green-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                  <TrendingUp className="text-green-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Assets</p>
+                  <p className="text-xl font-bold text-green-600">
+                    ₹{Number(balanceSheet.summary?.totalAssets || 0).toLocaleString('en-IN')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-xl p-4 border-2 border-red-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                  <TrendingDown className="text-red-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Liabilities</p>
+                  <p className="text-xl font-bold text-red-600">
+                    ₹{Number(balanceSheet.summary?.totalLiabilities || 0).toLocaleString('en-IN')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-xl p-4 border-2 border-purple-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <Wallet className="text-purple-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Capital</p>
+                  <p className="text-xl font-bold text-purple-600">
+                    ₹{Number(balanceSheet.summary?.totalCapital || 0).toLocaleString('en-IN')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className={`bg-white rounded-2xl shadow-xl p-4 border-2 ${balanceSheet.summary?.isBalanced ? 'border-green-200' : 'border-red-200'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${balanceSheet.summary?.isBalanced ? 'bg-green-100' : 'bg-red-100'}`}>
+                  {balanceSheet.summary?.isBalanced ? (
+                    <CheckCircle className="text-green-600" size={20} />
+                  ) : (
+                    <XCircle className="text-red-600" size={20} />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Balance Status</p>
+                  <p className={`text-xl font-bold ${balanceSheet.summary?.isBalanced ? 'text-green-600' : 'text-red-600'}`}>
+                    {balanceSheet.summary?.isBalanced ? 'Balanced' : 'Unbalanced'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Category Tabs */}
+        <div className="flex gap-2 mb-6 overflow-x-auto hide-scrollbar">
+          {categories.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => setSelectedCategory(cat.key)}
+              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition ${
+                selectedCategory === cat.key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+              }`}
+            >
+              {cat.label} ({cat.count})
+            </button>
+          ))}
+        </div>
+
+        {/* Accounts Table */}
         {!balanceSheet ? (
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-20 text-center">
-            <XCircle className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+            <FileText className="mx-auto h-16 w-16 text-gray-400 mb-4" />
             <h3 className="text-xl font-semibold text-gray-700 mb-2">No Data Available</h3>
             <p className="text-gray-500">No balance sheet data available for the selected date</p>
           </div>
         ) : (
-          <>
-            {/* Summary Cards */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border-2 border-green-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                    <TrendingUp className="text-green-600" size={20} />
+          <div className="space-y-6">
+            {['assets', 'liabilities', 'capital'].map(category => {
+              if (selectedCategory !== 'all' && selectedCategory !== category) return null;
+              
+              const accounts = filterAccounts(getCategoryAccounts(category));
+              if (accounts.length === 0) return null;
+
+              return (
+                <div key={category} className={`bg-white rounded-2xl shadow-xl border-2 ${getCategoryColor(category)} overflow-hidden`}>
+                  <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
+                      {getCategoryIcon(category)}
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 capitalize">{category} ({accounts.length})</h3>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Assets</p>
-                    <p className="text-xl font-bold text-green-600">
-                      ₹{Number(balanceSheet.summary?.totalAssets || 0).toLocaleString('en-IN')}
-                    </p>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left py-3 px-4 text-gray-700 font-semibold text-sm">Account Name</th>
+                          <th className="text-left py-3 px-4 text-gray-700 font-semibold text-sm">Sub Category</th>
+                          <th className="text-right py-3 px-4 text-gray-700 font-semibold text-sm">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accounts.map((account, index) => (
+                          <tr key={account.accountId || index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                            <td className="py-3 px-4">
+                              <span className="font-medium text-gray-800">{account.accountName || '-'}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-sm text-gray-600">{account.subCategory || '-'}</span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className={`font-bold ${
+                                category === 'assets' ? 'text-green-700' : 
+                                category === 'liabilities' ? 'text-red-700' : 
+                                'text-purple-700'
+                              }`}>
+                                ₹{Number(account.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </div>
+              );
+            })}
+          </div>
+        )}
 
-              <div className="bg-white rounded-2xl shadow-xl p-4 border-2 border-red-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                    <TrendingDown className="text-red-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Liabilities</p>
-                    <p className="text-xl font-bold text-red-600">
-                      ₹{Number(balanceSheet.summary?.totalLiabilities || 0).toLocaleString('en-IN')}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-xl p-4 border-2 border-purple-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                    <Wallet className="text-purple-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Capital</p>
-                    <p className="text-xl font-bold text-purple-600">
-                      ₹{Number(balanceSheet.summary?.totalCapital || 0).toLocaleString('en-IN')}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className={`bg-white rounded-2xl shadow-xl p-4 border-2 ${balanceSheet.summary?.isBalanced ? 'border-green-200' : 'border-red-200'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${balanceSheet.summary?.isBalanced ? 'bg-green-100' : 'bg-red-100'}`}>
-                    {balanceSheet.summary?.isBalanced ? (
-                      <CheckCircle className="text-green-600" size={20} />
-                    ) : (
-                      <XCircle className="text-red-600" size={20} />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Balance Status</p>
-                    <p className={`text-xl font-bold ${balanceSheet.summary?.isBalanced ? 'text-green-600' : 'text-red-600'}`}>
-                      {balanceSheet.summary?.isBalanced ? 'Balanced' : 'Unbalanced'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Balance Sheet Grid */}
-            <div className="grid grid-cols-2 gap-6">
-              {/* Left Side - Assets */}
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-t-2xl">
-                  <h2 className="text-xl font-bold">ASSETS</h2>
-                  <p className="text-sm text-green-100">What the company owns</p>
-                </div>
-
-                {/* Fixed Assets */}
-                {balanceSheet.balanceSheet?.assets?.fixedAssets?.accounts?.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-gray-100 p-3">
-                      <h3 className="font-bold text-gray-800">Fixed Assets</h3>
-                    </div>
-                    <div className="p-4 space-y-2">
-                      {balanceSheet.balanceSheet.assets.fixedAssets.accounts.map((account, index) => (
-                        <div key={account.accountId || index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                          <span className="text-gray-700">{account.accountName}</span>
-                          <span className="font-semibold text-gray-800">
-                            ₹{Number(account.balance || 0).toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-                        <span className="font-bold text-gray-800">Total Fixed Assets</span>
-                        <span className="font-bold text-green-600">
-                          ₹{Number(balanceSheet.balanceSheet.assets.fixedAssets.total || 0).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Current Assets */}
-                {balanceSheet.balanceSheet?.assets?.currentAssets?.accounts?.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-gray-100 p-3">
-                      <h3 className="font-bold text-gray-800">Current Assets</h3>
-                    </div>
-                    <div className="p-4 space-y-2">
-                      {balanceSheet.balanceSheet.assets.currentAssets.accounts.map((account, index) => (
-                        <div key={account.accountId || index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                          <span className="text-gray-700">{account.accountName}</span>
-                          <span className="font-semibold text-gray-800">
-                            ₹{Number(account.balance || 0).toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-                        <span className="font-bold text-gray-800">Total Current Assets</span>
-                        <span className="font-bold text-green-600">
-                          ₹{Number(balanceSheet.balanceSheet.assets.currentAssets.total || 0).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Investments */}
-                {balanceSheet.balanceSheet?.assets?.investments?.accounts?.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-gray-100 p-3">
-                      <h3 className="font-bold text-gray-800">Investments</h3>
-                    </div>
-                    <div className="p-4 space-y-2">
-                      {balanceSheet.balanceSheet.assets.investments.accounts.map((account, index) => (
-                        <div key={account.accountId || index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                          <span className="text-gray-700">{account.accountName}</span>
-                          <span className="font-semibold text-gray-800">
-                            ₹{Number(account.balance || 0).toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-                        <span className="font-bold text-gray-800">Total Investments</span>
-                        <span className="font-bold text-green-600">
-                          ₹{Number(balanceSheet.balanceSheet.assets.investments.total || 0).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Loans & Advances */}
-                {balanceSheet.balanceSheet?.assets?.loansAndAdvances?.accounts?.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-gray-100 p-3">
-                      <h3 className="font-bold text-gray-800">Loans & Advances</h3>
-                    </div>
-                    <div className="p-4 space-y-2">
-                      {balanceSheet.balanceSheet.assets.loansAndAdvances.accounts.map((account, index) => (
-                        <div key={account.accountId || index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                          <span className="text-gray-700">{account.accountName}</span>
-                          <span className="font-semibold text-gray-800">
-                            ₹{Number(account.balance || 0).toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-                        <span className="font-bold text-gray-800">Total Loans & Advances</span>
-                        <span className="font-bold text-green-600">
-                          ₹{Number(balanceSheet.balanceSheet.assets.loansAndAdvances.total || 0).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Total Assets */}
-                <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-4 rounded-2xl">
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold">TOTAL ASSETS</span>
-                    <span className="text-2xl font-bold">
-                      ₹{Number(balanceSheet.balanceSheet?.assets?.total || 0).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Side - Liabilities & Capital */}
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-4 rounded-t-2xl">
-                  <h2 className="text-xl font-bold">LIABILITIES & CAPITAL</h2>
-                  <p className="text-sm text-red-100">What the company owes</p>
-                </div>
-
-                {/* Capital */}
-                {balanceSheet.balanceSheet?.capital?.accounts?.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-purple-100 p-3">
-                      <h3 className="font-bold text-purple-800">Capital</h3>
-                    </div>
-                    <div className="p-4 space-y-2">
-                      {balanceSheet.balanceSheet.capital.accounts.map((account, index) => (
-                        <div key={account.accountId || index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                          <span className="text-gray-700">{account.accountName}</span>
-                          <span className="font-semibold text-gray-800">
-                            ₹{Number(account.balance || 0).toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-                        <span className="font-bold text-gray-800">Total Capital</span>
-                        <span className="font-bold text-purple-600">
-                          ₹{Number(balanceSheet.balanceSheet.capital.total || 0).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Long-term Liabilities */}
-                {balanceSheet.balanceSheet?.liabilities?.longTermLiabilities?.accounts?.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-gray-100 p-3">
-                      <h3 className="font-bold text-gray-800">Long-term Liabilities</h3>
-                    </div>
-                    <div className="p-4 space-y-2">
-                      {balanceSheet.balanceSheet.liabilities.longTermLiabilities.accounts.map((account, index) => (
-                        <div key={account.accountId || index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                          <span className="text-gray-700">{account.accountName}</span>
-                          <span className="font-semibold text-gray-800">
-                            ₹{Number(account.balance || 0).toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-                        <span className="font-bold text-gray-800">Total Long-term Liabilities</span>
-                        <span className="font-bold text-red-600">
-                          ₹{Number(balanceSheet.balanceSheet.liabilities.longTermLiabilities.total || 0).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Current Liabilities */}
-                {balanceSheet.balanceSheet?.liabilities?.currentLiabilities?.accounts?.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="bg-gray-100 p-3">
-                      <h3 className="font-bold text-gray-800">Current Liabilities</h3>
-                    </div>
-                    <div className="p-4 space-y-2">
-                      {balanceSheet.balanceSheet.liabilities.currentLiabilities.accounts.map((account, index) => (
-                        <div key={account.accountId || index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                          <span className="text-gray-700">{account.accountName}</span>
-                          <span className="font-semibold text-gray-800">
-                            ₹{Number(account.balance || 0).toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
-                        <span className="font-bold text-gray-800">Total Current Liabilities</span>
-                        <span className="font-bold text-red-600">
-                          ₹{Number(balanceSheet.balanceSheet.liabilities.currentLiabilities.total || 0).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Total Liabilities & Capital */}
-                <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 rounded-2xl">
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold">TOTAL LIABILITIES & CAPITAL</span>
-                    <span className="text-2xl font-bold">
-                      ₹{Number(balanceSheet.summary?.totalLiabilitiesAndCapital || 0).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                </div>
+        {/* Balance Check Alert */}
+        {balanceSheet && !balanceSheet.summary?.isBalanced && (
+          <div className="mt-6 bg-red-50 border-2 border-red-300 rounded-2xl p-4">
+            <div className="flex items-center gap-3">
+              <XCircle className="text-red-600" size={24} />
+              <div>
+                <h3 className="font-bold text-red-800">Balance Sheet is Unbalanced!</h3>
+                <p className="text-red-700">
+                  Difference: ₹{Number(balanceSheet.summary?.difference || 0).toLocaleString('en-IN')}
+                </p>
+                <p className="text-sm text-red-600 mt-1">
+                  Please check your voucher entries. Assets should equal Liabilities + Capital.
+                </p>
               </div>
             </div>
-
-            {/* Balance Check Alert */}
-            {!balanceSheet.summary?.isBalanced && (
-              <div className="mt-6 bg-red-50 border-2 border-red-300 rounded-2xl p-4">
-                <div className="flex items-center gap-3">
-                  <XCircle className="text-red-600" size={24} />
-                  <div>
-                    <h3 className="font-bold text-red-800">Balance Sheet is Unbalanced!</h3>
-                    <p className="text-red-700">
-                      Difference: ₹{Number(balanceSheet.summary?.difference || 0).toLocaleString('en-IN')}
-                    </p>
-                    <p className="text-sm text-red-600 mt-1">
-                      Please check your voucher entries. Assets should equal Liabilities + Capital.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         )}
       </div>
     </>

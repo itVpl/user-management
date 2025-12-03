@@ -1120,7 +1120,7 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
           </div>
           
           <div className="flex items-center gap-4">
-            {companies.length > 0 && (
+            {/* {companies.length > 0 && (
               <div className="relative">
                 <select
                   value={companyId || ''}
@@ -1159,7 +1159,7 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
                   ))}
                 </select>
               </div>
-            )}
+            )} */}
             
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -1908,13 +1908,13 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
             </div>
             
             <div className="p-6 space-y-6">
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4">
+              <div className="bg-green-50 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-4">
-                  <Receipt className="text-blue-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Voucher Information</h3>
+                  <Receipt className="text-green-600" size={20} />
+                  <h3 className="text-lg font-bold text-green-800">Voucher Information</h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 bg-white border border-blue-200 rounded-xl p-4">
+                <div className="grid grid-cols-2 gap-4 bg-white border border-green-200 rounded-xl p-4">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Voucher Number</p>
                     <p className="font-semibold text-gray-800">{selectedVoucher.voucherNumber || selectedVoucher._id || selectedVoucher.id || 'N/A'}</p>
@@ -1992,16 +1992,16 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-4">
+              <div className="bg-blue-50 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-4">
-                  <Receipt className="text-green-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Receipt Entries</h3>
+                  <Receipt className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-bold text-blue-800">Receipt Entries</h3>
                 </div>
 
                 <div className="space-y-4">
                   {selectedVoucher.entries && selectedVoucher.entries.length > 0 ? (
                     selectedVoucher.entries.map((entry, index) => (
-                      <div key={index} className="bg-white border border-green-200 rounded-xl p-4">
+                      <div key={index} className="bg-white border border-blue-200 rounded-xl p-4">
                         <h4 className="font-semibold text-gray-800 mb-3">Entry {index + 1}</h4>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
@@ -2089,7 +2089,7 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-4 pt-4 border-t">
+              <div className="flex justify-end gap-4 pt-4">
                 <button
                   onClick={() => {
                     setShowViewModal(false);

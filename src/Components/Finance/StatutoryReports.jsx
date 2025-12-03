@@ -333,28 +333,12 @@ const StatutoryReports = ({ selectedCompanyId }) => {
       `}</style>
       <div className="p-6 hide-scrollbar">
         {/* Header */}
-        <div className="mb-6">
+        {/* <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Statutory Reports</h1>
           <p className="text-gray-600">Compliance reports for GST, TDS, and MSME regulations</p>
-        </div>
+        </div> */}
 
-        {/* Filters */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-4">
-            {/* Date Range Button (only for GST and TDS) */}
-            {(selectedReport === 'gst' || selectedReport === 'tds') && (
-              <button
-                onClick={() => setShowCustomRange(true)}
-                className="flex items-center gap-2 px-4 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
-              >
-                <Calendar size={18} className="text-blue-600" />
-                <span className="text-sm font-medium">
-                  {format(range.startDate, 'dd MMM yyyy')} - {format(range.endDate, 'dd MMM yyyy')}
-                </span>
-              </button>
-            )}
-          </div>
-        </div>
+       
 
         {/* Custom Date Range Modal */}
         {showCustomRange && (
@@ -416,6 +400,23 @@ const StatutoryReports = ({ selectedCompanyId }) => {
               </button>
             );
           })}
+           {/* Filters */}
+        <div className="flex justify-between items-center mb-6 ml-32">
+          <div className="flex items-center gap-4">
+            {/* Date Range Button (only for GST and TDS) */}
+            {(selectedReport === 'gst' || selectedReport === 'tds') && (
+              <button
+                onClick={() => setShowCustomRange(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+              >
+                <Calendar size={18} className="text-blue-600" />
+                <span className="text-sm font-medium">
+                  {format(range.startDate, 'dd MMM yyyy')} - {format(range.endDate, 'dd MMM yyyy')}
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
         </div>
 
         {/* Report Content */}

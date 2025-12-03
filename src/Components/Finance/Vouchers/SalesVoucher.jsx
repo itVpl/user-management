@@ -1618,7 +1618,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 justify-end pt-4 border-t">
+              <div className="flex gap-3 justify-end pt-4 ">
                 <button
                   onClick={() => {
                     setShowViewModal(false);
