@@ -30,7 +30,7 @@ import TestConnectionDialog from './TestConnectionDialog';
 import ComposeDialog from './ComposeDialog';
 import EmailList from './EmailList';
 import EmailViewer from './EmailViewer';
-import { createEmailAccount, testEmailConnection, fetchInboxEmails, transformEmail, sendEmail } from './emailService';
+import { createEmailAccount, testEmailConnection, fetchInboxEmails, fetchSentEmails, fetchEmailByUid, transformEmail, sendEmail, sendEmailWithAttachments, replyToEmailWithFiles, replyToEmail } from './emailService';
 import { sampleEmails } from './sampleData';
 
 const Email = () => {
@@ -105,9 +105,10 @@ const Email = () => {
       const response = await fetchInboxEmails(createdAccountId);
       
       console.log('Checking response for emails...');
+      console.log('Full API Response:', response);
       console.log('response.emails:', response?.emails);
       console.log('response.data:', response?.data);
-      console.log('response.data.emails:', response?.data?.emails);
+      console.log('response.data?.emails:', response?.data?.emails);
       
       // Try different response structures
       const fetchedEmails = response?.emails || 
@@ -116,10 +117,16 @@ const Email = () => {
                            [];
       
       console.log('Fetched emails count:', fetchedEmails.length);
+      console.log('First email from API (before transform):', fetchedEmails[0]);
       
       if (fetchedEmails.length > 0) {
-        const transformedEmails = fetchedEmails.map(transformEmail);
+        const transformedEmails = fetchedEmails.map((email, index) => {
+          const transformed = transformEmail(email, index);
+          console.log(`Email ${index} - Original uid:`, email.uid, 'Transformed uid:', transformed.uid);
+          return transformed;
+        });
         console.log('Transformed emails:', transformedEmails);
+        console.log('First transformed email uid:', transformedEmails[0]?.uid);
         setEmails(transformedEmails);
       } else {
         console.log('No emails found, showing sample emails');
@@ -213,10 +220,52 @@ const Email = () => {
     setSelectedEmail(null);
   };
 
-  const handleEmailSelect = (email) => {
+  const handleEmailSelect = async (email) => {
+    console.log('Email selected:', email);
+    console.log('Email UID:', email.uid);
+    console.log('Account ID:', createdAccountId);
+    
+    // Set basic email info first
     setSelectedEmail(email);
     if (!email.isRead) {
       markAsRead(email.id);
+    }
+
+    // Fetch full email details if uid is available
+    if (email.uid && createdAccountId) {
+      console.log(`Fetching full email details for UID: ${email.uid}, Account ID: ${createdAccountId}`);
+      try {
+        const response = await fetchEmailByUid(email.uid, createdAccountId);
+        console.log('Full email response:', response);
+
+        if (response.success && response.email) {
+          const fullEmail = response.email;
+          console.log('Full email data:', fullEmail);
+          const transformedFullEmail = transformEmail(fullEmail);
+          const updatedEmail = {
+            ...email,
+            ...transformedFullEmail,
+            id: email.id || transformedFullEmail.uid,
+            uid: transformedFullEmail.uid || email.uid,
+            body: fullEmail.content || fullEmail.text || email.body,
+            html: fullEmail.html || email.html,
+            attachments: fullEmail.attachments || email.attachments || [],
+            hasAttachments: fullEmail.hasAttachments || (fullEmail.attachments?.length > 0),
+            attachmentCount: fullEmail.attachmentCount || (fullEmail.attachments?.length || 0),
+            messageId: fullEmail.messageId || fullEmail.messageID || fullEmail.message_id || email.messageId || null
+          };
+          console.log('Updated email with full details:', updatedEmail);
+          setSelectedEmail(updatedEmail);
+        } else {
+          console.warn('Response does not have success or email:', response);
+        }
+      } catch (err) {
+        console.error('Error fetching full email:', err);
+        console.error('Error details:', err.response?.data || err.message);
+        // Keep the basic email info if fetch fails
+      }
+    } else {
+      console.warn('Cannot fetch full email - missing uid or accountId:', { uid: email.uid, accountId: createdAccountId });
     }
   };
 
@@ -247,14 +296,24 @@ const Email = () => {
     setSendSuccess(false);
 
     try {
-      await sendEmail(emailData);
+      // Always use send-files endpoint (works with or without attachments)
+      await sendEmailWithAttachments({
+        ...emailData,
+        emailAccountId: createdAccountId
+      });
       setSendSuccess(true);
+      // Reload sent emails after sending
+      if (createdAccountId) {
+        setTimeout(() => {
+          loadSentEmails();
+        }, 500);
+      }
       setTimeout(() => {
         setComposeOpen(false);
         setSendSuccess(false);
       }, 2000);
     } catch (err) {
-      setSendError(err.message || 'Failed to send email');
+      setSendError(err.response?.data?.message || err.message || 'Failed to send email');
     } finally {
       setSendLoading(false);
     }

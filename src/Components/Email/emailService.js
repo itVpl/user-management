@@ -63,15 +63,15 @@ export const testEmailConnection = async (accountId) => {
 };
 
 // Fetch inbox emails
-export const fetchInboxEmails = async (accountId, limit = 50) => {
+export const fetchInboxEmails = async (accountId, limit = 50, page = 1) => {
   const token = getAuthToken();
   
   if (!token) {
     throw new Error('Please login to access emails');
   }
 
-  console.log('Fetching inbox emails for Account ID:', accountId);
-  const inboxUrl = `${API_BASE_URL}/email-inbox/inbox?limit=${limit}&emailAccountId=${accountId}`;
+  console.log('Fetching inbox emails for Account ID:', accountId, 'Limit:', limit, 'Page:', page);
+  const inboxUrl = `${API_BASE_URL}/email-inbox/inbox?limit=${limit}&page=${page}&emailAccountId=${accountId}`;
   console.log('Inbox URL:', inboxUrl);
 
   const response = await axios.get(
@@ -85,20 +85,70 @@ export const fetchInboxEmails = async (accountId, limit = 50) => {
   return response.data;
 };
 
+// Fetch sent emails
+export const fetchSentEmails = async (accountId, limit = 50, page = 1) => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to access emails');
+  }
+
+  console.log('Fetching sent emails for Account ID:', accountId, 'Limit:', limit, 'Page:', page);
+  const sentUrl = `${API_BASE_URL}/email-inbox/sent?limit=${limit}&page=${page}&emailAccountId=${accountId}`;
+  console.log('Sent URL:', sentUrl);
+
+  const response = await axios.get(
+    sentUrl,
+    { headers: getAuthHeaders() }
+  );
+
+  console.log('Sent Emails API Response:', response.data);
+  console.log('Full Sent Response:', JSON.stringify(response.data, null, 2));
+  
+  return response.data;
+};
+
+// Fetch single email by UID
+export const fetchEmailByUid = async (uid, accountId) => {
+  const token = getAuthToken();
+
+  if (!token) {
+    throw new Error('Please login to access emails');
+  }
+
+  console.log('Fetching email by UID:', uid, 'Account ID:', accountId);
+  const emailUrl = `${API_BASE_URL}/email-inbox/${uid}?emailAccountId=${accountId}`;
+  console.log('Email URL:', emailUrl);
+
+  const response = await axios.get(
+    emailUrl,
+    { headers: getAuthHeaders() }
+  );
+
+  console.log('Single Email API Response:', response.data);
+
+  return response.data;
+};
+
 // Transform API email to app format
 export const transformEmail = (email, index) => ({
   id: email._id || email.id || index,
+  uid: email.uid || email._id || email.id || index, // Preserve uid from API - this is critical for fetching full email
   from: email.from || email.sender || 'unknown@example.com',
   fromName: email.fromName || email.senderName || email.from || 'Unknown Sender',
   to: email.to || email.recipient || 'you@example.com',
   subject: email.subject || 'No Subject',
   body: email.body || email.text || email.content || '',
+  html: email.html || email.htmlBody || email.htmlContent || '',
   timestamp: email.timestamp || email.date || email.createdAt || new Date(),
   isRead: email.isRead || email.read || false,
   isStarred: email.isStarred || email.starred || false,
   folder: email.folder || 'inbox',
   priority: email.priority || 'normal',
-  attachments: email.attachments || []
+  attachments: email.attachments || [],
+  hasAttachments: email.hasAttachments || (email.attachments && email.attachments.length > 0),
+  attachmentCount: email.attachmentCount || (email.attachments ? email.attachments.length : 0),
+  messageId: email.messageId || email.messageID || email.message_id || null // Preserve messageId for threading
 });
 
 // Send email
@@ -118,6 +168,178 @@ export const sendEmail = async (emailData) => {
   );
 
   console.log('Send Email API Response:', response.data);
+  
+  return response.data;
+};
+
+// Send email with file uploads using FormData
+export const sendEmailWithAttachments = async (emailData) => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to send emails');
+  }
+
+  // Create FormData for multipart/form-data request
+  const formData = new FormData();
+  
+  // Add text fields
+  formData.append('to', emailData.to);
+  formData.append('subject', emailData.subject);
+  formData.append('text', emailData.text || emailData.body || '');
+  
+  // Add optional fields
+  if (emailData.html) {
+    formData.append('html', emailData.html);
+  }
+  if (emailData.emailAccountId) {
+    formData.append('emailAccountId', emailData.emailAccountId);
+  }
+
+  // Add file attachments
+  if (emailData.attachments && emailData.attachments.length > 0) {
+    emailData.attachments.forEach((attachment) => {
+      // If attachment is a File object, append directly
+      if (attachment instanceof File) {
+        formData.append('attachments', attachment);
+      } 
+      // If attachment has a file property (from ComposeDialog state)
+      else if (attachment.file instanceof File) {
+        formData.append('attachments', attachment.file);
+      }
+    });
+  }
+
+  console.log('Sending email with attachments:', {
+    to: emailData.to,
+    subject: emailData.subject,
+    text: emailData.text || emailData.body,
+    emailAccountId: emailData.emailAccountId,
+    attachmentsCount: emailData.attachments?.length || 0
+  });
+
+  const response = await axios.post(
+    `${API_BASE_URL}/email-inbox/send-files`,
+    formData,
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    }
+  );
+
+  console.log('Send Email with Attachments API Response:', response.data);
+  
+  return response.data;
+};
+
+// Reply to email with file uploads using FormData
+export const replyToEmailWithFiles = async (replyData) => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to send emails');
+  }
+
+  // Create FormData for multipart/form-data request
+  const formData = new FormData();
+  
+  // Add text fields
+  formData.append('to', replyData.to);
+  formData.append('subject', replyData.subject);
+  formData.append('text', replyData.text || replyData.body || '');
+  
+  // Add optional fields
+  if (replyData.html) {
+    formData.append('html', replyData.html);
+  }
+  if (replyData.inReplyTo) {
+    formData.append('inReplyTo', replyData.inReplyTo);
+  }
+  if (replyData.references) {
+    formData.append('references', replyData.references);
+  }
+  if (replyData.emailAccountId) {
+    formData.append('emailAccountId', replyData.emailAccountId);
+  }
+
+  // Add file attachments
+  if (replyData.attachments && replyData.attachments.length > 0) {
+    replyData.attachments.forEach((attachment) => {
+      // If attachment is a File object, append directly
+      if (attachment instanceof File) {
+        formData.append('attachments', attachment);
+      } 
+      // If attachment has a file property (from ComposeDialog state)
+      else if (attachment.file instanceof File) {
+        formData.append('attachments', attachment.file);
+      }
+    });
+  }
+
+  console.log('Replying to email with attachments:', {
+    to: replyData.to,
+    subject: replyData.subject,
+    text: replyData.text || replyData.body,
+    inReplyTo: replyData.inReplyTo,
+    references: replyData.references,
+    emailAccountId: replyData.emailAccountId,
+    attachmentsCount: replyData.attachments?.length || 0
+  });
+
+  const response = await axios.post(
+    `${API_BASE_URL}/email-inbox/reply-files`,
+    formData,
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    }
+  );
+
+  console.log('Reply Email API Response:', response.data);
+  
+  return response.data;
+};
+
+// Reply to email with JSON (base64 attachments)
+export const replyToEmail = async (replyData) => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to send emails');
+  }
+
+  console.log('Replying to email:', {
+    to: replyData.to,
+    subject: replyData.subject,
+    text: replyData.text || replyData.body,
+    inReplyTo: replyData.inReplyTo,
+    references: replyData.references,
+    emailAccountId: replyData.emailAccountId,
+    attachmentsCount: replyData.attachments?.length || 0
+  });
+
+  const response = await axios.post(
+    `${API_BASE_URL}/email-inbox/reply`,
+    {
+      to: replyData.to,
+      subject: replyData.subject,
+      text: replyData.text || replyData.body,
+      html: replyData.html,
+      inReplyTo: replyData.inReplyTo,
+      references: replyData.references,
+      emailAccountId: replyData.emailAccountId,
+      attachments: replyData.attachments || []
+    },
+    {
+      headers: getAuthHeaders()
+    }
+  );
+
+  console.log('Reply Email API Response:', response.data);
   
   return response.data;
 };

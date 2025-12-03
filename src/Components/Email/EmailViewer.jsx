@@ -197,24 +197,50 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
           borderRadius: 2,
           border: '1px solid #e8eaed'
         }}>
-          <Typography 
-            component="div"
-            sx={{ 
-              whiteSpace: 'pre-wrap', 
-              lineHeight: 1.9, 
-              color: '#3c4043',
-              fontSize: '0.95rem',
-              fontFamily: '"Google Sans", Roboto, Arial, sans-serif',
-              wordBreak: 'break-word',
-              '& a': {
-                display: 'inline-block',
-                marginTop: '4px',
-                marginBottom: '4px'
-              }
-            }}
-          >
-            {formatEmailBody(selectedEmail.body)}
-          </Typography>
+          {selectedEmail.html ? (
+            <Box
+              component="div"
+              dangerouslySetInnerHTML={{ __html: selectedEmail.html }}
+              sx={{ 
+                lineHeight: 1.9, 
+                color: '#3c4043',
+                fontSize: '0.95rem',
+                fontFamily: '"Google Sans", Roboto, Arial, sans-serif',
+                wordBreak: 'break-word',
+                '& img': {
+                  maxWidth: '100%',
+                  height: 'auto',
+                  borderRadius: 1,
+                  margin: '8px 0'
+                },
+                '& a': {
+                  color: '#1a73e8',
+                  textDecoration: 'none',
+                  '&:hover': { textDecoration: 'underline' }
+                },
+                '& p': { margin: '8px 0' }
+              }}
+            />
+          ) : (
+            <Typography 
+              component="div"
+              sx={{ 
+                whiteSpace: 'pre-wrap', 
+                lineHeight: 1.9, 
+                color: '#3c4043',
+                fontSize: '0.95rem',
+                fontFamily: '"Google Sans", Roboto, Arial, sans-serif',
+                wordBreak: 'break-word',
+                '& a': {
+                  display: 'inline-block',
+                  marginTop: '4px',
+                  marginBottom: '4px'
+                }
+              }}
+            >
+              {formatEmailBody(selectedEmail.body || selectedEmail.content)}
+            </Typography>
+          )}
         </Box>
 
         {/* Attachments */}
@@ -224,32 +250,68 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
               📎 {selectedEmail.attachments.length} Attachment{selectedEmail.attachments.length > 1 ? 's' : ''}
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-              {selectedEmail.attachments.map((att, i) => (
-                <Box key={i} sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 1.5, 
-                  px: 2, 
-                  py: 1.5,
-                  backgroundColor: '#fff',
-                  borderRadius: 2,
-                  border: '1px solid #e8eaed',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  '&:hover': { 
-                    backgroundColor: '#e8f0fe', 
-                    borderColor: '#1a73e8',
-                    transform: 'translateY(-1px)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              {selectedEmail.attachments.map((att, i) => {
+                // Handle both string and object attachments
+                const filename = typeof att === 'string' ? att : (att.filename || att.name || `Attachment ${i + 1}`);
+                const downloadUrl = att.downloadUrl || att.url || att.link;
+                const previewUrl = att.previewUrl || (att.isImage ? downloadUrl : null);
+                const isImage = att.isImage || (att.contentType && att.contentType.startsWith('image/'));
+                const size = att.size;
+                
+                const handleAttachmentClick = () => {
+                  if (downloadUrl) {
+                    // If downloadUrl is relative, make it absolute
+                    const fullUrl = downloadUrl.startsWith('http') 
+                      ? downloadUrl 
+                      : `https://vpl-liveproject-1.onrender.com${downloadUrl}`;
+                    window.open(fullUrl, '_blank');
                   }
-                }}>
-                  <AttachFileIcon sx={{ fontSize: 20, color: '#5f6368' }} />
-                  <Typography variant="body2" sx={{ color: '#1a73e8', fontWeight: 500 }}>
-                    {att}
-                  </Typography>
-                  <OpenInNewIcon sx={{ fontSize: 14, color: '#80868b' }} />
-                </Box>
-              ))}
+                };
+
+                return (
+                  <Box 
+                    key={i} 
+                    onClick={handleAttachmentClick}
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1.5, 
+                      px: 2, 
+                      py: 1.5,
+                      backgroundColor: '#fff',
+                      borderRadius: 2,
+                      border: '1px solid #e8eaed',
+                      cursor: downloadUrl ? 'pointer' : 'default',
+                      transition: 'all 0.2s ease',
+                      '&:hover': downloadUrl ? { 
+                        backgroundColor: '#e8f0fe', 
+                        borderColor: '#1a73e8',
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                      } : {}
+                    }}
+                  >
+                    {isImage && previewUrl ? (
+                      <img 
+                        src={previewUrl.startsWith('http') ? previewUrl : `https://vpl-liveproject-1.onrender.com${previewUrl}`}
+                        alt={filename}
+                        style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4 }}
+                      />
+                    ) : (
+                      <AttachFileIcon sx={{ fontSize: 20, color: '#5f6368' }} />
+                    )}
+                    <Typography variant="body2" sx={{ color: '#1a73e8', fontWeight: 500 }}>
+                      {filename}
+                    </Typography>
+                    {size && (
+                      <Typography variant="caption" sx={{ color: '#80868b' }}>
+                        ({(size / 1024).toFixed(1)} KB)
+                      </Typography>
+                    )}
+                    {downloadUrl && <OpenInNewIcon sx={{ fontSize: 14, color: '#80868b' }} />}
+                  </Box>
+                );
+              })}
             </Box>
           </Box>
         )}

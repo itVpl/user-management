@@ -68,45 +68,14 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
       return;
     }
     
-    // Convert attachments to base64 for API
-    const processAttachments = async () => {
-      const processedAttachments = await Promise.all(
-        attachments.map(async (att) => {
-          const base64 = await fileToBase64(att.file);
-          return {
-            filename: att.filename,
-            content: base64,
-            contentType: att.type
-          };
-        })
-      );
-      
-      onSend({
-        ...emailData,
-        html: `<p>${emailData.text.replace(/\n/g, '<br/>')}</p>`,
-        emailAccountId,
-        attachments: processedAttachments
-      });
-    };
-
-    if (attachments.length > 0) {
-      processAttachments();
-    } else {
-      onSend({
-        ...emailData,
-        html: `<p>${emailData.text.replace(/\n/g, '<br/>')}</p>`,
-        emailAccountId,
-        attachments: []
-      });
-    }
-  };
-
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = error => reject(error);
+    // Send email with File objects directly (send-files endpoint expects FormData with files)
+    onSend({
+      to: emailData.to,
+      subject: emailData.subject,
+      text: emailData.text,
+      html: `<p>${emailData.text.replace(/\n/g, '<br/>')}</p>`,
+      emailAccountId,
+      attachments: attachments.map(att => att.file) // Send File objects directly
     });
   };
 
