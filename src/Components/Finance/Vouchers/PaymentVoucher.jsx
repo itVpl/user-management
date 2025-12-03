@@ -452,6 +452,33 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
     }
   }, [searchTerm, data]);
 
+  // Auto-calculate total amount when entries change
+  useEffect(() => {
+    if (showCreateModal || showEditModal) {
+      let total = 0;
+      
+      formData.entries.forEach(entry => {
+        const entryAmount = parseFloat(entry.amount) || 0;
+        total += entryAmount;
+        
+        if (entry.tds?.applicable && entry.tds?.amount) {
+          const tdsAmount = parseFloat(entry.tds.amount) || 0;
+          total += tdsAmount;
+        }
+        
+        if (entry.gst?.applicable && entry.gst?.gstAmount) {
+          const gstAmount = parseFloat(entry.gst.gstAmount) || 0;
+          total += gstAmount;
+        }
+      });
+      
+      const calculatedTotal = total > 0 ? total.toFixed(2) : '';
+      if (formData.totalAmount !== calculatedTotal) {
+        setFormData(prev => ({ ...prev, totalAmount: calculatedTotal }));
+      }
+    }
+  }, [formData.entries, showCreateModal, showEditModal]);
+
   // Sync with parent selectedCompanyId
   useEffect(() => {
     if (selectedCompanyId && selectedCompanyId !== companyId) {
@@ -886,12 +913,59 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
   // Update entry in form
   const handleUpdateEntry = (index, field, value) => {
     const updatedEntries = [...formData.entries];
+    const entry = updatedEntries[index];
+    
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
       updatedEntries[index][parent][child] = value;
     } else {
       updatedEntries[index][field] = value;
     }
+    
+    // Auto-calculate TDS amount when TDS rate changes
+    if (field === 'tds.rate') {
+      const entryAmount = parseFloat(entry.amount) || 0;
+      const tdsRate = parseFloat(value) || 0;
+      if (entryAmount > 0 && tdsRate > 0) {
+        updatedEntries[index].tds.amount = ((entryAmount * tdsRate) / 100).toFixed(2);
+      } else {
+        updatedEntries[index].tds.amount = '';
+      }
+    }
+    
+    // Auto-calculate GST amount when GST rate changes
+    if (field === 'gst.gstRate') {
+      const entryAmount = parseFloat(entry.amount) || 0;
+      const gstRate = parseFloat(value) || 0;
+      if (entryAmount > 0 && gstRate > 0) {
+        updatedEntries[index].gst.gstAmount = ((entryAmount * gstRate) / 100).toFixed(2);
+      } else {
+        updatedEntries[index].gst.gstAmount = '';
+      }
+    }
+    
+    // Recalculate TDS amount when entry amount changes (if TDS is applicable)
+    if (field === 'amount' && entry.tds?.applicable && entry.tds?.rate) {
+      const entryAmount = parseFloat(value) || 0;
+      const tdsRate = parseFloat(entry.tds.rate) || 0;
+      if (entryAmount > 0 && tdsRate > 0) {
+        updatedEntries[index].tds.amount = ((entryAmount * tdsRate) / 100).toFixed(2);
+      } else {
+        updatedEntries[index].tds.amount = '';
+      }
+    }
+    
+    // Recalculate GST amount when entry amount changes (if GST is applicable)
+    if (field === 'amount' && entry.gst?.applicable && entry.gst?.gstRate) {
+      const entryAmount = parseFloat(value) || 0;
+      const gstRate = parseFloat(entry.gst.gstRate) || 0;
+      if (entryAmount > 0 && gstRate > 0) {
+        updatedEntries[index].gst.gstAmount = ((entryAmount * gstRate) / 100).toFixed(2);
+      } else {
+        updatedEntries[index].gst.gstAmount = '';
+      }
+    }
+    
     setFormData({ ...formData, entries: updatedEntries });
   };
 
@@ -1587,13 +1661,13 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
             {/* Content */}
             <div className="p-6 space-y-6">
               {/* Voucher Information */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-2">
+              <div className="bg-green-50 rounded-2xl p-2">
                 <div className="flex items-center gap-2 mb-4">
-                  <DollarSign className="text-blue-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Voucher Information</h3>
+                  <DollarSign className="text-green-600" size={20} />
+                  <h3 className="text-lg font-bold text-green-800">Voucher Information</h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 bg-white border border-blue-200 rounded-xl">
+                <div className="grid grid-cols-2 gap-2 bg-white border border-green-200 rounded-xl">
                   <div className="bg-white rounded-xl p-2 mt-4 ml-4 ">
                     <p className="text-sm text-gray-600 mb-1">Voucher Number</p>
                     <p className="font-semibold text-gray-800">{selectedVoucher.voucherNumber || selectedVoucher._id || selectedVoucher.id || 'N/A'}</p>
@@ -1670,18 +1744,18 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
               </div>
               
               {/* Payment Entries */}
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+              <div className="bg-blue-50 rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <DollarSign className="text-green-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Payment Entries</h3>
+                  <DollarSign className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-bold text-blue-800">Payment Entries</h3>
                 </div>
                 {selectedVoucher.entries && selectedVoucher.entries.length > 0 ? (
                   <div className="space-y-4">
                     {selectedVoucher.entries.map((entry, index) => (
-                      <div key={index} className="bg-white rounded-xl p-4 border border-green-200">
+                      <div key={index} className="bg-white rounded-xl p-4 border border-blue-200">
                         <div className="flex items-center gap-2 mb-3">
-                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-blue-600 font-bold text-sm">{index + 1}</span>
                           </div>
                           <h4 className="font-semibold text-gray-800">Entry {index + 1}</h4>
                         </div>

@@ -499,19 +499,19 @@ const Daybook = ({ selectedCompanyId }) => {
         )}
 
         {/* Table */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto hide-scrollbar">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <thead className="bg-gray-200">
                 <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Voucher No.</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Type</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Narration</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Debit</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Credit</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                  <th className="text-left py-4 px-6 text-black font-semibold text-sm uppercase tracking-wider">Date</th>
+                  <th className="text-left py-4 px-6 text-black font-semibold text-sm uppercase tracking-wider">Voucher No.</th>
+                  <th className="text-left py-4 px-6 text-black font-semibold text-sm uppercase tracking-wider">Type</th>
+                  <th className="text-left py-4 px-6 text-black font-semibold text-sm uppercase tracking-wider">Narration</th>
+                  <th className="text-right py-4 px-6 text-black font-semibold text-sm uppercase tracking-wider">Debit</th>
+                  <th className="text-right py-4 px-6 text-black font-semibold text-sm uppercase tracking-wider">Credit</th>
+                  <th className="text-center py-4 px-6 text-black font-semibold text-sm uppercase tracking-wider">Status</th>
+                  <th className="text-center py-4 px-6 text-black font-semibold text-sm uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -533,39 +533,58 @@ const Daybook = ({ selectedCompanyId }) => {
                   </tr>
                 ) : (
                   filteredVouchers.map((voucher, index) => (
-                    <tr key={voucher._id || index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">
-                          {voucher.voucherDate ? format(new Date(voucher.voucherDate), 'dd MMM yyyy') : '-'}
+                    <tr 
+                      key={voucher._id || index} 
+                      className={`border-b border-gray-200 hover:bg-blue-50 transition-colors ${
+                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                      }`}
+                    >
+                      <td className="py-4 px-2">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={24} className="text-gray-400" />
+                          <span className="text-sm font-medium text-gray-900">
+                            {voucher.voucherDate ? format(new Date(voucher.voucherDate), 'dd MMM yyyy') : '-'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className="font-mono text-sm font-semibold text-blue-600">
+                          {voucher.voucherNumber || '-'}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-mono text-base font-semibold text-gray-700">{voucher.voucherNumber || '-'}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${voucherTypeColor(voucher.voucherType)}`}>
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${voucherTypeColor(voucher.voucherType)}`}>
                           {voucher.voucherType || '-'}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{voucher.narration || '-'}</span>
+                      <td className="py-4 px-6">
+                        <span className="text-sm text-gray-700 line-clamp-2">
+                          {voucher.narration || '-'}
+                        </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">₹{Number(voucher.debitAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <td className="py-4 px-6 text-right">
+                        <span className="text-sm font-semibold text-green-600">
+                          ₹{Number(voucher.debitAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">₹{Number(voucher.creditAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <td className="py-4 px-6 text-right">
+                        <span className="text-sm font-semibold text-red-600">
+                          ₹{Number(voucher.creditAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${voucher.isPosted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                      <td className="py-4 px-6 text-center">
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${
+                          voucher.isPosted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                        }`}>
                           {voucher.isPosted ? 'Posted' : 'Unposted'}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-4 px-6 text-center">
                         <button
                           onClick={() => openViewModal(voucher)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                          className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
                         >
+                          <Eye size={16} />
                           View
                         </button>
                       </td>
@@ -638,9 +657,9 @@ const Daybook = ({ selectedCompanyId }) => {
 
               <div className="p-6 space-y-6">
                 {/* Basic Information */}
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-blue-800 mb-4">Basic Information</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold text-green-800 mb-4">Basic Information</h3>
+                  <div className="grid grid-cols-2 gap-4 bg-white p-4 border border-blue-100 rounded-2xl">
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Voucher Type</label>
                       <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${voucherTypeColor(selectedVoucher.voucherType)}`}>
@@ -668,9 +687,12 @@ const Daybook = ({ selectedCompanyId }) => {
 
                 {/* Narration */}
                 {selectedVoucher.narration && (
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Narration</label>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    
+                    <label className="block text-sm font-medium text-blue-700 mb-2">Narration</label>
+                    <div className='bg-white p-4 rounded-2xl border border-blue-200'>
                     <p className="text-gray-900">{selectedVoucher.narration}</p>
+                    </div>
                   </div>
                 )}
 
@@ -715,7 +737,7 @@ const Daybook = ({ selectedCompanyId }) => {
                 )}
 
                 {/* Totals */}
-                <div className="grid grid-cols-2 gap-6 bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-2 gap-6 bg-orange-50 p-6 rounded-lg border border-gray-200">
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Total Debit</label>
                     <p className="text-2xl font-bold text-green-600">

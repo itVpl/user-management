@@ -730,18 +730,18 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="bg-white rounded-2xl shadow-xl p-2 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
                 <FileText className="text-orange-600" size={20} />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total Vouchers</p>
+                <p className="text-sm text-gray-600">Total Purchase</p>
                 <p className="text-xl font-bold text-gray-800">{data.length}</p>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="bg-white rounded-2xl shadow-xl p-2 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
                 <DollarSign className="text-red-600" size={20} />
@@ -1685,15 +1685,17 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
             Close
           </button>
 
-          <button
-            onClick={() => {
-              setShowViewModal(false);
-              handleEditPurchase(selectedVoucher);
-            }}
-            className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold shadow hover:from-green-600 hover:to-green-700"
-          >
-            Edit
-          </button>
+          {!selectedVoucher.isPosted && (
+            <button
+              onClick={() => {
+                setShowViewModal(false);
+                handleEdit(selectedVoucher);
+              }}
+              className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold shadow hover:from-green-600 hover:to-green-700"
+            >
+              Edit
+            </button>
+          )}
         </div>
 
       </div>

@@ -457,7 +457,9 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
     const entryTotal = formData.entries.reduce((sum, e) => {
       const baseAmount = parseFloat(e.amount) || 0;
       const gstAmount = e.gst.applicable ? (parseFloat(e.gst.gstAmount) || 0) : 0;
-      return sum + baseAmount + gstAmount;
+      const tdsAmount = e.tds.applicable ? (parseFloat(e.tds.amount) || 0) : 0;
+      // For Debit Note: Subtract GST and TDS from base amount
+      return sum + baseAmount - gstAmount - tdsAmount;
     }, 0);
     return { supplierTotal, entryTotal };
   };

@@ -1180,13 +1180,13 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
             {/* Content */}
             <div className="p-6 space-y-6">
               {/* Voucher Information */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-2">
+              <div className="bg-green-50 rounded-2xl p-2">
                 <div className="flex items-center gap-2 mb-4">
-                  <ArrowLeftRight className="text-blue-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Voucher Information</h3>
+                  <ArrowLeftRight className="text-green-600" size={20} />
+                  <h3 className="text-lg font-bold text-green-800">Voucher Information</h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 bg-white border border-blue-200 rounded-xl">
+                <div className="grid grid-cols-2 gap-2 bg-white border border-green-200 rounded-xl">
                   <div className="bg-white rounded-xl p-2 mt-4 ml-4">
                     <p className="text-sm text-gray-600 mb-1">Voucher Number</p>
                     <p className="font-semibold text-gray-800">{selectedVoucher.voucherNumber || selectedVoucher._id || selectedVoucher.id || 'N/A'}</p>
@@ -1235,12 +1235,12 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
               </div>
               
               {/* Transaction Details */}
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+              <div className="bg-blue-50 rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <ArrowLeftRight className="text-green-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Transaction Details</h3>
+                  <ArrowLeftRight className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-bold text-blue-800">Transaction Details</h3>
                 </div>
-                <div className="bg-white rounded-xl p-4 border border-green-200">
+                <div className="bg-white rounded-xl p-4 border border-blue-200">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <p className="text-sm text-gray-600 mb-1">From Account (Debit)</p>

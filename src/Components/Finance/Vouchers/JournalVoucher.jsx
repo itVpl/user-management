@@ -358,6 +358,42 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
     }
   }, [searchTerm, data]);
 
+  // Auto-calculate total amount when entries change
+  useEffect(() => {
+    if (showCreateModal || showEditModal) {
+      let totalDebit = 0;
+      let totalCredit = 0;
+      
+      formData.entries.forEach(entry => {
+        const entryAmount = parseFloat(entry.amount) || 0;
+        
+        // Add TDS and GST to the entry amount
+        let entryTotal = entryAmount;
+        if (entry.tds?.applicable && entry.tds?.amount) {
+          const tdsAmount = parseFloat(entry.tds.amount) || 0;
+          entryTotal += tdsAmount;
+        }
+        if (entry.gst?.applicable && entry.gst?.gstAmount) {
+          const gstAmount = parseFloat(entry.gst.gstAmount) || 0;
+          entryTotal += gstAmount;
+        }
+        
+        if (entry.entryType === 'Debit') {
+          totalDebit += entryTotal;
+        } else if (entry.entryType === 'Credit') {
+          totalCredit += entryTotal;
+        }
+      });
+      
+      // For journal voucher, use the higher of debit or credit as total
+      const calculatedTotal = Math.max(totalDebit, totalCredit) > 0 ? Math.max(totalDebit, totalCredit).toFixed(2) : '';
+      if (formData.totalAmount !== calculatedTotal) {
+        setFormData(prev => ({ ...prev, totalAmount: calculatedTotal }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.entries, showCreateModal, showEditModal]);
+
   useEffect(() => {
     if (selectedCompanyId && selectedCompanyId !== companyId) {
       setCompanyId(selectedCompanyId);
@@ -550,11 +586,20 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
         return;
       }
 
+      // Calculate total including TDS and GST
+      let entryTotal = amount;
+      if (entry.tds?.applicable && entry.tds?.amount) {
+        entryTotal += parseFloat(entry.tds.amount) || 0;
+      }
+      if (entry.gst?.applicable && entry.gst?.gstAmount) {
+        entryTotal += parseFloat(entry.gst.gstAmount) || 0;
+      }
+
       if (entry.entryType === 'Debit') {
-        totalDebit += amount;
+        totalDebit += entryTotal;
         hasDebit = true;
       } else {
-        totalCredit += amount;
+        totalCredit += entryTotal;
         hasCredit = true;
       }
     }
@@ -682,12 +727,59 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
 
   const handleUpdateEntry = (index, field, value) => {
     const updatedEntries = [...formData.entries];
+    const entry = updatedEntries[index];
+    
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
       updatedEntries[index][parent][child] = value;
     } else {
       updatedEntries[index][field] = value;
     }
+    
+    // Auto-calculate TDS amount when TDS rate changes
+    if (field === 'tds.rate') {
+      const entryAmount = parseFloat(entry.amount) || 0;
+      const tdsRate = parseFloat(value) || 0;
+      if (entryAmount > 0 && tdsRate > 0) {
+        updatedEntries[index].tds.amount = ((entryAmount * tdsRate) / 100).toFixed(2);
+      } else {
+        updatedEntries[index].tds.amount = '';
+      }
+    }
+    
+    // Auto-calculate GST amount when GST rate changes
+    if (field === 'gst.gstRate') {
+      const entryAmount = parseFloat(entry.amount) || 0;
+      const gstRate = parseFloat(value) || 0;
+      if (entryAmount > 0 && gstRate > 0) {
+        updatedEntries[index].gst.gstAmount = ((entryAmount * gstRate) / 100).toFixed(2);
+      } else {
+        updatedEntries[index].gst.gstAmount = '';
+      }
+    }
+    
+    // Recalculate TDS amount when entry amount changes (if TDS is applicable)
+    if (field === 'amount' && entry.tds?.applicable && entry.tds?.rate) {
+      const entryAmount = parseFloat(value) || 0;
+      const tdsRate = parseFloat(entry.tds.rate) || 0;
+      if (entryAmount > 0 && tdsRate > 0) {
+        updatedEntries[index].tds.amount = ((entryAmount * tdsRate) / 100).toFixed(2);
+      } else {
+        updatedEntries[index].tds.amount = '';
+      }
+    }
+    
+    // Recalculate GST amount when entry amount changes (if GST is applicable)
+    if (field === 'amount' && entry.gst?.applicable && entry.gst?.gstRate) {
+      const entryAmount = parseFloat(value) || 0;
+      const gstRate = parseFloat(entry.gst.gstRate) || 0;
+      if (entryAmount > 0 && gstRate > 0) {
+        updatedEntries[index].gst.gstAmount = ((entryAmount * gstRate) / 100).toFixed(2);
+      } else {
+        updatedEntries[index].gst.gstAmount = '';
+      }
+    }
+    
     setFormData({ ...formData, entries: updatedEntries });
   };
 
@@ -696,8 +788,18 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
     let credit = 0;
     formData.entries.forEach(entry => {
       const amount = parseFloat(entry.amount) || 0;
-      if (entry.entryType === 'Debit') debit += amount;
-      else if (entry.entryType === 'Credit') credit += amount;
+      
+      // Add TDS and GST to the entry amount
+      let entryTotal = amount;
+      if (entry.tds?.applicable && entry.tds?.amount) {
+        entryTotal += parseFloat(entry.tds.amount) || 0;
+      }
+      if (entry.gst?.applicable && entry.gst?.gstAmount) {
+        entryTotal += parseFloat(entry.gst.gstAmount) || 0;
+      }
+      
+      if (entry.entryType === 'Debit') debit += entryTotal;
+      else if (entry.entryType === 'Credit') credit += entryTotal;
     });
     return { debit, credit, difference: debit - credit };
   };
@@ -705,168 +807,229 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
   const balance = calculateBalance();
 
   return (
-    <div className="p-6">
+    <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
-              <BookOpen className="text-white" size={24} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">Journal Vouchers</h2>
-              <p className="text-gray-600 text-sm">Manage non-cash accounting entries</p>
+      <div className="bg-white border-b border-gray-200 shadow-sm p-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-6">
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <BookOpen className="text-purple-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Journals</p>
+                  <p className="text-xl font-bold text-gray-800">{filteredData.length}</p>
+                </div>
+              </div>
             </div>
           </div>
-          <button
-            onClick={handleCreateJournal}
-            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition flex items-center gap-2 shadow-lg"
-          >
-            <PlusCircle size={20} />
-            Create Journal
-          </button>
-        </div>
-
-        {/* Search and Filter */}
-        <div className="flex gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search journal vouchers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
+          
+          <div className="flex items-center gap-4">
+            {/* {companies.length > 0 && (
+              <div className="relative">
+                <select
+                  value={companyId || ''}
+                  onChange={(e) => {
+                    const selectedCompanyId = e.target.value;
+                    setCompanyId(selectedCompanyId);
+                    setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+                    setFilters({
+                      startDate: '',
+                      endDate: '',
+                      journalType: '',
+                      isPosted: ''
+                    });
+                    if (selectedCompanyId) {
+                      fetchJournalData({}, selectedCompanyId).then(result => {
+                        setData(result);
+                        setFilteredData(result);
+                      }).catch(error => {
+                        console.error('Error fetching journal data:', error);
+                        const errorMessage = error.response?.data?.message || error.message || 'Failed to load journal data';
+                        alertify.error(errorMessage);
+                        setData([]);
+                        setFilteredData([]);
+                      });
+                    } else {
+                      setData([]);
+                      setFilteredData([]);
+                    }
+                  }}
+                  className="w-48 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-sm font-medium"
+                >
+                  <option value="">Select Company</option>
+                  {companies.map((company) => (
+                    <option key={company._id || company.id} value={company._id || company.id}>
+                      {company.companyName} {company.isDefault ? '(Default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )} */}
+            
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search journals..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            
+            <button
+              onClick={() => setShowCustomRange(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+            >
+              <Calendar size={18} className="text-blue-600" />
+              <span className="text-sm font-medium">
+                {format(range.startDate, 'dd MMM yyyy')} - {format(range.endDate, 'dd MMM yyyy')}
+              </span>
+            </button>
+            
+            <button
+              onClick={() => setShowFilterModal(true)}
+              className="flex items-center gap-2 px-5 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold shadow hover:bg-gray-50 transition"
+            >
+              <Filter size={20} /> Status Filter
+            </button>
+            
+            <button
+              onClick={handleCreateJournal}
+              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg text-white font-semibold shadow hover:from-purple-600 hover:to-purple-700 transition"
+            >
+              <PlusCircle size={20} /> Create Journal
+            </button>
           </div>
-          <button
-            onClick={() => setShowCustomRange(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
-          >
-            <Calendar size={18} className="text-blue-600" />
-            <span className="text-sm font-medium">
-              {format(range.startDate, 'dd MMM yyyy')} - {format(range.endDate, 'dd MMM yyyy')}
-            </span>
-          </button>
-          <button
-            onClick={() => setShowFilterModal(true)}
-            className="px-6 py-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
-          >
-            <Filter size={20} />
-            Status Filter
-          </button>
         </div>
       </div>
 
-      {/* Data Table */}
-      {loading ? (
-        <div className="bg-white rounded-xl shadow-md p-12">
-          <div className="flex justify-center items-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading journal vouchers...</p>
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          {loading ? (
+            <div className="p-12">
+              <div className="flex justify-center items-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading journals...</p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      ) : filteredData.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-md p-12">
-          <div className="text-center">
-            <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No journal vouchers found</p>
-            <p className="text-gray-400 text-sm mt-2">Create your first journal voucher to get started</p>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Voucher No.</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Date</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Journal Type</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Amount</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Status</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredData.map((voucher, index) => (
-                  <tr key={voucher._id || voucher.id || index} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 text-sm text-gray-900">{voucher.voucherNumber || 'N/A'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {voucher.voucherDate ? new Date(voucher.voucherDate).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
-                        {voucher.journalType || 'Other'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                      ₹{voucher.totalAmount ? voucher.totalAmount.toLocaleString() : '0'}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      {voucher.isPosted ? (
-                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium flex items-center gap-1 w-fit">
-                          <CheckCircle size={14} /> Posted
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium flex items-center gap-1 w-fit">
-                          <XCircle size={14} /> Draft
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex justify-center gap-2">
-                        <button
-                          onClick={() => handleViewJournal(voucher)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                          title="View"
-                        >
-                          <Eye size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleEditJournal(voucher)}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
-                          title="Edit"
-                          disabled={voucher.isPosted}
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteJournal(voucher)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Delete"
-                          disabled={voucher.isPosted}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                        {voucher.isPosted ? (
-                          <button
-                            onClick={() => handleUnpostJournal(voucher)}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                            title="Unpost"
-                          >
-                            <XCircle size={18} />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handlePostJournal(voucher)}
-                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition"
-                            title="Post"
-                          >
-                            <CheckCircle size={18} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                  <tr>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Voucher Number</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Journal Type</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Amount</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredData.length > 0 ? (
+                    filteredData.map((item, index) => {
+                      const voucherId = item._id || item.id || 'N/A';
+                      const voucherNumber = item.voucherNumber || 'N/A';
+                      const voucherDate = item.voucherDate || item.date || '';
+                      const journalType = item.journalType || 'Other';
+                      const totalAmount = item.totalAmount || 0;
+                      const isPosted = item.isPosted !== undefined ? item.isPosted : false;
+                      
+                      return (
+                        <tr
+                          key={voucherId}
+                          className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                        >
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700">{voucherNumber}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700">
+                              {voucherDate ? new Date(voucherDate).toLocaleDateString() : 'N/A'}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700">{journalType}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700">
+                              ₹{Number(totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                isPosted
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}
+                            >
+                              {isPosted ? 'Posted' : 'Unposted'}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleViewJournal(item)}
+                                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                View
+                              </button>
+                              <button
+                                onClick={() => handleEditJournal(item)}
+                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                Edit
+                              </button>
+                              {isPosted ? (
+                                <button
+                                  onClick={() => handleUnpostJournal(item)}
+                                  className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  Unpost
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handlePostJournal(item)}
+                                  className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  Post
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteJournal(item)}
+                                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="py-12 text-center text-gray-500">
+                        <div className="flex flex-col items-center gap-3">
+                          <BookOpen size={48} className="text-gray-300" />
+                          <p className="text-lg font-medium">No journal vouchers found</p>
+                          <p className="text-sm">Create your first journal voucher to get started</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Date Range Modal */}
       {showCustomRange && (
@@ -905,18 +1068,30 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
 
       {/* Status Filter Modal */}
       {showFilterModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-2xl">
-              <h3 className="text-xl font-bold">Filter Journal Vouchers</h3>
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full">
+            <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <Filter className="text-white" size={24} />
+                  <h2 className="text-xl font-bold">Filter Journals</h2>
+                </div>
+                <button
+                  onClick={() => setShowFilterModal(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
             </div>
+            
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Journal Type</label>
                 <select
                   value={filters.journalType}
                   onChange={(e) => setFilters({ ...filters, journalType: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   <option value="">All Types</option>
                   <option value="Adjustment">Adjustment</option>
@@ -933,34 +1108,35 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
                 <select
                   value={filters.isPosted}
                   onChange={(e) => setFilters({ ...filters, isPosted: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
-                  <option value="">All Status</option>
+                  <option value="">All</option>
                   <option value="true">Posted</option>
-                  <option value="false">Draft</option>
+                  <option value="false">Unposted</option>
                 </select>
               </div>
-            </div>
-            <div className="p-6 bg-gray-50 rounded-b-2xl flex gap-3">
-              <button
-                onClick={() => {
-                  setFilters({ startDate: '', endDate: '', journalType: '', isPosted: '' });
-                  setShowFilterModal(false);
-                  fetchData();
-                }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                Reset
-              </button>
-              <button
-                onClick={() => {
-                  setShowFilterModal(false);
-                  fetchData();
-                }}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition"
-              >
-                Apply
-              </button>
+              
+              <div className="flex justify-end gap-4 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setFilters({ journalType: '', isPosted: '' });
+                    setShowFilterModal(false);
+                    fetchData();
+                  }}
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFilterModal(false);
+                    fetchData();
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-semibold shadow hover:from-purple-600 hover:to-purple-700 transition"
+                >
+                  Apply Filters
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1330,17 +1506,24 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
 
       {/* View Modal */}
       {showViewModal && selectedVoucher && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl sticky top-0 z-10">
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <Eye size={24} />
+                    <Eye className="text-white" size={24} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">View Journal Voucher</h2>
-                    <p className="text-purple-100">Voucher details</p>
+                    <h2 className="text-xl font-bold">Journal Voucher Details</h2>
+                    <p className="text-purple-100">View journal voucher information</p>
                   </div>
                 </div>
                 <button
@@ -1354,118 +1537,180 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
                 </button>
               </div>
             </div>
-
+            
             <div className="p-6 space-y-6">
-              {/* Basic Info */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h3>
-                <div className="grid grid-cols-2 gap-4">
+              <div className="bg-green-50 rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpen className="text-green-600" size={20} />
+                  <h3 className="text-lg font-bold text-green-800">Voucher Information</h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 bg-white border border-green-200 rounded-xl p-4">
                   <div>
-                    <p className="text-sm text-gray-600">Voucher Number</p>
-                    <p className="text-base font-semibold text-gray-900">{selectedVoucher.voucherNumber || 'N/A'}</p>
+                    <p className="text-sm text-gray-600 mb-1">Voucher Number</p>
+                    <p className="font-semibold text-gray-800">{selectedVoucher.voucherNumber || selectedVoucher._id || selectedVoucher.id || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Date</p>
-                    <p className="text-base font-semibold text-gray-900">
+                    <p className="text-sm text-gray-600 mb-1">Company</p>
+                    <p className="font-semibold text-gray-800">
+                      {selectedVoucher.company && typeof selectedVoucher.company === 'object' && selectedVoucher.company !== null
+                        ? (selectedVoucher.company.companyName || selectedVoucher.company._id || 'N/A')
+                        : (companies.find(c => (c._id || c.id) === selectedVoucher.company)?.companyName || selectedVoucher.company || 'N/A')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Voucher Date</p>
+                    <p className="font-semibold text-gray-800">
                       {selectedVoucher.voucherDate ? new Date(selectedVoucher.voucherDate).toLocaleDateString() : 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Journal Type</p>
-                    <p className="text-base font-semibold text-gray-900">{selectedVoucher.journalType || 'Other'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Amount</p>
-                    <p className="text-base font-semibold text-gray-900">
-                      ₹{selectedVoucher.totalAmount ? selectedVoucher.totalAmount.toLocaleString() : '0'}
-                    </p>
+                    <p className="text-sm text-gray-600 mb-1">Journal Type</p>
+                    <p className="font-semibold text-gray-800">{selectedVoucher.journalType || 'Other'}</p>
                   </div>
                   {selectedVoucher.referenceNumber && (
                     <div>
-                      <p className="text-sm text-gray-600">Reference Number</p>
-                      <p className="text-base font-semibold text-gray-900">{selectedVoucher.referenceNumber}</p>
+                      <p className="text-sm text-gray-600 mb-1">Reference Number</p>
+                      <p className="font-semibold text-gray-800">{selectedVoucher.referenceNumber}</p>
                     </div>
                   )}
                   <div>
-                    <p className="text-sm text-gray-600">Status</p>
-                    <p className="text-base font-semibold">
-                      {selectedVoucher.isPosted ? (
-                        <span className="text-green-600">Posted</span>
-                      ) : (
-                        <span className="text-yellow-600">Draft</span>
-                      )}
+                    <p className="text-sm text-gray-600 mb-1">Total Amount</p>
+                    <p className="font-semibold text-gray-800">
+                      ₹{Number(selectedVoucher.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
-                </div>
-              </div>
-
-              {/* Entries */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-blue-800 mb-4">Journal Entries</h3>
-                <div className="space-y-3">
-                  {selectedVoucher.entries && selectedVoucher.entries.map((entry, index) => (
-                    <div key={index} className="bg-white p-4 rounded-lg border border-gray-200">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm text-gray-600">Account</p>
-                          <p className="text-base font-semibold text-gray-900">
-                            {entry.account?.name || entry.account || 'N/A'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Entry Type</p>
-                          <p className="text-base font-semibold">
-                            <span className={`px-3 py-1 rounded-full text-xs ${
-                              entry.entryType === 'Debit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                            }`}>
-                              {entry.entryType}
-                            </span>
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Amount</p>
-                          <p className="text-base font-semibold text-gray-900">
-                            ₹{entry.amount ? entry.amount.toLocaleString() : '0'}
-                          </p>
-                        </div>
-                        {entry.narration && (
-                          <div className="col-span-2">
-                            <p className="text-sm text-gray-600">Narration</p>
-                            <p className="text-base text-gray-900">{entry.narration}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Additional Details */}
-              {(selectedVoucher.narration || selectedVoucher.remarks) && (
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-purple-800 mb-4">Additional Details</h3>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Status</p>
+                    <p className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      selectedVoucher.isPosted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {selectedVoucher.isPosted ? 'Posted' : 'Unposted'}
+                    </p>
+                  </div>
                   {selectedVoucher.narration && (
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-600">Narration</p>
-                      <p className="text-base text-gray-900">{selectedVoucher.narration}</p>
+                    <div className="col-span-2">
+                      <p className="text-sm text-gray-600 mb-1">Narration</p>
+                      <p className="font-semibold text-gray-800">{selectedVoucher.narration}</p>
                     </div>
                   )}
                   {selectedVoucher.remarks && (
-                    <div>
-                      <p className="text-sm text-gray-600">Remarks</p>
-                      <p className="text-base text-gray-900">{selectedVoucher.remarks}</p>
+                    <div className="col-span-2">
+                      <p className="text-sm text-gray-600 mb-1">Remarks</p>
+                      <p className="font-semibold text-gray-800">{selectedVoucher.remarks}</p>
                     </div>
                   )}
                 </div>
-              )}
+              </div>
 
-              <div className="flex justify-end">
+              <div className="bg-blue-50 rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpen className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-bold text-blue-800">Journal Entries</h3>
+                </div>
+
+                <div className="space-y-4">
+                  {selectedVoucher.entries && selectedVoucher.entries.length > 0 ? (
+                    selectedVoucher.entries.map((entry, index) => (
+                      <div key={index} className="bg-white border border-blue-200 rounded-xl p-4">
+                        <h4 className="font-semibold text-gray-800 mb-3">Entry {index + 1}</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Account</p>
+                            <p className="font-semibold text-gray-800">
+                              {entry.account && typeof entry.account === 'object' && entry.account !== null
+                                ? (entry.account.name || entry.account._id || 'N/A')
+                                : (entry.account || 'N/A')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Entry Type</p>
+                            <p className="font-semibold text-gray-800">{entry.entryType || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Amount</p>
+                            <p className="font-semibold text-gray-800">
+                              ₹{Number(entry.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          {entry.billWise && (
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">Bill Wise</p>
+                              <p className="font-semibold text-gray-800">{entry.billWise}</p>
+                            </div>
+                          )}
+                          {entry.billReference && (
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">Bill Reference</p>
+                              <p className="font-semibold text-gray-800">{entry.billReference}</p>
+                            </div>
+                          )}
+                          {entry.tds?.applicable && (
+                            <>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">TDS Section</p>
+                                <p className="font-semibold text-gray-800">{entry.tds.section || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">TDS Rate</p>
+                                <p className="font-semibold text-gray-800">{entry.tds.rate || 0}%</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">TDS Amount</p>
+                                <p className="font-semibold text-gray-800">
+                                  ₹{Number(entry.tds.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">TDS Account</p>
+                                <p className="font-semibold text-gray-800">
+                                  {entry.tds.tdsAccount && typeof entry.tds.tdsAccount === 'object' && entry.tds.tdsAccount !== null
+                                    ? (entry.tds.tdsAccount.name || entry.tds.tdsAccount._id || 'N/A')
+                                    : (entry.tds.tdsAccount || 'N/A')}
+                                </p>
+                              </div>
+                            </>
+                          )}
+                          {entry.gst?.applicable && (
+                            <>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">GST Type</p>
+                                <p className="font-semibold text-gray-800">{entry.gst.gstType || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">GST Rate</p>
+                                <p className="font-semibold text-gray-800">{entry.gst.gstRate || 0}%</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">GST Amount</p>
+                                <p className="font-semibold text-gray-800">
+                                  ₹{Number(entry.gst.gstAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            </>
+                          )}
+                          {entry.narration && (
+                            <div className="col-span-2">
+                              <p className="text-sm text-gray-600 mb-1">Narration</p>
+                              <p className="font-semibold text-gray-800">{entry.narration}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No entries found</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-4 pt-4">
                 <button
                   onClick={() => {
                     setShowViewModal(false);
                     setSelectedVoucher(null);
                   }}
-                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
                 >
                   Close
                 </button>
