@@ -429,15 +429,24 @@ const handleCitySelect = (city) => {
       }
 
       // Handle different response structures
+      let truckersList = [];
       if (response.truckers) {
-        setTruckers(response.truckers);
+        truckersList = response.truckers;
       } else if (response.data && response.data.truckers) {
-        setTruckers(response.data.truckers);
+        truckersList = response.data.truckers;
+      } else if (response.data && Array.isArray(response.data)) {
+        truckersList = response.data;
       } else if (Array.isArray(response)) {
-        setTruckers(response);
-      } else {
-        setTruckers([]);
+        truckersList = response;
       }
+      
+      // Debug: Log first trucker to see structure
+      if (truckersList.length > 0) {
+        console.log('=== FIRST TRUCKER FROM API ===');
+        console.log(JSON.stringify(truckersList[0], null, 2));
+      }
+      
+      setTruckers(truckersList);
     } catch (err) {
       console.error('Error fetching truckers:', err);
       if (err.message.includes('403') || err.message.includes('401')) {
@@ -485,13 +494,19 @@ const handleCitySelect = (city) => {
   };
 
   // Handle edit trucker
+  // NOTE: Currently using data from table row. There is NO API call to fetch a single trucker.
+  // The edit form data comes directly from the trucker object passed when clicking Edit button.
   const handleEditTrucker = (trucker) => {
     console.log('Trucker data for editing:', trucker);
-    console.log('Available ID fields:', {
-      _id: trucker._id,
-      userId: trucker.userId,
-      id: trucker.id
-    });
+    
+    // Get company address - API uses 'compAdd' field
+    const companyAddress = trucker.compAdd || trucker.address || trucker.companyAddress || trucker.compAddress || '';
+    
+    // Get zip code - API uses 'zipcode' field (lowercase)
+    const zipCodeValue = trucker.zipcode || trucker.zipCode || trucker.pinCode || trucker.pincode || trucker.postalCode || trucker.zip || '';
+    
+    console.log('Company Address:', companyAddress);
+    console.log('Zip Code:', zipCodeValue);
 
     setEditFormData({
       _id: trucker._id || trucker.userId,
@@ -504,10 +519,10 @@ const handleCitySelect = (city) => {
       city: trucker.city || '',
       state: trucker.state || '',
       country: trucker.country || '',
-      // address ke common alternate keys (including compAdd from AddTruckerform):
-      address: trucker.compAdd || trucker.address || trucker.companyAddress || trucker.compAddress || '',
-      // zip/pin/postal ke common alternate keys (including zipcode from AddTruckerform):
-      zipCode: trucker.zipcode || trucker.zipCode || trucker.pinCode || trucker.pincode || trucker.postalCode || trucker.zip || '',
+      // Company address - API response uses 'compAdd'
+      address: companyAddress,
+      // Zip code - API response uses 'zipcode' (lowercase)
+      zipCode: zipCodeValue,
       status: trucker.status || 'pending',
 
       // ... (baaki document URLs same rakhna)
@@ -541,8 +556,6 @@ const handleCitySelect = (city) => {
       insurance: null,
 
     });
-
-
 
     // Reset upload status
     setEditUploadStatus({
