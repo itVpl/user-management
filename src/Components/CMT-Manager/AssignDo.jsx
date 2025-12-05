@@ -98,6 +98,7 @@ export default function AssignDo() {
               assignedToCMT: assignment.assignedToCMT || null,
               assignmentStatus: assignment.assignmentStatus || 'N/A',
               doStatus: assignment.doStatus || 'N/A',
+              loadReferenceStatus: assignment.loadReference?.status || assignment.doStatus || 'N/A',
               createdAt: assignment.createdAt || new Date().toISOString()
             };
           });
@@ -520,8 +521,8 @@ export default function AssignDo() {
                           </div>
                         </td>
                         <td className="py-2 px-3">
-                          <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(assignment.doStatus)}`}>
-                            {assignment.doStatus}
+                          <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(assignment.loadReferenceStatus)}`}>
+                            {assignment.loadReferenceStatus}
                           </span>
                         </td>
                         <td className="py-2 px-3">
