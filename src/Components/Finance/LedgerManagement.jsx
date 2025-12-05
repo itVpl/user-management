@@ -4,6 +4,11 @@ import { Search, PlusCircle, Edit, Trash2, Eye, CheckCircle, XCircle, Filter, Bu
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import Loader from '../common/Loader.jsx';
+import { DateRange } from 'react-date-range';
+import { format } from 'date-fns';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -153,6 +158,19 @@ const LedgerManagement = ({ selectedCompanyId }) => {
   // Stats for counts (will be fetched separately)
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
 
+  // Date filter state
+  const getDefaultDateRange = () => {
+    const currentYear = new Date().getFullYear();
+    return {
+      startDate: new Date(currentYear, 0, 1),
+      endDate: new Date(currentYear, 11, 31),
+      key: 'selection'
+    };
+  };
+  const [range, setRange] = useState(getDefaultDateRange());
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [dateFilterApplied, setDateFilterApplied] = useState(true);
+
   // Modal States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -274,6 +292,11 @@ const LedgerManagement = ({ selectedCompanyId }) => {
         sortBy: 'name',
         sortOrder: 'asc'
       });
+
+      if (dateFilterApplied && range) {
+        params.append('startDate', format(range.startDate, 'yyyy-MM-dd'));
+        params.append('endDate', format(range.endDate, 'yyyy-MM-dd'));
+      }
 
       if (searchTerm) params.append('search', searchTerm);
       if (isActiveFilter !== '') params.append('isActive', isActiveFilter);
@@ -664,7 +687,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
       fetchStats(); // Fetch stats for counts
       fetchLedgers(currentPage);
     }
-  }, [selectedCompanyId, currentPage, isActiveFilter]);
+  }, [selectedCompanyId, currentPage, isActiveFilter, dateFilterApplied]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -678,16 +701,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
 
   // Loading State
   if (loading && ledgers.length === 0) {
-    return (
-      <div className="p-6">
-        <div className="flex justify-center items-center" style={{ minHeight: '400px' }}>
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-green-200 border-t-green-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading ledger accounts...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <Loader variant="section" message="Loading ledger accounts..." />;
   }
 
   // Use stats from state (actual counts, not filtered)
@@ -704,110 +718,88 @@ const LedgerManagement = ({ selectedCompanyId }) => {
         }
       `}</style>
       <div className="p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div 
-            className={`bg-white rounded-2xl shadow-xl p-4 border-2 cursor-pointer transition-all hover:shadow-2xl ${
-              isActiveFilter === '' 
-                ? 'border-green-500 bg-green-50' 
-                : 'border-gray-100 hover:border-green-300'
-            }`}
-            onClick={() => {
-              setIsActiveFilter('');
-              setCurrentPage(1);
-            }}
-            title="Click to view all ledgers"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                isActiveFilter === '' ? 'bg-green-200' : 'bg-green-100'
-              }`}>
-                <Wallet className="text-green-600" size={20} />
+      <div className="mb-6">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-4">
+            <div
+              className={`bg-white rounded-xl shadow p-3 border cursor-pointer transition-all ${
+                isActiveFilter === '' ? 'border-green-500 bg-green-50' : 'border-gray-100 hover:border-green-300'
+              }`}
+              onClick={() => { setIsActiveFilter(''); setCurrentPage(1); }}
+              title="Click to view all ledgers"
+            >
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActiveFilter === '' ? 'bg-green-200' : 'bg-green-100'}`}>
+                  <Wallet className="text-green-600" size={18} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600">Total Ledgers</p>
+                  <p className="text-lg font-bold text-gray-800">{stats.total}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Ledgers</p>
-                <p className="text-xl font-bold text-gray-800">{stats.total}</p>
+            </div>
+            <div
+              className={`bg-white rounded-xl shadow p-3 border cursor-pointer transition-all ${
+                isActiveFilter === 'true' ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-blue-300'
+              }`}
+              onClick={() => { if (isActiveFilter === 'true') { setIsActiveFilter(''); } else { setIsActiveFilter('true'); setCurrentPage(1); } }}
+              title="Click to filter active ledgers"
+            >
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActiveFilter === 'true' ? 'bg-blue-200' : 'bg-blue-100'}`}>
+                  <CheckCircle className="text-blue-600" size={18} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600">Active</p>
+                  <p className="text-lg font-bold text-blue-600">{stats.active}</p>
+                </div>
+              </div>
+            </div>
+            <div
+              className={`bg-white rounded-xl shadow p-3 border cursor-pointer transition-all ${
+                isActiveFilter === 'false' ? 'border-red-500 bg-red-50' : 'border-gray-100 hover:border-red-300'
+              }`}
+              onClick={() => { if (isActiveFilter === 'false') { setIsActiveFilter(''); } else { setIsActiveFilter('false'); setCurrentPage(1); } }}
+              title="Click to filter inactive ledgers"
+            >
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActiveFilter === 'false' ? 'bg-red-200' : 'bg-red-100'}`}>
+                  <XCircle className="text-red-600" size={18} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600">Inactive</p>
+                  <p className="text-lg font-bold text-red-600">{stats.inactive}</p>
+                </div>
               </div>
             </div>
           </div>
-          <div 
-            className={`bg-white rounded-2xl shadow-xl p-4 border-2 cursor-pointer transition-all hover:shadow-2xl ${
-              isActiveFilter === 'true' 
-                ? 'border-blue-500 bg-blue-50' 
-                : 'border-gray-100 hover:border-blue-300'
-            }`}
-            onClick={() => {
-              if (isActiveFilter === 'true') {
-                setIsActiveFilter(''); // Reset filter if already active
-              } else {
-                setIsActiveFilter('true');
-                setCurrentPage(1);
-              }
-            }}
-            title="Click to filter active ledgers"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                isActiveFilter === 'true' ? 'bg-blue-200' : 'bg-blue-100'
-              }`}>
-                <CheckCircle className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Active</p>
-                <p className="text-xl font-bold text-blue-600">{stats.active}</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search ledgers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
             </div>
+            <button
+              onClick={() => setShowCustomRange(true)}
+              className="flex items-center gap-2 px-3 py-2 border border-blue-500 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+            >
+              <Calendar size={18} className="text-blue-600" />
+              <span className="text-sm font-medium">
+                {format(range.startDate, 'dd MMM yyyy')} - {format(range.endDate, 'dd MMM yyyy')}
+              </span>
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+            >
+              <PlusCircle size={18} /> Create Ledger
+            </button>
           </div>
-          <div 
-            className={`bg-white rounded-2xl shadow-xl p-4 border-2 cursor-pointer transition-all hover:shadow-2xl ${
-              isActiveFilter === 'false' 
-                ? 'border-red-500 bg-red-50' 
-                : 'border-gray-100 hover:border-red-300'
-            }`}
-            onClick={() => {
-              if (isActiveFilter === 'false') {
-                setIsActiveFilter(''); // Reset filter if already active
-              } else {
-                setIsActiveFilter('false');
-                setCurrentPage(1);
-              }
-            }}
-            title="Click to filter inactive ledgers"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                isActiveFilter === 'false' ? 'bg-red-200' : 'bg-red-100'
-              }`}>
-                <XCircle className="text-red-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Inactive</p>
-                <p className="text-xl font-bold text-red-600">{stats.inactive}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search ledgers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Create Ledger Button */}
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
-          >
-            <PlusCircle size={20} /> Create Ledger
-          </button>
         </div>
       </div>
 
@@ -938,6 +930,51 @@ const LedgerManagement = ({ selectedCompanyId }) => {
           </div>
         )}
       </div>
+
+      {/* Create Modal */}
+      {/* Custom Date Range Modal */}
+      {showCustomRange && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4"
+          onClick={() => setShowCustomRange(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Date Range</h3>
+            <DateRange
+              ranges={[range]}
+              onChange={(item) => setRange(item.selection)}
+              moveRangeOnFirstSelection={false}
+              months={2}
+              direction="horizontal"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCustomRange(false);
+                  setRange(getDefaultDateRange());
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCustomRange(false);
+                  setCurrentPage(1);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Apply Filter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (

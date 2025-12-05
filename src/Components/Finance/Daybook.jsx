@@ -8,6 +8,7 @@ import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
+import Loader from '../common/Loader.jsx';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -305,16 +306,7 @@ const Daybook = ({ selectedCompanyId }) => {
 
   // Loading State
   if (loading && vouchers.length === 0) {
-    return (
-      <div className="p-6">
-        <div className="flex justify-center items-center" style={{ minHeight: '400px' }}>
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200 border-t-purple-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading daybook...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <Loader variant="section" message="Loading daybook..." />;
   }
 
   const voucherTypeOptions = [

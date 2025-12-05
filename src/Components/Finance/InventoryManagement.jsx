@@ -17,6 +17,7 @@ import BalanceSheet from './BalanceSheet.jsx';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import Loader from '../common/Loader.jsx';
 
 export default function InventoryManagement() {
   const [activeSection, setActiveSection] = useState('ledger');
@@ -144,7 +145,7 @@ export default function InventoryManagement() {
           <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Select Company</label>
           {loadingCompanies ? (
             <div className="flex items-center justify-center py-2">
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent"></div>
+              <Loader variant="inline" />
             </div>
           ) : (
             <select

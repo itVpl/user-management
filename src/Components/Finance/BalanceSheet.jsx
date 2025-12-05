@@ -8,6 +8,7 @@ import { DateRange } from 'react-date-range';
 import { format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
+import Loader from '../common/Loader.jsx';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -270,16 +271,7 @@ const BalanceSheet = ({ selectedCompanyId }) => {
 
   // Loading State
   if (loading && !balanceSheet) {
-    return (
-      <div className="p-6">
-        <div className="flex justify-center items-center" style={{ minHeight: '400px' }}>
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-teal-200 border-t-teal-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading balance sheet...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <Loader variant="section" message="Loading balance sheet..." />;
   }
 
   const categories = [

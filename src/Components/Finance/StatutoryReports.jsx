@@ -8,6 +8,7 @@ import { DateRange } from 'react-date-range';
 import { format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
+import Loader from '../common/Loader.jsx';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -299,18 +300,14 @@ const StatutoryReports = ({ selectedCompanyId }) => {
     }
   }, [selectedCompanyId, range, selectedReport]);
 
-  // Loading State
-  if (loading && !gstSummary && !tdsSummary && !msmeReport && !msmeForm1) {
-    return (
-      <div className="p-6">
-        <div className="flex justify-center items-center" style={{ minHeight: '400px' }}>
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-orange-200 border-t-orange-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading statutory reports...</p>
-          </div>
-        </div>
-      </div>
-    );
+  // Loading State (tab-specific)
+  if (loading) {
+    const loadingMessage =
+      selectedReport === 'gst' ? 'Loading GST summary...' :
+      selectedReport === 'tds' ? 'Loading TDS summary...' :
+      selectedReport === 'msme' ? 'Loading MSME outstanding...' :
+      'Loading MSME Form 1...';
+    return <Loader variant="section" message={loadingMessage} />;
   }
 
   const reportTypes = [
