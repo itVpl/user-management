@@ -219,10 +219,25 @@ function TabPanel({ value, index, children }) {
 function EditForm({ data, onSubmit, loading, onClose }) {
   // Initialize form data with calculated totals
   const initializeFormData = (data) => {
-    const customers = (data?.customers || []).map(customer => ({
-      ...customer,
-      totalAmount: (customer.lineHaul || 0) + (customer.fsc || 0) + (customer.other || 0)
-    }));
+    const customers = (data?.customers || []).map(customer => {
+      // Handle billTo - fallback to customerName from root if not in customer object
+      const billTo = customer.billTo || data.customerName || '';
+      
+      // Handle other - if it's an array, use otherTotal or sum it up; otherwise use the value directly
+      let otherValue = 0;
+      if (Array.isArray(customer.other)) {
+        otherValue = customer.otherTotal || customer.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0);
+      } else {
+        otherValue = customer.other || customer.otherTotal || 0;
+      }
+      
+      return {
+        ...customer,
+        billTo: billTo,
+        other: otherValue,
+        totalAmount: (customer.lineHaul || 0) + (customer.fsc || 0) + otherValue
+      };
+    });
     
     const carrierFees = (data?.carrier?.carrierFees || []).map(fee => ({
       ...fee,
@@ -1827,14 +1842,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
   };
 
-  // ===== POST: Accountant approval (Approve/Reject) =====
+  // ===== POST: Accountant approval (Approve) =====
   const postAccountantApproval = async () => {
     if (!selected?._id) {
       setToast({ open: true, severity: "error", msg: "No DO selected." });
-      return;
-    }
-    if (approvalAction === "reject" && !approvalRemarks.trim()) {
-      setToast({ open: true, severity: "warning", msg: "Remarks are required for rejection." });
       return;
     }
 
@@ -1844,15 +1855,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const body = {
         doId: selected._id,
         accountantEmpId: empId,
-        action: approvalAction, // "approve" or "reject"
-        remarks: approvalRemarks || (approvalAction === "approve" ? "All details verified and approved" : "Rejected by accountant"),
+        action: "approve",
+        remarks: approvalRemarks || "All details verified and approved",
       };
       const resp = await axios.post(url, body, { headers });
 
       const baseMsg = resp?.data?.message || "Action completed";
-      const successMsg = approvalAction === "approve" 
-        ? `${baseMsg}. Check the "Accountant Approved" tab to see the approved DO.`
-        : baseMsg;
+      const successMsg = `${baseMsg}. Check the "Accountant Approved" tab to see the approved DO.`;
       setToast({ open: true, severity: "success", msg: successMsg });
 
       const newApproval = resp?.data?.data?.accountantApproval;
@@ -1867,10 +1876,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       if (activeTab === 0) {
         fetchData(page);
         fetchProcessed(processedPage); // Also refresh approved tab
-        // If approved, switch to approved tab to show the result
-        if (approvalAction === "approve") {
-          setTimeout(() => setActiveTab(1), 500);
-        }
+        // Switch to approved tab to show the result
+        setTimeout(() => setActiveTab(1), 500);
       } else {
         fetchProcessed(processedPage);
         fetchData(page); // Also refresh assigned tab
@@ -2026,13 +2033,20 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
   // filters (tab 1)
   const processedFiltered = useMemo(() => {
-    if (!processedSearch.trim()) return processedRows;
+    // First filter: Only show approved, exclude rejected and pending
+    let filtered = processedRows.filter((r) => {
+      const status = r?.accountantApproval?.status;
+      return status === 'approved';
+    });
+    
+    // Second filter: Apply search if provided
+    if (!processedSearch.trim()) return filtered;
     const q = processedSearch.toLowerCase();
-    return processedRows.filter((r) => {
+    return filtered.filter((r) => {
       const cust = r?.customers?.[0] || {};
       return (
         (cust?.loadNo || "").toLowerCase().includes(q) ||
-        (cust?.billTo || "").toLowerCase().includes(q) ||
+        (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
         (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
         (r?.shipper?.name || "").toLowerCase().includes(q) ||
         (r?._id || "").toLowerCase().includes(q)
@@ -2270,7 +2284,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
                               </td>
                               <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.billTo || "—"}</span>
+                                <span className="font-medium text-gray-700">{cust?.billTo || row?.customerName || "—"}</span>
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
@@ -2473,7 +2487,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         {processedFiltered.map((row, index) => {
                           const cust = row?.customers?.[0] || {};
                           const totals = computeTotals(row);
-                          const apprBy = row?.accountantApproval?.approvedBy?.employeeName || "—";
+                          // Get Approved By with multiple fallbacks
+                          const apprBy = row?.accountantApproval?.approvedBy?.employeeName 
+                            || row?.accountantApproval?.resubmittedBy?.employeeName 
+                            || row?.accountantApproval?.assignedTo?.employeeName
+                            || row?.accountantApproval?.approvedBy?.empId 
+                            || row?.accountantApproval?.resubmittedBy?.empId
+                            || row?.accountantApproval?.assignedTo?.empId
+                            || "—";
                           const apprAt = row?.accountantApproval?.approvedAt || row?.updatedAt;
                           return (
                             <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
@@ -2484,7 +2505,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
                               </td>
                               <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.billTo || "—"}</span>
+                                <span className="font-medium text-gray-700">{cust?.billTo || row?.customerName || "—"}</span>
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
@@ -2517,13 +2538,6 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     title="View Details"
                                   >
                                     <Eye size={16} />
-                                  </button>
-                                  <button
-                                    onClick={() => openEditModal(row)}
-                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                    title="Edit Details"
-                                  >
-                                    <Edit size={16} />
                                   </button>
                                 </div>
                               </td>
@@ -2698,7 +2712,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
                               </td>
                               <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.billTo || "—"}</span>
+                                <span className="font-medium text-gray-700">{cust?.billTo || row?.customerName || "—"}</span>
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
@@ -2858,7 +2872,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <p className="text-sm text-gray-600">Bill To</p>
-                            <p className="font-medium text-gray-800">{customer?.billTo || 'N/A'}</p>
+                            <p className="font-medium text-gray-800">{customer?.billTo || selected?.customerName || 'N/A'}</p>
                           </div>
                           <div>
                             <p className="text-sm text-gray-600">Dispatcher Name</p>
@@ -2882,7 +2896,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           </div>
                           <div>
                             <p className="text-sm text-gray-600">Other</p>
-                            <p className="font-medium text-gray-800">${fmtMoney(customer?.other || 0)}</p>
+                            <p className="font-medium text-gray-800">${fmtMoney(
+                              Array.isArray(customer?.other) 
+                                ? (customer?.otherTotal || customer.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
+                                : (customer?.other || customer?.otherTotal || 0)
+                            )}</p>
                           </div>
                           <div className="col-span-2">
                             <p className="text-sm text-gray-600">Total Amount</p>
@@ -2891,6 +2909,46 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Rejection Information - Only show for rejected DOs */}
+              {activeTab === 2 && selected?.salesApproval?.status === 'rejected' && selected?.salesApproval?.rejectionReason && (
+                <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-6 border border-red-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <XCircle className="text-red-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Rejection Details</h3>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-red-200">
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Rejected By</p>
+                        <p className="font-medium text-gray-800">
+                          {selected?.salesApproval?.rejectedBy?.employeeName || selected?.salesApproval?.rejectedBy?.empId || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Rejected At</p>
+                        <p className="font-medium text-gray-800">
+                          {selected?.salesApproval?.rejectedAt ? fmtDateTime(selected.salesApproval.rejectedAt) : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Rejection Reason</p>
+                        <p className="font-medium text-gray-800 bg-red-50 p-3 rounded-lg border border-red-200">
+                          {selected?.salesApproval?.rejectionReason || 'N/A'}
+                        </p>
+                      </div>
+                      {selected?.salesApproval?.remarks && (
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Remarks</p>
+                          <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            {selected.salesApproval.remarks}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -3314,8 +3372,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     )}
                   </CardContent>
                 </Card>
-              {/* Final Approval - Only show for non-rejected DOs */}
-              {activeTab !== 2 && (
+              {/* Final Approval - Only show for Assigned to Accountant tab (tab 0) */}
+              {activeTab === 0 && (
                 <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
                   <div className="flex items-center gap-2 mb-6">
                     <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
@@ -3323,66 +3381,43 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-gray-800">Final Approval</h3>
-                      <p className="text-sm text-gray-600">Review and approve or reject this delivery order</p>
+                      <p className="text-sm text-gray-600">Review and approve this delivery order</p>
                     </div>
                   </div>
 
                   {/* Remarks */}
                   <div className="mb-4">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Remarks {approvalAction === "reject" && <span className="text-red-600">*</span>}
+                      Remarks
                     </label>
                     <textarea
-                      placeholder={approvalAction === "approve" ? "All charges verified and approved" : "Reason for rejection"}
+                      placeholder="All charges verified and approved"
                       value={approvalRemarks}
                       onChange={(e) => setApprovalRemarks(e.target.value)}
-                      required={approvalAction === "reject"}
                       rows={6}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
                     />
                   </div>
 
-                  {/* Action Selection and Buttons */}
+                  {/* Send to Sales Button */}
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="md:col-span-1">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Action</label>
-                        <select
-                          value={approvalAction}
-                          onChange={(e) => setApprovalAction(e.target.value)}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
-                        >
-                          <option value="" disabled>Select Action</option>
-                          <option value="approve">Approve</option>
-                          <option value="reject">Reject</option>
-                        </select>
-                      </div>
-                      <div className="md:col-span-2 flex items-stretch gap-3">
-                        <button
-                          onClick={postAccountantApproval}
-                          disabled={posting || !approvalAction}
-                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {posting ? (
-                            <>
-                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                              <span>Sending...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Send size={18} />
-                              <span>Send to Sales</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => setApprovalAction("reject")}
-                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 h-12 bg-white border-2 border-red-500 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition-all duration-200"
-                        >
-                          Mark as Reject
-                        </button>
-                      </div>
-                    </div>
+                    <button
+                      onClick={postAccountantApproval}
+                      disabled={posting}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {posting ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Sending...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={18} />
+                          <span>Send to Sales</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}

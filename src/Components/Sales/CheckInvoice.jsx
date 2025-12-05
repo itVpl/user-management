@@ -22,6 +22,8 @@ import {
   Paper,
   Stack,
   TextField,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   Visibility as VisibilityIcon,
@@ -122,6 +124,13 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
   const [approvalAction, setApprovalAction] = useState(null); // 'approve' or 'reject'
   const [approvalRemarks, setApprovalRemarks] = useState("");
   const [approvalLoading, setApprovalLoading] = useState(false);
+  
+  // Notification state
+  const [notification, setNotification] = useState({
+    open: false,
+    message: '',
+    severity: 'success', // 'success', 'error', 'warning', 'info'
+  });
 
   const token = getStored("token");
   const salesEmpId = propSalesId || getStored("salesEmpId") || "1234";
@@ -1096,7 +1105,11 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
       );
 
       if (response.data.success) {
-        alert(`✅ Sales person ${approvalAction} successful!`);
+        setNotification({
+          open: true,
+          message: `Sales person ${approvalAction === 'approve' ? 'approval' : 'rejection'} successful!`,
+          severity: 'success',
+        });
         // Close modal and refresh data
         setShowApprovalModal(false);
         setApprovalAction(null);
@@ -1104,11 +1117,19 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
         setDetailsOpen(false);
         fetchList(page);
       } else {
-        alert(`❌ Failed to ${approvalAction}: ${response.data.message || 'Unknown error'}`);
+        setNotification({
+          open: true,
+          message: `Failed to ${approvalAction}: ${response.data.message || 'Unknown error'}`,
+          severity: 'error',
+        });
       }
     } catch (e) {
       console.error('Sales person approval failed:', e);
-      alert(`❌ Error: ${e?.response?.data?.message || e?.message || 'Unknown error'}`);
+      setNotification({
+        open: true,
+        message: `Error: ${e?.response?.data?.message || e?.message || 'Unknown error'}`,
+        severity: 'error',
+      });
     } finally {
       setApprovalLoading(false);
     }
@@ -1300,7 +1321,7 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
                           <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
                         </td>
                         <td className="py-2 px-3">
-                          <span className="font-medium text-gray-700">{cust?.billTo || "—"}</span>
+                          <span className="font-medium text-gray-700">{cust?.billTo || r?.customerName || "—"}</span>
                         </td>
                         <td className="py-2 px-3">
                           <span className="font-medium text-gray-700">{r?.carrier?.carrierName || "—"}</span>
@@ -1485,7 +1506,7 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <p className="text-sm text-gray-600">Bill To</p>
-                                <p className="font-medium text-gray-800">{customer?.billTo || 'N/A'}</p>
+                                <p className="font-medium text-gray-800">{customer?.billTo || selected?.customerName || 'N/A'}</p>
                               </div>
                               <div>
                                 <p className="text-sm text-gray-600">Dispatcher Name</p>
@@ -2296,6 +2317,45 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Notification Snackbar */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={4000}
+        onClose={() => setNotification({ ...notification, open: false })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        sx={{
+          '& .MuiSnackbar-root': {
+            top: '24px !important',
+          }
+        }}
+      >
+        <Alert
+          onClose={() => setNotification({ ...notification, open: false })}
+          severity={notification.severity}
+          variant="filled"
+          sx={{
+            width: '100%',
+            fontSize: '15px',
+            fontWeight: 500,
+            borderRadius: '12px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+            '& .MuiAlert-icon': {
+              fontSize: '24px',
+            },
+            '&.MuiAlert-filledSuccess': {
+              background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
+              color: 'white',
+            },
+            '&.MuiAlert-filledError': {
+              background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
+              color: 'white',
+            },
+          }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 }
