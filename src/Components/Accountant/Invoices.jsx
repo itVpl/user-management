@@ -618,7 +618,20 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [processedPage, setProcessedPage] = useState(1);
   const [processedSearch, setProcessedSearch] = useState("");
 
-  // === TAB 2: Rejected by Sales ===
+  // === TAB 2: Approved By Sales ===
+  const [acceptedLoading, setAcceptedLoading] = useState(false);
+  const [acceptedError, setAcceptedError] = useState("");
+  const [acceptedRows, setAcceptedRows] = useState([]);
+  const [acceptedPagination, setAcceptedPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 50,
+  });
+  const [acceptedPage, setAcceptedPage] = useState(1);
+  const [acceptedSearch, setAcceptedSearch] = useState("");
+
+  // === TAB 3: Rejected by Sales ===
   const [rejectedLoading, setRejectedLoading] = useState(false);
   const [rejectedError, setRejectedError] = useState("");
   const [rejectedRows, setRejectedRows] = useState([]);
@@ -658,6 +671,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState(null);
   const [editLoading, setEditLoading] = useState(false);
+
+  // Payment modal state
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({
+    paymentMethod: '',
+    paymentReference: '',
+    paymentNotes: '',
+    paymentProof: null
+  });
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   // Logo source for PDF generation - using your actual logo
   const logoSrc = Logo;
@@ -1766,6 +1790,41 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
   };
 
+  // ===== API: Approved By Sales (Sales Verified) =====
+  const fetchAccepted = async (targetPage = 1) => {
+    setAcceptedLoading(true);
+    setAcceptedError("");
+    try {
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/finance/sales-verified-dos`;
+      const resp = await axios.get(url, {
+        params: { accountantEmpId: empId, page: targetPage, limit: 50 },
+        headers,
+      });
+      const payload = resp?.data?.data || {};
+      // ensure accountantUser populated even if only accepted API hits
+      setAccountantUser((prev) => prev || payload.financeEmployee || null);
+      setAcceptedRows(payload.salesVerifiedDOs || []);
+      if (payload.pagination) {
+        setAcceptedPagination(payload.pagination);
+      } else {
+        setAcceptedPagination((p) => ({
+          ...p,
+          currentPage: 1,
+          totalPages: 1,
+          totalItems: (payload.salesVerifiedDOs || []).length,
+        }));
+      }
+      // Update selected item if modal is open
+      setTimeout(() => updateSelectedFromTable(), 100);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || "Failed to fetch approved DOs.";
+      setAcceptedError(msg);
+      setAcceptedRows([]);
+    } finally {
+      setAcceptedLoading(false);
+    }
+  };
+
   // ===== API: Rejected by Sales =====
   const fetchRejected = async (targetPage = 1) => {
     setRejectedLoading(true);
@@ -1952,6 +2011,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       } else if (activeTab === 1) {
         fetchProcessed(processedPage);
       } else if (activeTab === 2) {
+        fetchAccepted(acceptedPage);
+      } else if (activeTab === 3) {
         fetchRejected(rejectedPage);
       }
       
@@ -1972,12 +2033,76 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setEditOpen(true);
   };
 
+  const openPaymentModal = (row) => {
+    setPaymentData(row);
+    setPaymentForm({
+      paymentMethod: '',
+      paymentReference: '',
+      paymentNotes: '',
+      paymentProof: null
+    });
+    setPaymentModalOpen(true);
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!paymentData) return;
+
+    // Validation
+    if (!paymentForm.paymentMethod) {
+      setToast({ open: true, severity: "error", msg: "Please select a payment method" });
+      return;
+    }
+    if (!paymentForm.paymentProof) {
+      setToast({ open: true, severity: "error", msg: "Please upload payment proof document" });
+      return;
+    }
+
+    setPaymentLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('doId', paymentData._id);
+      formData.append('accountantEmpId', empId);
+      formData.append('paymentMethod', paymentForm.paymentMethod);
+      if (paymentForm.paymentReference) {
+        formData.append('paymentReference', paymentForm.paymentReference);
+      }
+      if (paymentForm.paymentNotes) {
+        formData.append('paymentNotes', paymentForm.paymentNotes);
+      }
+      formData.append('paymentProof', paymentForm.paymentProof);
+
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/mark-as-paid`;
+      const resp = await axios.post(url, formData, {
+        headers: {
+          ...headers,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (resp?.data?.success) {
+        setToast({ open: true, severity: "success", msg: "DO marked as paid successfully!" });
+        setPaymentModalOpen(false);
+        // Refresh the data
+        fetchAccepted();
+      } else {
+        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark as paid" });
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.message || error?.message || "Failed to mark as paid";
+      setToast({ open: true, severity: "error", msg: errorMsg });
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   // initial loads
   useEffect(() => {
     fetchData(page);
     // Mount pe processed bhi ek baar fetch (so first time tab-1 me empty na lage)
     fetchProcessed(processedPage);
-    // Mount pe rejected bhi ek baar fetch (so first time tab-2 me empty na lage)
+    // Mount pe accepted bhi ek baar fetch (so first time tab-2 me empty na lage)
+    fetchAccepted(acceptedPage);
+    // Mount pe rejected bhi ek baar fetch (so first time tab-3 me empty na lage)
     fetchRejected(rejectedPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empId]);
@@ -1994,6 +2119,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   }, [processedPage]);
 
   useEffect(() => {
+    fetchAccepted(acceptedPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acceptedPage]);
+
+  useEffect(() => {
     fetchRejected(rejectedPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rejectedPage]);
@@ -2001,7 +2131,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // tab change pe processed search reset
   useEffect(() => {
     if (activeTab === 1) setProcessedSearch("");
-    if (activeTab === 2) setRejectedSearch("");
+    if (activeTab === 2) setAcceptedSearch("");
+    if (activeTab === 3) setRejectedSearch("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -2054,6 +2185,23 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     });
   }, [processedRows, processedSearch]);
 
+  // filters (tab 2 - Approved By Sales)
+  const acceptedFiltered = useMemo(() => {
+    if (!acceptedSearch.trim()) return acceptedRows;
+    const q = acceptedSearch.toLowerCase();
+    return acceptedRows.filter((r) => {
+      const cust = r?.customers?.[0] || {};
+      return (
+        (cust?.loadNo || "").toLowerCase().includes(q) ||
+        (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
+        (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
+        (r?.shipper?.name || "").toLowerCase().includes(q) ||
+        (r?._id || "").toLowerCase().includes(q) ||
+        (r?.loadReference?.shipmentNumber || "").toLowerCase().includes(q)
+      );
+    });
+  }, [acceptedRows, acceptedSearch]);
+
   // filters (tab 2)
   const rejectedFiltered = useMemo(() => {
     if (!rejectedSearch.trim()) return rejectedRows;
@@ -2092,6 +2240,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     } else if (activeTab === 1) {
       updatedRow = processedRows.find(r => r._id === selected._id);
     } else if (activeTab === 2) {
+      updatedRow = acceptedRows.find(r => r._id === selected._id);
+    } else if (activeTab === 3) {
       updatedRow = rejectedRows.find(r => r._id === selected._id);
     }
     
@@ -2162,6 +2312,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         <button
           onClick={() => setActiveTab(2)}
           className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 2
+            ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} />
+            <span>Approved By Sales</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab(3)}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 3
             ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg'
             : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
             }`}
@@ -2602,8 +2764,228 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           </div>
         )}
 
-        {/* TAB 2: Rejected by Sales */}
+        {/* TAB 2: Approved By Sales */}
         {activeTab === 2 && (
+          <div>
+            {/* Search and Stats */}
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-6">
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <CheckCircle className="text-blue-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Approved</p>
+                      <p className="text-xl font-bold text-gray-800">{acceptedRows.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <FileText className="text-blue-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Filtered</p>
+                      <p className="text-xl font-bold text-blue-600">{acceptedFiltered.length}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID / Shipment#)"
+                    value={acceptedSearch}
+                    onChange={(e) => setAcceptedSearch(e.target.value)}
+                    className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  {acceptedSearch && (
+                    <button
+                      onClick={() => setAcceptedSearch("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => fetchAccepted(acceptedPage)}
+                  disabled={acceptedLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw size={18} className={acceptedLoading ? 'animate-spin' : ''} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {acceptedLoading && (
+              <div className="mb-4">
+                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            )}
+
+            {!acceptedLoading && acceptedFiltered.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No approved DOs found</h3>
+                <p className="text-sm text-gray-500">Try adjusting filters or search.</p>
+                {acceptedError && (
+                  <p className="text-sm text-red-600 mt-2">{acceptedError}</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                        <tr>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved By</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved At</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pay</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {acceptedFiltered.map((row, index) => {
+                          const cust = row?.customers?.[0] || {};
+                          const totals = computeTotals(row);
+                          const apprBy = row?.salesApproval?.approvedBy?.employeeName 
+                            || row?.salesApproval?.approvedBy?.empId
+                            || "—";
+                          const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
+                          const isPaid = row?.paymentStatus?.status === 'paid';
+                          return (
+                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{cust?.billTo || row?.customerName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <span className="font-bold text-blue-600">${fmtMoney(totals.carrierTotal)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{apprBy}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{fmtDateTime(apprAt)}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => openDetails(row)}
+                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="View Details"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center justify-center">
+                                  {isPaid ? (
+                                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700">
+                                      <CheckCircle size={14} />
+                                      Paid
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => openPaymentModal(row)}
+                                      className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title="Mark as Paid"
+                                    >
+                                      Pay
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {!acceptedLoading && acceptedPagination?.totalPages > 1 && (
+                  <div className="flex justify-end mt-4">
+                    <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+                      <button
+                        onClick={() => setAcceptedPage(acceptedPage - 1)}
+                        disabled={acceptedPage === 1}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: acceptedPagination.totalPages }, (_, i) => i + 1)
+                          .filter(p => {
+                            if (acceptedPagination.totalPages <= 7) return true;
+                            if (acceptedPage <= 4) return p <= 5;
+                            if (acceptedPage >= acceptedPagination.totalPages - 3) return p >= acceptedPagination.totalPages - 4;
+                            return p >= acceptedPage - 2 && p <= acceptedPage + 2;
+                          })
+                          .map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setAcceptedPage(p)}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                acceptedPage === p
+                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                      </div>
+                      <button
+                        onClick={() => setAcceptedPage(acceptedPage + 1)}
+                        disabled={acceptedPage === acceptedPagination.totalPages}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        Next
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: Rejected by Sales */}
+        {activeTab === 3 && (
           <div>
             {/* Search and Stats */}
             <div className="flex justify-between items-center mb-6">
@@ -2914,7 +3296,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               )}
 
               {/* Rejection Information - Only show for rejected DOs */}
-              {activeTab === 2 && selected?.salesApproval?.status === 'rejected' && selected?.salesApproval?.rejectionReason && (
+              {activeTab === 3 && selected?.salesApproval?.status === 'rejected' && selected?.salesApproval?.rejectionReason && (
                 <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-6 border border-red-200">
                   <div className="flex items-center gap-2 mb-4">
                     <XCircle className="text-red-600" size={20} />
@@ -3348,6 +3730,106 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   </CardContent>
                 </Card>
 
+                {/* Payment Information - Only show for paid DOs */}
+                {selected?.paymentStatus?.status === 'paid' && (
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CheckCircle className="text-green-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Payment Information</h3>
+                      <span className="ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
+                        <CheckCircle size={14} />
+                        Paid
+                      </span>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 border border-green-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Payment Method</p>
+                          <p className="font-medium text-gray-800 capitalize">
+                            {selected?.paymentStatus?.paymentMethod?.replace('_', ' ') || 'N/A'}
+                          </p>
+                        </div>
+                        {selected?.paymentStatus?.paymentReference && (
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Payment Reference</p>
+                            <p className="font-medium text-gray-800">
+                              {selected.paymentStatus.paymentReference}
+                            </p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Paid At</p>
+                          <p className="font-medium text-gray-800">
+                            {selected?.paymentStatus?.paidAt ? fmtDateTime(selected.paymentStatus.paidAt) : 'N/A'}
+                          </p>
+                        </div>
+                        {selected?.paymentStatus?.paymentNotes && (
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600 mb-1">Payment Notes</p>
+                            <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                              {selected.paymentStatus.paymentNotes}
+                            </p>
+                          </div>
+                        )}
+                        {selected?.paymentStatus?.paymentProof && (
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600 mb-2">Payment Proof</p>
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                              <div className="flex items-center gap-3">
+                                {isImageUrl(selected.paymentStatus.paymentProof.fileUrl) ? (
+                                  <a
+                                    href={selected.paymentStatus.paymentProof.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                  >
+                                    <ImageIcon className="text-blue-600" style={{ fontSize: 24 }} />
+                                    <div>
+                                      <p className="font-medium">{selected.paymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
+                                      <p className="text-xs text-gray-500">Click to view image</p>
+                                    </div>
+                                  </a>
+                                ) : isPdfUrl(selected.paymentStatus.paymentProof.fileUrl) ? (
+                                  <a
+                                    href={selected.paymentStatus.paymentProof.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                  >
+                                    <PictureAsPdfIcon className="text-red-600" style={{ fontSize: 24 }} />
+                                    <div>
+                                      <p className="font-medium">{selected.paymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
+                                      <p className="text-xs text-gray-500">Click to view PDF</p>
+                                    </div>
+                                  </a>
+                                ) : (
+                                  <a
+                                    href={selected.paymentStatus.paymentProof.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                  >
+                                    <AttachFileIcon className="text-gray-600" style={{ fontSize: 24 }} />
+                                    <div>
+                                      <p className="font-medium">{selected.paymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
+                                      <p className="text-xs text-gray-500">Click to download</p>
+                                    </div>
+                                  </a>
+                                )}
+                              </div>
+                              {selected.paymentStatus.paymentProof.uploadedAt && (
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Uploaded: {fmtDateTime(selected.paymentStatus.paymentProof.uploadedAt)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Uploaded Files */}
                 <Card variant="outlined">
                   <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#0ea5e9", 0.05) }}>
@@ -3484,7 +3966,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               </div>
 
                 {/* Resubmit to Sales - Only show for rejected DOs */}
-                {activeTab === 2 && (
+                {activeTab === 3 && (
                   <Card variant="outlined">
                     <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#dc2626", 0.05) }}>
                       <Typography variant="subtitle1" fontWeight={700}>
@@ -3601,6 +4083,170 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
 
 
+
+      {/* Payment Modal */}
+      {paymentModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setPaymentModalOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <DollarSign size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Mark as Paid</h2>
+                      <p className="text-white/80 text-sm">DO ID: {paymentData?._id ? shortId(paymentData._id) : 'N/A'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPaymentModalOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                <div className="space-y-4">
+                  {/* Payment Method */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Method <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={paymentForm.paymentMethod}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                      required
+                    >
+                      <option value="">Select Payment Method</option>
+                      <option value="cash">Cash</option>
+                      <option value="check">Check</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="online">Online</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  {/* Payment Reference */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Reference (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentForm.paymentReference}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentReference: e.target.value })}
+                      placeholder="Transaction ID, Check Number, etc."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Payment Notes */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Notes (Optional)
+                    </label>
+                    <textarea
+                      value={paymentForm.paymentNotes}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentNotes: e.target.value })}
+                      placeholder="Additional notes about the payment"
+                      rows={3}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                    />
+                  </div>
+
+                  {/* Payment Proof Upload */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Proof <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            if (file.size > 10 * 1024 * 1024) {
+                              setToast({ open: true, severity: "error", msg: "File size must be less than 10MB" });
+                              return;
+                            }
+                            setPaymentForm({ ...paymentForm, paymentProof: file });
+                          }
+                        }}
+                        className="hidden"
+                        id="payment-proof-upload"
+                        required
+                      />
+                      <label
+                        htmlFor="payment-proof-upload"
+                        className="cursor-pointer flex flex-col items-center justify-center"
+                      >
+                        {paymentForm.paymentProof ? (
+                          <div className="text-center">
+                            <CheckCircle size={32} className="text-green-500 mx-auto mb-2" />
+                            <p className="text-sm font-medium text-gray-700">{paymentForm.paymentProof.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(paymentForm.paymentProof.size / 1024).toFixed(2)} KB
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPaymentForm({ ...paymentForm, paymentProof: null });
+                                document.getElementById('payment-proof-upload').value = '';
+                              }}
+                              className="mt-2 text-sm text-red-500 hover:text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <AttachFileIcon className="text-gray-400 mb-2" style={{ fontSize: 40 }} />
+                            <p className="text-sm font-medium text-gray-700">Click to upload payment proof</p>
+                            <p className="text-xs text-gray-500 mt-1">PDF, JPG, PNG (Max 10MB)</p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => setPaymentModalOpen(false)}
+                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                      disabled={paymentLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handlePaymentSubmit}
+                      disabled={paymentLoading || !paymentForm.paymentMethod || !paymentForm.paymentProof}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                    >
+                      {paymentLoading ? "Processing..." : "Mark as Paid"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
         {/* Snackbar */}
         <Snackbar
