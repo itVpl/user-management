@@ -1068,8 +1068,14 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
 
       {/* Status Filter Modal */}
       {showFilterModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowFilterModal(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -1144,12 +1150,22 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
 
       {/* Create/Edit Modal */}
       {(showCreateModal || showEditModal) && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center p-4"
+          onClick={() => {
+            setShowCreateModal(false);
+            setShowEditModal(false);
+            setSelectedVoucher(null);
+          }}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar">
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl sticky top-0 z-10">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -1461,13 +1477,13 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
               <div className="bg-purple-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-purple-800 mb-4">Additional Details</h3>
                 <div className="space-y-3">
-                  <textarea
+                  {/* <textarea
                     value={formData.narration}
                     onChange={(e) => setFormData({ ...formData, narration: e.target.value })}
                     placeholder="Overall Narration"
                     rows="2"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
+                  /> */}
                   <textarea
                     value={formData.remarks}
                     onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
@@ -1479,7 +1495,7 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex gap-4 pt-4 border-t border-gray-200">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => {
@@ -1487,14 +1503,14 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
                     setShowEditModal(false);
                     setSelectedVoucher(null);
                   }}
-                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading || Math.abs(balance.difference) > 0.01}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Saving...' : showEditModal ? 'Update Journal' : 'Create Journal'}
                 </button>
@@ -1506,7 +1522,13 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
 
       {/* View Modal */}
       {showViewModal && selectedVoucher && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => {
+            setShowViewModal(false);
+            setSelectedVoucher(null);
+          }}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1514,6 +1536,7 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">

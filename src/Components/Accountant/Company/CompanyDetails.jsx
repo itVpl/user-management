@@ -54,30 +54,32 @@ const CompanyDetails = ({ company, onClose, onEdit }) => {
                 <p className="text-blue-100">{company.companyCode}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:text-gray-200 text-2xl font-bold"
-            >
-              ×
-            </button>
+
+            <div className="flex items-center gap-3">
+              {company.isDefault && (
+                <span className="px-4 py-2 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-700">
+                  Default Company
+                </span>
+              )}
+              <span className={`px-4 py-2 rounded-full text-sm font-semibold ${
+                company.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {company.isActive ? 'Active' : 'Inactive'}
+              </span>
+              <button
+                onClick={onClose}
+                className="text-white hover:text-gray-200 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Content */}
         <div className="modal-content overflow-y-auto flex-1 p-6 space-y-6">
           {/* Status Badge */}
-          <div className="flex gap-3">
-            <span className={`px-4 py-2 rounded-full text-sm font-semibold ${
-              company.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-            }`}>
-              {company.isActive ? 'Active' : 'Inactive'}
-            </span>
-            {company.isDefault && (
-              <span className="px-4 py-2 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-700">
-                Default Company
-              </span>
-            )}
-          </div>
+         
 
           {/* Basic Information */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
@@ -116,16 +118,16 @@ const CompanyDetails = ({ company, onClose, onEdit }) => {
               <h3 className="text-lg font-bold text-gray-800">Address</h3>
             </div>
             <div className="bg-white rounded-xl p-4 border border-green-200">
-              <div className="space-y-2">
-                <p className="text-gray-800">{company.address?.addressLine1}</p>
-                {company.address?.addressLine2 && (
-                  <p className="text-gray-800">{company.address.addressLine2}</p>
-                )}
-                <p className="text-gray-800">
-                  {company.address?.city}, {company.address?.state} - {company.address?.pincode}
-                </p>
-                <p className="text-gray-800">{company.address?.country}</p>
-              </div>
+              <p className="text-gray-800">
+                {[
+                  company.address?.addressLine1,
+                  company.address?.addressLine2,
+                  company.address?.city,
+                  company.address?.state,
+                  company.address?.pincode,
+                  company.address?.country
+                ].filter(Boolean).join(', ')}
+              </p>
             </div>
           </div>
 

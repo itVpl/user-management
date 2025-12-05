@@ -1134,7 +1134,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
               {/* Basic Details Section */}
               <div className="bg-purple-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-purple-800 mb-4">Basic Details</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Voucher Date *</label>
                     <input
@@ -1145,7 +1145,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>
-                  <div>
+                  {/* <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Voucher Number</label>
                     <input
                       type="text"
@@ -1154,7 +1154,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                       placeholder="Auto-generated if empty"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
-                  </div>
+                  </div> */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Debit Note Type *</label>
                     <select
@@ -1171,7 +1171,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                       <option value="Other">Other</option>
                     </select>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Reference Number</label>
                     <input
                       type="text"
@@ -1186,7 +1186,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
               {/* Suppliers Section */}
               <div className="bg-red-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-red-800">Suppliers (Debit Side)</h3>
+                  <h3 className="text-lg font-semibold text-red-800">Suppliers</h3>
                   <button
                     type="button"
                     onClick={addSupplier}
@@ -1211,7 +1211,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Supplier Account *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Supplier Account Holder *</label>
                         <SearchableDropdown
                           value={supplier.account}
                           onChange={(value) => updateSupplier(index, 'account', value)}
@@ -1299,7 +1299,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
               {/* Entries Section (Credit Side) */}
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-green-800">Credit Entries (Purchase/Expense/Asset)</h3>
+                  <h3 className="text-lg font-semibold text-green-800">Credit Entries</h3>
                   <button
                     type="button"
                     onClick={addEntry}
@@ -1324,7 +1324,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Account *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Account Holder *</label>
                         <SearchableDropdown
                           value={entry.account}
                           onChange={(value) => updateEntry(index, 'account', value)}
@@ -1389,7 +1389,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                           <label className="text-sm font-medium text-gray-700">GST Applicable</label>
                         </div>
                         {entry.gst.applicable && (
-                          <div className="grid grid-cols-4 gap-2 mt-2">
+                          <div className="grid grid-cols-3 gap-2 mt-2">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">GST Type</label>
                               <select
@@ -1424,7 +1424,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                               />
                             </div>
-                            <div>
+                            {/* <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Input GST Account</label>
                               <SearchableDropdown
                                 value={entry.gst.inputGstAccount}
@@ -1438,7 +1438,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                                 disabled={loadingLedgers}
                                 compact={true}
                               />
-                            </div>
+                            </div> */}
                           </div>
                         )}
                       </div>
@@ -1455,7 +1455,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                           <label className="text-sm font-medium text-gray-700">TDS Applicable</label>
                         </div>
                         {entry.tds.applicable && (
-                          <div className="grid grid-cols-4 gap-2 mt-2">
+                          <div className="grid grid-cols-3 gap-2 mt-2">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">TDS Section</label>
                               <input
@@ -1488,7 +1488,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                               />
                             </div>
-                            <div>
+                            {/* <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">TDS Account</label>
                               <SearchableDropdown
                                 value={entry.tds.tdsAccount}
@@ -1502,7 +1502,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                                 disabled={loadingLedgers}
                                 compact={true}
                               />
-                            </div>
+                            </div> */}
                           </div>
                         )}
                       </div>
@@ -1515,7 +1515,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Additional Details</h3>
                 <div className="grid grid-cols-1 gap-4">
-                  <div>
+                  {/* <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Narration</label>
                     <textarea
                       value={formData.narration}
@@ -1524,7 +1524,7 @@ export default function DebitNoteVoucher({ selectedCompanyId = null }) {
                       rows="2"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
-                  </div>
+                  </div> */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
                     <textarea

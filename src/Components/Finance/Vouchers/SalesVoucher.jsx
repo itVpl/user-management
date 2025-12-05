@@ -670,15 +670,51 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
     }
   };
 
-  const handlePost = (voucher) => {
-    if (window.confirm('Are you sure you want to post this sales voucher?')) {
-      alertify.success('Voucher posted! (API integration pending)');
+  const handlePost = async (voucher) => {
+    try {
+      setLoading(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const response = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/sales/${voucher._id || voucher.id}/post`,
+        {},
+        {
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        }
+      );
+
+      if (response.data.success) {
+        alertify.success(response.data.message || 'Sales voucher posted successfully');
+        fetchData(); // Refresh the data to show updated status
+      }
+    } catch (error) {
+      console.error('Error posting sales voucher:', error);
+      alertify.error(error.response?.data?.message || 'Failed to post sales voucher');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUnpost = (voucher) => {
-    if (window.confirm('Are you sure you want to unpost this sales voucher?')) {
-      alertify.success('Voucher unposted! (API integration pending)');
+  const handleUnpost = async (voucher) => {
+    try {
+      setLoading(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const response = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/tally/voucher/sales/${voucher._id || voucher.id}/unpost`,
+        {},
+        {
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        }
+      );
+
+      if (response.data.success) {
+        alertify.success(response.data.message || 'Sales voucher unposted successfully');
+        fetchData(); // Refresh the data to show updated status
+      }
+    } catch (error) {
+      console.error('Error unposting sales voucher:', error);
+      alertify.error(error.response?.data?.message || 'Failed to unpost sales voucher');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1040,7 +1076,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
               {/* Basic Information Section - Blue Background */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-blue-800 mb-4">Basic Information</h3>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <input
                       type="date"
@@ -1061,7 +1097,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                       <option value="Cash">Cash Sale</option>
                     </select>
                   </div>
-                  <div>
+                  {/* <div>
                     <input
                       type="text"
                       value={formData.voucherNumber}
@@ -1069,8 +1105,8 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                       placeholder="Voucher Number (Auto)"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                  </div>
-                  <div>
+                  </div> */}
+                  {/* <div>
                     <input
                       type="text"
                       value={formData.invoiceNumber}
@@ -1078,7 +1114,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                       placeholder="Invoice Number (Auto)"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                  </div>
+                  </div> */}
                 </div>
               </div>
 
@@ -1192,7 +1228,10 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                         <SearchableDropdown
                           value={entry.account}
                           onChange={(value) => updateEntry(index, 'account', value)}
-                          options={getLedgersByType('sales')}
+                          options={ledgers.map(ledger => ({
+                            value: ledger._id,
+                            label: `${ledger.name} (${ledger.accountType})`
+                          }))}
                           placeholder="Select Sales Account *"
                           loading={loadingLedgers}
                           searchPlaceholder="Search accounts..."
@@ -1254,7 +1293,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                       </div>
 
                       {entry.gst.applicable && (
-                        <div className="grid grid-cols-4 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div>
                             <select
                               value={entry.gst.gstType}
@@ -1285,7 +1324,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                               className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
                             />
                           </div>
-                          <div>
+                          {/* <div>
                             <SearchableDropdown
                               value={entry.gst.outputGstAccount}
                               onChange={(value) => updateEntry(index, 'gst.outputGstAccount', value)}
@@ -1293,7 +1332,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                               placeholder="GST Account"
                               loading={loadingLedgers}
                             />
-                          </div>
+                          </div> */}
                         </div>
                       )}
                     </div>
