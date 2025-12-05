@@ -167,7 +167,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
   };
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+    <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={onClose}>
       {/* Hide scrollbar for modal content */}
       <style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -177,6 +177,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
       <div 
         className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">

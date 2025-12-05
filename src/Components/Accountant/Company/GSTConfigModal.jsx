@@ -100,8 +100,8 @@ const GSTConfigModal = ({ company, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[80vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-gradient-to-r from-orange-600 to-orange-700 text-white p-6 flex justify-between items-center flex-shrink-0">
           <div>
