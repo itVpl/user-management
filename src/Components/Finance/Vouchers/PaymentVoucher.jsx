@@ -1548,13 +1548,13 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
                   <h3 className="text-lg font-semibold text-purple-800 mb-4">Additional Information</h3>
                   <div className="grid grid-cols-1 gap-4">
                     <div>
-                      <textarea
+                      {/* <textarea
                         rows="2"
                         value={formData.narration}
                         onChange={(e) => setFormData({ ...formData, narration: e.target.value })}
                         placeholder="Overall Narration"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      /> */}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>

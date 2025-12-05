@@ -1020,7 +1020,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                     />
                   </div>
 
-                  <div>
+                  {/* <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Account Code</label>
                     <input
                       type="text"
@@ -1029,7 +1029,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Auto-generated if empty"
                     />
-                  </div>
+                  </div> */}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Account Type <span className="text-red-500">*</span></label>

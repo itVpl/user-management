@@ -685,8 +685,6 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
   };
 
   const handlePost = async (voucher) => {
-    if (!window.confirm('Are you sure you want to post this purchase voucher?')) return;
-    
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const response = await axios.put(
@@ -706,8 +704,6 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
   };
 
   const handleUnpost = async (voucher) => {
-    if (!window.confirm('Are you sure you want to unpost this purchase voucher?')) return;
-    
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const response = await axios.put(
@@ -1084,7 +1080,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
               {/* Basic Information Section - Orange Background */}
               <div className="bg-orange-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-orange-800 mb-4">Basic Information</h3>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <input
                       type="date"
@@ -1129,7 +1125,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
               {/* Account Information Section - Red Background */}
               <div className="bg-red-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-red-800 mb-4">Account Information</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   {formData.purchaseType === 'Credit' ? (
                     <div>
                       <SearchableDropdown
@@ -1231,12 +1227,17 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-5 gap-4 mb-3">
+                    <div className="grid grid-cols-3 gap-4 mb-3">
                       <div className="col-span-2">
                         <SearchableDropdown
                           value={entry.account}
                           onChange={(value) => updateEntry(index, 'account', value)}
-                          options={getLedgersByType('purchase')}
+                          options={index === 0 
+                            ? ledgers.map(ledger => ({
+                                value: ledger._id,
+                                label: `${ledger.name} (${ledger.accountType})`
+                              }))
+                            : getLedgersByType('purchase')}
                           placeholder="Select Purchase Account *"
                           loading={loadingLedgers}
                           searchPlaceholder="Search accounts..."
@@ -1274,9 +1275,6 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                         />
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 mb-3">
                       <div>
                         <input
                           type="number"
@@ -1288,6 +1286,10 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                         />
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 mb-3">
+                     
                       <div>
                         <input
                           type="text"
@@ -1312,7 +1314,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                       </div>
 
                       {entry.gst.applicable && (
-                        <div className="grid grid-cols-4 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div>
                             <select
                               value={entry.gst.gstType}
@@ -1343,7 +1345,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                               className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
                             />
                           </div>
-                          <div>
+                          {/* <div>
                             <SearchableDropdown
                               value={entry.gst.inputGstAccount}
                               onChange={(value) => updateEntry(index, 'gst.inputGstAccount', value)}
@@ -1351,7 +1353,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                               placeholder="Input GST Account"
                               loading={loadingLedgers}
                             />
-                          </div>
+                          </div> */}
                         </div>
                       )}
                     </div>
@@ -1369,7 +1371,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                       </div>
 
                       {entry.tds.applicable && (
-                        <div className="grid grid-cols-4 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div>
                             <input
                               type="text"
@@ -1399,7 +1401,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                               className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
                             />
                           </div>
-                          <div>
+                          {/* <div>
                             <SearchableDropdown
                               value={entry.tds.tdsAccount}
                               onChange={(value) => updateEntry(index, 'tds.tdsAccount', value)}
@@ -1407,7 +1409,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                               placeholder="TDS Account"
                               loading={loadingLedgers}
                             />
-                          </div>
+                          </div> */}
                         </div>
                       )}
                     </div>

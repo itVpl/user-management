@@ -1160,7 +1160,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
               {/* Basic Details Section */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-blue-800 mb-4">Basic Details</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Voucher Date *</label>
                     <input
@@ -1171,7 +1171,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  <div>
+                  {/* <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Voucher Number</label>
                     <input
                       type="text"
@@ -1180,7 +1180,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                       placeholder="Auto-generated if empty"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                  </div>
+                  </div> */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Credit Note Type *</label>
                     <select
@@ -1197,7 +1197,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                       <option value="Other">Other</option>
                     </select>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Reference Number</label>
                     <input
                       type="text"
@@ -1238,7 +1238,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Customer Account *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Customer Account Name *</label>
                         <SearchableDropdown
                           value={customer.account}
                           onChange={(value) => updateCustomer(index, 'account', value)}
@@ -1351,7 +1351,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Account *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Account Holder Name *</label>
                         <SearchableDropdown
                           value={entry.account}
                           onChange={(value) => updateEntry(index, 'account', value)}
@@ -1541,7 +1541,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Additional Details</h3>
                 <div className="grid grid-cols-1 gap-4">
-                  <div>
+                  {/* <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Narration</label>
                     <textarea
                       value={formData.narration}
@@ -1550,7 +1550,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                       rows="2"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                  </div>
+                  </div> */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
                     <textarea

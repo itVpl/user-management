@@ -1380,8 +1380,14 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
 
       {/* Status Filter Modal */}
       {showFilterModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowFilterModal(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -1433,7 +1439,14 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
 
       {/* Create/Edit Receipt Modal */}
       {(showCreateModal || showEditModal) && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => {
+            setShowCreateModal(false);
+            setShowEditModal(false);
+            setSelectedVoucher(null);
+          }}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1441,6 +1454,7 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl sticky top-0 z-10">
               <div className="flex justify-between items-center">
@@ -1804,13 +1818,13 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
                   <h3 className="text-lg font-semibold text-purple-800 mb-4">Additional Information</h3>
                   <div className="grid grid-cols-1 gap-4">
                     <div>
-                      <textarea
+                      {/* <textarea
                         rows="2"
                         value={formData.narration}
                         onChange={(e) => setFormData({ ...formData, narration: e.target.value })}
                         placeholder="Overall Narration"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      /> */}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -1875,7 +1889,13 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
 
       {/* View Receipt Modal */}
       {showViewModal && selectedVoucher && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => {
+            setShowViewModal(false);
+            setSelectedVoucher(null);
+          }}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1883,6 +1903,7 @@ export default function ReceiptVoucher({ selectedCompanyId = null }) {
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">

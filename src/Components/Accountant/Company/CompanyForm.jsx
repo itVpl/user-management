@@ -62,7 +62,13 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
           phone: company.contact?.phone || '',
           mobile: company.contact?.mobile || '',
           email: company.contact?.email || '',
-          website: company.contact?.website || '',
+          website: (() => {
+            const website = company.contact?.website || '';
+            if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
+              return 'https://' + website;
+            }
+            return website;
+          })(),
           fax: company.contact?.fax || ''
         },
         financialYear: {
@@ -104,6 +110,37 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
         }
       }));
     }
+  };
+
+  const handleWebsiteChange = (e) => {
+    let value = e.target.value;
+    
+    // If value is empty, set empty
+    if (value.trim() === '') {
+      setFormData(prev => ({
+        ...prev,
+        contact: {
+          ...prev.contact,
+          website: ''
+        }
+      }));
+      return;
+    }
+    
+    // Remove existing http:// or https:// if user types it
+    value = value.replace(/^https?:\/\//, '');
+    
+    // Always add https:// prefix
+    value = 'https://' + value;
+    
+    // Update the form data
+    setFormData(prev => ({
+      ...prev,
+      contact: {
+        ...prev.contact,
+        website: value
+      }
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -180,7 +217,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
           {/* Basic Information - Orange Section */}
           <div className="bg-orange-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold text-orange-800 mb-4">Basic Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Company Name <span className="text-red-500">*</span>
@@ -226,8 +263,8 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
           {/* Address - Blue Section */}
           <div className="bg-blue-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold text-blue-800 mb-4">Address</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+              <div className="md:col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Address Line 1 <span className="text-red-500">*</span>
                 </label>
@@ -241,7 +278,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
                   placeholder="Enter address line 1"
                 />
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
                 <input
                   type="text"
@@ -313,7 +350,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
           {/* Contact Information - Green Section */}
           <div className="bg-green-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold text-green-800 mb-4">Contact Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Phone <span className="text-red-500">*</span>
@@ -355,14 +392,19 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
-                <input
-                  type="url"
-                  name="contact.website"
-                  value={formData.contact.website}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter website URL"
-                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none">
+                    https://
+                  </span>
+                  <input
+                    type="text"
+                    name="contact.website"
+                    value={formData.contact.website.replace(/^https?:\/\//, '')}
+                    onChange={handleWebsiteChange}
+                    className="w-full pl-20 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="example.com"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fax</label>
@@ -381,7 +423,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
           {/* Financial Configuration - Purple Section */}
           <div className="bg-purple-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold text-purple-800 mb-4">Financial Configuration</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Financial Year From <span className="text-red-500">*</span>
@@ -455,7 +497,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
           {/* Tax Details - Indigo Section */}
           <div className="bg-indigo-50 p-4 rounded-lg">
             <h3 className="text-lg font-semibold text-indigo-800 mb-4">Tax Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     GSTIN <span className="text-gray-500 text-xs">(15 characters)</span>
