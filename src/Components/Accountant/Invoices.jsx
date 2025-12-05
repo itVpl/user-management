@@ -2913,6 +2913,46 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 </div>
               )}
 
+              {/* Rejection Information - Only show for rejected DOs */}
+              {activeTab === 2 && selected?.salesApproval?.status === 'rejected' && selected?.salesApproval?.rejectionReason && (
+                <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-6 border border-red-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <XCircle className="text-red-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Rejection Details</h3>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-red-200">
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Rejected By</p>
+                        <p className="font-medium text-gray-800">
+                          {selected?.salesApproval?.rejectedBy?.employeeName || selected?.salesApproval?.rejectedBy?.empId || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Rejected At</p>
+                        <p className="font-medium text-gray-800">
+                          {selected?.salesApproval?.rejectedAt ? fmtDateTime(selected.salesApproval.rejectedAt) : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Rejection Reason</p>
+                        <p className="font-medium text-gray-800 bg-red-50 p-3 rounded-lg border border-red-200">
+                          {selected?.salesApproval?.rejectionReason || 'N/A'}
+                        </p>
+                      </div>
+                      {selected?.salesApproval?.remarks && (
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Remarks</p>
+                          <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            {selected.salesApproval.remarks}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Carrier Information */}
               {selected?.carrier && (
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
