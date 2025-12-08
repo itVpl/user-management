@@ -10,6 +10,7 @@ import {
   XCircle,
   Eye,
   EyeOff,
+  PlusCircle,
 } from "lucide-react";
 // ========= Searchable dropdown (no lib) =========
 function SearchableSelect({
@@ -236,12 +237,8 @@ export default function AddTruckerForm({ onSuccess }) {
     email: "",
     password: "",
     confirmPassword: "",
-    // Secondary Address
-    secondaryCompAdd: "",
-    secondaryCountry: "",
-    secondaryState: "",
-    secondaryCity: "",
-    secondaryZipcode: "",
+    // Working Address (array of {state, city, attachment})
+    workingAddress: [],
     // docs
     brokeragePacket: null,
     carrierPartnerAgreement: null,
@@ -274,11 +271,7 @@ const [countryOptions, setCountryOptions] = React.useState([]);
 const [stateOptions, setStateOptions]     = React.useState([]);
 const [cityOptions, setCityOptions]       = React.useState([]);
 const [geoLoading, setGeoLoading]         = React.useState({ countries: false, states: false, cities: false });
-
-// Secondary Address GEO state
-const [secondaryStateOptions, setSecondaryStateOptions] = React.useState([]);
-const [secondaryCityOptions, setSecondaryCityOptions] = React.useState([]);
-const [secondaryGeoLoading, setSecondaryGeoLoading] = React.useState({ states: false, cities: false });
+const [workingAddressRefresh, setWorkingAddressRefresh] = React.useState(0); // Force re-render for working address cities
 
 const statesCacheRef = React.useRef({});  // { [country]: [{label,value}] }
 const citiesCacheRef = React.useRef({});  // { [`${country}|${state}`]: [{label,value}] }
@@ -374,68 +367,6 @@ React.useEffect(() => {
   return () => { mounted = false; };
 }, [formData.country, formData.state]);
 
-// Secondary Address - States when country changes
-React.useEffect(() => {
-  const c = formData.secondaryCountry?.trim();
-  if (!c) { setSecondaryStateOptions([]); setSecondaryCityOptions([]); return; }
-
-  if (statesCacheRef.current[c]) {
-    setSecondaryStateOptions(statesCacheRef.current[c]);
-    return;
-  }
-
-  let mounted = true;
-  (async () => {
-    try {
-      setSecondaryGeoLoading(p => ({ ...p, states: true }));
-      const list = await fetchStatesAPI(c);
-      if (mounted) {
-        setSecondaryStateOptions(list);
-        statesCacheRef.current[c] = list;
-      }
-    } catch (e) {
-      console.error("Secondary States load failed", e);
-      if (mounted) setSecondaryStateOptions([]);
-    } finally {
-      if (mounted) setSecondaryGeoLoading(p => ({ ...p, states: false }));
-    }
-  })();
-
-  return () => { mounted = false; };
-}, [formData.secondaryCountry]);
-
-// Secondary Address - Cities when state changes
-React.useEffect(() => {
-  const c = formData.secondaryCountry?.trim();
-  const s = formData.secondaryState?.trim();
-  if (!c || !s) { setSecondaryCityOptions([]); return; }
-
-  const key = `${c}|${s}`;
-  if (citiesCacheRef.current[key]) {
-    setSecondaryCityOptions(citiesCacheRef.current[key]);
-    return;
-  }
-
-  let mounted = true;
-  (async () => {
-    try {
-      setSecondaryGeoLoading(p => ({ ...p, cities: true }));
-      const list = await fetchCitiesAPI(c, s);
-      if (mounted) {
-        setSecondaryCityOptions(list);
-        citiesCacheRef.current[key] = list;
-      }
-    } catch (e) {
-      console.error("Secondary Cities load failed", e);
-      if (mounted) setSecondaryCityOptions([]);
-    } finally {
-      if (mounted) setSecondaryGeoLoading(p => ({ ...p, cities: false }));
-    }
-  })();
-
-  return () => { mounted = false; };
-}, [formData.secondaryCountry, formData.secondaryState]);
-
   const documentFields = [
     { key: "brokeragePacket", label: "Brokerage Packet", required: true },
     { key: "carrierPartnerAgreement", label: "Carrier Partner Agreement" },
@@ -469,12 +400,6 @@ React.useEffect(() => {
         if (!value?.trim()) return "Please enter the zip code.";
         if (!ZIP_RE.test(value.trim()))
           return "Please enter the valid zip code.";
-        break;
-      // Secondary Address validations (optional - only validate format if provided)
-      case "secondaryZipcode":
-        // Only validate format if value is provided
-        if (value?.trim() && !ZIP_RE.test(value.trim()))
-          return "Please enter the valid secondary zip code.";
         break;
       case "phoneNo": {
         if (!value?.trim()) return "Please enter the mobile number.";
@@ -549,18 +474,16 @@ React.useEffect(() => {
       if (msg) newErrors[f] = msg;
     });
 
-    // Secondary Address (optional - only validate format if any field is filled)
-    const hasSecondaryAddress = 
-      formData.secondaryCompAdd?.trim() || 
-      formData.secondaryCountry?.trim() || 
-      formData.secondaryState?.trim() || 
-      formData.secondaryCity?.trim() || 
-      formData.secondaryZipcode?.trim();
-    
-    if (hasSecondaryAddress) {
-      // If any secondary field is filled, validate zipcode format if provided
-      const zipMsg = validateField("secondaryZipcode", formData.secondaryZipcode);
-      if (zipMsg) newErrors.secondaryZipcode = zipMsg;
+    // Working Address validation (optional - validate each entry if filled)
+    if (formData.workingAddress && formData.workingAddress.length > 0) {
+      formData.workingAddress.forEach((addr, idx) => {
+        if (addr.state?.trim() && !addr.city?.trim()) {
+          newErrors[`workingAddress_${idx}_city`] = "Please enter the city for this working address.";
+        }
+        if (addr.city?.trim() && !addr.state?.trim()) {
+          newErrors[`workingAddress_${idx}_state`] = "Please enter the state for this working address.";
+        }
+      });
     }
 
     // Documents
@@ -666,18 +589,27 @@ React.useEffect(() => {
     truckerData.append("email", formData.email.trim());
     truckerData.append("password", formData.password);
 
-    // Secondary Address (optional - send as nested FormData fields using bracket notation)
-    // Backend will automatically parse these as secondaryAddress.compAdd, secondaryAddress.country, etc.
-    if (formData.secondaryCompAdd?.trim() || 
-        formData.secondaryCountry?.trim() || 
-        formData.secondaryState?.trim() || 
-        formData.secondaryCity?.trim() || 
-        formData.secondaryZipcode?.trim()) {
-      truckerData.append("secondaryAddress[compAdd]", formData.secondaryCompAdd?.trim() || "");
-      truckerData.append("secondaryAddress[country]", formData.secondaryCountry?.trim() || "");
-      truckerData.append("secondaryAddress[state]", formData.secondaryState?.trim() || "");
-      truckerData.append("secondaryAddress[city]", formData.secondaryCity?.trim() || "");
-      truckerData.append("secondaryAddress[zipcode]", formData.secondaryZipcode?.trim() || "");
+    // Working Address (optional - send as JSON string, attachments separately)
+    if (formData.workingAddress && formData.workingAddress.length > 0) {
+      const validAddresses = formData.workingAddress.filter(addr => 
+        addr.state?.trim() || addr.city?.trim()
+      );
+      
+      if (validAddresses.length > 0) {
+        // Send workingAddress as JSON string (without attachments)
+        const workingAddressJson = validAddresses.map(addr => ({
+          state: addr.state?.trim() || "",
+          city: addr.city?.trim() || ""
+        }));
+        truckerData.append("workingAddress", JSON.stringify(workingAddressJson));
+        
+        // Send attachments separately as workingAddressAttachments (multiple files)
+        validAddresses.forEach((addr) => {
+          if (addr.attachment) {
+            truckerData.append("workingAddressAttachments", addr.attachment);
+          }
+        });
+      }
     }
 
     // Documents
@@ -713,11 +645,7 @@ React.useEffect(() => {
           email: "",
           password: "",
           confirmPassword: "",
-          secondaryCompAdd: "",
-          secondaryCountry: "",
-          secondaryState: "",
-          secondaryCity: "",
-          secondaryZipcode: "",
+          workingAddress: [],
           brokeragePacket: null,
           carrierPartnerAgreement: null,
           w9Form: null,
@@ -898,94 +826,148 @@ React.useEffect(() => {
           </div>
         </div>
 
-        {/* Secondary Address */}
+        {/* Working Address */}
         <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
-          <h4 className="text-2xl font-bold mb-4 text-center">Secondary Address (Optional)</h4>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-2xl font-bold">Working Address (Optional)</h4>
+            <button
+              type="button"
+              onClick={() => {
+                setFormData(prev => ({
+                  ...prev,
+                  workingAddress: [...(prev.workingAddress || []), { state: "", city: "", attachment: null }]
+                }));
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              <PlusCircle size={18} /> Add More
+            </button>
+          </div>
           <div className="w-full flex flex-col gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Company Address
-              </label>
-              <input
-                type="text"
-                name="secondaryCompAdd"
-                placeholder="Secondary Company Address"
-                value={formData.secondaryCompAdd}
-                onChange={handleChange}
-                className="w-full border border-gray-400 px-4 py-2 rounded-lg"
-              />
-              {renderError("secondaryCompAdd")}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Country
-                </label>
-                <SearchableSelect
-                  name="secondaryCountry"
-                  value={formData.secondaryCountry || ""}
-                  onChange={(val) => {
-                    setFormData(p => ({ ...p, secondaryCountry: val, secondaryState: "", secondaryCity: "" }));
-                  }}
-                  options={countryOptions}
-                  placeholder="Search country…"
-                  loading={geoLoading.countries}
-                  error={errors.secondaryCountry}
-                />
-                {renderError("secondaryCountry")}
+            {formData.workingAddress && formData.workingAddress.length > 0 ? (
+              formData.workingAddress.map((addr, idx) => (
+                <div key={idx} className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <h5 className="text-lg font-semibold text-gray-700">Working Address #{idx + 1}</h5>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          workingAddress: prev.workingAddress.filter((_, i) => i !== idx)
+                        }));
+                      }}
+                      className="text-red-600 hover:text-red-700 font-semibold"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">State</label>
+                      <SearchableSelect
+                        name={`workingAddress_${idx}_state`}
+                        value={addr.state || ""}
+                        onChange={async (val) => {
+                          const updated = [...formData.workingAddress];
+                          updated[idx] = { ...updated[idx], state: val, city: "" }; // Clear city when state changes
+                          setFormData(prev => ({ ...prev, workingAddress: updated }));
+                          
+                          // Load cities for the selected state and cache them
+                          if (val && formData.country) {
+                            const key = `${formData.country}|${val}`;
+                            console.log('Loading cities for working address:', key, 'Cached?', !!citiesCacheRef.current[key]);
+                            if (!citiesCacheRef.current[key]) {
+                              try {
+                                setGeoLoading(p => ({ ...p, cities: true }));
+                                const cities = await fetchCitiesAPI(formData.country, val);
+                                console.log('Loaded cities:', cities.length, cities);
+                                citiesCacheRef.current[key] = cities;
+                                // Force re-render to update city dropdown
+                                setWorkingAddressRefresh(prev => prev + 1);
+                              } catch (e) {
+                                console.error("Failed to load cities for working address", e);
+                              } finally {
+                                setGeoLoading(p => ({ ...p, cities: false }));
+                              }
+                            } else {
+                              console.log('Using cached cities:', citiesCacheRef.current[key].length);
+                              // Even if cached, force re-render to show cities
+                              setWorkingAddressRefresh(prev => prev + 1);
+                            }
+                          } else {
+                            console.warn('Cannot load cities - missing state or country:', { state: val, country: formData.country });
+                          }
+                        }}
+                        options={stateOptions}
+                        placeholder="Search state…"
+                        loading={geoLoading.states}
+                        error={errors[`workingAddress_${idx}_state`]}
+                      />
+                      {errors[`workingAddress_${idx}_state`] && (
+                        <p className="text-xs text-red-600 mt-1">{errors[`workingAddress_${idx}_state`]}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">City</label>
+                      <SearchableSelect
+                        name={`workingAddress_${idx}_city`}
+                        value={addr.city || ""}
+                        onChange={(val) => {
+                          const updated = [...formData.workingAddress];
+                          updated[idx] = { ...updated[idx], city: val };
+                          setFormData(prev => ({ ...prev, workingAddress: updated }));
+                        }}
+                        options={(() => {
+                          // Force re-computation when refresh state changes (use refresh state to trigger)
+                          const _ = workingAddressRefresh; // Depend on refresh state
+                          if (!addr.state) return [];
+                          const key = `${formData.country}|${addr.state}`;
+                          return citiesCacheRef.current[key] || [];
+                        })()}
+                        placeholder={addr.state ? "Search city…" : "Select state first"}
+                        allowCustom
+                        disabled={!addr.state}
+                        loading={geoLoading.cities}
+                        error={errors[`workingAddress_${idx}_city`]}
+                      />
+                      {errors[`workingAddress_${idx}_city`] && (
+                        <p className="text-xs text-red-600 mt-1">{errors[`workingAddress_${idx}_city`]}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <FileText size={16} />
+                      Attachment (Optional)
+                    </label>
+                    <div className="relative mt-2">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          const updated = [...formData.workingAddress];
+                          updated[idx] = { ...updated[idx], attachment: file };
+                          setFormData(prev => ({ ...prev, workingAddress: updated }));
+                        }}
+                        className="w-full border border-gray-400 px-4 py-2 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        accept=".pdf,.doc,.docx"
+                      />
+                      {addr.attachment && (
+                        <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
+                          <CheckCircle size={16} />
+                          {addr.attachment.name}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No working addresses added. Click "Add More" to add one.</p>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  State
-                </label>
-                <SearchableSelect
-                  name="secondaryState"
-                  value={formData.secondaryState || ""}
-                  onChange={(val) => setFormData(p => ({ ...p, secondaryState: val, secondaryCity: "" }))}
-                  options={secondaryStateOptions}
-                  placeholder={formData.secondaryCountry ? "Search state…" : "Select country first"}
-                  disabled={!formData.secondaryCountry}
-                  loading={secondaryGeoLoading.states}
-                  error={errors.secondaryState}
-                />
-                {renderError("secondaryState")}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  City
-                </label>
-                <SearchableSelect
-                  name="secondaryCity"
-                  value={formData.secondaryCity || ""}
-                  onChange={(val) => setFormData(p => ({ ...p, secondaryCity: val }))}
-                  options={secondaryCityOptions}
-                  placeholder={formData.secondaryState ? "Search city…" : "Select state first"}
-                  allowCustom
-                  disabled={!formData.secondaryState}
-                  loading={secondaryGeoLoading.cities}
-                  error={errors.secondaryCity}
-                />
-                {renderError("secondaryCity")}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Zip Code
-                </label>
-                <input
-                  type="text"
-                  name="secondaryZipcode"
-                  placeholder="Secondary Zip Code"
-                  value={formData.secondaryZipcode}
-                  onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-                />
-                {renderError("secondaryZipcode")}
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
