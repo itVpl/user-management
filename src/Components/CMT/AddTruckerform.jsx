@@ -236,6 +236,12 @@ export default function AddTruckerForm({ onSuccess }) {
     email: "",
     password: "",
     confirmPassword: "",
+    // Secondary Address
+    secondaryCompAdd: "",
+    secondaryCountry: "",
+    secondaryState: "",
+    secondaryCity: "",
+    secondaryZipcode: "",
     // docs
     brokeragePacket: null,
     carrierPartnerAgreement: null,
@@ -268,6 +274,11 @@ const [countryOptions, setCountryOptions] = React.useState([]);
 const [stateOptions, setStateOptions]     = React.useState([]);
 const [cityOptions, setCityOptions]       = React.useState([]);
 const [geoLoading, setGeoLoading]         = React.useState({ countries: false, states: false, cities: false });
+
+// Secondary Address GEO state
+const [secondaryStateOptions, setSecondaryStateOptions] = React.useState([]);
+const [secondaryCityOptions, setSecondaryCityOptions] = React.useState([]);
+const [secondaryGeoLoading, setSecondaryGeoLoading] = React.useState({ states: false, cities: false });
 
 const statesCacheRef = React.useRef({});  // { [country]: [{label,value}] }
 const citiesCacheRef = React.useRef({});  // { [`${country}|${state}`]: [{label,value}] }
@@ -363,6 +374,68 @@ React.useEffect(() => {
   return () => { mounted = false; };
 }, [formData.country, formData.state]);
 
+// Secondary Address - States when country changes
+React.useEffect(() => {
+  const c = formData.secondaryCountry?.trim();
+  if (!c) { setSecondaryStateOptions([]); setSecondaryCityOptions([]); return; }
+
+  if (statesCacheRef.current[c]) {
+    setSecondaryStateOptions(statesCacheRef.current[c]);
+    return;
+  }
+
+  let mounted = true;
+  (async () => {
+    try {
+      setSecondaryGeoLoading(p => ({ ...p, states: true }));
+      const list = await fetchStatesAPI(c);
+      if (mounted) {
+        setSecondaryStateOptions(list);
+        statesCacheRef.current[c] = list;
+      }
+    } catch (e) {
+      console.error("Secondary States load failed", e);
+      if (mounted) setSecondaryStateOptions([]);
+    } finally {
+      if (mounted) setSecondaryGeoLoading(p => ({ ...p, states: false }));
+    }
+  })();
+
+  return () => { mounted = false; };
+}, [formData.secondaryCountry]);
+
+// Secondary Address - Cities when state changes
+React.useEffect(() => {
+  const c = formData.secondaryCountry?.trim();
+  const s = formData.secondaryState?.trim();
+  if (!c || !s) { setSecondaryCityOptions([]); return; }
+
+  const key = `${c}|${s}`;
+  if (citiesCacheRef.current[key]) {
+    setSecondaryCityOptions(citiesCacheRef.current[key]);
+    return;
+  }
+
+  let mounted = true;
+  (async () => {
+    try {
+      setSecondaryGeoLoading(p => ({ ...p, cities: true }));
+      const list = await fetchCitiesAPI(c, s);
+      if (mounted) {
+        setSecondaryCityOptions(list);
+        citiesCacheRef.current[key] = list;
+      }
+    } catch (e) {
+      console.error("Secondary Cities load failed", e);
+      if (mounted) setSecondaryCityOptions([]);
+    } finally {
+      if (mounted) setSecondaryGeoLoading(p => ({ ...p, cities: false }));
+    }
+  })();
+
+  return () => { mounted = false; };
+}, [formData.secondaryCountry, formData.secondaryState]);
+
   const documentFields = [
     { key: "brokeragePacket", label: "Brokerage Packet", required: true },
     { key: "carrierPartnerAgreement", label: "Carrier Partner Agreement" },
@@ -396,6 +469,12 @@ React.useEffect(() => {
         if (!value?.trim()) return "Please enter the zip code.";
         if (!ZIP_RE.test(value.trim()))
           return "Please enter the valid zip code.";
+        break;
+      // Secondary Address validations (optional - only validate format if provided)
+      case "secondaryZipcode":
+        // Only validate format if value is provided
+        if (value?.trim() && !ZIP_RE.test(value.trim()))
+          return "Please enter the valid secondary zip code.";
         break;
       case "phoneNo": {
         if (!value?.trim()) return "Please enter the mobile number.";
@@ -469,6 +548,20 @@ React.useEffect(() => {
       const msg = validateField(f, formData[f]);
       if (msg) newErrors[f] = msg;
     });
+
+    // Secondary Address (optional - only validate format if any field is filled)
+    const hasSecondaryAddress = 
+      formData.secondaryCompAdd?.trim() || 
+      formData.secondaryCountry?.trim() || 
+      formData.secondaryState?.trim() || 
+      formData.secondaryCity?.trim() || 
+      formData.secondaryZipcode?.trim();
+    
+    if (hasSecondaryAddress) {
+      // If any secondary field is filled, validate zipcode format if provided
+      const zipMsg = validateField("secondaryZipcode", formData.secondaryZipcode);
+      if (zipMsg) newErrors.secondaryZipcode = zipMsg;
+    }
 
     // Documents
     documentFields.forEach((doc) => {
@@ -573,6 +666,20 @@ React.useEffect(() => {
     truckerData.append("email", formData.email.trim());
     truckerData.append("password", formData.password);
 
+    // Secondary Address (optional - send as nested FormData fields using bracket notation)
+    // Backend will automatically parse these as secondaryAddress.compAdd, secondaryAddress.country, etc.
+    if (formData.secondaryCompAdd?.trim() || 
+        formData.secondaryCountry?.trim() || 
+        formData.secondaryState?.trim() || 
+        formData.secondaryCity?.trim() || 
+        formData.secondaryZipcode?.trim()) {
+      truckerData.append("secondaryAddress[compAdd]", formData.secondaryCompAdd?.trim() || "");
+      truckerData.append("secondaryAddress[country]", formData.secondaryCountry?.trim() || "");
+      truckerData.append("secondaryAddress[state]", formData.secondaryState?.trim() || "");
+      truckerData.append("secondaryAddress[city]", formData.secondaryCity?.trim() || "");
+      truckerData.append("secondaryAddress[zipcode]", formData.secondaryZipcode?.trim() || "");
+    }
+
     // Documents
     documentFields.forEach((doc) => {
       const f = formData[doc.key];
@@ -606,6 +713,11 @@ React.useEffect(() => {
           email: "",
           password: "",
           confirmPassword: "",
+          secondaryCompAdd: "",
+          secondaryCountry: "",
+          secondaryState: "",
+          secondaryCity: "",
+          secondaryZipcode: "",
           brokeragePacket: null,
           carrierPartnerAgreement: null,
           w9Form: null,
@@ -781,6 +893,97 @@ React.useEffect(() => {
                   inputMode="numeric"
                 />
                 {renderError("phoneNo")}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary Address */}
+        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
+          <h4 className="text-2xl font-bold mb-4 text-center">Secondary Address (Optional)</h4>
+          <div className="w-full flex flex-col gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Company Address
+              </label>
+              <input
+                type="text"
+                name="secondaryCompAdd"
+                placeholder="Secondary Company Address"
+                value={formData.secondaryCompAdd}
+                onChange={handleChange}
+                className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+              />
+              {renderError("secondaryCompAdd")}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Country
+                </label>
+                <SearchableSelect
+                  name="secondaryCountry"
+                  value={formData.secondaryCountry || ""}
+                  onChange={(val) => {
+                    setFormData(p => ({ ...p, secondaryCountry: val, secondaryState: "", secondaryCity: "" }));
+                  }}
+                  options={countryOptions}
+                  placeholder="Search country…"
+                  loading={geoLoading.countries}
+                  error={errors.secondaryCountry}
+                />
+                {renderError("secondaryCountry")}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  State
+                </label>
+                <SearchableSelect
+                  name="secondaryState"
+                  value={formData.secondaryState || ""}
+                  onChange={(val) => setFormData(p => ({ ...p, secondaryState: val, secondaryCity: "" }))}
+                  options={secondaryStateOptions}
+                  placeholder={formData.secondaryCountry ? "Search state…" : "Select country first"}
+                  disabled={!formData.secondaryCountry}
+                  loading={secondaryGeoLoading.states}
+                  error={errors.secondaryState}
+                />
+                {renderError("secondaryState")}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  City
+                </label>
+                <SearchableSelect
+                  name="secondaryCity"
+                  value={formData.secondaryCity || ""}
+                  onChange={(val) => setFormData(p => ({ ...p, secondaryCity: val }))}
+                  options={secondaryCityOptions}
+                  placeholder={formData.secondaryState ? "Search city…" : "Select state first"}
+                  allowCustom
+                  disabled={!formData.secondaryState}
+                  loading={secondaryGeoLoading.cities}
+                  error={errors.secondaryCity}
+                />
+                {renderError("secondaryCity")}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Zip Code
+                </label>
+                <input
+                  type="text"
+                  name="secondaryZipcode"
+                  placeholder="Secondary Zip Code"
+                  value={formData.secondaryZipcode}
+                  onChange={handleChange}
+                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                />
+                {renderError("secondaryZipcode")}
               </div>
             </div>
           </div>

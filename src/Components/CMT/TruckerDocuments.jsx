@@ -219,9 +219,15 @@ const isValidEmail = (val = '') =>
 // const isValidPhone = (val) =>
 //   /^[6-9]\d{9}$/.test(String(val || '').trim());
 
-// INDIA PIN code: exactly 6 digits, first not 0
-const isValidZip = (val) =>
-  /^[1-9]\d{5}$/.test(String(val || '').trim());
+// ZIP validation: Supports US (5 digits or 5-4 format) and India (6 digits)
+const isValidZip = (val) => {
+  const trimmed = String(val || '').trim();
+  // US format: 5 digits or 5-4 format (e.g., 12345 or 12345-6789)
+  const usZipPattern = /^\d{5}(-\d{4})?$/;
+  // India PIN: exactly 6 digits, first not 0
+  const indiaPinPattern = /^[1-9]\d{5}$/;
+  return usZipPattern.test(trimmed) || indiaPinPattern.test(trimmed);
+};
 
 const ALLOWED_DOC_EXT = ['PDF', 'DOC', 'DOCX'];
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -286,6 +292,14 @@ const [geoLoading, setGeoLoading] = useState({
   states: false,
   cities: false,
 });
+
+// Secondary Address Geo dropdown state
+const [secondaryStateOptions, setSecondaryStateOptions] = useState([]);
+const [secondaryCityOptions, setSecondaryCityOptions] = useState([]);
+const [secondaryGeoLoading, setSecondaryGeoLoading] = useState({
+  states: false,
+  cities: false,
+});
 useEffect(() => {
   // Jab edit modal open ho, countries lao; aur agar form me country/state pehle se hai to dependent bhi
   if (!showEditModal) return;
@@ -319,6 +333,28 @@ useEffect(() => {
         setStateOptions([]);
         setCityOptions([]);
       }
+
+      // Load secondary address geo data if exists
+      const secCtry = (editFormData.secondaryCountry || "").trim();
+      if (secCtry) {
+        setSecondaryGeoLoading((p) => ({ ...p, states: true }));
+        const secStates = await fetchStatesAPI(secCtry);
+        if (!mounted) return;
+        setSecondaryStateOptions(secStates);
+
+        const secSt = (editFormData.secondaryState || "").trim();
+        if (secSt) {
+          setSecondaryGeoLoading((p) => ({ ...p, cities: true }));
+          const secCities = await fetchCitiesAPI(secCtry, secSt);
+          if (!mounted) return;
+          setSecondaryCityOptions(secCities);
+        } else {
+          setSecondaryCityOptions([]);
+        }
+      } else {
+        setSecondaryStateOptions([]);
+        setSecondaryCityOptions([]);
+      }
     } catch (e) {
       console.error("Countries/States preload failed:", e?.message || e);
       // minimal fallback
@@ -327,6 +363,7 @@ useEffect(() => {
       }
     } finally {
       setGeoLoading({ countries: false, states: false, cities: false });
+      setSecondaryGeoLoading({ states: false, cities: false });
     }
   })();
 
@@ -362,6 +399,39 @@ const handleStateSelect = async (state) => {
 
 const handleCitySelect = (city) => {
   setEditFormData((p) => ({ ...p, city }));
+};
+
+// Secondary Address handlers
+const handleSecondaryCountrySelect = async (country) => {
+  setEditFormData((p) => ({ ...p, secondaryCountry: country, secondaryState: "", secondaryCity: "" }));
+  setSecondaryStateOptions([]);
+  setSecondaryCityOptions([]);
+  if (!country) return;
+  try {
+    setSecondaryGeoLoading((p) => ({ ...p, states: true }));
+    const states = await fetchStatesAPI(country);
+    setSecondaryStateOptions(states);
+  } finally {
+    setSecondaryGeoLoading((p) => ({ ...p, states: false }));
+  }
+};
+
+const handleSecondaryStateSelect = async (state) => {
+  const country = editFormData.secondaryCountry || "";
+  setEditFormData((p) => ({ ...p, secondaryState: state, secondaryCity: "" }));
+  setSecondaryCityOptions([]);
+  if (!country || !state) return;
+  try {
+    setSecondaryGeoLoading((p) => ({ ...p, cities: true }));
+    const cities = await fetchCitiesAPI(country, state);
+    setSecondaryCityOptions(cities);
+  } finally {
+    setSecondaryGeoLoading((p) => ({ ...p, cities: false }));
+  }
+};
+
+const handleSecondaryCitySelect = (city) => {
+  setEditFormData((p) => ({ ...p, secondaryCity: city }));
 };
 
   // Document fields configuration
@@ -508,6 +578,9 @@ const handleCitySelect = (city) => {
     console.log('Company Address:', companyAddress);
     console.log('Zip Code:', zipCodeValue);
 
+    // Get secondary address data
+    const secondaryAddr = trucker.secondaryAddress || {};
+    
     setEditFormData({
       _id: trucker._id || trucker.userId,
       compName: trucker.compName || '',
@@ -523,6 +596,12 @@ const handleCitySelect = (city) => {
       address: companyAddress,
       // Zip code - API response uses 'zipcode' (lowercase)
       zipCode: zipCodeValue,
+      // Secondary Address
+      secondaryCompAdd: secondaryAddr.compAdd || '',
+      secondaryCountry: secondaryAddr.country || '',
+      secondaryState: secondaryAddr.state || '',
+      secondaryCity: secondaryAddr.city || '',
+      secondaryZipcode: secondaryAddr.zipcode || '',
       status: trucker.status || 'pending',
 
       // ... (baaki document URLs same rakhna)
@@ -659,7 +738,21 @@ const handleCitySelect = (city) => {
         state: editFormData.state,
         country: editFormData.country,
         address: editFormData.address,
-        zipCode: editFormData.zipCode
+        zipCode: editFormData.zipCode,
+        // Secondary Address (only if any field is filled)
+        ...(editFormData.secondaryCompAdd?.trim() || 
+            editFormData.secondaryCountry?.trim() || 
+            editFormData.secondaryState?.trim() || 
+            editFormData.secondaryCity?.trim() || 
+            editFormData.secondaryZipcode?.trim() ? {
+          secondaryAddress: {
+            compAdd: editFormData.secondaryCompAdd?.trim() || "",
+            country: editFormData.secondaryCountry?.trim() || "",
+            state: editFormData.secondaryState?.trim() || "",
+            city: editFormData.secondaryCity?.trim() || "",
+            zipcode: editFormData.secondaryZipcode?.trim() || "",
+          }
+        } : {})
       };
 
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
@@ -1225,6 +1318,81 @@ const handleCitySelect = (city) => {
                           {editFormData.zipCode?.trim() ? 'Please enter the valid zip code.' : 'Please enter the zip code.'}
                         </p>
                       )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Secondary Address Card (Optional) */}
+              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
+                <h4 className="text-2xl font-bold mb-4 text-center">Secondary Address (Optional)</h4>
+                <div className="w-full flex flex-col gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Company Address</label>
+                    <input
+                      type="text"
+                      name="secondaryCompAdd"
+                      placeholder="Secondary Company Address"
+                      value={editFormData.secondaryCompAdd || ''}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, secondaryCompAdd: e.target.value }))}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Country</label>
+                      <SelectWithSearch
+                        name="secondaryCountry"
+                        value={editFormData.secondaryCountry || ''}
+                        onChange={handleSecondaryCountrySelect}
+                        options={countryOptions}
+                        placeholder={geoLoading.countries ? "Loading..." : "Select..."}
+                        disabled={geoLoading.countries}
+                        error=""
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">State</label>
+                      <SelectWithSearch
+                        name="secondaryState"
+                        value={editFormData.secondaryState || ''}
+                        onChange={handleSecondaryStateSelect}
+                        options={secondaryStateOptions}
+                        placeholder={editFormData.secondaryCountry ? (secondaryGeoLoading.states ? "Loading..." : "Select...") : "Select country first"}
+                        disabled={!editFormData.secondaryCountry || secondaryGeoLoading.states}
+                        error=""
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">City</label>
+                      <SelectWithSearch
+                        name="secondaryCity"
+                        value={editFormData.secondaryCity || ''}
+                        onChange={handleSecondaryCitySelect}
+                        options={secondaryCityOptions}
+                        placeholder={editFormData.secondaryState ? (secondaryGeoLoading.cities ? "Loading..." : "Select...") : "Select state first"}
+                        allowCustom
+                        disabled={!editFormData.secondaryState || secondaryGeoLoading.cities}
+                        error=""
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Zip Code</label>
+                      <input
+                        type="text"
+                        name="secondaryZipcode"
+                        placeholder="Secondary Zip Code"
+                        value={editFormData.secondaryZipcode || ''}
+                        onChange={(e) => {
+                          const v = e.target.value.toUpperCase().replace(/[^0-9-]/g, '').slice(0, 10);
+                          setEditFormData(prev => ({ ...prev, secondaryZipcode: v }));
+                        }}
+                        className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1957,6 +2125,79 @@ const handleCitySelect = (city) => {
                   </div>
                 </div>
               </div>
+
+              {/* Secondary Address Information */}
+              {selectedTrucker.secondaryAddress && (
+                (selectedTrucker.secondaryAddress.compAdd || 
+                 selectedTrucker.secondaryAddress.country || 
+                 selectedTrucker.secondaryAddress.state || 
+                 selectedTrucker.secondaryAddress.city || 
+                 selectedTrucker.secondaryAddress.zipcode) && (
+                  <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6 mt-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <MapPin className="text-orange-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Secondary Address</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      {selectedTrucker.secondaryAddress.compAdd && (
+                        <div className="flex items-center gap-3 col-span-2">
+                          <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                            <MapPin className="text-orange-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Address</p>
+                            <p className="font-semibold text-gray-800">{selectedTrucker.secondaryAddress.compAdd}</p>
+                          </div>
+                        </div>
+                      )}
+                      {selectedTrucker.secondaryAddress.city && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                            <MapPin className="text-orange-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">City</p>
+                            <p className="font-semibold text-gray-800">{selectedTrucker.secondaryAddress.city}</p>
+                          </div>
+                        </div>
+                      )}
+                      {selectedTrucker.secondaryAddress.state && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                            <MapPin className="text-orange-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">State</p>
+                            <p className="font-semibold text-gray-800">{selectedTrucker.secondaryAddress.state}</p>
+                          </div>
+                        </div>
+                      )}
+                      {selectedTrucker.secondaryAddress.country && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                            <MapPin className="text-orange-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Country</p>
+                            <p className="font-semibold text-gray-800">{selectedTrucker.secondaryAddress.country}</p>
+                          </div>
+                        </div>
+                      )}
+                      {selectedTrucker.secondaryAddress.zipcode && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                            <MapPin className="text-orange-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Zip Code</p>
+                            <p className="font-semibold text-gray-800">{selectedTrucker.secondaryAddress.zipcode}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
 
               {/* Documents Section */}
               {selectedTrucker.documentPreview && Object.keys(selectedTrucker.documentPreview).length > 0 && (
