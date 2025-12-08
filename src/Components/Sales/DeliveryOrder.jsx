@@ -3978,7 +3978,7 @@ const handleUpdateOrder = async (e) => {
       return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
     })();
 
-    // Determine logo based on company name
+    // Determine logo based on company name git change 
     const companyName = order?.company || order?.addDispature || '';
     const pdfLogo = (companyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
     
@@ -4067,7 +4067,7 @@ const handleUpdateOrder = async (e) => {
 
     <div class="field">
       <span class="label">Name:</span>
-      <span class="value">${shipper?.pickUpLocations?.[0]?.name || 'N/A'}</span>
+      <span class="value">${shipper?.dropLocations?.[0]?.name || 'N/A'}</span>
     </div>
 
     <div class="field">
@@ -4250,8 +4250,8 @@ const handleUpdateOrder = async (e) => {
 
   if (previewImg) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
-        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4">
+      <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center" onClick={() => setPreviewImg(null)}>
+        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4" onClick={(e) => e.stopPropagation()}>
           <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl shadow-lg" />
           <button
             onClick={() => setPreviewImg(null)}
@@ -4266,8 +4266,8 @@ const handleUpdateOrder = async (e) => {
 
   if (modalType) {
     return (
-      <div className="fixed inset-0 z-50 backdrop-blue-sm bg-black/30 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center">
+      <div className="fixed inset-0 z-50 backdrop-blue-sm bg-black/30 flex items-center justify-center" onClick={() => setModalType(null)}>
+        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
@@ -4384,8 +4384,8 @@ const handleUpdateOrder = async (e) => {
 
           {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
           {showCustomRange && (
-            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl shadow-2xl p-4">
+            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
                 <DateRange
                   ranges={[range]}
                   onChange={(item) => setRange(item.selection)}
@@ -4704,7 +4704,7 @@ const handleUpdateOrder = async (e) => {
 
       {/* Add Delivery Order Modal */}
       {showAddOrderForm && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={handleCloseModal}>
           {/* Hide scrollbar for modal content */}
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -4713,6 +4713,7 @@ const handleUpdateOrder = async (e) => {
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
@@ -6144,10 +6145,11 @@ const handleUpdateOrder = async (e) => {
             </div>
           )}
 
-          <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => setShowOrderModal(false)}>
             <div
               className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
               <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
@@ -6806,8 +6808,8 @@ const handleUpdateOrder = async (e) => {
 
       {/* Charges Popup */}
       {showChargesPopup && (
-        <div className="fixed inset-0 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60]" onClick={closeChargesPopup}>
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
 
             {/* Header */}
             <div className={`bg-gradient-to-r ${chargesPopupType === 'customer' ? 'from-blue-500 to-blue-600' : 'from-green-500 to-green-600'} -m-8 mb-6 p-6 rounded-t-xl`}>
@@ -7048,8 +7050,8 @@ const handleUpdateOrder = async (e) => {
 
       {/* Delete Order Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={closeDeleteModal}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 rounded-t-2xl">
               <div className="flex justify-between items-center">
@@ -7135,8 +7137,8 @@ const handleUpdateOrder = async (e) => {
 
       {/* Delete Order Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={closeDeleteModal}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 rounded-t-2xl">
               <div className="flex justify-between items-center">
@@ -7222,8 +7224,8 @@ const handleUpdateOrder = async (e) => {
 
       {/* Assign Order Modal */}
       {showAssignModal && orderToAssign && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative">
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => { setShowAssignModal(false); setOrderToAssign(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-2xl">
               <div className="flex justify-between items-center">
