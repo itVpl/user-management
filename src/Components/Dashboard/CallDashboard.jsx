@@ -32,7 +32,7 @@ api.interceptors.request.use((config) => {
 
 /* ============ DEBUG HELPERS ============ */
 const DEBUG = true;
-// const dbg = (...args) => DEBUG && console.log("%c[DailyTarget]", "color:#2563eb;font-weight:bold", ...args);
+// const dbg = (...args) => DEBUG && 
 const dberr = (...args) => DEBUG && console.error("%c[DailyTarget]", "color:#dc2626;font-weight:bold", ...args);
 
 

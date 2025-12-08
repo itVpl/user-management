@@ -61,6 +61,8 @@ const menuItems = [
   { name: "Team", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TLTeams" },
   { name: "Trukers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerDocuments" },
   { name: "Add Trucker Drivers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/addtruckerdriver" },
+  { name: "Empty Truck Location", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/empty-truck-location" },
+  { name: "Trucker Empty Location", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/trucker-empty-location" },
   { name: "Employees Hygine", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HREmployeeHygine" },
   { name: "Manager L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ManagerShippersLDocuments" },
   { name: "Trucker L Document", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerLDocuments" },
@@ -172,10 +174,13 @@ const Sidebar = () => {
           console.log("📋 All menu items:", menuItems.map(m => m.name));
 
           // Match menu items with active modules by name (case insensitive)
+          // Also normalize multiple spaces to single space for matching
           const matchedMenus = menuItems.filter((item) =>
-            activeModules.some((mod) => 
-              mod.name.trim().toLowerCase() === item.name.trim().toLowerCase()
-            )
+            activeModules.some((mod) => {
+              const modName = mod.name.trim().replace(/\s+/g, ' ').toLowerCase();
+              const itemName = item.name.trim().replace(/\s+/g, ' ').toLowerCase();
+              return modName === itemName;
+            })
           );
 
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));

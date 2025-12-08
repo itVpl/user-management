@@ -73,19 +73,16 @@ export default function AssignLoad() {
         }
       });
 
-      console.log('API Response:', response);
-      console.log('Response Data:', response.data);
 
       // Check if response has data property
       if (response.data && response.data.success) {
         const loadsData = response.data.data?.loads || [];
-        console.log('Loads Data:', loadsData);
-        
+
         if (Array.isArray(loadsData)) {
           const transformedData = loadsData.map((load, index) => {
             // Log CMT assignment data for debugging
             if (load.cmtAssignment) {
-              console.log(`Load ${load._id} CMT Assignment:`, load.cmtAssignment);
+
             }
             
             // Helper function to get origin data (check both single object and array)
@@ -147,14 +144,13 @@ export default function AssignLoad() {
             };
           });
 
-          console.log('Transformed Data:', transformedData);
           setLoads(transformedData);
         } else {
-          console.log('Loads data is not an array:', loadsData);
+
           toast.error('API returned data is not in expected format');
         }
       } else {
-        console.log('Unexpected response structure:', response.data);
+
         toast.error('Unexpected response structure from API');
       }
     } catch (error) {
@@ -245,7 +241,7 @@ export default function AssignLoad() {
 
   // Handle view load details
   const handleViewLoad = (load) => {
-    console.log('Opening load view for:', load.shipmentNo);
+
     setSelectedLoad(load);
     setShowViewModal(true);
   };
@@ -303,8 +299,6 @@ export default function AssignLoad() {
         reason: reassignDescription.trim()
       };
 
-      console.log('Re-assign payload:', payload);
-
       // Make API call to re-assign load
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/cmt-assignments/reassign`,
@@ -323,10 +317,10 @@ export default function AssignLoad() {
         closeReassignModal();
         
         // Refresh the data immediately and then again after a delay to ensure updated data
-        console.log('Refreshing data after re-assignment...');
+
         fetchLoads();
         setTimeout(() => {
-          console.log('Second refresh after re-assignment...');
+
           fetchLoads();
         }, 2000);
       } else {

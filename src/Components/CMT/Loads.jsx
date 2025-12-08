@@ -2028,10 +2028,6 @@ const MaterialShipperDropdown = ({
 
     const fieldOrder = getFieldOrder();
 
-    console.log(`🔍 Validating fields for ${loadType} load:`, fieldOrder);
-
-    
-
     fieldOrder.forEach((name) => {
 
       const v = loadForm[name] ?? '';
@@ -2041,8 +2037,6 @@ const MaterialShipperDropdown = ({
       if (m) {
 
         errs[name] = m;
-
-        console.log(`❌ Validation failed for ${name}:`, m);
 
       }
 
@@ -2057,8 +2051,6 @@ const MaterialShipperDropdown = ({
       if (pickupLocations.length === 0) {
 
         errs.pickupLocations = 'Please add at least one pickup location.';
-
-        console.log(`❌ Validation failed for pickupLocations: Please add at least one pickup location.`);
 
       } else {
 
@@ -2118,8 +2110,6 @@ const MaterialShipperDropdown = ({
 
         errs.deliveryLocations = 'Please add at least one delivery location.';
 
-        console.log(`❌ Validation failed for deliveryLocations: Please add at least one delivery location.`);
-
       } else {
 
         // Validate each delivery location
@@ -2168,10 +2158,6 @@ const MaterialShipperDropdown = ({
 
     }
 
-
-
-    console.log("🔍 Validation errors:", errs);
-
     setFormErrors(errs);
 
     if (Object.keys(errs).length) scrollToField(Object.keys(errs)[0]);
@@ -2188,10 +2174,6 @@ const MaterialShipperDropdown = ({
 
     e.preventDefault();
 
-    console.log("🚀 Form submit button clicked!");
-
-
-
     // Check if we're in edit mode
 
     if (showEditModal && selectedLoadForAction) {
@@ -2206,8 +2188,6 @@ const MaterialShipperDropdown = ({
 
     if (creatingLoad) {
 
-      console.log("❌ Already creating load, returning...");
-
       return;
 
     }
@@ -2218,8 +2198,6 @@ const MaterialShipperDropdown = ({
 
     if (loadType === 'DRAYAGE' && creatingDrayage) {
 
-      console.log("❌ Already creating drayage, returning...");
-
       return;
 
     }
@@ -2228,29 +2206,17 @@ const MaterialShipperDropdown = ({
 
     // client-side validation
 
-    console.log("🔍 Running form validation...");
-
     if (!validateAll()) {
-
-      console.log("❌ Form validation failed!");
 
       return;
 
     }
 
-    console.log("✅ Form validation passed!");
-
-
-
     // token fallback (sessionStorage || localStorage)
 
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
-    console.log("🔑 Token found:", token ? "Yes" : "No");
-
     if (!token) {
-
-      console.log("❌ No token found, user not logged in");
 
       alertify.error("You're not logged in.");
 
@@ -2262,21 +2228,14 @@ const MaterialShipperDropdown = ({
 
     // Build payload based on load type
 
-    console.log("🔧 Building payload for load type:", loadType);
 
-    console.log("📋 Current form state:", loadForm);
 
-    console.log("📍 Pickup locations:", pickupLocations);
-
-    console.log("📍 Delivery locations:", deliveryLocations);
 
     let payload;
 
     
 
       if (loadType === 'OTR') {
-
-        console.log("📦 Building OTR payload...");
 
         // OTR Load Structure - Use pickup and delivery locations from state
 
@@ -2375,8 +2334,6 @@ const MaterialShipperDropdown = ({
         };
 
     } else if (loadType === 'DRAYAGE') {
-
-      console.log("📦 Building DRAYAGE payload...");
 
       // Calculate totals
 
@@ -2549,13 +2506,6 @@ const MaterialShipperDropdown = ({
       if (loadType === 'DRAYAGE') setCreatingDrayage(true);
 
 
-
-      console.log("🚀 Sending payload to API:", payload);
-
-      console.log("🔗 API URL:", `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`);
-
-
-
       const res = await axios.post(
 
         `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`,
@@ -2622,10 +2572,6 @@ const MaterialShipperDropdown = ({
 
     e.preventDefault();
 
-    console.log("🔄 Edit form submit button clicked!");
-
-
-
     // Check if we have a selected load to edit
 
     if (!selectedLoadForAction) {
@@ -2642,8 +2588,6 @@ const MaterialShipperDropdown = ({
 
     if (creatingLoad) {
 
-      console.log("❌ Already submitting, returning...");
-
       return;
 
     }
@@ -2652,29 +2596,17 @@ const MaterialShipperDropdown = ({
 
     // Client-side validation
 
-    console.log("🔍 Running form validation for edit...");
-
     if (!validateAll()) {
-
-      console.log("❌ Form validation failed!");
 
       return;
 
     }
 
-    console.log("✅ Form validation passed!");
-
-
-
     // Get authentication token
 
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
-    console.log("🔑 Token found:", token ? "Yes" : "No");
-
     if (!token) {
-
-      console.log("❌ No token found, user not logged in");
 
       alertify.error("You're not logged in.");
 
@@ -2686,21 +2618,14 @@ const MaterialShipperDropdown = ({
 
     // Build payload based on load type (same as create)
 
-    console.log("🔧 Building edit payload for load type:", loadType);
 
-    console.log("📋 Current form state:", loadForm);
 
-    console.log("📍 Pickup locations:", pickupLocations);
-
-    console.log("📍 Delivery locations:", deliveryLocations);
 
     let payload;
 
     
 
     if (loadType === 'OTR') {
-
-      console.log("📦 Building OTR edit payload...");
 
       // OTR Load Structure - Use pickup and delivery locations from state
 
@@ -2801,8 +2726,6 @@ const MaterialShipperDropdown = ({
       };
 
     } else if (loadType === 'DRAYAGE') {
-
-      console.log("📦 Building DRAYAGE edit payload...");
 
       // Calculate totals for DRAYAGE edit
 
@@ -2974,14 +2897,6 @@ const MaterialShipperDropdown = ({
 
 
 
-      console.log("🔄 Sending edit payload to API:", payload);
-
-      console.log("🔍 Selected load for action:", selectedLoadForAction);
-
-      console.log("🔍 Is duplicating:", isDuplicating);
-
-      
-
       let res;
 
       if (isDuplicating) {
@@ -2989,10 +2904,6 @@ const MaterialShipperDropdown = ({
         // If duplicating, create a new load using the same API as add load
 
         console.log("🔄 Creating new load (duplicate)...");
-
-        console.log("🔗 API URL:", `${API_CONFIG.BASE_URL}/api/v1/load/create-by-sales`);
-
-        
 
         res = await axios.post(
 
@@ -3018,13 +2929,7 @@ const MaterialShipperDropdown = ({
 
         // If editing, update existing load
 
-        console.log("🔍 Load ID being used:", selectedLoadForAction.loadNum);
-
         console.log("🔍 Available load properties:", Object.keys(selectedLoadForAction));
-
-        console.log("🔗 API URL:", `${API_CONFIG.BASE_URL}/api/v1/load/sales-user/load/${selectedLoadForAction.loadNum}`);
-
-
 
         res = await axios.put(
 
@@ -3149,10 +3054,6 @@ const MaterialShipperDropdown = ({
           },
 
         });
-
-        console.log("Shippers:", res.data);
-
-
 
         setShippers(res.data?.customers || []); // 👈 adjust based on actual key
 
@@ -4300,10 +4201,6 @@ const MaterialShipperDropdown = ({
 
   const populateEditForm = (load) => {
 
-    console.log('🔄 Populating edit form with load data:', load);
-
-    
-
     // Set load type based on the load data
 
     setLoadType(load.loadType || 'OTR');
@@ -4313,10 +4210,6 @@ const MaterialShipperDropdown = ({
     // Extract shipper ID from shipper object or direct property
 
     const shipperId = load.shipperId || load.shipper?._id || '';
-
-    console.log('🔍 Extracted shipper ID:', shipperId);
-
-    
 
     // Populate basic form fields
 
@@ -4504,15 +4397,7 @@ const MaterialShipperDropdown = ({
         if (!toState) toState = load.destination?.state || '';
         if (!toAddress) toAddress = load.destination?.addressLine1 || load.destination?.address || '';
       }
-      
-      console.log('📍 DRAYAGE Load ZIP extraction:', {
-        fromZip,
-        toZip,
-        origins: load.origins,
-        destinations: load.destinations,
-        loadFromZip: load.fromZip,
-        loadToZip: load.toZip
-      });
+
     } else {
 
       // For OTR loads, use direct properties
@@ -4634,8 +4519,6 @@ const MaterialShipperDropdown = ({
 
           const formatted = formatDateTimeForInput(origin.pickupDate);
 
-          console.log('📅 Formatting pickup date:', origin.pickupDate, '→', formatted);
-
           return formatted;
 
         })() : '',
@@ -4643,8 +4526,6 @@ const MaterialShipperDropdown = ({
         deliveryDate: origin.deliveryDate ? (() => {
 
           const formatted = formatDateTimeForInput(origin.deliveryDate);
-
-          console.log('📅 Formatting delivery date:', origin.deliveryDate, '→', formatted);
 
           return formatted;
 
@@ -4676,8 +4557,6 @@ const MaterialShipperDropdown = ({
         deliveryDate: destination.deliveryDate ? (() => {
 
           const formatted = formatDateTimeForInput(destination.deliveryDate);
-
-          console.log('📅 Formatting destination delivery date:', destination.deliveryDate, '→', formatted);
 
           return formatted;
 
@@ -4714,10 +4593,6 @@ const MaterialShipperDropdown = ({
   // Handle duplicate load
 
   const handleDuplicateLoad = (load) => {
-
-    console.log('🔄 Duplicating load:', load);
-
-    
 
     // Mark selected and duplicating
 
@@ -5193,13 +5068,13 @@ const MaterialShipperDropdown = ({
 
             onClick={() => {
 
-              console.log("Create Load button clicked!"); // Debug log
+               // Debug log
 
               resetLoadForm();                 // ✅ clear everything first
 
               setShowLoadCreationModal(true);  // then open the modal
 
-              console.log("Modal should be opening..."); // Debug log
+               // Debug log
 
             }}
 

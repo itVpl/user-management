@@ -25,7 +25,7 @@ const EMP_API = `${API_CONFIG.BASE_URL}/api/v1/inhouseUser`;
 
 
 const DEBUG = true;
-const dbg = (...a) => DEBUG && console.log('[LeaveApproval]', ...a);
+const dbg = () => {}; // Debug function disabled
 
 
 // ------------------ HELPERS ------------------

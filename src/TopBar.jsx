@@ -70,24 +70,25 @@ const Topbar = () => {
   // Get user department
   useEffect(() => {
     const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
-    console.log("🔍 TopBar - User String:", userString);
+    // console.log("🔍 TopBar - User String:", userString);
+    
     if (userString) {
       try {
         const userData = JSON.parse(userString);
-        console.log("🔍 TopBar - User Data:", userData);
+        // console.log("🔍 TopBar - User Data:", userData);
         const department = typeof userData?.department === 'string' 
           ? userData.department 
           : userData?.department?.name || '';
-        console.log("🔍 TopBar - Department:", department);
+        // console.log("🔍 TopBar - Department:", department);
         const departmentLower = department.toLowerCase().trim();
-        console.log("🔍 TopBar - Department Lower:", departmentLower);
+        // console.log("🔍 TopBar - Department Lower:", departmentLower);
         
         if (departmentLower === 'sales' || departmentLower === 'cmt' || departmentLower.includes('sales') || departmentLower.includes('cmt')) {
           const finalDept = departmentLower.includes('sales') ? 'sales' : 'cmt';
-          console.log("🔍 TopBar - Setting Department:", finalDept);
+          // console.log("🔍 TopBar - Setting Department:", finalDept);
           setUserDepartment(finalDept);
         } else {
-          console.log("🔍 TopBar - Department not Sales or CMT:", departmentLower);
+          // console.log("🔍 TopBar - Department not Sales or CMT:", departmentLower);
         }
       } catch (error) {
         console.error("Error parsing user data:", error);
@@ -99,9 +100,9 @@ const Topbar = () => {
 
   // Fetch checklist data based on department
   useEffect(() => {
-    console.log("🔍 TopBar - userDepartment:", userDepartment);
+    // console.log("🔍 TopBar - userDepartment:", userDepartment);
     if (!userDepartment) {
-      console.log("🔍 TopBar - No department, returning");
+      // console.log("🔍 TopBar - No department, returning");
       return;
     }
 
@@ -217,8 +218,8 @@ const Topbar = () => {
             ];
           }
 
-          console.log("🔍 TopBar - Checklist Items:", items);
-          console.log("🔍 TopBar - Checklist Tooltips:", tooltips);
+          // console.log("🔍 TopBar - Checklist Items:", items);
+          // console.log("🔍 TopBar - Checklist Tooltips:", tooltips);
           setChecklistItems(items);
           setChecklistTooltips(tooltips);
         } else {

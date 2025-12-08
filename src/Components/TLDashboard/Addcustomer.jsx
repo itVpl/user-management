@@ -38,7 +38,7 @@ export default function AddCustomerForm() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log("Submitted Data:", { ...formData, agentIds });
+
     // Add your API logic here
   };
 

@@ -123,7 +123,7 @@ export default function CandidateShortlist() {
       });
 
       const data = await response.json();
-      console.log('API Response:', data); // Debug log
+       // Debug log
 
       if (data.success) {
         // Transform API data to match frontend format
@@ -191,7 +191,6 @@ export default function CandidateShortlist() {
         }).filter(candidate => candidate !== null);
 
         setCandidates(transformedCandidates);
-        console.log('Transformed candidates:', transformedCandidates);
 
         // Set statistics from API response
         if (data.statistics) {
@@ -205,7 +204,6 @@ export default function CandidateShortlist() {
           });
         }
 
-        console.log(`Loaded ${transformedCandidates.length} candidates successfully!`);
         // alertify.success(`Loaded ${transformedCandidates.length} candidates successfully!`);
       } else {
         console.error('API Error:', data);
@@ -248,16 +246,6 @@ export default function CandidateShortlist() {
   const currentCandidates = filteredCandidates.slice(startIndex, endIndex);
 
   // Debug logging
-  console.log('Pagination Debug:', {
-    totalCandidates: candidates.length,
-    filteredCandidates: filteredCandidates.length,
-    itemsPerPage,
-    totalPages,
-    currentPage,
-    startIndex,
-    endIndex,
-    currentCandidatesLength: currentCandidates.length
-  });
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -354,7 +342,7 @@ export default function CandidateShortlist() {
           return;
         }
 
-        console.log('Sending payload:', payload); // Debug log
+         // Debug log
 
         // Make API call
         const response = await fetch(`${API_BASE_URL}/api/v1/candidate/create-simple`, {

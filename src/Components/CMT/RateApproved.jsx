@@ -125,7 +125,7 @@ export default function RateApproved() {
   const fetchApprovedRates = async () => {
     // This function is no longer used for the default API call
     // Keeping it for potential future use but not calling the default API
-    console.log('fetchApprovedRates function called but default API call removed');
+
     return [];
   };
 
@@ -134,14 +134,11 @@ export default function RateApproved() {
     try {
       setCustomersLoading(true);
       const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
-      console.log('Fetching customers from:', `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers/${userEmpId}`);
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers/${userEmpId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
-
-      console.log('Customers API Response:', response);
 
       if (response.data && response.data.success) {
         const customerOptions = response.data.customers.map(customer => ({
@@ -150,7 +147,7 @@ export default function RateApproved() {
           customer: customer
         }));
         setCustomers(customerOptions);
-        console.log('Customer options:', customerOptions);
+
       } else {
         console.error('Customers API response format error:', response.data);
         setCustomers([]);
@@ -167,14 +164,11 @@ export default function RateApproved() {
     try {
       setLoading(true);
       const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
-      console.log('Fetching completed rates from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/${userEmpId}`);
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/${userEmpId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
-
-      console.log('Completed Rates API Response:', response);
 
       if (response.data && response.data.success) {
         // Transform API data to match our component structure
@@ -244,8 +238,7 @@ export default function RateApproved() {
           intermediateApprovedAt: bid.intermediateApprovedAt
         }));
 
-        console.log('Transformed completed rates:', transformedRates);
-        console.log('Setting approvedRates with length:', transformedRates.length);
+
         setApprovedRates(transformedRates);
 
         // Force a re-render by updating the search term
@@ -274,14 +267,11 @@ export default function RateApproved() {
     try {
       setLoading(true);
       const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
-      console.log('Fetching accepted bids from:', `${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=${userEmpId}`);
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=${userEmpId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
-
-      console.log('Accepted Bids API Response:', response);
 
       if (response.data && response.data.success) {
         // Transform API data to match our component structure
@@ -415,8 +405,7 @@ export default function RateApproved() {
           };
         });
 
-        console.log('Transformed accepted bids:', transformedBids);
-        console.log('Setting approvedRates with length:', transformedBids.length);
+
         setApprovedRates(transformedBids);
 
         // Force a re-render by updating the search term
@@ -445,7 +434,7 @@ export default function RateApproved() {
     const userEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
     if (userEmpId) {
       setSalesUserId(userEmpId);
-      console.log('User empId loaded:', userEmpId);
+
     } else {
       console.warn('No empId found in sessionStorage or localStorage');
     }
@@ -453,15 +442,15 @@ export default function RateApproved() {
     // Log current auth token for Postman testing
     const authToken = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
     if (authToken) {
-      console.log('🔑 Current Auth Token for Postman:', authToken);
-      console.log('📋 Postman Headers needed:');
-      console.log('Authorization: Bearer ' + authToken);
-      console.log('Content-Type: application/json');
-      console.log('🌐 API Endpoints for Postman:');
-      console.log('GET ' + API_CONFIG.BASE_URL + '/api/v1/bid/pending-by-sales-user/' + userEmpId);
-      console.log('GET ' + API_CONFIG.BASE_URL + '/api/v1/bid/pending-intermediate-approval');
-      console.log('GET ' + API_CONFIG.BASE_URL + '/api/v1/bid/pending/emp/' + userEmpId);
-      console.log('GET ' + API_CONFIG.BASE_URL + '/api/v1/bid/accepted-by-inhouse?empId=' + userEmpId);
+
+
+
+
+
+
+
+
+
     } else {
       console.warn('❌ No auth token found in sessionStorage or localStorage');
     }
@@ -499,7 +488,7 @@ export default function RateApproved() {
   };
 
   // Filter rates based on search term
-  console.log('Filtering rates. Total approvedRates:', approvedRates.length, 'Search term:', searchTerm);
+
   const filteredRates = approvedRates.filter(rate => {
     const matches = rate.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -509,23 +498,20 @@ export default function RateApproved() {
       (rate.shipperName && rate.shipperName.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (searchTerm && matches) {
-      console.log('Rate matches search:', rate.id, rate.truckerName);
+
     }
     return matches;
   });
-  console.log('Filtered rates count:', filteredRates.length);
+
   // Add after fetchApprovedRates function
   const fetchPendingApprovals = async () => {
     try {
-      console.log('🔍 Fetching pending approvals from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`);
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
 
-      console.log('📊 Pending Approvals API Response:', response.data);
-      console.log('📈 Number of pending approvals found:', response.data?.bids?.length || 0);
 
       if (response.data && response.data.success) {
         const currentUserEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
@@ -537,9 +523,7 @@ export default function RateApproved() {
           return bidEmpId === currentUserEmpId;
         });
 
-        console.log('🔍 Total pending approvals:', response.data.bids.length);
-        console.log('👤 User-specific pending approvals:', userSpecificBids.length);
-        console.log('🔑 Current user empId:', currentUserEmpId);
+
 
         const transformedRates = userSpecificBids.map(bid => ({
           id: `RA-${bid._id.slice(-6)}`,
@@ -597,15 +581,12 @@ export default function RateApproved() {
   const fetchPendingBidsBySalesUser = async (userId = null) => {
     try {
       const userEmpId = userId || salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
-      console.log('🔍 Fetching pending bids for sales user:', userEmpId);
-      
+
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
       });
 
-      console.log('📊 Sales User Bids API Response:', response.data);
-      console.log('📈 Number of sales user bids found:', response.data?.bids?.length || 0);
 
       if (response.data && response.data.success) {
         const transformedBids = response.data.bids.map(bid => ({
@@ -676,7 +657,6 @@ export default function RateApproved() {
           attachment: bid.attachment || null
         }));
 
-        console.log('Transformed pending bids:', transformedBids);
         return transformedBids;
       }
       return [];
@@ -708,8 +688,6 @@ export default function RateApproved() {
         index === self.findIndex(r => r.rateNum === rate.rateNum)
       );
 
-      console.log('Combined rates before deduplication:', combinedRates.length);
-      console.log('Unique rates after deduplication:', uniqueRates.length);
 
       setApprovedRates(uniqueRates);
     } catch (error) {
@@ -724,15 +702,12 @@ export default function RateApproved() {
   const handleManualApprove = async (bidId, customRate) => {
     setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
     try {
-      console.log('Approving bid with custom rate:', { bidId, customRate });
 
       const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
         intermediateRate: parseInt(customRate)
       }, {
         headers: API_CONFIG.getAuthHeaders()
       });
-
-      console.log('Manual approval response:', response.data);
 
       if (response.data.success) {
         alertify.success('✅ Bid approved successfully with custom rate!');
@@ -852,8 +827,7 @@ export default function RateApproved() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      console.log(`✅ Exported ${dataToExport.length} records to CSV successfully!`);
+
     } catch (error) {
       console.error('Export to CSV error:', error);
     }
@@ -1145,10 +1119,8 @@ export default function RateApproved() {
       const matchingCustomer = customers.find(c => c.customer._id === rate.shipperInfo?._id);
       const selectedCustomerId = matchingCustomer ? matchingCustomer.value : '';
 
-      console.log('Rate shipper info:', rate.shipperInfo);
-      console.log('Available customers:', customers);
-      console.log('Matching customer:', matchingCustomer);
-      console.log('Selected customer ID:', selectedCustomerId);
+
+
 
       const sn = (rate.shipmentNumber && rate.shipmentNumber !== 'N/A') ? rate.shipmentNumber : '';
       setAcceptBidForm({
@@ -2112,9 +2084,9 @@ export default function RateApproved() {
                             {/* Manual Approve Button */}
                             <button
                               onClick={() => {
-                                console.log('Approve button clicked for rate:', rate);
-                                console.log('Rate rates array:', rate.rates);
-                                console.log('Rate totalrates:', rate.totalrates);
+
+
+
                                 setMarginAmount(0); // Reset margin when opening modal
                                 setApprovalModal({ visible: true, type: 'manual', rate });
                               }}
@@ -2380,7 +2352,7 @@ export default function RateApproved() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
-                              console.log('Add Margin button clicked for rate:', rate);
+
                               setMarginAmount(0); // Reset margin when opening modal
                               setApprovalModal({ visible: true, type: 'manual', rate });
                             }}

@@ -464,7 +464,7 @@ export default function DeliveryOrder() {
   // Reset customer name input when selectedOrder changes
   useEffect(() => {
     if (selectedOrder) {
-      console.log('Selected order changed, customer name:', selectedOrder.customerName);
+
       setCustomerNameInput(selectedOrder.customerName || '');
     }
   }, [selectedOrder]);
@@ -572,7 +572,7 @@ export default function DeliveryOrder() {
   // Monitor customers array to ensure it's never empty
   useEffect(() => {
     if (!formData.customers || formData.customers.length === 0) {
-      console.log('Customers array is empty, adding default customer');
+
       setFormData(prev => ({
         ...prev,
         customers: [{
@@ -682,7 +682,7 @@ export default function DeliveryOrder() {
         // Filter only active employees
         const activeEmployees = response.data.employees.filter(emp => emp.status === 'active');
         setDispatchers(activeEmployees);
-        console.log('Dispatchers loaded:', activeEmployees);
+
       } else {
         console.error('No employees data in response');
         setDispatchers([]);
@@ -701,9 +701,7 @@ export default function DeliveryOrder() {
     try {
       setLoadingLoads(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      
-      console.log('Fetching loads with token:', token ? 'Present' : 'Missing');
-      console.log('API URL:', `${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`);
+
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
         headers: {
@@ -712,11 +710,9 @@ export default function DeliveryOrder() {
         }
       });
 
-      console.log('Loads API Response:', response.data);
-
       if (response.data && response.data.loads) {
         setLoads(response.data.loads);
-        console.log('Loads loaded successfully:', response.data.loads.length, 'loads');
+
       } else {
         console.error('No loads data in response:', response.data);
         setLoads([]);
@@ -999,16 +995,13 @@ export default function DeliveryOrder() {
     if (value) {
       try {
         setLoadingSelectedLoad(true);
-        console.log('Fetching load data for loadId:', value);
-        
+
         const response = await apiService.getLoadById(value);
-        console.log('Load data response:', response);
-        
+
         if (response.success && response.load) {
           const loadData = response.load;
           setSelectedLoadData(loadData);
-          console.log('Load data loaded successfully:', loadData);
-          
+
           // Auto-fill form fields with load data
           setFormData(prev => ({
             ...prev,
@@ -1150,19 +1143,7 @@ export default function DeliveryOrder() {
                     `Bid Deadline: ${loadData.bidDeadline ? new Date(loadData.bidDeadline).toLocaleDateString() : 'N/A'}\n\n` +
                     (prev.remarks ? `=== ADDITIONAL REMARKS ===\n${prev.remarks}` : '')
           }));
-          
-          console.log('Auto-filled form data:', {
-            shipperName: loadData.shipper?.compName,
-            carrierName: loadData.assignedTo?.compName,
-            dispatcherName: loadData.assignedTo?.compName,
-            workOrderNo: loadData.poNumber || loadData.shipmentNumber,
-            pickupLocations: loadData.origins?.length,
-            dropLocations: loadData.destinations?.length,
-            zipCode: loadData.origins?.[0]?.zip,
-            city: loadData.origins?.[0]?.city,
-            state: loadData.origins?.[0]?.state
-          });
-          
+
           // If acceptedBid has rates array, populate charges (but don't open calculator automatically)
           if (loadData.acceptedBid?.rates && Array.isArray(loadData.acceptedBid.rates) && loadData.acceptedBid.rates.length > 0) {
             // Map the rates to the format expected by Charges Calculator
@@ -1182,9 +1163,8 @@ export default function DeliveryOrder() {
               ...prev,
               totalRates: totalRatesValue
             }));
-            
-            console.log('Charges populated from acceptedBid:', mappedCharges);
-            console.log('Total Rates:', totalRatesValue);
+
+
           }
           
           alertify.success('Load data loaded and form fields auto-filled!');
@@ -1407,7 +1387,7 @@ export default function DeliveryOrder() {
 
   // Handle charges popup for Carrier
   const handleChargesClick = () => {
-    console.log('Carrier charges popup opened');
+
     setChargesPopupType('carrier');
     setCurrentCustomerIndex(null);
     // Load existing carrier charges if available
@@ -1427,7 +1407,7 @@ export default function DeliveryOrder() {
   
   // Handle charges popup for Customer
   const handleCustomerChargesClick = (customerIndex) => {
-    console.log('Customer charges popup opened for customer:', customerIndex);
+
     setChargesPopupType('customer');
     setCurrentCustomerIndex(customerIndex);
     // Load existing customer charges if available
@@ -1874,10 +1854,8 @@ export default function DeliveryOrder() {
         supportingDocs: formData.docs ? '' : '' // Will be handled in multipart
       };
 
-      console.log('Submitting delivery order with loadReference:', formData.selectedLoad);
-      console.log('Selected load value type:', typeof formData.selectedLoad);
-      console.log('Selected load value length:', formData.selectedLoad ? formData.selectedLoad.length : 'null/undefined');
-      console.log('Full submit data:', submitData);
+
+
 
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
@@ -2304,7 +2282,7 @@ const validateForm = (mode = formMode) => {
 
   const handleEditOrder = async (order) => {
     try {
-      console.log('Edit order clicked:', order);
+
       const originalId = order.originalId || order.id.replace('DO-', '');
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
@@ -2341,8 +2319,7 @@ const validateForm = (mode = formMode) => {
             : (Number(c.other) || 0);
           
           // Log original customer data for debugging
-          console.log('Original customer from API:', c);
-          
+
           return {
             billTo: c.billTo || '',
             dispatcherName: c.dispatcherName || '',
@@ -2595,7 +2572,6 @@ const validateForm = (mode = formMode) => {
   const handleConfirmAssign = async () => {
     try {
       setAssigningOrder(true);
-      console.log('Confirming assignment for order:', orderToAssign);
 
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       if (!token) {
@@ -2751,8 +2727,6 @@ const handleUpdateOrder = async (e) => {
       orderId = orderId.replace(/^DO-/, '');
     }
 
-    console.log('Updating order ID:', orderId);
-
     // Get user/employee info
     const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
     const user = JSON.parse(userStr || '{}');
@@ -2785,7 +2759,7 @@ const handleUpdateOrder = async (e) => {
       
       // Debug: Log original data to see what fields are available
       if (idx === 0) {
-        console.log('Original customer data from API:', originalData);
+
       }
 
       // Start with original data to preserve all fields, then update with form values
@@ -2821,7 +2795,6 @@ const handleUpdateOrder = async (e) => {
         customerData.loadNo = originalData.loadNo;
       }
 
-      console.log(`Customer ${idx + 1} data:`, customerData);
       console.log(`Customer ${idx + 1} loadNo:`, customerData.loadNo, '(from original:', originalData.loadNo, ')');
       return customerData;
     });
@@ -2938,8 +2911,6 @@ const handleUpdateOrder = async (e) => {
       return;
     }
 
-    console.log('Update successful:', response.data);
-
     // 2) OPTIONAL: Handle document upload if a new file is selected
     if (formData.docs && formData.docs instanceof File) {
       try {
@@ -2947,7 +2918,6 @@ const handleUpdateOrder = async (e) => {
         fd.append('document', formData.docs);
 
         const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}/upload`;
-        console.log('Uploading document to:', uploadUrl);
 
         const uploadResponse = await axios.put(uploadUrl, fd, {
           headers: { 
@@ -2958,7 +2928,7 @@ const handleUpdateOrder = async (e) => {
         });
 
         if (uploadResponse?.data?.success) {
-          console.log('Document upload successful');
+
           alertify.success('Document uploaded successfully');
         } else {
           console.warn('Document upload response not successful:', uploadResponse?.data);
@@ -3027,14 +2997,14 @@ const handleUpdateOrder = async (e) => {
       if (editingOrder && editingOrder.fullData && editingOrder.fullData.carrier) {
         currentOrder = editingOrder.fullData;
         existingCarrierData = editingOrder.fullData.carrier;
-        console.log('Found carrier from editingOrder.fullData:', existingCarrierData);
+
       }
       // If not found, try from orders array
       else if (editingOrder && editingOrder._id) {
         currentOrder = orders.find(order => order._id === editingOrder._id);
         if (currentOrder && currentOrder.carrier) {
           existingCarrierData = currentOrder.carrier;
-          console.log('Found carrier from orders array:', existingCarrierData);
+
         }
       }
 
@@ -3053,8 +3023,6 @@ const handleUpdateOrder = async (e) => {
           totalCarrierFees: carrierFees.reduce((sum, fee) => sum + (fee.total || 0), 0)
         }
       };
-
-      console.log('Updating carrier fees with payload:', updateData);
 
       const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, updateData, {
         headers: {
@@ -3120,8 +3088,6 @@ const handleUpdateOrder = async (e) => {
         doId: orderId,
         status: newStatus
       };
-
-      console.log('Updating status with payload:', statusData);
 
       const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/do/do/status`, statusData, {
         headers: {
