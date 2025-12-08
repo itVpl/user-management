@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaUpload, FaTimes } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Paperclip, Eye } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+
+// Utility functions
+const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
+const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
+const shortId = (id = "") => (id?.length > 8 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id);
+const isImageUrl = (url = "") => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url);
+const isPdfUrl = (url = "") => /\.pdf$/i.test(url);
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -139,6 +146,25 @@ const AcountentPayable = () => {
   const itemsPerPage = 10;
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'paid', 'unpaid', 'pending'
   const [remarks, setRemarks] = useState({}); // { doId: 'remark text' }
+  
+  // Payment modal state
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({
+    paymentMethod: '',
+    paymentReference: '',
+    paymentNotes: '',
+    carrierPaymentProof: null
+  });
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // Shipment images and additional documents state
+  const [shipImgs, setShipImgs] = useState(null);
+  const [shipImgsLoading, setShipImgsLoading] = useState(false);
+  const [shipImgsErr, setShipImgsErr] = useState("");
+  const [addDocs, setAddDocs] = useState([]);
+  const [addDocsLoading, setAddDocsLoading] = useState(false);
+  const [addDocsErr, setAddDocsErr] = useState("");
 
   useEffect(() => {
     fetchAllDOs();
@@ -148,7 +174,7 @@ const AcountentPayable = () => {
     try {
       setLoading(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do`, {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/accountant/paid-dos`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -156,7 +182,7 @@ const AcountentPayable = () => {
       });
 
       if (response.data && response.data.success) {
-        const transformedDOs = (response.data.data || []).map(order => {
+        const transformedDOs = (response.data.data?.paidDOs || []).map(order => {
           const puLocs = order.shipper?.pickUpLocations || order.shipper?.pickupLocations || [];
           const drLocs = order.shipper?.dropLocations || order.shipper?.deliveryLocations || [];
           const loadNo = order.customers?.[0]?.loadNo || 'N/A';
@@ -165,10 +191,10 @@ const AcountentPayable = () => {
             id: `DO-${String(order._id).slice(-6)}`,
             originalId: order._id,
             doNum: loadNo,
-            clientName: order.customers?.[0]?.billTo || 'N/A',
+            clientName: order.customers?.[0]?.billTo || order.customerName || 'N/A',
             carrierName: order.carrier?.carrierName || 'N/A',
             carrierFees: order.carrier?.totalCarrierFees || 0,
-            createdAt: new Date(order.date).toISOString().split('T')[0],
+            createdAt: new Date(order.date || order.createdAt).toISOString().split('T')[0],
             createdBySalesUser: order.createdBySalesUser || 'N/A',
             status: order.status || 'open',
             // Full order data for details
@@ -178,10 +204,10 @@ const AcountentPayable = () => {
 
         setDos(transformedDOs);
         
-        // Initialize payment statuses as 'pending'
+        // Initialize carrier payment statuses from API response
         const initialStatus = {};
         transformedDOs.forEach(deliveryOrder => {
-          initialStatus[deliveryOrder.originalId] = 'pending';
+          initialStatus[deliveryOrder.originalId] = deliveryOrder.fullData?.carrierPaymentStatus?.status || 'pending';
         });
         setPaymentStatus(initialStatus);
       }
@@ -202,6 +228,9 @@ const AcountentPayable = () => {
     try {
       setLoadingDetails(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+      
+      // Fetch DO details
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/${doId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -210,9 +239,36 @@ const AcountentPayable = () => {
       });
 
       if (response.data && response.data.success) {
-        setSelectedDoDetails(response.data.data);
+        const order = response.data.data;
+        setSelectedDoDetails(order);
         setShowPaymentModal(false); // Close selection modal
         setShowDetailsModal(true); // Open details modal
+
+        // Fetch shipment images
+        const shipmentNo = order?.loadReference?.shipmentNumber;
+        if (shipmentNo) {
+          setShipImgsLoading(true);
+          try {
+            const imgResp = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${shipmentNo}/images`, { headers });
+            setShipImgs(imgResp?.data || null);
+          } catch (e) {
+            setShipImgsErr(e?.response?.data?.message || e?.message || "Failed to load shipment images");
+          } finally {
+            setShipImgsLoading(false);
+          }
+        }
+
+        // Fetch additional documents
+        setAddDocsLoading(true);
+        try {
+          const docResp = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/${doId}/additional-documents`, { headers });
+          setAddDocs(docResp?.data?.data?.documents || docResp?.data?.additionalDocuments || []);
+        } catch (e) {
+          setAddDocsErr(e?.response?.data?.message || e?.message || "Failed to load additional documents");
+          setAddDocs([]);
+        } finally {
+          setAddDocsLoading(false);
+        }
       } else {
         alertify.error('Failed to load DO details');
       }
@@ -222,6 +278,20 @@ const AcountentPayable = () => {
     } finally {
       setLoadingDetails(false);
     }
+  };
+
+  // Compute totals helper
+  const computeTotals = (order) => {
+    const customers = order?.customers || [];
+    const billTotal = customers.reduce((sum, cust) => {
+      const other = Array.isArray(cust?.other)
+        ? (cust?.otherTotal || cust.other.reduce((s, item) => s + (Number(item?.total) || 0), 0))
+        : (cust?.other || cust?.otherTotal || 0);
+      return sum + (cust?.lineHaul || 0) + (cust?.fsc || 0) + other;
+    }, 0);
+    const carrierTotal = order?.carrier?.totalCarrierFees || 0;
+    const netRevenue = billTotal - carrierTotal;
+    return { billTotal, carrierTotal, netRevenue };
   };
 
   const handleSubmitPayment = async (doId) => {
@@ -375,6 +445,75 @@ const AcountentPayable = () => {
     label: `${deliveryOrder.doNum} - ${deliveryOrder.clientName} - ${deliveryOrder.carrierName}`
   }));
 
+  const handleOpenPaymentModal = (deliveryOrder) => {
+    setPaymentData(deliveryOrder);
+    setPaymentForm({
+      paymentMethod: '',
+      paymentReference: '',
+      paymentNotes: '',
+      carrierPaymentProof: null
+    });
+    setPaymentModalOpen(true);
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!paymentData) return;
+
+    // Validation
+    if (!paymentForm.paymentMethod) {
+      alertify.error('Please select a payment method');
+      return;
+    }
+    if (!paymentForm.carrierPaymentProof) {
+      alertify.error('Please upload carrier payment proof document');
+      return;
+    }
+
+    setPaymentLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('doId', paymentData.originalId);
+      
+      // Get employee ID from storage
+      const empId = sessionStorage.getItem("empId") || localStorage.getItem("empId") || "";
+      if (empId) {
+        formData.append('accountantEmpId', empId);
+      }
+      
+      formData.append('paymentMethod', paymentForm.paymentMethod);
+      if (paymentForm.paymentReference) {
+        formData.append('paymentReference', paymentForm.paymentReference);
+      }
+      if (paymentForm.paymentNotes) {
+        formData.append('paymentNotes', paymentForm.paymentNotes);
+      }
+      formData.append('carrierPaymentProof', paymentForm.carrierPaymentProof);
+
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/mark-carrier-as-paid`;
+      const resp = await axios.post(url, formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (resp?.data?.success) {
+        alertify.success('Carrier payment marked as paid successfully!');
+        setPaymentModalOpen(false);
+        // Refresh the data
+        fetchAllDOs();
+      } else {
+        alertify.error(resp?.data?.message || 'Failed to mark carrier as paid');
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.message || error?.message || 'Failed to mark carrier as paid';
+      alertify.error(errorMsg);
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -392,78 +531,20 @@ const AcountentPayable = () => {
     <div className="p-6">
       {/* Header Section */}
       <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div 
-            onClick={() => setActiveTab('all')}
-            className={`bg-white rounded-2xl shadow-xl p-4 border cursor-pointer transition-all hover:shadow-2xl ${
-              activeTab === 'all' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-100'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Truck className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total DOs</p>
-                <p className="text-xl font-bold text-gray-800">{dos.length}</p>
-              </div>
+        {/* Total DO Section */}
+        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <Truck className="text-blue-600" size={20} />
             </div>
-          </div>
-          <div 
-            onClick={() => setActiveTab('paid')}
-            className={`bg-white rounded-2xl shadow-xl p-4 border cursor-pointer transition-all hover:shadow-2xl ${
-              activeTab === 'paid' ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-100'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Paid</p>
-                <p className="text-xl font-bold text-green-600">
-                  {Object.values(paymentStatus).filter(s => s === 'paid').length}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div 
-            onClick={() => setActiveTab('unpaid')}
-            className={`bg-white rounded-2xl shadow-xl p-4 border cursor-pointer transition-all hover:shadow-2xl ${
-              activeTab === 'unpaid' ? 'border-red-500 ring-2 ring-red-200' : 'border-gray-100'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                <XCircle className="text-red-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Unpaid</p>
-                <p className="text-xl font-bold text-red-600">
-                  {Object.values(paymentStatus).filter(s => s === 'unpaid').length}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div 
-            onClick={() => setActiveTab('pending')}
-            className={`bg-white rounded-2xl shadow-xl p-4 border cursor-pointer transition-all hover:shadow-2xl ${
-              activeTab === 'pending' ? 'border-yellow-500 ring-2 ring-yellow-200' : 'border-gray-100'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Clock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-xl font-bold text-yellow-600">
-                  {Object.values(paymentStatus).filter(s => s === 'pending').length}
-                </p>
-              </div>
+            <div>
+              <p className="text-sm text-gray-600">Total DO</p>
+              <p className="text-xl font-bold text-gray-800">{dos.length}</p>
             </div>
           </div>
         </div>
+        
+        {/* Search Section - Moved to Right */}
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -475,13 +556,6 @@ const AcountentPayable = () => {
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <button
-            onClick={() => setShowPaymentModal(true)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-lg hover:shadow-xl"
-          >
-            <DollarSign size={20} />
-            Make Payment
-          </button>
         </div>
       </div>
 
@@ -605,182 +679,504 @@ const AcountentPayable = () => {
 
             {/* Content */}
             <div className="p-6 space-y-6">
-              {/* Carrier Details */}
-              <div className="bg-gradient-to-br from-green-50 to-white border border-green-200 rounded-2xl p-6 shadow">
-                <div className="flex items-center gap-2 mb-4">
-                  <Truck className="text-green-600" size={20} />
-                  <h3 className="text-lg font-bold text-green-700">Carrier Details</h3>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
-                  <div>
-                    <span className="font-medium text-gray-600">Carrier Name:</span>
-                    <span className="ml-2 text-gray-800">{selectedDoDetails.carrier?.carrierName || 'N/A'}</span>
+              {/* Customer Information */}
+              {selectedDoDetails?.customers?.length > 0 && (
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <User className="text-green-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
                   </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Phone:</span>
-                    <span className="ml-2 text-gray-800">{selectedDoDetails.carrier?.carrierDetails?.phoneNo || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Equipment Type:</span>
-                    <span className="ml-2 text-gray-800">{selectedDoDetails.carrier?.equipmentType || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Total Carrier Fees:</span>
-                    <span className="ml-2 text-gray-800 font-semibold">${selectedDoDetails.carrier?.totalCarrierFees || 0}</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Load Details */}
-              <div className="bg-gradient-to-br from-blue-50 to-white border border-blue-200 rounded-2xl p-6 shadow">
-                <div className="flex items-center gap-2 mb-4">
-                  <MapPin className="text-blue-600" size={20} />
-                  <h3 className="text-lg font-bold text-blue-700">Load Details</h3>
-                </div>
-                <div className="grid grid-cols-3 md:grid-cols-3 gap-4">
-                  <div>
-                    <span className="font-medium text-gray-600">Load Number:</span>
-                    <span className="ml-2 text-gray-800">{selectedDoDetails.customers?.[0]?.loadNo || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Bill To:</span>
-                    <span className="ml-2 text-gray-800">{selectedDoDetails.customers?.[0]?.billTo || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Dispatcher:</span>
-                    <span className="ml-2 text-gray-800">{selectedDoDetails.customers?.[0]?.dispatcherName || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Work Order No:</span>
-                    <span className="ml-2 text-gray-800">{selectedDoDetails.customers?.[0]?.workOrderNo || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Total Amount:</span>
-                    <span className="ml-2 text-gray-800 font-semibold">${selectedDoDetails.customers?.[0]?.totalAmount || 0}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sales Person Details */}
-              <div className="bg-gradient-to-br from-purple-50 to-white border border-purple-200 rounded-2xl p-6 shadow">
-                <div className="flex items-center gap-2 mb-4">
-                  <User className="text-purple-600" size={20} />
-                  <h3 className="text-lg font-bold text-purple-700">Sales Person Details</h3>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
-                  <div className='bg-white p-2 rounded-md border border-gray-200'>
-                    <span className="font-medium text-gray-600">Created By:</span>
-                    <span className="ml-2 text-gray-800">
-                      {selectedDoDetails.createdBySalesUser?.employeeName || selectedDoDetails.createdBySalesUser || 'N/A'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Created Date:</span>
-                    <span className="ml-2 text-gray-800">
-                      {new Date(selectedDoDetails.date).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Status Section */}
-              <div className="bg-gradient-to-br from-orange-50 to-white border border-orange-200 rounded-2xl p-6 shadow">
-                <h3 className="text-lg font-bold text-orange-700 mb-4">Payment Status</h3>
-                <div className="flex items-center gap-3">
-                  <span className="font-medium text-gray-600">Current Status:</span>
-                  <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium ${getStatusColor(paymentStatus[selectedDoDetails._id] || 'pending')}`}>
-                    {getStatusIcon(paymentStatus[selectedDoDetails._id] || 'pending')}
-                    {(paymentStatus[selectedDoDetails._id] || 'pending').charAt(0).toUpperCase() + (paymentStatus[selectedDoDetails._id] || 'pending').slice(1)}
-                  </span>
-                </div>
-              </div>
-
-              {/* File Attachment Section */}
-              <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-200 rounded-2xl p-6 shadow">
-                <h3 className="text-lg font-bold text-indigo-700 mb-4">
-                  Attachments <span className="text-red-500 text-sm">*Required</span>
-                </h3>
-                <div className="mb-4">
-                  <label className="block mb-2 text-sm font-medium text-gray-700">
-                    Upload Files (Images/PDF)
-                  </label>
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600 transition">
-                      <FaUpload />
-                      <span>Choose Files</span>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*,.pdf"
-                        onChange={(e) => handleFileUpload(selectedDoDetails._id, e)}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">Supported formats: Images (JPG, PNG) and PDF</p>
-                </div>
-                {attachments[selectedDoDetails._id] && attachments[selectedDoDetails._id].length > 0 && (
-                  <div className="space-y-2">
-                    {attachments[selectedDoDetails._id].map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <FileText className="text-blue-500" size={20} />
-                          <span className="text-sm text-gray-700">{file.name}</span>
-                          <span className="text-xs text-gray-500">
-                            ({(file.size / 1024).toFixed(2)} KB)
-                          </span>
+                  <div className="space-y-4">
+                    {selectedDoDetails.customers.map((customer, index) => (
+                      <div key={customer?._id || index} className="bg-white rounded-xl p-4 border border-green-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                          </div>
+                          <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
                         </div>
-                        <button
-                          onClick={() => handleRemoveFile(selectedDoDetails._id, index)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <FaTimes />
-                        </button>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Bill To</p>
+                            <p className="font-medium text-gray-800">{customer?.billTo || selectedDoDetails?.customerName || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Dispatcher Name</p>
+                            <p className="font-medium text-gray-800">{customer?.dispatcherName || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Load No</p>
+                            <p className="font-medium text-gray-800">{customer?.loadNo || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Work Order No</p>
+                            <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Line Haul</p>
+                            <p className="font-medium text-gray-800">${fmtMoney(customer?.lineHaul || 0)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">FSC</p>
+                            <p className="font-medium text-gray-800">${fmtMoney(customer?.fsc || 0)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Other</p>
+                            <p className="font-medium text-gray-800">${fmtMoney(
+                              Array.isArray(customer?.other) 
+                                ? (customer?.otherTotal || customer.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
+                                : (customer?.other || customer?.otherTotal || 0)
+                            )}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600">Total Amount</p>
+                            <p className="font-bold text-lg text-green-600">${fmtMoney(customer?.calculatedTotal ?? customer?.totalAmount ?? 0)}</p>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Remarks Section */}
-              <div className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-2xl p-6 shadow">
-                <h3 className="text-lg font-bold text-gray-700 mb-4">Remarks</h3>
-                <textarea
-                  value={remarks[selectedDoDetails._id] || ''}
-                  onChange={(e) => setRemarks(prev => ({
-                    ...prev,
-                    [selectedDoDetails._id]: e.target.value
-                  }))}
-                  placeholder="Enter any remarks or notes..."
-                  rows={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                />
-              </div>
+              {/* Carrier Information */}
+              {selectedDoDetails?.carrier && (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Truck className="text-purple-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Carrier Information</h3>
+                  </div>
 
-              {/* Submit Button */}
-              <div className="flex justify-end">
-                <button
-                  onClick={() => handleSubmitPayment(selectedDoDetails._id)}
-                  disabled={submittingPayment}
-                  className={`flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-all shadow-lg ${
-                    submittingPayment 
-                      ? 'opacity-70 cursor-not-allowed' 
-                      : 'hover:from-blue-600 hover:to-blue-700 hover:shadow-xl'
-                  }`}
-                >
-                  {submittingPayment ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle size={20} />
-                      Submit Payment
-                    </>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <Truck className="text-purple-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Carrier Name</p>
+                        <p className="font-semibold text-gray-800">{selectedDoDetails.carrier?.carrierName || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                        <Truck className="text-pink-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Equipment Type</p>
+                        <p className="font-semibold text-gray-800">{selectedDoDetails.carrier?.equipmentType || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <DollarSign className="text-green-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Total Carrier Fees</p>
+                        <p className="font-semibold text-gray-800">${fmtMoney(selectedDoDetails.carrier?.totalCarrierFees || 0)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedDoDetails.carrier?.carrierFees?.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">Carrier Charges</h4>
+                      <div className="space-y-2">
+                        {selectedDoDetails.carrier.carrierFees.map((charge, i) => (
+                          <div key={i} className="bg-white rounded-lg p-3 border border-purple-200">
+                            <div className="flex justify-between items-center">
+                              <span className="font-medium text-gray-800">{charge?.name}</span>
+                              <span className="font-bold text-green-600">${fmtMoney(charge?.total || 0)}</span>
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Quantity: {charge?.quantity || 0} × Amount: ${fmtMoney(charge?.amount || 0)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </button>
+                </div>
+              )}
+
+              {/* Shipper Information */}
+              {selectedDoDetails?.shipper && (
+                <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Truck className="text-orange-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Shipper Information</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6 mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                        <User className="text-orange-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Shipper Name</p>
+                        <p className="font-semibold text-gray-800">{selectedDoDetails.shipper?.name || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pickup Locations */}
+                  {((selectedDoDetails.shipper?.pickUpLocations || []).length > 0) && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
+                      <div className="space-y-3">
+                        {(selectedDoDetails.shipper?.pickUpLocations || []).map((location, index) => (
+                          <div key={location?._id || index} className="bg-white rounded-lg p-3 border border-orange-200">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-600">Name</p>
+                                <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Address</p>
+                                <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">City</p>
+                                <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">State</p>
+                                <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Zip Code</p>
+                                <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Pickup Date</p>
+                                <p className="font-medium text-gray-800">
+                                  {location?.pickUpDate ? fmtDateTime(location.pickUpDate) : 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Drop Locations */}
+                  {((selectedDoDetails.shipper?.dropLocations || []).length > 0) && (
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">Drop Locations</h4>
+                      <div className="space-y-3">
+                        {(selectedDoDetails.shipper?.dropLocations || []).map((location, index) => (
+                          <div key={location?._id || index} className="bg-white rounded-lg p-3 border border-yellow-200">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-600">Name</p>
+                                <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Address</p>
+                                <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">City</p>
+                                <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">State</p>
+                                <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Zip Code</p>
+                                <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Drop Date</p>
+                                <p className="font-medium text-gray-800">
+                                  {location?.dropDate ? fmtDateTime(location.dropDate) : 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Shipment Images */}
+              {shipImgsLoading && (
+                <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                  <p className="text-gray-600">Loading shipment images...</p>
+                </div>
+              )}
+              {shipImgsErr && (
+                <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
+                  <p className="text-red-600 text-sm">{shipImgsErr}</p>
+                </div>
+              )}
+              {!shipImgsLoading && shipImgs?.images && (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="text-purple-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Shipment Images</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {/* Pickup Images */}
+                    {[
+                      ...(shipImgs.images.emptyTruckImages || []),
+                      ...(shipImgs.images.loadedTruckImages || []),
+                      ...(shipImgs.images.podImages || []),
+                      ...(shipImgs.images.eirTickets || []),
+                      ...(shipImgs.images.containerImages || []),
+                      ...(shipImgs.images.sealImages || []),
+                    ].length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-gray-800 mb-2">Pickup Images</h4>
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                          {[
+                            ...(shipImgs.images.emptyTruckImages || []),
+                            ...(shipImgs.images.loadedTruckImages || []),
+                            ...(shipImgs.images.podImages || []),
+                            ...(shipImgs.images.eirTickets || []),
+                            ...(shipImgs.images.containerImages || []),
+                            ...(shipImgs.images.sealImages || []),
+                          ].map((img, i) => (
+                            <a key={i} href={img} target="_blank" rel="noopener noreferrer">
+                              <img src={img} alt={`Pickup Image ${i + 1}`} className="h-24 rounded-lg object-cover border border-gray-200" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Drop Images */}
+                    {[
+                      ...(shipImgs.images.dropLocationImages?.podImages || []),
+                      ...(shipImgs.images.dropLocationImages?.loadedTruckImages || []),
+                      ...(shipImgs.images.dropLocationImages?.dropLocationImages || []),
+                      ...(shipImgs.images.dropLocationImages?.emptyTruckImages || []),
+                    ].length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-gray-800 mb-2">Drop Images</h4>
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                          {[
+                            ...(shipImgs.images.dropLocationImages?.podImages || []),
+                            ...(shipImgs.images.dropLocationImages?.loadedTruckImages || []),
+                            ...(shipImgs.images.dropLocationImages?.dropLocationImages || []),
+                            ...(shipImgs.images.dropLocationImages?.emptyTruckImages || []),
+                          ].map((img, i) => (
+                            <a key={i} href={img} target="_blank" rel="noopener noreferrer">
+                              <img src={img} alt={`Drop Image ${i + 1}`} className="h-24 rounded-lg object-cover border border-gray-200" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Additional Documents */}
+              {addDocsLoading && (
+                <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                  <p className="text-gray-600">Loading additional documents...</p>
+                </div>
+              )}
+              {addDocsErr && (
+                <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
+                  <p className="text-red-600 text-sm">{addDocsErr}</p>
+                </div>
+              )}
+              {!addDocsLoading && addDocs.length > 0 && (
+                <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl p-6 border border-pink-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="text-pink-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Additional Documents</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {addDocs.map((doc, i) => {
+                      const url = doc?.documentUrl || "";
+                      const isImg = isImageUrl(url);
+                      return (
+                        <div key={doc?._id || i} className="bg-white rounded-lg p-3 border border-pink-200">
+                          <div className="flex items-center gap-2 mb-2">
+                            {isImg ? <FileText className="text-blue-500" size={16} /> : <FileText className="text-gray-500" size={16} />}
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                              {isPdfUrl(url) ? "PDF Document" : (isImg ? "Image" : "File")}
+                            </a>
+                          </div>
+                          {isImg && (
+                            <a href={url} target="_blank" rel="noopener noreferrer">
+                              <img src={url} alt="additional-doc" className="w-full h-32 object-cover rounded border border-gray-200" />
+                            </a>
+                          )}
+                          {doc?.uploadedBy && (
+                            <div className="mt-2 text-xs text-gray-500">
+                              <p>Uploaded by: {doc.uploadedBy.employeeName || 'N/A'} ({doc.uploadedBy.empId || 'N/A'})</p>
+                              <p>Dept: {doc.uploadedBy.department || 'N/A'}</p>
+                              <p>At: {fmtDateTime(doc.uploadedAt)}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Totals */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <DollarSign className="text-green-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Totals</h3>
+                </div>
+                <div className="space-y-2">
+                  {(() => {
+                    const totals = computeTotals(selectedDoDetails);
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Bill Amount (Customer)</span>
+                          <span className="font-semibold text-gray-800">${fmtMoney(totals.billTotal)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Carrier Fees</span>
+                          <span className="font-semibold text-gray-800">${fmtMoney(totals.carrierTotal)}</span>
+                        </div>
+                        <div className="border-t border-gray-300 pt-2 mt-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-semibold text-gray-700">Net Revenue</span>
+                            <span className="font-bold text-lg text-green-600">${fmtMoney(totals.netRevenue)}</span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
+
+              {/* Carrier Payment Information - Only show carrier payment details */}
+              {selectedDoDetails?.carrierPaymentStatus?.status === 'paid' && (
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <CheckCircle className="text-green-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Carrier Payment Information</h3>
+                    <span className="ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
+                      <CheckCircle size={14} />
+                      Paid
+                    </span>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-green-200">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Payment Method</p>
+                        <p className="font-medium text-gray-800 capitalize">
+                          {selectedDoDetails?.carrierPaymentStatus?.paymentMethod?.replace('_', ' ') || 'N/A'}
+                        </p>
+                      </div>
+                      {selectedDoDetails?.carrierPaymentStatus?.paymentReference && (
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Payment Reference</p>
+                          <p className="font-medium text-gray-800">
+                            {selectedDoDetails.carrierPaymentStatus.paymentReference}
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Paid At</p>
+                        <p className="font-medium text-gray-800">
+                          {selectedDoDetails?.carrierPaymentStatus?.paidAt ? fmtDateTime(selectedDoDetails.carrierPaymentStatus.paidAt) : 'N/A'}
+                        </p>
+                      </div>
+                      {selectedDoDetails?.carrierPaymentStatus?.paymentNotes && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-600 mb-1">Payment Notes</p>
+                          <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            {selectedDoDetails.carrierPaymentStatus.paymentNotes}
+                          </p>
+                        </div>
+                      )}
+                      {selectedDoDetails?.carrierPaymentStatus?.paymentProof && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-600 mb-2">Carrier Payment Proof</p>
+                          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            <div className="flex items-center gap-3">
+                              {isImageUrl(selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl) ? (
+                                <a
+                                  href={selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                >
+                                  <FileText className="text-blue-600" size={24} />
+                                  <div>
+                                    <p className="font-medium">{selectedDoDetails.carrierPaymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
+                                    <p className="text-xs text-gray-500">Click to view image</p>
+                                  </div>
+                                </a>
+                              ) : isPdfUrl(selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl) ? (
+                                <a
+                                  href={selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                >
+                                  <FileText className="text-red-600" size={24} />
+                                  <div>
+                                    <p className="font-medium">{selectedDoDetails.carrierPaymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
+                                    <p className="text-xs text-gray-500">Click to view PDF</p>
+                                  </div>
+                                </a>
+                              ) : (
+                                <a
+                                  href={selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                >
+                                  <FileText className="text-gray-600" size={24} />
+                                  <div>
+                                    <p className="font-medium">{selectedDoDetails.carrierPaymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
+                                    <p className="text-xs text-gray-500">Click to download</p>
+                                  </div>
+                                </a>
+                              )}
+                            </div>
+                            {selectedDoDetails.carrierPaymentStatus.paymentProof.uploadedAt && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                Uploaded: {fmtDateTime(selectedDoDetails.carrierPaymentStatus.paymentProof.uploadedAt)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Uploaded Files */}
+              {selectedDoDetails?.uploadedFiles && selectedDoDetails.uploadedFiles.length > 0 && (
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="text-blue-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Files</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedDoDetails.uploadedFiles.map((f, i) => (
+                      <div key={f?._id || i} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-blue-200">
+                        <FileText className="text-blue-500" size={20} />
+                        <a href={f?.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-medium">
+                          {f?.fileName || 'File'}
+                        </a>
+                        <span className="ml-auto text-xs text-gray-500">{fmtDateTime(f?.uploadDate)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -797,66 +1193,71 @@ const AcountentPayable = () => {
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEES</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">PAYMENT STATUS</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
+                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pay</th>
+                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {currentDOs.map((deliveryOrder, index) => (
-                <tr key={deliveryOrder.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                  <td className="py-2 px-3">
-                    <span className="font-medium text-gray-700">{deliveryOrder.id}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <span className="font-mono text-base font-semibold text-gray-700">{deliveryOrder.doNum}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <span className="font-medium text-gray-700">{deliveryOrder.clientName}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <span className="font-medium text-gray-700">{deliveryOrder.carrierName}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <span className="font-medium text-gray-700">${deliveryOrder.carrierFees || 0}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(paymentStatus[deliveryOrder.originalId] || 'pending')}`}>
-                      {getStatusIcon(paymentStatus[deliveryOrder.originalId] || 'pending')}
-                      {(paymentStatus[deliveryOrder.originalId] || 'pending').charAt(0).toUpperCase() + (paymentStatus[deliveryOrder.originalId] || 'pending').slice(1)}
-                    </span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <span className="font-medium text-gray-700">
-                      {deliveryOrder.createdBySalesUser?.employeeName || deliveryOrder.createdBySalesUser || 'N/A'}
-                    </span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setSelectedDoId(deliveryOrder.originalId);
-                          handleDoSelect(deliveryOrder.originalId);
-                        }}
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        View Details
-                      </button>
-                      {/* <button
-                        onClick={() => handleMarkAsPaid(deliveryOrder.originalId)}
-                        className={`flex items-center gap-1 px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                          markAsPaidChecked[deliveryOrder.originalId]
-                            ? 'bg-green-600 text-white'
-                            : 'bg-green-500 hover:bg-green-600 text-white'
-                        }`}
-                      >
-                        <CheckCircle size={14} />
-                        {markAsPaidChecked[deliveryOrder.originalId] ? 'Paid' : 'Mark Paid'}
-                      </button> */}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {currentDOs.map((deliveryOrder, index) => {
+                const isPaid = deliveryOrder.fullData?.carrierPaymentStatus?.status === 'paid';
+                return (
+                  <tr key={deliveryOrder.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">{deliveryOrder.id}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-mono text-base font-semibold text-gray-700">{deliveryOrder.doNum}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">{deliveryOrder.clientName}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">{deliveryOrder.carrierName}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">${deliveryOrder.carrierFees || 0}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="font-medium text-gray-700">
+                        {deliveryOrder.createdBySalesUser?.employeeName || deliveryOrder.createdBySalesUser || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center justify-center">
+                        {isPaid ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700">
+                            <CheckCircle size={14} />
+                            Paid
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenPaymentModal(deliveryOrder)}
+                            className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Pay to Carrier"
+                          >
+                            Pay
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center justify-center">
+                        <button
+                          onClick={() => {
+                            setSelectedDoId(deliveryOrder.originalId);
+                            handleDoSelect(deliveryOrder.originalId);
+                          }}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="View Details"
+                        >
+                          <Eye size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -906,6 +1307,170 @@ const AcountentPayable = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Payment Modal */}
+      {paymentModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setPaymentModalOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <DollarSign size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Pay to Carrier</h2>
+                      <p className="text-white/80 text-sm">DO ID: {paymentData?.id || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPaymentModalOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                <div className="space-y-4">
+                  {/* Payment Method */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Method <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={paymentForm.paymentMethod}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                      required
+                    >
+                      <option value="">Select Payment Method</option>
+                      <option value="cash">Cash</option>
+                      <option value="check">Check</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="online">Online</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  {/* Payment Reference */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Reference (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentForm.paymentReference}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentReference: e.target.value })}
+                      placeholder="Transaction ID, Check Number, etc."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Payment Notes */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Notes (Optional)
+                    </label>
+                    <textarea
+                      value={paymentForm.paymentNotes}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentNotes: e.target.value })}
+                      placeholder="Additional notes about the payment"
+                      rows={3}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                    />
+                  </div>
+
+                  {/* Carrier Payment Proof Upload */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Carrier Payment Proof <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            if (file.size > 10 * 1024 * 1024) {
+                              alertify.error('File size must be less than 10MB');
+                              return;
+                            }
+                            setPaymentForm({ ...paymentForm, carrierPaymentProof: file });
+                          }
+                        }}
+                        className="hidden"
+                        id="carrier-payment-proof-upload"
+                        required
+                      />
+                      <label
+                        htmlFor="carrier-payment-proof-upload"
+                        className="cursor-pointer flex flex-col items-center justify-center"
+                      >
+                        {paymentForm.carrierPaymentProof ? (
+                          <div className="text-center">
+                            <CheckCircle size={32} className="text-green-500 mx-auto mb-2" />
+                            <p className="text-sm font-medium text-gray-700">{paymentForm.carrierPaymentProof.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(paymentForm.carrierPaymentProof.size / 1024).toFixed(2)} KB
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPaymentForm({ ...paymentForm, carrierPaymentProof: null });
+                                document.getElementById('carrier-payment-proof-upload').value = '';
+                              }}
+                              className="mt-2 text-sm text-red-500 hover:text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <Paperclip className="text-gray-400 mb-2" size={40} />
+                            <p className="text-sm font-medium text-gray-700">Click to upload carrier payment proof</p>
+                            <p className="text-xs text-gray-500 mt-1">PDF, JPG, PNG (Max 10MB)</p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => setPaymentModalOpen(false)}
+                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                      disabled={paymentLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handlePaymentSubmit}
+                      disabled={paymentLoading || !paymentForm.paymentMethod || !paymentForm.carrierPaymentProof}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                    >
+                      {paymentLoading ? "Processing..." : "Pay to Carrier"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

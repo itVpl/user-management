@@ -1095,11 +1095,25 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
   const doMongoId = order?.raw?._id || order?.id;
   const shipmentNumber = extractShipmentNumber(order);
+  const isForwarded = !!order?.raw?.forwardedToAccountant || !!order?.forwardedToAccountant;
+  const isSalesVerified = order?.raw?.assignmentStatus === 'sales_verified' || order?.assignmentStatus === 'sales_verified';
+  const isCmtVerified = order?.raw?.assignmentStatus === 'cmt_verified' || order?.assignmentStatus === 'cmt_verified';
+  const assignmentStatus = order?.raw?.assignmentStatus || order?.assignmentStatus || '';
+  const isAssigned = assignmentStatus === 'assigned';
+  
+  // Disable button if:
+  // 1. Already CMT verified
+  // 2. Already forwarded (any status)
+  // 3. Sales verified AND already forwarded (user requirement)
+  // 4. Status is sales_verified (backend requires 'assigned' status)
   const alreadyForwarded =
-    order?.raw?.assignmentStatus === 'cmt_verified' || !!order?.raw?.forwardedToAccountant;
+    isCmtVerified || 
+    isForwarded ||
+    (isSalesVerified && isForwarded) ||
+    isSalesVerified; // Disable if sales_verified (backend requires 'assigned' status)
 
   // Debug logging
-  console.log('DO Details Modal - Order:', order?.doId, 'Already Forwarded:', alreadyForwarded, 'Assignment Status:', order?.raw?.assignmentStatus, 'Forwarded To Accountant:', !!order?.raw?.forwardedToAccountant);
+  console.log('DO Details Modal - Order:', order?.doId, 'Already Forwarded:', alreadyForwarded, 'Assignment Status:', order?.raw?.assignmentStatus, 'Forwarded To Accountant:', isForwarded, 'Sales Verified:', isSalesVerified, 'CMT Verified:', isCmtVerified);
   function RowImages({ groups = {} }) {
     // groups = { Label: [urls], Label2: [urls], ... }
     const items = [];
@@ -1178,6 +1192,12 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
   // Forward
   const forwardToAccountant = async () => {
+    // Prevent forwarding if already forwarded
+    if (alreadyForwarded) {
+      alertify.warning('This DO has already been forwarded to accountant');
+      return;
+    }
+    
     try {
       if (!doMongoId || !cmtEmpId) return alertify.error('Missing DO ID or CMT EmpId');
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -2444,7 +2464,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               />
               <div className="mt-4 flex justify-end">
                 <button
-                  onClick={forwardToAccountant}
+                  onClick={(e) => {
+                    if (alreadyForwarded) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    forwardToAccountant();
+                  }}
                   disabled={fwLoading || alreadyForwarded}
                   className={`px-6 py-3 rounded-lg transition-all font-semibold ${alreadyForwarded
                       ? 'bg-gray-400 text-white cursor-not-allowed opacity-60'
@@ -2457,7 +2484,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   {alreadyForwarded ? (
                     <>
                       <CheckCircle size={18} className="inline mr-2" />
-                      Already Forwarded
+                      Already forwarded to the accountant
                     </>
                   ) : fwLoading ? (
                     <>
@@ -2654,6 +2681,7 @@ export default function DODetails({ overrideEmpId }) {
             doStatus: item?.doStatus || 'Active',
             assignmentStatus: item?.assignmentStatus || 'assigned',
             assignedToCMT: item?.assignedToCMT || null,
+            loadReferenceStatus: item?.loadReference?.status || item?.doStatus || 'Active',
 
             createdAt: item?.createdAt || new Date().toISOString(),
             updatedAt: item?.updatedAt || null,
@@ -2750,6 +2778,7 @@ export default function DODetails({ overrideEmpId }) {
             assignmentStatus: item?.assignmentStatus || 'rejected',
             assignedToCMT: item?.assignedToCMT || null,
             forwardedToAccountant: item?.forwardedToAccountant || null,
+            loadReferenceStatus: item?.loadReference?.status || item?.doStatus || 'Rejected',
 
             createdAt: item?.createdAt || new Date().toISOString(),
             updatedAt: item?.updatedAt || null,
@@ -3112,7 +3141,7 @@ export default function DODetails({ overrideEmpId }) {
                             className={`text-xs font-semibold px-2 py-1 rounded-full ${order.status === 'open' ? MS.successPill : MS.neutralPill
                               }`}
                           >
-                            {order.doStatus || order.status}
+                            {order.loadReferenceStatus || order.doStatus || order.status}
                           </span>
                           {order.assignmentStatus === 'cmt_verified' && (
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
