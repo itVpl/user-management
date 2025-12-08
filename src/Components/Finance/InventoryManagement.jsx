@@ -26,6 +26,24 @@ export default function InventoryManagement() {
   const [companies, setCompanies] = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
 
+  const selectedCompany = companies.find(c => (c._id || c.id) === selectedCompanyId);
+
+  const pageTitles = {
+    ledger: 'Ledger',
+    daybook: 'Daybook',
+    accountSummary: 'Account Summary',
+    statutoryReports: 'Statutory Reports',
+    balanceSheet: 'Balance Sheet',
+    payment: 'Payment Voucher',
+    contra: 'Contra Voucher',
+    receipt: 'Receipt Voucher',
+    journal: 'Journal Voucher',
+    debit: 'Debit Note',
+    credit: 'Credit Note',
+    sale: 'Sales Voucher',
+    purchase: 'Purchase Voucher'
+  };
+
   // Voucher types for dropdown
   const voucherTypes = [
     { id: 'payment', label: 'Payment', icon: DollarSign },
@@ -137,7 +155,12 @@ export default function InventoryManagement() {
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-gray-200 shadow-lg flex-shrink-0">
         <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600">
-          <h2 className="text-xl font-bold text-white">Inventory</h2>
+          <div className="flex items-center gap-3">
+            <Building className="text-white" size={24} />
+            <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight truncate">
+              {selectedCompanyId ? (selectedCompany?.companyName || selectedCompany?.name || 'Company') : 'Inventory'}
+            </h2>
+          </div>
         </div>
 
         {/* Company Dropdown */}
@@ -151,7 +174,7 @@ export default function InventoryManagement() {
             <select
               value={selectedCompanyId || ''}
               onChange={(e) => setSelectedCompanyId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${selectedCompanyId ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-white'}`}
             >
               <option value="">Select Company</option>
               {companies.map((company) => (
@@ -290,6 +313,20 @@ export default function InventoryManagement() {
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-2">
+          <div className="mb-4 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileText size={20} className="text-blue-700" />
+                <span className="text-lg font-semibold text-blue-700">{pageTitles[activeSection] || 'Inventory'}</span>
+              </div>
+              {selectedCompanyId && (
+                <div className="flex items-center gap-2 text-blue-700">
+                  <Building size={18} />
+                  <span className="text-sm font-medium">{selectedCompany?.companyName || selectedCompany?.name || 'Company'}</span>
+                </div>
+              )}
+            </div>
+          </div>
           {renderContent()}
         </div>
       </div>

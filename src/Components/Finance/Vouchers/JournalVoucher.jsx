@@ -8,6 +8,7 @@ import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
+import CreateLedgerModal from '../Ledger/CreateLedgerModal.jsx';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -24,6 +25,7 @@ const SearchableDropdown = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredOptions, setFilteredOptions] = useState(options);
+  const [highlightIndex, setHighlightIndex] = useState(0);
   const dropdownRef = React.useRef(null);
 
   useEffect(() => {
@@ -36,6 +38,12 @@ const SearchableDropdown = ({
       setFilteredOptions(filtered);
     }
   }, [searchTerm, options]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setHighlightIndex(0);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -70,60 +78,61 @@ const SearchableDropdown = ({
   };
 
   const selectedOption = options.find(option => option.value === value);
-  const paddingClass = compact ? 'px-3 py-2' : 'px-4 py-3';
+  const paddingClass = compact ? 'px-3 py-2' : 'px-3 py-2';
   const textSizeClass = compact ? 'text-sm' : '';
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      <div
-        className={`w-full ${paddingClass} border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer ${
-          disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
-        }`}
-        onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
-      >
-        <div className="flex items-center justify-between">
-          <span className={`${selectedOption ? 'text-gray-900' : 'text-gray-500'} ${textSizeClass}`}>
-            {loading ? 'Loading...' : selectedOption ? selectedOption.label : placeholder}
-          </span>
-          <svg
-            className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-          </svg>
+      <div className={`w-full ${paddingClass} border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 ${disabled ? 'bg-gray-100' : ''}`}>
+        <div className="relative flex items-center">
+          <input
+            type="text"
+            value={searchTerm !== '' ? searchTerm : (selectedOption ? selectedOption.label : '')}
+            onChange={(e) => { setSearchTerm(e.target.value); if (!disabled && !loading) setIsOpen(true); }}
+            onFocus={() => !disabled && !loading && setIsOpen(true)}
+            onKeyDown={(e) => {
+              if (!isOpen) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlightIndex(prev => Math.min(prev + 1, filteredOptions.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlightIndex(prev => Math.max(prev - 1, 0));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const opt = filteredOptions[highlightIndex];
+                if (opt) handleSelect(opt);
+              } else if (e.key === 'Escape') {
+                setIsOpen(false);
+                setSearchTerm('');
+              }
+            }}
+            placeholder={loading ? 'Loading...' : placeholder}
+            disabled={disabled || loading}
+            className={`w-full bg-transparent outline-none ${textSizeClass} p-0 text-gray-900`}
+          />
+          <Search className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} absolute right-3 text-gray-400`} />
         </div>
       </div>
 
       {isOpen && !disabled && !loading && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
-          <div className="p-2 border-b border-gray-200">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                autoFocus
-              />
-            </div>
-          </div>
           <div className="max-h-48 overflow-y-auto">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option, index) => (
                 <div
                   key={index}
-                  className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                  className={`px-4 py-2 cursor-pointer text-sm ${index === highlightIndex ? 'bg-blue-100' : 'hover:bg-blue-50'}`}
+                  onMouseEnter={() => setHighlightIndex(index)}
                   onClick={() => handleSelect(option)}
                 >
                   {option.label}
                 </div>
               ))
             ) : (
-              <div className="px-4 py-2 text-gray-500 text-sm text-center">No options found</div>
+              <div className="px-4 py-2 text-gray-500 text-sm text-center">
+                No options found
+              </div>
             )}
           </div>
         </div>
@@ -140,6 +149,7 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showLedgerCreateModal, setShowLedgerCreateModal] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState({
@@ -1308,6 +1318,16 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
 
                     <div className="grid grid-cols-3 gap-4 mb-3">
                       <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium text-gray-700">Account *</label>
+                          <button
+                            type="button"
+                            onClick={() => setShowLedgerCreateModal(true)}
+                            className="text-xs px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                          >
+                            + Create Ledger
+                          </button>
+                        </div>
                         <SearchableDropdown
                           value={entry.account}
                           onChange={(value) => handleUpdateEntry(index, 'account', value)}
@@ -1742,6 +1762,15 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
           </div>
         </div>
       )}
+      <CreateLedgerModal
+        isOpen={showLedgerCreateModal}
+        onClose={() => setShowLedgerCreateModal(false)}
+        selectedCompanyId={formData.company || companyId}
+        onCreated={() => {
+          const cid = formData.company || companyId;
+          if (cid) fetchAllLedgers(cid);
+        }}
+      />
     </div>
   );
 }
