@@ -48,6 +48,7 @@ const ProfilePage = () => {
   const [reason, setReason] = useState("");
   const [leaveMessage, setLeaveMessage] = useState("");
   const [leaveHistory, setLeaveHistory] = useState([]);
+  const [leaveBalance, setLeaveBalance] = useState(null);
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [leaveErrors, setLeaveErrors] = useState({
     leaveType: "",
@@ -112,6 +113,17 @@ const ProfilePage = () => {
     }
   };
 
+  const fetchLeaveBalance = async () => {
+    if (!empId) return;
+    try {
+      const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/leave/balance/${empId}`, authHeader());
+      if (res.data.success) setLeaveBalance(res.data);
+      else setLeaveBalance(null);
+    } catch (err) {
+      setLeaveBalance(null);
+    }
+  };
+
   const fetchAttendanceData = async (date) => {
     const d = date || attendanceDate;
     if (!d) return;
@@ -153,9 +165,16 @@ const ProfilePage = () => {
         if (res.data.success) setEmployee(res.data.employee);
       })
       .then(fetchLeaveHistory)
+      .then(fetchLeaveBalance)
       .then(() => fetchAttendanceData(todayISO()))
       .catch(() => {});
   }, [empId]);
+
+  useEffect(() => {
+    if (activeTab === "leave" && empId) {
+      fetchLeaveBalance();
+    }
+  }, [activeTab, empId]);
 
   useEffect(() => {
     if (empId && attendanceDate) fetchAttendanceData(attendanceDate);
@@ -251,7 +270,7 @@ const ProfilePage = () => {
       };
 
       const res = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/leave/apply",
+        "https://vpl-liveproject-1.onrender.com/api/v1/leave/apply-with-balance",
         payload,
         authHeader()
       );
@@ -264,6 +283,7 @@ const ProfilePage = () => {
         setToDate("");
         setReason("");
         fetchLeaveHistory();
+        fetchLeaveBalance();
       } else {
         setLeaveMessage(res.data?.message || "Something went wrong.");
       }
@@ -508,6 +528,48 @@ const ProfilePage = () => {
           {/* ================= LEAVE TAB ================= */}
           {activeTab === "leave" && (
             <div className="grid grid-cols-3 gap-6">
+              {/* Leave Balance Card - Quarterly Information Only */}
+              <div className="col-span-3 bg-gradient-to-br from-white to-indigo-50 p-6 rounded-3xl shadow-xl border border-indigo-200 mb-4">
+                <h2 className="text-2xl font-bold text-indigo-800 mb-6 flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
+                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                      <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  Leave Balance
+                </h2>
+                {leaveBalance?.quarterlyInfo ? (
+                  <div className="bg-gradient-to-r from-indigo-100 to-purple-100 p-6 rounded-xl border border-indigo-200">
+                    <div className="text-lg font-semibold text-indigo-800 mb-4">Quarterly Information</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <div className="text-xs text-gray-600 mb-1">Current Quarter</div>
+                        <div className="text-lg font-bold text-indigo-700">{leaveBalance.quarterlyInfo.currentQuarter}</div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <div className="text-xs text-gray-600 mb-1">Quarter Period</div>
+                        <div className="text-sm font-bold text-indigo-700">
+                          {leaveBalance.quarterlyInfo.quarterStartDate} to {leaveBalance.quarterlyInfo.quarterEndDate}
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <div className="text-xs text-gray-600 mb-1">Quarterly Used</div>
+                        <div className="text-lg font-bold text-indigo-700">
+                          {leaveBalance.quarterlyInfo.quarterlyUsed} / {leaveBalance.quarterlyInfo.quarterlyLimit}
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <div className="text-xs text-gray-600 mb-1">Last Allocation</div>
+                        <div className="text-sm font-bold text-indigo-700">{leaveBalance.quarterlyInfo.lastMonthlyAllocation}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">Loading quarterly information...</div>
+                )}
+              </div>
+
               <div className="col-span-1 bg-gradient-to-br from-white to-indigo-50 p-8 rounded-3xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
                 <h2 className="text-2xl font-bold text-indigo-800 mb-6 flex items-center gap-3">
                   <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
