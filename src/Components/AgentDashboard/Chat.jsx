@@ -65,10 +65,9 @@ const ChatPage = () => {
 
   // Show notification
   const showNotification = (title, body, senderName) => {
-    console.log("🔔 Attempting to show notification:", { title, body, senderName });
-    console.log("🔔 Notification permission:", Notification.permission);
-    console.log("🔔 Browser support:", typeof Notification !== 'undefined');
-    
+
+
+
     // Check if Notification API is supported
     if (typeof Notification === 'undefined') {
       console.error("❌ Notification API not supported in this browser");
@@ -84,18 +83,17 @@ const ChatPage = () => {
           requireInteraction: true, // Keep notification until user interacts
           silent: false // Play sound
         });
-        console.log("✅ Notification created successfully");
-        
+
         // Add click handler
         notification.onclick = () => {
-          console.log("🔔 Notification clicked");
+
           window.focus();
           notification.close();
         };
         
         // Add close handler
         notification.onclose = () => {
-          console.log("🔔 Notification closed");
+
         };
         
         // Auto close after 5 seconds
@@ -107,10 +105,10 @@ const ChatPage = () => {
         console.error("❌ Failed to create notification:", error);
       }
     } else {
-      console.log("❌ Notification permission not granted:", Notification.permission);
+
       // Try to request permission again
       Notification.requestPermission().then(permission => {
-        console.log("🔔 Permission request result:", permission);
+
         if (permission === "granted") {
           showNotification(title, body, senderName); // Retry
         }
@@ -120,31 +118,30 @@ const ChatPage = () => {
 
   // Request notification permission
   const requestNotificationPermission = () => {
-    console.log("🔔 Current notification permission:", Notification.permission);
-    
+
     if (Notification.permission === "default") {
-      console.log("🔔 Requesting notification permission...");
+
       Notification.requestPermission().then(permission => {
-        console.log("🔔 Permission result:", permission);
+
         if (permission === "granted") {
-          console.log("✅ Notification permission granted!");
+
         } else {
-          console.log("❌ Notification permission denied:", permission);
+
         }
       });
     } else if (Notification.permission === "granted") {
-      console.log("✅ Notification permission already granted!");
+
     } else {
-      console.log("❌ Notification permission denied:", Notification.permission);
+
     }
   };
 
   // Update unread count for a user
   const updateUnreadCount = (senderEmpId, increment = 1) => {
-    console.log("📊 Updating unread count for:", senderEmpId, "increment:", increment);
+
     setNewMessagesMap(prev => {
       const newCount = (prev[senderEmpId] || 0) + increment;
-      console.log("📊 New count for", senderEmpId, ":", newCount);
+
       return {
         ...prev,
         [senderEmpId]: newCount
@@ -154,7 +151,7 @@ const ChatPage = () => {
 
   // Clear unread count for a user
   const clearUnreadCount = (empId) => {
-    console.log("📊 Clearing unread count for:", empId);
+
     setNewMessagesMap(prev => {
       const copy = { ...prev };
       delete copy[empId];
@@ -165,14 +162,13 @@ const ChatPage = () => {
   // Mark messages as seen on server
   const markMessagesAsSeen = async (senderEmpId) => {
     try {
-      console.log("👁️ Marking messages as seen for:", senderEmpId);
+
       const res = await axios.patch(
         `${API_CONFIG.BASE_URL}/api/v1/chat/seen/${senderEmpId}`,
         {},
         { withCredentials: true }
       );
-      console.log("✅ Messages marked as seen:", res.data);
-      
+
       // Update local unread count
       clearUnreadCount(senderEmpId);
       
@@ -185,7 +181,7 @@ const ChatPage = () => {
 
   // Show in-app notification
   const displayInAppNotification = (title, body, senderName) => {
-    console.log("🔔 Showing in-app notification:", { title, body, senderName });
+
     setInAppNotificationData({ title, body, senderName });
     setShowInAppNotification(true);
     
@@ -204,13 +200,10 @@ const ChatPage = () => {
         { withCredentials: true }
       );
 
-      console.log("📨 All messages from server:", res.data);
-      
       const allMessages = res.data || [];
       // Don't filter - show all messages between these two users
       setMessages(allMessages);
-      
-      console.log("📨 Messages set:", allMessages);
+
       setTimeout(scrollToBottom, 100);
     } catch (err) {
       console.error("❌ Failed to load messages:", err);
@@ -250,19 +243,17 @@ const ChatPage = () => {
         `${API_CONFIG.BASE_URL}/api/v1/chat/unread`,
         { withCredentials: true }
       );
-      console.log("📊 Server unread counts:", res.data);
-      
+
       const unread = {};
       if (res.data && res.data.success && res.data.unreadBySender) {
         res.data.unreadBySender.forEach((item) => {
           if (item.unreadCount > 0 && item.sender && item.sender.empId) {
             unread[item.sender.empId] = item.unreadCount;
-            console.log(`📊 Unread count for ${item.sender.employeeName}: ${item.unreadCount}`);
+
           }
         });
       }
-      
-      console.log("📊 Final unread map:", unread);
+
       setNewMessagesMap(unread);
     } catch (err) {
       console.error("❌ Failed to fetch unread counts", err);
@@ -277,7 +268,7 @@ const ChatPage = () => {
         `${API_CONFIG.BASE_URL}/api/v1/chat/files/user/${empId}`,
         { withCredentials: true }
       );
-      console.log('Files response:', res.data);
+
       setFiles(res.data.files || []);
     } catch (err) {
       console.error("❌ Failed to fetch files:", err);
@@ -355,8 +346,6 @@ const ChatPage = () => {
         }
       );
 
-      console.log('File upload response:', response.data);
-
       // Add file message to UI immediately with proper ID
       const newFileMessage = {
         _id: response.data?.messageId || response.data?.id || response.data?.message?._id || Date.now().toString(),
@@ -424,8 +413,6 @@ const ChatPage = () => {
           },
         }
       );
-
-      console.log('Image upload response:', response.data);
 
       // Add image message to UI immediately with proper ID
       const newImageMessage = {
@@ -643,7 +630,7 @@ const ChatPage = () => {
     });
 
     socketRef.current.on("connect", () => {
-      console.log("✅ Socket connected:", socketRef.current.id);
+
       socketRef.current.emit("join", storedUser.empId);
     });
 
@@ -652,7 +639,6 @@ const ChatPage = () => {
     });
 
     const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName }) => {
-      console.log("📨 New message from:", senderEmpId, "to", receiverEmpId);
 
       // Check if this message is for current user (as receiver)
       const isForMe = receiverEmpId === storedUser.empId;
@@ -661,34 +647,17 @@ const ChatPage = () => {
       // Check if this message is to current selected user
       const isToSelectedUser = receiverEmpId === selectedUser?.empId;
 
-      console.log("Message details:", {
-        isForMe,
-        isFromSelectedUser,
-        isToSelectedUser,
-        currentUser: storedUser.empId,
-        selectedUser: selectedUser?.empId
-      });
-
       // Show notification if message is for current user and not from current selected user
-      console.log("🔔 Notification check:", {
-        isForMe,
-        isFromSelectedUser,
-        message,
-        senderName,
-        currentUser: storedUser.empId,
-        selectedUser: selectedUser?.empId
-      });
-      
+
       if (isForMe && !isFromSelectedUser) {
-        console.log("🔔 Showing notification for message from:", senderName);
-        
+
         // Try browser notification first
         showNotification("New Message", message || "Sent you a message", senderName || "Someone");
         
         // Also show in-app notification as backup
         displayInAppNotification("New Message", message || "Sent you a message", senderName || "Someone");
       } else {
-        console.log("🔔 Not showing notification - conditions not met");
+
       }
 
       // Update last message time for sorting
@@ -699,7 +668,7 @@ const ChatPage = () => {
 
       // Update unread count for the sender
       if (isForMe && !isFromSelectedUser) {
-        console.log("📊 Updating unread count for:", senderEmpId);
+
         updateUnreadCount(senderEmpId, 1);
         
         // Refresh server-side unread counts and re-sort chat list
@@ -712,7 +681,7 @@ const ChatPage = () => {
 
       // If message is for current user OR involves current selected user, refresh messages
       if ((isForMe && isFromSelectedUser) || (isToSelectedUser && senderEmpId === storedUser.empId)) {
-        console.log("🔄 Refreshing messages for current chat");
+
         await fetchMessages(selectedUser.empId);
         setTimeout(scrollToBottom, 100);
       }
@@ -984,14 +953,7 @@ const ChatPage = () => {
                       new Date(messages[idx - 1]?.timestamp).toDateString();
                     
                     // Debug message details
-                    console.log(`Message ${idx}:`, {
-                      senderEmpId: msg.senderEmpId,
-                      receiverEmpId: msg.receiverEmpId,
-                      currentUser: storedUser?.empId,
-                      isSentByMe,
-                      message: msg.message
-                    });
-                    
+
                     return (
                       <div key={idx}>
                         {showDate && (
@@ -1139,10 +1101,10 @@ const ChatPage = () => {
                                         onClick={() => {
                                           // Download using message ID
                                           if (msg._id) {
-                                            console.log('Downloading file for message:', msg._id);
+
                                             window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank');
                                           } else {
-                                            console.log('No message ID found for download');
+
                                           }
                                         }}
                                         className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"

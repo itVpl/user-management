@@ -72,18 +72,14 @@ export default function AssignDo() {
         }
       });
 
-      console.log('API Response:', response);
-      console.log('Response Data:', response.data);
 
       // Check if response has data property
       if (response.data && response.data.success) {
         const assignmentsData = response.data.data?.assignments || [];
-        console.log('Assignments Data:', assignmentsData);
-        
+
         if (Array.isArray(assignmentsData)) {
           const transformedData = assignmentsData.map((assignment, index) => {
-            console.log(`Assignment ${assignment.doId} CMT Assignment:`, assignment.assignedToCMT);
-            
+
             return {
               id: assignment.doId || index,
               sNo: index + 1,
@@ -103,14 +99,13 @@ export default function AssignDo() {
             };
           });
 
-          console.log('Transformed Data:', transformedData);
           setAssignments(transformedData);
         } else {
-          console.log('Assignments data is not an array:', assignmentsData);
+
           toast.error('API returned data is not in expected format');
         }
       } else {
-        console.log('Unexpected response structure:', response.data);
+
         toast.error('Unexpected response structure from API');
       }
     } catch (error) {
@@ -201,7 +196,7 @@ export default function AssignDo() {
 
   // Handle view assignment details
   const handleViewAssignment = (assignment) => {
-    console.log('Opening assignment view for:', assignment.doId);
+
     setSelectedAssignment(assignment);
     setShowViewModal(true);
   };
@@ -259,8 +254,6 @@ export default function AssignDo() {
         reason: reassignDescription.trim()
       };
 
-      console.log('Re-assign payload:', payload);
-
       // Make API call to re-assign DO
       const response = await axios.put(
         `${API_CONFIG.BASE_URL}/api/v1/do/do/reassign-to-cmt`,
@@ -279,10 +272,10 @@ export default function AssignDo() {
         closeReassignModal();
         
         // Refresh the data immediately and then again after a delay to ensure updated data
-        console.log('Refreshing data after re-assignment...');
+
         fetchAssignments();
         setTimeout(() => {
-          console.log('Second refresh after re-assignment...');
+
           fetchAssignments();
         }, 2000);
       } else {

@@ -165,7 +165,7 @@ const Email = () => {
 
   const loadEmails = async () => {
     if (!createdAccountId) {
-      console.log('No email account ID available');
+
       setEmails(sampleEmails); // Show sample emails if no account
       return;
     }
@@ -193,8 +193,6 @@ const Email = () => {
           }
         }
       );
-
-      console.log('Inbox Response:', response.data);
 
       // Transform API response to match our email format
       const fetchedEmails = response.data?.emails || response.data?.data || [];
@@ -251,14 +249,13 @@ const Email = () => {
                     sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
       
       if (!token || !createdAccountId) {
-        console.log('No token or account ID for fetching full email');
+
         setEmailLoading(false);
         return;
       }
 
       const uid = email.uid || email.id;
-      console.log('Fetching full email - UID:', uid, 'AccountID:', createdAccountId);
-      
+
       const response = await axios.get(
         `${API_BASE_URL}/email-inbox/${uid}?emailAccountId=${createdAccountId}`,
         {
@@ -268,8 +265,6 @@ const Email = () => {
           }
         }
       );
-
-      console.log('Full Email Response:', response.data);
 
       if (response.data.success && response.data.email) {
         const fullEmail = response.data.email;
@@ -326,7 +321,7 @@ const Email = () => {
         // Remove the data:image/xxx;base64, prefix
         const result = reader.result;
         const base64 = result.includes(',') ? result.split(',')[1] : result;
-        console.log('Base64 conversion - File:', file.name, 'Size:', base64.length, 'chars');
+
         resolve(base64);
       };
       reader.onerror = (error) => reject(error);
@@ -389,14 +384,6 @@ const Email = () => {
         formData.append('attachments', att.file);
       });
 
-      console.log('Sending email with FormData:', {
-        to: composeData.to,
-        subject: composeData.subject,
-        text: composeData.body,
-        emailAccountId: createdAccountId,
-        attachmentsCount: composeData.attachments.length
-      });
-
       const response = await axios.post(
         `${API_BASE_URL}/email-inbox/send-files`,
         formData,
@@ -407,8 +394,6 @@ const Email = () => {
           }
         }
       );
-
-      console.log('Send email response:', response.data);
 
       if (response.data.success) {
         // Add to sent emails locally
@@ -470,8 +455,7 @@ const Email = () => {
           }
         }
       );
-      
-      console.log('Create Account Response:', response.data);
+
       console.log('Full Response Object:', JSON.stringify(response.data, null, 2));
       
       // Store the created account ID - handle different response structures
@@ -492,7 +476,7 @@ const Email = () => {
         if (accountId) {
           setCreatedAccountId(accountId);
           localStorage.setItem('emailAccountId', accountId); // Save to localStorage
-          console.log('✅ Stored Account ID:', accountId);
+
           setCreateSuccess(true);
         } else {
           console.warn('⚠️ Could not find account ID in response. Full response:', response.data);
@@ -517,8 +501,7 @@ const Email = () => {
   };
 
   const handleTestConnection = async () => {
-    console.log('Testing connection with Account ID:', createdAccountId);
-    
+
     if (!createdAccountId) {
       setTestError('Please create an email account first');
       return;
@@ -540,7 +523,6 @@ const Email = () => {
       }
 
       const testUrl = `${API_BASE_URL}/email-accounts/${createdAccountId}/test`;
-      console.log('Test Connection URL:', testUrl);
 
       const response = await axios.post(
         testUrl,
@@ -552,8 +534,7 @@ const Email = () => {
           }
         }
       );
-      
-      console.log('Test Connection Response:', response.data);
+
       setTestSuccess(true);
       setIsAccountTested(true);
       setTimeout(() => {
@@ -712,8 +693,7 @@ const Email = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      console.log('Downloaded:', filename, 'ContentType:', contentType);
+
     } catch (error) {
       console.error('Error downloading attachment:', error);
     }
@@ -865,7 +845,7 @@ const Email = () => {
                               display: 'block'
                             }}
                             onError={(e) => {
-                              console.log('Image load error for:', filename);
+
                               e.target.style.display = 'none';
                             }}
                           />

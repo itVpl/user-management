@@ -25,15 +25,12 @@ export const createEmailAccount = async (accountData) => {
     throw new Error('Please login to access this resource');
   }
 
-  console.log('Creating email account with data:', accountData);
-  
   const response = await axios.post(
     `${API_BASE_URL}/email-accounts/create`,
     accountData,
     { headers: getAuthHeaders() }
   );
 
-  console.log('Create Account API Response:', response.data);
   console.log('Full Response:', JSON.stringify(response.data, null, 2));
   
   return response.data;
@@ -47,9 +44,7 @@ export const testEmailConnection = async (accountId) => {
     throw new Error('Please login to access this resource');
   }
 
-  console.log('Testing connection for Account ID:', accountId);
   const testUrl = `${API_BASE_URL}/email-accounts/${accountId}/test`;
-  console.log('Test URL:', testUrl);
 
   const response = await axios.post(
     testUrl,
@@ -57,8 +52,6 @@ export const testEmailConnection = async (accountId) => {
     { headers: getAuthHeaders() }
   );
 
-  console.log('Test Connection API Response:', response.data);
-  
   return response.data;
 };
 
@@ -70,16 +63,13 @@ export const fetchInboxEmails = async (accountId, limit = 50, page = 1) => {
     throw new Error('Please login to access emails');
   }
 
-  console.log('Fetching inbox emails for Account ID:', accountId, 'Limit:', limit, 'Page:', page);
   const inboxUrl = `${API_BASE_URL}/email-inbox/inbox?limit=${limit}&page=${page}&emailAccountId=${accountId}`;
-  console.log('Inbox URL:', inboxUrl);
 
   const response = await axios.get(
     inboxUrl,
     { headers: getAuthHeaders() }
   );
 
-  console.log('Inbox API Response:', response.data);
   console.log('Full Inbox Response:', JSON.stringify(response.data, null, 2));
   
   return response.data;
@@ -93,16 +83,13 @@ export const fetchSentEmails = async (accountId, limit = 50, page = 1) => {
     throw new Error('Please login to access emails');
   }
 
-  console.log('Fetching sent emails for Account ID:', accountId, 'Limit:', limit, 'Page:', page);
   const sentUrl = `${API_BASE_URL}/email-inbox/sent?limit=${limit}&page=${page}&emailAccountId=${accountId}`;
-  console.log('Sent URL:', sentUrl);
 
   const response = await axios.get(
     sentUrl,
     { headers: getAuthHeaders() }
   );
 
-  console.log('Sent Emails API Response:', response.data);
   console.log('Full Sent Response:', JSON.stringify(response.data, null, 2));
   
   return response.data;
@@ -116,16 +103,12 @@ export const fetchEmailByUid = async (uid, accountId) => {
     throw new Error('Please login to access emails');
   }
 
-  console.log('Fetching email by UID:', uid, 'Account ID:', accountId);
   const emailUrl = `${API_BASE_URL}/email-inbox/${uid}?emailAccountId=${accountId}`;
-  console.log('Email URL:', emailUrl);
 
   const response = await axios.get(
     emailUrl,
     { headers: getAuthHeaders() }
   );
-
-  console.log('Single Email API Response:', response.data);
 
   return response.data;
 };
@@ -159,16 +142,12 @@ export const sendEmail = async (emailData) => {
     throw new Error('Please login to send emails');
   }
 
-  console.log('Sending email:', emailData);
-
   const response = await axios.post(
     `${API_BASE_URL}/email-inbox/send`,
     emailData,
     { headers: getAuthHeaders() }
   );
 
-  console.log('Send Email API Response:', response.data);
-  
   return response.data;
 };
 
@@ -210,14 +189,6 @@ export const sendEmailWithAttachments = async (emailData) => {
     });
   }
 
-  console.log('Sending email with attachments:', {
-    to: emailData.to,
-    subject: emailData.subject,
-    text: emailData.text || emailData.body,
-    emailAccountId: emailData.emailAccountId,
-    attachmentsCount: emailData.attachments?.length || 0
-  });
-
   const response = await axios.post(
     `${API_BASE_URL}/email-inbox/send-files`,
     formData,
@@ -229,8 +200,6 @@ export const sendEmailWithAttachments = async (emailData) => {
     }
   );
 
-  console.log('Send Email with Attachments API Response:', response.data);
-  
   return response.data;
 };
 
@@ -278,16 +247,6 @@ export const replyToEmailWithFiles = async (replyData) => {
     });
   }
 
-  console.log('Replying to email with attachments:', {
-    to: replyData.to,
-    subject: replyData.subject,
-    text: replyData.text || replyData.body,
-    inReplyTo: replyData.inReplyTo,
-    references: replyData.references,
-    emailAccountId: replyData.emailAccountId,
-    attachmentsCount: replyData.attachments?.length || 0
-  });
-
   const response = await axios.post(
     `${API_BASE_URL}/email-inbox/reply-files`,
     formData,
@@ -299,8 +258,6 @@ export const replyToEmailWithFiles = async (replyData) => {
     }
   );
 
-  console.log('Reply Email API Response:', response.data);
-  
   return response.data;
 };
 
@@ -311,16 +268,6 @@ export const replyToEmail = async (replyData) => {
   if (!token) {
     throw new Error('Please login to send emails');
   }
-
-  console.log('Replying to email:', {
-    to: replyData.to,
-    subject: replyData.subject,
-    text: replyData.text || replyData.body,
-    inReplyTo: replyData.inReplyTo,
-    references: replyData.references,
-    emailAccountId: replyData.emailAccountId,
-    attachmentsCount: replyData.attachments?.length || 0
-  });
 
   const response = await axios.post(
     `${API_BASE_URL}/email-inbox/reply`,
@@ -339,7 +286,5 @@ export const replyToEmail = async (replyData) => {
     }
   );
 
-  console.log('Reply Email API Response:', response.data);
-  
   return response.data;
 };

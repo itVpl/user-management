@@ -503,13 +503,13 @@ const handleWorkingAddressFileChange = (idx, file) => {
         response = await axiosInstance.get('/api/v1/shipper_driver/cmt/truckers');
         response = response.data; // Extract data from axios response
       } catch (cmtError) {
-        console.log('CMT endpoint failed, trying general truckers endpoint:', cmtError);
+
         try {
           // Fallback to general truckers endpoint
           response = await axiosInstance.get('/api/v1/truckers');
           response = response.data; // Extract data from axios response
         } catch (generalError) {
-          console.log('General endpoint also failed:', generalError);
+
           // Try one more endpoint
           response = await axiosInstance.get('/api/v1/shipper_driver/truckers');
           response = response.data; // Extract data from axios response
@@ -530,7 +530,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
       
       // Debug: Log first trucker to see structure
       if (truckersList.length > 0) {
-        console.log('=== FIRST TRUCKER FROM API ===');
+
         console.log(JSON.stringify(truckersList[0], null, 2));
       }
       
@@ -585,16 +585,13 @@ const handleWorkingAddressFileChange = (idx, file) => {
   // NOTE: Currently using data from table row. There is NO API call to fetch a single trucker.
   // The edit form data comes directly from the trucker object passed when clicking Edit button.
   const handleEditTrucker = (trucker) => {
-    console.log('Trucker data for editing:', trucker);
-    
+
     // Get company address - API uses 'compAdd' field
     const companyAddress = trucker.compAdd || trucker.address || trucker.companyAddress || trucker.compAddress || '';
     
     // Get zip code - API uses 'zipcode' field (lowercase)
     const zipCodeValue = trucker.zipcode || trucker.zipCode || trucker.pinCode || trucker.pincode || trucker.postalCode || trucker.zip || '';
-    
-    console.log('Company Address:', companyAddress);
-    console.log('Zip Code:', zipCodeValue);
+
 
     // Get working address data
     const workingAddr = trucker.workingAddress || [];
@@ -1048,12 +1045,12 @@ const handleWorkingAddressFileChange = (idx, file) => {
 
     for (const endpoint of endpoints) {
       try {
-        console.log(`Testing endpoint: ${endpoint}`);
+
         const response = await axiosInstance.get(endpoint);
-        console.log(`✅ Success for ${endpoint}:`, response.data);
+
         return response.data;
       } catch (error) {
-        console.log(`❌ Failed for ${endpoint}:`, error.message);
+
       }
     }
   };

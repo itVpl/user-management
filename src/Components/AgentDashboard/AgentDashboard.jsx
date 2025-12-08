@@ -98,7 +98,7 @@ const Dashboard = () => {
       // Get user object from sessionStorage and extract aliasName
       const userStr = sessionStorage.getItem('user');
       if (!userStr) {
-        console.log('No user found in sessionStorage');
+
         return;
       }
       
@@ -106,11 +106,9 @@ const Dashboard = () => {
       const alias = user.aliasName;
       
       if (!alias) {
-        console.log('No aliasName found in user object');
+
         return;
       }
-      
-      console.log('Using alias:', alias);
 
       // Get today's date range in local timezone (not UTC)
       const today = new Date();
@@ -130,8 +128,6 @@ const Dashboard = () => {
       
       const from = formatDate(startOfDay);
       const to = formatDate(endOfDay);
-      
-      console.log('Date range:', { from, to });
 
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -144,8 +140,6 @@ const Dashboard = () => {
           }
         );
 
-        console.log('API Response:', response.data);
-        
         // Check if response.data is an array, if not, try to get the correct property
         let records = [];
         if (Array.isArray(response.data)) {
@@ -155,7 +149,7 @@ const Dashboard = () => {
         } else if (response.data && Array.isArray(response.data.data)) {
           records = response.data.data;
         } else {
-          console.log('No records found in response:', response.data);
+
           records = [];
         }
 
@@ -214,7 +208,7 @@ const Dashboard = () => {
         // Get user data to extract empId
         const userStr = sessionStorage.getItem('user');
         if (!userStr) {
-          console.log('No user found in sessionStorage');
+
           return;
         }
         
@@ -222,11 +216,9 @@ const Dashboard = () => {
         const empId = user.empId;
         
         if (!empId) {
-          console.log('No empId found in user object');
+
           return;
         }
-        
-        console.log('Fetching DO data for employee:', empId);
 
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
@@ -376,8 +368,6 @@ const Dashboard = () => {
   const userData = sessionStorage.getItem("user") || localStorage.getItem("user");
   const user = userData ? JSON.parse(userData) : {};
   const department = user?.department || 'CMT';
-  
-  console.log("AgentDashboard - User department:", department); 
 
   // Format today's truckers data for display
   const recentCarriers = cmtData.todayTruckers.map(trucker => ({

@@ -5,7 +5,7 @@ const LoadAssignmentPopup = ({ assignment, onClose, hasBothPopups = false }) => 
   // Log when popup is rendered for debugging
   React.useEffect(() => {
     if (assignment) {
-      console.log('🎯 LoadAssignmentPopup rendered:', assignment);
+
     }
   }, [assignment]);
 
