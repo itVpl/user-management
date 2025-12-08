@@ -148,6 +148,19 @@ export default function DeliveryOrder() {
     'image/jpeg',
     'image/png'
   ];
+  const ALLOWED_OTR_TYPES = [
+    'Dry Van',
+    'Reefer',
+    'Step Deck',
+    'Double Drop / Lowboy',
+    'Conestoga',
+    'Livestock Trailer',
+    'Car Hauler',
+    'Container Chassis',
+    'End Dump',
+    'Side Dump',
+    'Hopper Bottom'
+  ];
   const sanitizeAlnum = (s = "") => s.replace(/[^A-Za-z0-9]/g, "");
   // money (>= 0, max 2 decimals)
   const isMoney2dp = (s = '') => {
@@ -1776,6 +1789,41 @@ export default function DeliveryOrder() {
         return formatDateToISO(dateString);
       };
 
+      // Clean pickup and drop locations: drop any rows missing required datetime
+      const cleanedPickupLocations = (formData.pickupLocations || [])
+        .map(l => ({
+          name: (l.name || '').trim(),
+          address: (l.address || '').trim(),
+          city: (l.city || '').trim(),
+          state: (l.state || '').trim(),
+          zipCode: (l.zipCode || '').trim(),
+          weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
+          commodity: (l.commodity || formData.commodity || '').trim(),
+          pickUpDate: formatDateToISO(l.pickUpDate),
+          remarks: (l.remarks || '').trim(),
+        }))
+        .filter(l => l.pickUpDate && l.pickUpDate.trim());
+
+      const cleanedDropLocations = (formData.dropLocations || [])
+        .map(l => ({
+          name: (l.name || '').trim(),
+          address: (l.address || '').trim(),
+          city: (l.city || '').trim(),
+          state: (l.state || '').trim(),
+          zipCode: (l.zipCode || '').trim(),
+          weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
+          commodity: (l.commodity || formData.commodity || '').trim(),
+          dropDate: formatDateToISO(l.dropDate),
+          remarks: (l.remarks || '').trim(),
+        }))
+        .filter(l => l.dropDate && l.dropDate.trim());
+
+      if (!cleanedPickupLocations.length) {
+        alertify.error('Please enter pickUpDate for at least one pickup location');
+        setSubmitting(false);
+        return;
+      }
+
       // customers - convert other field to array format
       const customersWithTotals = formData.customers.map(c => {
         const lh = toNum2(c.lineHaul);
@@ -1792,6 +1840,7 @@ export default function DeliveryOrder() {
         }] : [];
         
         return {
+          billTo: c.billTo,
           dispatcherName: c.dispatcherName,
           workOrderNo: c.workOrderNo,
           lineHaul: lh,
@@ -1804,6 +1853,7 @@ export default function DeliveryOrder() {
 
       // carrier (from charges)
       const carrierData = {
+        carrierName: formData.carrierName,
         equipmentType: formData.equipmentType,
         carrierFees: (charges || []).map(ch => ({
           name: ch.name,
@@ -1813,6 +1863,15 @@ export default function DeliveryOrder() {
         })),
         totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0)
       };
+
+      if ((formData.loadType || selectedLoadType) === 'OTR') {
+        const et = (formData.equipmentType || '').trim();
+        if (!ALLOWED_OTR_TYPES.includes(et)) {
+          alertify.error('Select a valid equipment type for OTR');
+          setSubmitting(false);
+          return;
+        }
+      }
 
       // Format return location for DRAYAGE - only include if all required fields are present
       const returnLocationData = (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && formData.returnLocation ? {
@@ -1834,37 +1893,18 @@ export default function DeliveryOrder() {
         loadType: formData.loadType || selectedLoadType,
         shipperId: shipperId || '',
         carrierId: carrierId || '',
-        companyName: formData.company || formData.addDispature || '', // Company name for both DRAYAGE and OTR
+        company: formData.company || formData.addDispature || '',
+        addDispature: formData.company || formData.addDispature || '',
         customers: customersWithTotals,
         carrier: carrierData,
         shipper: {
           containerNo: formData.containerNo || '',
           containerType: (formData.loadType || selectedLoadType) === 'DRAYAGE' 
             ? ((formData.equipmentType || formData.containerType || '').trim()) 
-            : ((formData.containerType || '').trim()),
+            : ((formData.equipmentType || formData.containerType || '').trim()),
           shipmentNo: formData.shipmentNo || '',
-          pickUpLocations: formData.pickupLocations.map(l => ({
-            name: l.name || '',
-            address: l.address || '',
-            city: l.city || '',
-            state: l.state || '',
-            zipCode: l.zipCode || '',
-            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            commodity: l.commodity || formData.commodity || '',
-            pickUpDate: formatDateToISO(l.pickUpDate),
-            remarks: l.remarks || ''
-          })),
-          dropLocations: formData.dropLocations.map(l => ({
-            name: l.name || '',
-            address: l.address || '',
-            city: l.city || '',
-            state: l.state || '',
-            zipCode: l.zipCode || '',
-            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            commodity: l.commodity || formData.commodity || '',
-            dropDate: formatDateToISO(l.dropDate),
-            remarks: l.remarks || ''
-          }))
+          pickUpLocations: cleanedPickupLocations,
+          dropLocations: cleanedDropLocations
         },
         bols: (formData.bols || [])
           .filter(b => (b.bolNo || '').trim())
@@ -1910,30 +1950,10 @@ export default function DeliveryOrder() {
           containerNo: formData.containerNo || '',
           containerType: (formData.loadType || selectedLoadType) === 'DRAYAGE' 
             ? ((formData.equipmentType || formData.containerType || '').trim()) 
-            : ((formData.containerType || '').trim()),
+            : ((formData.equipmentType || formData.containerType || '').trim()),
           shipmentNo: formData.shipmentNo || '',
-          pickUpLocations: formData.pickupLocations.map(l => ({
-            name: l.name || '',
-            address: l.address || '',
-            city: l.city || '',
-            state: l.state || '',
-            zipCode: l.zipCode || '',
-            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            commodity: l.commodity || formData.commodity || '',
-            pickUpDate: formatDateToISO(l.pickUpDate),
-            remarks: l.remarks || ''
-          })),
-          dropLocations: formData.dropLocations.map(l => ({
-            name: l.name || '',
-            address: l.address || '',
-            city: l.city || '',
-            state: l.state || '',
-            zipCode: l.zipCode || '',
-            weight: l.weight === '' ? 0 : parseInt(l.weight) || 0,
-            commodity: l.commodity || formData.commodity || '',
-            dropDate: formatDateToISO(l.dropDate),
-            remarks: l.remarks || ''
-          }))
+          pickUpLocations: cleanedPickupLocations,
+          dropLocations: cleanedDropLocations
         };
         fd.append('shipper', JSON.stringify(shipperJSON));
 
@@ -4041,14 +4061,28 @@ const handleUpdateOrder = async (e) => {
     </div>
 
     <!-- Shipper Info -->
-    <div class="grid">
-      <div class="box">
-        <div class="box-title">Shipper Information</div>
-        <div class="field"><span class="label">Name:</span><span class="value">${shipper.name || 'N/A'}</span></div>
-        <div class="field"><span class="label">Container No:</span><span class="value">${shipper.containerNo || 'N/A'}</span></div>
-        <div className="field"><span class="label">Container Type:</span><span class="value">${shipper.containerType || 'N/A'}</span></div>
-      </div>
+  <div class="grid">
+  <div class="box">
+    <div class="box-title">Shipper Information</div>
+
+    <div class="field">
+      <span class="label">Name:</span>
+      <span class="value">${shipper?.pickUpLocations?.[0]?.name || 'N/A'}</span>
     </div>
+
+    <div class="field">
+      <span class="label">Container No:</span>
+      <span class="value">${shipper.containerNo || 'N/A'}</span>
+    </div>
+
+    <div class="field">
+      <span class="label">Container Type:</span>
+      <span class="value">${shipper.containerType || 'N/A'}</span>
+    </div>
+
+  </div>
+</div>
+
 
     <!-- Pickup & Delivery -->
     <div class="section">
@@ -5687,9 +5721,9 @@ const handleUpdateOrder = async (e) => {
                           {/* Make entire field area clickable by also focusing the input on container click */}
                           <div onClick={(e) => e.currentTarget.querySelector('input')?.focus()}>
                             <ClickableDateInput
-                              value={formData.pickupLocations[0]?.pickUpDate || ''}
-                              onChange={(val) => handlePickupLocationChange(0, 'pickUpDate', val)}
-                              error={errors.pickups?.[0]?.pickUpDate}
+                              value={formData.pickupLocations[locationIndex]?.pickUpDate || ''}
+                              onChange={(val) => handlePickupLocationChange(locationIndex, 'pickUpDate', val)}
+                              error={lErr.pickUpDate}
                               mode="datetime"
                             />
                             {lErr.pickUpDate && <p className="text-red-600 text-xs mt-1">{lErr.pickUpDate}</p>}
