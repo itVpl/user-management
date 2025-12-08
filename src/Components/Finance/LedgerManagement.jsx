@@ -9,6 +9,7 @@ import { DateRange } from 'react-date-range';
 import { format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
+import CreateLedgerModal from './Ledger/CreateLedgerModal.jsx';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -25,6 +26,7 @@ const SearchableDropdown = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredOptions, setFilteredOptions] = useState(options);
+  const [highlightIndex, setHighlightIndex] = useState(0);
   const dropdownRef = React.useRef(null);
 
   useEffect(() => {
@@ -37,6 +39,10 @@ const SearchableDropdown = ({
       setFilteredOptions(filtered);
     }
   }, [searchTerm, options]);
+
+  useEffect(() => {
+    if (isOpen) setHighlightIndex(0);
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -73,54 +79,43 @@ const SearchableDropdown = ({
   const selectedOption = options.find(option => option.value === value);
   
   // Compact mode styling to match DeliveryOrder inline filters
-  const paddingClass = compact ? 'px-3 py-2' : 'px-4 py-3';
+  const paddingClass = compact ? 'px-3 py-2' : 'px-3 py-2';
   const borderClass = 'border-gray-300';
   const textSizeClass = compact ? 'text-sm' : '';
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      <div
-        className={`w-full ${paddingClass} border ${borderClass} rounded-lg bg-white ${compact ? 'focus-within:ring-2 focus-within:ring-green-500 focus-within:border-transparent' : 'focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent'} cursor-pointer ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
-          }`}
-        onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
-      >
-        <div className="flex items-center justify-between">
-          <span className={`${selectedOption ? 'text-gray-900' : 'text-gray-500'} ${textSizeClass}`}>
-            {loading ? 'Loading...' : selectedOption ? selectedOption.label : placeholder}
-          </span>
-          <svg
-            className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-          </svg>
+      <div className={`w-full ${paddingClass} border ${borderClass} rounded-lg bg-white ${compact ? 'focus-within:ring-2 focus-within:ring-green-500 focus-within:border-transparent' : 'focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent'} ${disabled ? 'bg-gray-100' : ''}`}>
+        <div className="relative flex items-center">
+          <input
+            type="text"
+            value={searchTerm !== '' ? searchTerm : (selectedOption ? selectedOption.label : '')}
+            onChange={(e) => { setSearchTerm(e.target.value); if (!disabled && !loading) setIsOpen(true); }}
+            onFocus={() => !disabled && !loading && setIsOpen(true)}
+            onKeyDown={(e) => {
+              if (!isOpen) return;
+              if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIndex(prev => Math.min(prev + 1, filteredOptions.length - 1)); }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIndex(prev => Math.max(prev - 1, 0)); }
+              else if (e.key === 'Enter') { e.preventDefault(); const opt = filteredOptions[highlightIndex]; if (opt) handleSelect(opt); }
+              else if (e.key === 'Escape') { setIsOpen(false); setSearchTerm(''); }
+            }}
+            placeholder={loading ? 'Loading...' : placeholder}
+            disabled={disabled || loading}
+            className={`w-full bg-transparent outline-none ${compact ? 'text-sm' : ''} p-0 text-gray-900`}
+          />
+          <Search className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} absolute right-3 text-gray-400`} />
         </div>
       </div>
 
       {isOpen && !disabled && !loading && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
-          <div className="p-2 border-b border-gray-200">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                autoFocus
-              />
-            </div>
-          </div>
-
           <div className="max-h-48 overflow-y-auto">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option, index) => (
                 <div
                   key={index}
-                  className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                  className={`px-4 py-2 cursor-pointer text-sm ${index === highlightIndex ? 'bg-blue-100' : 'hover:bg-blue-50'}`}
+                  onMouseEnter={() => setHighlightIndex(index)}
                   onClick={() => handleSelect(option)}
                 >
                   {option.label}
@@ -149,7 +144,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
   const [loading, setLoading] = useState(false);
   const [ledgers, setLedgers] = useState([]);
   const [filteredLedgers, setFilteredLedgers] = useState([]);
-  const [companies, setCompanies] = useState([]); // For modal dropdown
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isActiveFilter, setIsActiveFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -228,23 +223,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
            sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
   };
 
-  // Fetch Companies (for modal dropdown)
-  const fetchCompanies = async () => {
-    try {
-      const token = getAuthToken();
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/company/all?isActive=true&page=1&limit=100&sortBy=companyName&sortOrder=asc`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const companiesList = response.data?.companies || response.data?.data || [];
-      setCompanies(companiesList);
-    } catch (error) {
-      console.error('Error fetching companies:', error);
-      alertify.error(error.response?.data?.message || 'Failed to load companies');
-    }
-  };
+  
 
   // Fetch Stats (all ledgers without filters for counts)
   const fetchStats = async () => {
@@ -589,8 +568,6 @@ const LedgerManagement = ({ selectedCompanyId }) => {
 
   // Open Create Modal
   const openCreateModal = () => {
-    resetForm();
-    setFormData(prev => ({ ...prev, company: selectedCompanyId || '' }));
     setShowCreateModal(true);
   };
 
@@ -678,9 +655,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
   };
 
   // Effects
-  useEffect(() => {
-    fetchCompanies(); // Fetch companies for modal dropdown
-  }, []);
+  
 
   useEffect(() => {
     if (selectedCompanyId) {
@@ -977,7 +952,13 @@ const LedgerManagement = ({ selectedCompanyId }) => {
       )}
 
       {/* Create Modal */}
-      {showCreateModal && (
+      <CreateLedgerModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        selectedCompanyId={selectedCompanyId}
+        onCreated={() => fetchLedgers(currentPage)}
+      />
+      {false && (
         <div 
           className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
           onClick={() => setShowCreateModal(false)}

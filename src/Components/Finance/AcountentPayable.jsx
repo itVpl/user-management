@@ -20,6 +20,7 @@ const SearchableDropdown = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredOptions, setFilteredOptions] = useState(options);
+  const [highlightIndex, setHighlightIndex] = useState(0);
   const dropdownRef = React.useRef(null);
 
   useEffect(() => {
@@ -32,6 +33,10 @@ const SearchableDropdown = ({
       setFilteredOptions(filtered);
     }
   }, [searchTerm, options]);
+
+  useEffect(() => {
+    if (isOpen) setHighlightIndex(0);
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -69,48 +74,37 @@ const SearchableDropdown = ({
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      <div
-        className={`w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
-          }`}
-        onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
-      >
-        <div className="flex items-center justify-between">
-          <span className={selectedOption ? 'text-gray-900' : 'text-gray-500'}>
-            {loading ? 'Loading...' : selectedOption ? selectedOption.label : placeholder}
-          </span>
-          <svg
-            className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-          </svg>
+      <div className={`w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent ${disabled ? 'bg-gray-100' : ''}`}>
+        <div className="relative flex items-center">
+          <input
+            type="text"
+            value={searchTerm !== '' ? searchTerm : (selectedOption ? selectedOption.label : '')}
+            onChange={(e) => { setSearchTerm(e.target.value); if (!disabled && !loading) setIsOpen(true); }}
+            onFocus={() => !disabled && !loading && setIsOpen(true)}
+            onKeyDown={(e) => {
+              if (!isOpen) return;
+              if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIndex(prev => Math.min(prev + 1, filteredOptions.length - 1)); }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIndex(prev => Math.max(prev - 1, 0)); }
+              else if (e.key === 'Enter') { e.preventDefault(); const opt = filteredOptions[highlightIndex]; if (opt) handleSelect(opt); }
+              else if (e.key === 'Escape') { setIsOpen(false); setSearchTerm(''); }
+            }}
+            placeholder={loading ? 'Loading...' : placeholder}
+            disabled={disabled || loading}
+            className="w-full bg-transparent outline-none p-0 text-gray-900"
+          />
+          <Search className="w-4 h-4 absolute right-3 text-gray-400" />
         </div>
       </div>
 
       {isOpen && !disabled && !loading && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
-          <div className="p-2 border-b border-gray-200">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                autoFocus
-              />
-            </div>
-          </div>
-
           <div className="max-h-48 overflow-y-auto">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option, index) => (
                 <div
                   key={index}
-                  className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                  className={`px-4 py-2 cursor-pointer text-sm ${index === highlightIndex ? 'bg-blue-100' : 'hover:bg-blue-50'}`}
+                  onMouseEnter={() => setHighlightIndex(index)}
                   onClick={() => handleSelect(option)}
                 >
                   {option.label}
@@ -617,14 +611,14 @@ const AcountentPayable = () => {
                   <Truck className="text-green-600" size={20} />
                   <h3 className="text-lg font-bold text-green-700">Carrier Details</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                   <div>
                     <span className="font-medium text-gray-600">Carrier Name:</span>
                     <span className="ml-2 text-gray-800">{selectedDoDetails.carrier?.carrierName || 'N/A'}</span>
                   </div>
                   <div>
                     <span className="font-medium text-gray-600">Phone:</span>
-                    <span className="ml-2 text-gray-800">{selectedDoDetails.carrier?.phone || 'N/A'}</span>
+                    <span className="ml-2 text-gray-800">{selectedDoDetails.carrier?.carrierDetails?.phoneNo || 'N/A'}</span>
                   </div>
                   <div>
                     <span className="font-medium text-gray-600">Equipment Type:</span>
@@ -643,7 +637,7 @@ const AcountentPayable = () => {
                   <MapPin className="text-blue-600" size={20} />
                   <h3 className="text-lg font-bold text-blue-700">Load Details</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 md:grid-cols-3 gap-4">
                   <div>
                     <span className="font-medium text-gray-600">Load Number:</span>
                     <span className="ml-2 text-gray-800">{selectedDoDetails.customers?.[0]?.loadNo || 'N/A'}</span>
@@ -673,8 +667,8 @@ const AcountentPayable = () => {
                   <User className="text-purple-600" size={20} />
                   <h3 className="text-lg font-bold text-purple-700">Sales Person Details</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                  <div className='bg-white p-2 rounded-md border border-gray-200'>
                     <span className="font-medium text-gray-600">Created By:</span>
                     <span className="ml-2 text-gray-800">
                       {selectedDoDetails.createdBySalesUser?.employeeName || selectedDoDetails.createdBySalesUser || 'N/A'}
