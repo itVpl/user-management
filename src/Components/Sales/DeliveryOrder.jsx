@@ -533,7 +533,8 @@ export default function DeliveryOrder() {
     selectedLoad: '', // Load reference dropdown
     company: '', // Company field
     loadType: 'OTR', // Load type: DRAYAGE or OTR
-    returnLocation: { // Return location for DRAYAGE
+  returnLocation: { // Return location for DRAYAGE
+      name: '',
       address: '',
       city: '',
       state: '',
@@ -851,12 +852,14 @@ export default function DeliveryOrder() {
 
         // Return location for DRAYAGE
         returnLocation: src.loadType === 'DRAYAGE' && src.returnLocation ? {
+          name: src.returnLocation.name || src.returnLocation.locationName || '',
           address: src.returnLocation.returnFullAddress || '',
           city: src.returnLocation.city || '',
           state: src.returnLocation.state || '',
           zipCode: src.returnLocation.zipCode || '',
           returnDate: fmt(src.returnLocation.returnDate)
         } : {
+          name: '',
           address: '',
           city: '',
           state: '',
@@ -1881,9 +1884,11 @@ export default function DeliveryOrder() {
           formData.returnLocation.state,
           formData.returnLocation.zipCode
         ].filter(Boolean).join(', ') || '',
+        name: formData.returnLocation.name || '',
         city: formData.returnLocation.city || '',
         state: formData.returnLocation.state || '',
         zipCode: formData.returnLocation.zipCode || '',
+        weight: formData.returnLocation.weight === '' ? 0 : (Number(formData.returnLocation.weight) || 0),
         returnDate: formatReturnDateToISO(formData.returnLocation.returnDate || '')
       } : null;
 
@@ -2054,6 +2059,7 @@ export default function DeliveryOrder() {
           company: '',
           loadType: 'OTR',
           returnLocation: {
+            name: '',
             address: '',
             city: '',
             state: '',
@@ -2234,6 +2240,7 @@ const validateForm = (mode = formMode) => {
       commodity: '',
       loadType: 'OTR',
       returnLocation: {
+        name: '',
         address: '',
         city: '',
         state: '',
@@ -2407,16 +2414,20 @@ const validateForm = (mode = formMode) => {
           
           // Return location for DRAYAGE
           returnLocation: fullOrderData.loadType === 'DRAYAGE' && fullOrderData.returnLocation ? {
+            name: fullOrderData.returnLocation.name || fullOrderData.returnLocation.locationName || '',
             address: fullOrderData.returnLocation.returnFullAddress || '',
             city: fullOrderData.returnLocation.city || '',
             state: fullOrderData.returnLocation.state || '',
             zipCode: fullOrderData.returnLocation.zipCode || '',
+            weight: fullOrderData.returnLocation.weight ?? '',
             returnDate: formatDateForInput(fullOrderData.returnLocation.returnDate)
           } : {
+            name: '',
             address: '',
             city: '',
             state: '',
             zipCode: '',
+            weight: '',
             returnDate: ''
           },
           
@@ -2911,9 +2922,11 @@ const handleUpdateOrder = async (e) => {
         formData.returnLocation.state,
         formData.returnLocation.zipCode
       ].filter(Boolean).join(', ') || '',
+      name: formData.returnLocation.name || '',
       city: formData.returnLocation.city || '',
       state: formData.returnLocation.state || '',
       zipCode: formData.returnLocation.zipCode || '',
+      weight: formData.returnLocation.weight === '' ? 0 : (Number(formData.returnLocation.weight) || 0),
       returnDate: formData.returnLocation.returnDate || ''
     } : null;
 
@@ -3248,12 +3261,14 @@ const handleUpdateOrder = async (e) => {
       else qtyRaw = 1;
       const qty = toNum(qtyRaw) || 1;
 
-      let rateRaw = (ch && ch.rate !== undefined && ch.rate !== null) ? ch.rate : 0;
+      let rateRaw = null;
+      if (ch && ch.rate !== undefined && ch.rate !== null) rateRaw = ch.rate;
+      else if (ch && ch.amount !== undefined && ch.amount !== null) rateRaw = ch.amount;
+      else if (ch && ch.amt !== undefined && ch.amt !== null) rateRaw = ch.amt;
+      else if (ch && ch.price !== undefined && ch.price !== null) rateRaw = ch.price;
       const rate = toNum(rateRaw);
 
-      let totalRaw = null;
-      if (ch && ch.total !== undefined && ch.total !== null) totalRaw = ch.total;
-      else if (ch && ch.amount !== undefined && ch.amount !== null) totalRaw = ch.amount;
+      let totalRaw = (ch && ch.total !== undefined && ch.total !== null) ? ch.total : null;
       const total = totalRaw !== null ? toNum(totalRaw) : (rate * qty);
 
       let desc = 'Charge ' + (idx + 1);
@@ -3495,7 +3510,7 @@ const handleUpdateOrder = async (e) => {
       
       // Format return location address line (same as pickup/drop)
       const returnAddrLine = formatLocLine({
-        name: returnLoc.locationName || '',
+        name: returnLoc.name || returnLoc.locationName || '',
         address: returnLoc.returnFullAddress || returnLoc.address || '',
         city: returnLoc.city || '',
         state: returnLoc.state || '',
@@ -5931,19 +5946,19 @@ const handleUpdateOrder = async (e) => {
   <div className="bg-white p-4 rounded-lg mt-4">
     <h4 className="text-md font-semibold text-gray-800 mb-4">Return Location</h4>
     <div className="grid grid-cols-3 gap-4">
-      {/* Location Name */}
+      {/* Name */}
       <div className="col-span-1">
         <input
           type="text"
-          value={formData.returnLocation?.locationName || ''}
+          value={formData.returnLocation?.name || ''}
           onChange={(e) => setFormData(prev => ({
             ...prev,
-            returnLocation: { ...prev.returnLocation, locationName: e.target.value }
+            returnLocation: { ...prev.returnLocation, name: e.target.value }
           }))}
-          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.locationName ? 'border-red-400' : 'border-gray-300'}`}
-          placeholder="Location Name (e.g., Warehouse, Port, Facility) *"
+          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.returnLocation?.name ? 'border-red-400' : 'border-gray-300'}`}
+          placeholder="Name (e.g., Warehouse, Port, Facility) *"
         />
-        {errors.returnLocation?.locationName && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.locationName}</p>}
+        {errors.returnLocation?.name && <p className="text-red-600 text-xs mt-1">{errors.returnLocation.name}</p>}
       </div>
       
       {/* Address */}
@@ -6550,6 +6565,10 @@ const handleUpdateOrder = async (e) => {
 
                     <div className="bg-white rounded-lg p-4 border border-indigo-200">
                       <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600">Name</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.name || 'N/A'}</p>
+                        </div>
                         <div className="col-span-2">
                           <p className="text-sm text-gray-600">Return Full Address</p>
                           <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.returnFullAddress || 'N/A'}</p>
