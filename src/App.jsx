@@ -76,6 +76,7 @@ import InventoryManagement from "./Components/Finance/InventoryManagement.jsx";
 import AcountentPayable from "./Components/Finance/AcountentPayable.jsx";
 import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
 import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
+import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
 
 // Global Notification Component
 function GlobalAssignmentNotification() {
@@ -453,6 +454,7 @@ function App() {
           <Route path="acountent-payable" element={<AcountentPayable />} />
           <Route path="empty-truck-location" element={<EmptyTruckLocation />} />
           <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
+          <Route path="break-report" element={<BreakReport />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
