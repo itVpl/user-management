@@ -3374,6 +3374,7 @@ const MaterialShipperDropdown = ({
         const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/inhouse-created`, {
 
           timeout: 15000, withCredentials: true, headers,
+          params: { sort: "-createdAt" },
 
         });
 
@@ -3543,15 +3544,11 @@ const MaterialShipperDropdown = ({
 
             status,
 
-            createdAt: load.pickupDate
+            createdAt: load.createdAt
 
-              ? new Date(load.pickupDate).toISOString()
+              ? new Date(load.createdAt).toISOString()
 
-              : load.createdAt
-
-                ? new Date(load.createdAt).toISOString()
-
-                : 'N/A',
+              : 'N/A',
 
             createdBy: load.createdBySalesUser 
 
@@ -3677,9 +3674,12 @@ const MaterialShipperDropdown = ({
 
 
 
-      // Latest first
-
-      transformedLoads.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      // Latest first - sort by createdAt descending (newest first)
+      transformedLoads.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA; // Descending order (newest first)
+      });
 
 
 
@@ -5431,7 +5431,7 @@ const MaterialShipperDropdown = ({
 
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Status</th>
 
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Action</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide" style={{ width: '320px', minWidth: '320px' }}>Action</th>
 
                 </tr>
 
@@ -5503,15 +5503,15 @@ const MaterialShipperDropdown = ({
 
                     </td>
 
-                    <td className="py-2 px-3 w-48">
+                    <td className="py-2 px-3" style={{ width: '320px', minWidth: '320px' }}>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 flex-nowrap">
 
                         <button
 
                           onClick={() => handleViewLoad(load)}
 
-                          className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-xs font-medium"
+                          className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-xs font-medium whitespace-nowrap"
 
                         >
 
@@ -5525,7 +5525,7 @@ const MaterialShipperDropdown = ({
 
                           onClick={() => handleEditLoad(load)}
 
-                          className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-xs font-medium"
+                          className="flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-xs font-medium whitespace-nowrap"
 
                         >
 
@@ -5539,7 +5539,7 @@ const MaterialShipperDropdown = ({
 
                           onClick={() => handleDuplicateLoad(load)}
 
-                          className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-xs font-medium"
+                          className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-xs font-medium whitespace-nowrap"
 
                         >
 
@@ -5553,7 +5553,7 @@ const MaterialShipperDropdown = ({
 
                           onClick={() => handleDeleteLoad(load)}
 
-                          className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
+                          className="flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium whitespace-nowrap"
 
                         >
 
