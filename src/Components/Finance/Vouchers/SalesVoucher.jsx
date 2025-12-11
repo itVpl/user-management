@@ -128,7 +128,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function SalesVoucher({ selectedCompanyId = null }) {
+export default function SalesVoucher({ selectedCompanyId = null, globalRange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -154,6 +154,11 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
   };
   
   const [range, setRange] = useState(getDefaultDateRange());
+  useEffect(() => {
+    if (globalRange && globalRange.startDate && globalRange.endDate) {
+      setRange({ startDate: new Date(globalRange.startDate), endDate: new Date(globalRange.endDate), key: 'selection' });
+    }
+  }, [globalRange]);
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [dateFilterApplied, setDateFilterApplied] = useState(true);
@@ -414,9 +419,10 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
       const [parent, child] = field.split('.');
       newEntries[index][parent][child] = value;
       if (parent === 'gst' && child === 'gstRate' && newEntries[index].amount) {
-        const amount = parseFloat(newEntries[index].amount) || 0;
+        const base = parseFloat(newEntries[index].amount) || 0;
         const rate = parseFloat(value) || 0;
-        newEntries[index].gst.gstAmount = ((amount * rate) / 100).toFixed(2);
+        const gstAmt = (base * rate) / 100;
+        newEntries[index].gst.gstAmount = gstAmt.toFixed(2);
       }
       if (parent === 'tds' && child === 'rate' && newEntries[index].amount) {
         const amount = parseFloat(newEntries[index].amount) || 0;
@@ -433,9 +439,10 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
         }
       }
       if (field === 'amount' && newEntries[index].gst.applicable && newEntries[index].gst.gstRate) {
-        const amount = parseFloat(value) || 0;
+        const base = parseFloat(value) || 0;
         const gstRate = parseFloat(newEntries[index].gst.gstRate) || 0;
-        newEntries[index].gst.gstAmount = ((amount * gstRate) / 100).toFixed(2);
+        const gstAmt = (base * gstRate) / 100;
+        newEntries[index].gst.gstAmount = gstAmt.toFixed(2);
       }
       if (field === 'amount' && newEntries[index].tds.applicable && newEntries[index].tds.rate) {
         const amount = parseFloat(value) || 0;
@@ -449,14 +456,17 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
   const getLedgersByType = (accountType) => {
     return ledgers
       .filter(ledger => {
-        if (accountType === 'customer') return ledger.accountType === 'Sundry Debtors';
+        if (accountType === 'customer') {
+          const t = String(ledger.accountType || ledger.groupName || ledger.group || '').toLowerCase();
+          return t.includes('sundry debtor');
+        }
         if (accountType === 'cashBank') return ['Cash', 'Bank'].includes(ledger.accountType);
-        if (accountType === 'sales') return ['Sales', 'Income'].includes(ledger.accountType);
+        if (accountType === 'sales') return ledger.accountType === 'Sales';
         if (accountType === 'gst') return ledger.accountType === 'Duties & Taxes';
         return true;
       })
       .map(ledger => ({
-        value: ledger._id,
+        value: ledger._id || ledger.id,
         label: `${ledger.name} (${ledger.accountType})`
       }));
   };
@@ -476,7 +486,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
       voucherDate: '',
       voucherNumber: '',
       invoiceNumber: '',
-      salesType: 'Credit',
+      salesType: 'Debit',
       customerAccount: '',
       cashBankAccount: '',
       paymentMode: 'Cash',
@@ -1045,16 +1055,18 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                         required
                         value={formData.company}
                         onChange={(e) => {
-                          const selectedCompanyId = e.target.value;
-                          setFormData({ ...formData, company: selectedCompanyId });
-                          setCompanyId(selectedCompanyId);
-                          if (selectedCompanyId) {
-                            fetchAllLedgers(selectedCompanyId);
+                          if (selectedCompanyId) return;
+                          const value = e.target.value;
+                          setFormData({ ...formData, company: value });
+                          setCompanyId(value);
+                          if (value) {
+                            fetchAllLedgers(value);
                           } else {
                             setLedgers([]);
                           }
                         }}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!!selectedCompanyId}
                       >
                         <option value="">Select Company *</option>
                         {companies.map((company) => (
@@ -1132,13 +1144,10 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                       <SearchableDropdown
                         value={formData.customerAccount}
                         onChange={(value) => setFormData({ ...formData, customerAccount: value })}
-                        options={ledgers.map(ledger => ({
-                          value: ledger._id,
-                          label: `${ledger.name} (${ledger.accountType})`
-                        }))}
+                        options={getLedgersByType('customer')}
                         placeholder="Select Customer Account *"
                         loading={loadingLedgers}
-                        searchPlaceholder="Search all accounts..."
+                        searchPlaceholder="Search customer ledgers..."
                       />
                     </div>
                   ) : (
@@ -1157,13 +1166,10 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                         <SearchableDropdown
                           value={formData.cashBankAccount}
                           onChange={(value) => setFormData({ ...formData, cashBankAccount: value })}
-                          options={ledgers.map(ledger => ({
-                            value: ledger._id,
-                            label: `${ledger.name} (${ledger.accountType})`
-                          }))}
+                          options={getLedgersByType('cashBank')}
                           placeholder="Select Cash/Bank Account *"
                           loading={loadingLedgers}
-                          searchPlaceholder="Search all accounts..."
+                          searchPlaceholder="Search cash/bank ledgers..."
                         />
                       </div>
                       <div>
@@ -1185,13 +1191,7 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
               <div className="bg-purple-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-purple-800">Sales Entries</h3>
-                  <button
-                    type="button"
-                    onClick={addEntry}
-                    className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                  >
-                    + Add Entry
-                  </button>
+               
                 </div>
 
                 {formData.entries.map((entry, index) => (
@@ -1211,27 +1211,24 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
 
                     <div className="grid grid-cols-4 gap-4 mb-3">
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium text-gray-700">Sales Account *</label>
-                          <button
-                            type="button"
-                            onClick={() => setShowLedgerCreateModal(true)}
-                            className="text-xs px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
-                          >
-                            + Create Ledger
-                          </button>
-                        </div>
-                        <SearchableDropdown
-                          value={entry.account}
-                          onChange={(value) => updateEntry(index, 'account', value)}
-                          options={ledgers.map(ledger => ({
-                            value: ledger._id,
-                            label: `${ledger.name} (${ledger.accountType})`
-                          }))}
-                          placeholder="Select Sales Account *"
-                          loading={loadingLedgers}
-                          searchPlaceholder="Search accounts..."
-                        />
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-sm font-medium text-gray-700">Sales Account *</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowLedgerCreateModal(true)}
+                          className="text-xs px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                        >
+                          + Create Ledger
+                        </button>
+                      </div>
+                      <SearchableDropdown
+                        value={entry.account}
+                        onChange={(value) => updateEntry(index, 'account', value)}
+                        options={getLedgersByType('sales')}
+                        placeholder="Select Sales Account *"
+                        loading={loadingLedgers}
+                        searchPlaceholder="Search accounts..."
+                      />
                       </div>
                       <div>
                         <input
@@ -1334,6 +1331,13 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
                     </div>
                   </div>
                 ))}
+                   <button
+                    type="button"
+                    onClick={addEntry}
+                    className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                  >
+                    + Add Entry
+                  </button>
 
                 {/* Total Amount Display */}
                 <div className="mt-4 p-4 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg">
@@ -1689,5 +1693,3 @@ export default function SalesVoucher({ selectedCompanyId = null }) {
     </div>
   );
 }
-
-

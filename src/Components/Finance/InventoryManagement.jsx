@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { BookOpen, ChevronDown, ChevronRight, FileText, DollarSign, Receipt, ArrowLeftRight, CreditCard, ShoppingCart, Wallet, Calendar, TrendingUp, AlertCircle, Scale, Building } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, FileText, DollarSign, Receipt, ArrowLeftRight, CreditCard, ShoppingCart, Wallet, Calendar, TrendingUp, AlertCircle, Scale, Building, ChartBar, Search } from 'lucide-react';
+import { DateRange } from 'react-date-range';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
 import LedgerManagement from './LedgerManagement.jsx';
+import LedgerEntries from './LedgerEntries.jsx';
 import PaymentVoucher from './Vouchers/PaymentVoucher.jsx';
 import ContraVoucher from './Vouchers/ContraVoucher.jsx';
 import ReceiptVoucher from './ReceiptVoucher.jsx';
@@ -18,6 +22,7 @@ import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import Loader from '../common/Loader.jsx';
+import ProfitandLoss from './ProfitandLoss.jsx';
 
 export default function InventoryManagement() {
   const [activeSection, setActiveSection] = useState('ledger');
@@ -25,6 +30,11 @@ export default function InventoryManagement() {
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [globalRange, setGlobalRange] = useState(null);
 
   const selectedCompany = companies.find(c => (c._id || c.id) === selectedCompanyId);
 
@@ -34,6 +44,7 @@ export default function InventoryManagement() {
     accountSummary: 'Account Summary',
     statutoryReports: 'Statutory Reports',
     balanceSheet: 'Balance Sheet',
+    ledgerEntries: 'Ledger Entries',
     payment: 'Payment Voucher',
     contra: 'Contra Voucher',
     receipt: 'Receipt Voucher',
@@ -41,7 +52,8 @@ export default function InventoryManagement() {
     debit: 'Debit Note',
     credit: 'Credit Note',
     sale: 'Sales Voucher',
-    purchase: 'Purchase Voucher'
+    purchase: 'Purchase Voucher',
+    profitandloss: 'Profit and Loss'
   };
 
   // Voucher types for dropdown
@@ -123,45 +135,184 @@ export default function InventoryManagement() {
       return <StatutoryReports selectedCompanyId={selectedCompanyId} />;
     }
 
-    if (activeSection === 'balanceSheet') {
-      return <BalanceSheet selectedCompanyId={selectedCompanyId} />;
-    }
+  if (activeSection === 'balanceSheet') {
+    return <BalanceSheet selectedCompanyId={selectedCompanyId} />;
+  }
+
+  if (activeSection === 'profitandloss') {
+    return <ProfitandLoss selectedCompanyId={selectedCompanyId} onNavigateSection={(id) => setActiveSection(id)} />;
+  }
+
+  if (activeSection === 'ledgerEntries') {
+    return <LedgerEntries selectedCompanyId={selectedCompanyId} />;
+  }
 
     // Render voucher components
     switch (activeSection) {
       case 'payment':
-        return <PaymentVoucher selectedCompanyId={selectedCompanyId} />;
+        return <PaymentVoucher selectedCompanyId={selectedCompanyId} globalRange={globalRange} />;
       case 'contra':
-        return <ContraVoucher selectedCompanyId={selectedCompanyId} />;
+        return <ContraVoucher selectedCompanyId={selectedCompanyId} globalRange={globalRange} />;
       case 'receipt':
-        return <ReceiptVoucher selectedCompanyId={selectedCompanyId} />;
+        return <ReceiptVoucher selectedCompanyId={selectedCompanyId} globalRange={globalRange} />;
       case 'journal':
-        return <JournalVoucher selectedCompanyId={selectedCompanyId} />;
+        return <JournalVoucher selectedCompanyId={selectedCompanyId} globalRange={globalRange} />;
       case 'debit':
-        return <DebitNoteVoucher selectedCompanyId={selectedCompanyId} />;
+        return <DebitNoteVoucher selectedCompanyId={selectedCompanyId} globalRange={globalRange} />;
       case 'credit':
-        return <CreditNoteVoucher selectedCompanyId={selectedCompanyId} />;
+        return <CreditNoteVoucher selectedCompanyId={selectedCompanyId} globalRange={globalRange} />;
       case 'sale':
-        return <SalesVoucher selectedCompanyId={selectedCompanyId} />;
+        return <SalesVoucher selectedCompanyId={selectedCompanyId} globalRange={globalRange} />;
       case 'purchase':
-        return <PurchaseVoucher selectedCompanyId={selectedCompanyId} />;
+        return <PurchaseVoucher selectedCompanyId={selectedCompanyId} globalRange={globalRange} />;
       default:
         return <LedgerManagement selectedCompanyId={selectedCompanyId} />;
     }
   };
 
+  const primarySections = [
+    { id: 'ledger', label: 'Ledger', icon: BookOpen },
+    { id: 'daybook', label: 'Daybook', icon: Calendar },
+    { id: 'accountSummary', label: 'Account Summary', icon: TrendingUp },
+    { id: 'statutoryReports', label: 'Statutory Reports', icon: AlertCircle },
+    { id: 'balanceSheet', label: 'Balance Sheet', icon: Scale },
+    { id: 'ledgerEntries', label: 'Ledger Entries', icon: FileText },
+    { id: 'profitandloss', label: 'Profit and Loss', icon: ChartBar }
+  ];
+
+  const allActions = [
+    ...primarySections,
+    ...voucherTypes
+  ];
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(true);
+        setCommandQuery('');
+        setHighlightIndex(0);
+        return;
+      }
+      if (showCommandPalette) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setShowCommandPalette(false);
+          setCommandQuery('');
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setHighlightIndex((i) => i + 1);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setHighlightIndex((i) => Math.max(i - 1, 0));
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const filtered = allActions.filter(a => a.label.toLowerCase().includes(commandQuery.toLowerCase()));
+          const item = filtered[Math.min(highlightIndex, Math.max(filtered.length - 1, 0))];
+          if (item) {
+            setActiveSection(item.id);
+            setIsVoucherDropdownOpen(false);
+            setShowCommandPalette(false);
+            setCommandQuery('');
+            setHighlightIndex(0);
+          }
+          return;
+        }
+      }
+      if (e.altKey && e.key === 'F2') {
+        e.preventDefault();
+        setShowPeriodModal(true);
+        return;
+      }
+      if (e.key === 'F4') {
+        e.preventDefault();
+        setActiveSection('contra');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.key === 'F5') {
+        e.preventDefault();
+        setActiveSection('payment');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.key === 'F6') {
+        e.preventDefault();
+        setActiveSection('receipt');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.key === 'F7') {
+        e.preventDefault();
+        setActiveSection('journal');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.key === 'F8') {
+        e.preventDefault();
+        setActiveSection('sale');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.key === 'F9') {
+        e.preventDefault();
+        setActiveSection('purchase');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.altKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        setActiveSection('ledger');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.altKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setActiveSection('daybook');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.altKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setActiveSection('accountSummary');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setActiveSection('balanceSheet');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+      if (e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setActiveSection('profitandloss');
+        setIsVoucherDropdownOpen(false);
+        return;
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [showCommandPalette, commandQuery, highlightIndex]);
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-gray-200 shadow-lg flex-shrink-0">
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600">
+        {/* <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600">
           <div className="flex items-center gap-3">
             <Building className="text-white" size={24} />
             <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight truncate">
               {selectedCompanyId ? (selectedCompany?.companyName || selectedCompany?.name || 'Company') : 'Inventory'}
             </h2>
           </div>
-        </div>
+        </div> */}
 
         {/* Company Dropdown */}
         <div className="p-4 border-b border-gray-200 bg-gray-50">
@@ -307,11 +458,27 @@ export default function InventoryManagement() {
             <Scale size={20} />
             <span className="font-medium">Balance Sheet</span>
           </button>
+
+          {/* Profit and Loss Option */}
+          <button
+            onClick={() => {
+              setActiveSection('profitandloss');
+              setIsVoucherDropdownOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+              activeSection === 'profitandloss'
+                ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-105'
+                : 'text-gray-700 hover:bg-gray-100 hover:shadow-md'
+            }`}
+          >
+            <ChartBar size={20} />
+            <span className="font-medium">Profit and Loss</span>
+          </button>
         </nav>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto relative">
         <div className="p-2">
           <div className="mb-4 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50">
             <div className="flex items-center justify-between">
@@ -327,7 +494,87 @@ export default function InventoryManagement() {
               )}
             </div>
           </div>
-          {renderContent()}
+          {activeSection === 'daybook' && (
+            <Daybook selectedCompanyId={selectedCompanyId} globalRange={globalRange} applyGlobalRange={!!globalRange} />
+          )}
+          {activeSection === 'accountSummary' && (
+            <AccountSummary selectedCompanyId={selectedCompanyId} globalRange={globalRange} />
+          )}
+          {activeSection === 'profitandloss' && (
+            <ProfitandLoss selectedCompanyId={selectedCompanyId} globalRange={globalRange} onNavigateSection={(id) => setActiveSection(id)} />
+          )}
+          {activeSection !== 'daybook' && activeSection !== 'accountSummary' && activeSection !== 'profitandloss' && renderContent()}
+        </div>
+        {showCommandPalette && (
+          <div className="absolute inset-0 z-20 bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCommandPalette(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 px-4 pt-4">
+                <Search className="text-gray-400" size={18} />
+                <input
+                  autoFocus
+                  value={commandQuery}
+                  onChange={(e) => { setCommandQuery(e.target.value); setHighlightIndex(0); }}
+                  placeholder="Go to... (Ledger, Payment, Sales, etc.)"
+                  className="flex-1 px-2 py-2 border-b border-gray-200 focus:outline-none"
+                />
+              </div>
+              <div className="max-h-64 overflow-y-auto p-2">
+                {allActions
+                  .filter(a => a.label.toLowerCase().includes(commandQuery.toLowerCase()))
+                  .map((a, idx) => {
+                    const Icon = a.icon;
+                    const active = idx === Math.min(highlightIndex, allActions.filter(x => x.label.toLowerCase().includes(commandQuery.toLowerCase())).length - 1);
+                    return (
+                      <button
+                        key={`${a.id}-${idx}`}
+                        onClick={() => { setActiveSection(a.id); setIsVoucherDropdownOpen(false); setShowCommandPalette(false); setCommandQuery(''); setHighlightIndex(0); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg ${active ? 'bg-blue-100' : 'hover:bg-gray-50'}`}
+                      >
+                        <Icon size={16} />
+                        <span className="text-sm font-medium">{a.label}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        )}
+        {showPeriodModal && (
+          <div className="absolute inset-0 z-30 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPeriodModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 border-b">
+                <h3 className="text-lg font-semibold text-gray-800">Set Period (Alt+F2)</h3>
+              </div>
+              <div className="p-4">
+                <DateRange
+                  ranges={[globalRange || { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+                  onChange={(item) => setGlobalRange(item.selection)}
+                  moveRangeOnFirstSelection={false}
+                  months={2}
+                  direction="horizontal"
+                />
+                <div className="flex justify-end gap-2 mt-3">
+                  <button type="button" onClick={() => setShowPeriodModal(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+                  <button type="button" onClick={() => setShowPeriodModal(false)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Apply</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="sticky bottom-0 z-10 bg-white/80 backdrop-blur border-t border-gray-200 px-4 py-2 text-xs text-gray-600 flex flex-wrap gap-3">
+          <span>Ctrl+K Search</span>
+          <span>Alt+F2 Period</span>
+          <span>F4 Contra</span>
+          <span>F5 Payment</span>
+          <span>F6 Receipt</span>
+          <span>F7 Journal</span>
+          <span>F8 Sales</span>
+          <span>F9 Purchase</span>
+          <span>Alt+L Ledger</span>
+          <span>Alt+D Daybook</span>
+          <span>Alt+A Account Summary</span>
+          <span>Alt+B Balance Sheet</span>
+          <span>Alt+P Profit & Loss</span>
         </div>
       </div>
     </div>

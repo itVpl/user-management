@@ -105,6 +105,15 @@ const Sidebar = () => {
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeBgColor, setActiveBgColor] = useState(() => {
+    try {
+      const saved = localStorage.getItem("themePrefs");
+      const parsed = saved ? JSON.parse(saved) : null;
+      return (parsed && parsed.sidebarActive) || "#3b82f6";
+    } catch {
+      return "#3b82f6";
+    }
+  });
 
   const toggleSidebar = () => setIsExpanded(!isExpanded);
 
@@ -142,7 +151,7 @@ const Sidebar = () => {
           console.error("❌ No user data found");
           // Fallback: show basic menus when no user data
           const basicMenus = menuItems.filter(item => 
-            ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
+            ['Dashboard', 'Tracking',].includes(item.name)
           );
           setFilteredMenuItems(basicMenus);
           setLoading(false);
@@ -227,6 +236,18 @@ const Sidebar = () => {
     fetchModules();
   }, []);
 
+  useEffect(() => {
+    const onStorage = () => {
+      try {
+        const saved = localStorage.getItem("themePrefs");
+        const parsed = saved ? JSON.parse(saved) : {};
+        if (parsed.sidebarActive) setActiveBgColor(parsed.sidebarActive);
+      } catch {}
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // Show loading state
   if (loading) {
     return (
@@ -262,8 +283,9 @@ const Sidebar = () => {
                     key={idx}
                     title={!isExpanded ? item.name : ""}
                     className={({ isActive }) =>
-                      `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "bg-blue-500 text-white" : "hover:bg-gray-100 text-gray-700"}`
+                      `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
                     }
+                    style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
                     end
                   >
                     {({ isActive }) => (

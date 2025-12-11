@@ -123,8 +123,20 @@ const SearchableDropdown = ({
 };
 
 const ACCOUNT_TYPES = [
-  'Cash', 'Bank', 'Sales', 'Purchase', 'Expense', 'Income', 'Asset',
-  'Liability', 'Capital', 'Sundry Debtor', 'Sundry Creditor', 'Investment', 'Loan', 'Duty & Tax', 'Other'
+  'Cash',
+  'Bank',
+  'Sales',
+  'Purchase',
+  'Sundry Debtor',
+  'Sundry Creditor',
+  'Income',
+  'Capital',
+  'Expense',
+  'Asset',
+  'Liability',
+  'Investment',
+  'Loan',
+  'Other'
 ];
 
 const getAuthToken = () => {
@@ -578,7 +590,7 @@ export default function CreateLedgerModal({ isOpen, onClose, selectedCompanyId, 
           </div>
 
           <div className="bg-teal-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold text-teal-800 mb-4">Tax Details</h3>
+            <h3 className="text-lg font-semibold text-teal-800 mb-4">Documents</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN</label>

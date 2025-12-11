@@ -167,6 +167,7 @@ const BalanceSheet = ({ selectedCompanyId }) => {
 
     try {
       setLoading(true);
+      setBalanceSheet(null);
       const token = getAuthToken();
       const params = new URLSearchParams({
         asOnDate: format(range.endDate, 'yyyy-MM-dd'),
@@ -174,7 +175,7 @@ const BalanceSheet = ({ selectedCompanyId }) => {
       });
 
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/tally/balance-sheet/company/${selectedCompanyId}?${params}`,
+        `${API_CONFIG.BASE_URL}/api/v1/tally/financial-reports/company/${selectedCompanyId}/balance-sheet?${params}`,
         { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
       );
 
@@ -199,39 +200,32 @@ const BalanceSheet = ({ selectedCompanyId }) => {
   // Get all accounts for a category
   const getCategoryAccounts = (category) => {
     if (!balanceSheet?.balanceSheet) return [];
-    
-    let accounts = [];
-    switch(category) {
-      case 'assets':
-        if (balanceSheet.balanceSheet.assets?.fixedAssets?.accounts) {
-          accounts = [...accounts, ...balanceSheet.balanceSheet.assets.fixedAssets.accounts.map(a => ({...a, subCategory: 'Fixed Assets'}))];
-        }
-        if (balanceSheet.balanceSheet.assets?.currentAssets?.accounts) {
-          accounts = [...accounts, ...balanceSheet.balanceSheet.assets.currentAssets.accounts.map(a => ({...a, subCategory: 'Current Assets'}))];
-        }
-        if (balanceSheet.balanceSheet.assets?.investments?.accounts) {
-          accounts = [...accounts, ...balanceSheet.balanceSheet.assets.investments.accounts.map(a => ({...a, subCategory: 'Investments'}))];
-        }
-        if (balanceSheet.balanceSheet.assets?.loansAndAdvances?.accounts) {
-          accounts = [...accounts, ...balanceSheet.balanceSheet.assets.loansAndAdvances.accounts.map(a => ({...a, subCategory: 'Loans & Advances'}))];
-        }
-        break;
-      case 'liabilities':
-        if (balanceSheet.balanceSheet.liabilities?.longTermLiabilities?.accounts) {
-          accounts = [...accounts, ...balanceSheet.balanceSheet.liabilities.longTermLiabilities.accounts.map(a => ({...a, subCategory: 'Long-term Liabilities'}))];
-        }
-        if (balanceSheet.balanceSheet.liabilities?.currentLiabilities?.accounts) {
-          accounts = [...accounts, ...balanceSheet.balanceSheet.liabilities.currentLiabilities.accounts.map(a => ({...a, subCategory: 'Current Liabilities'}))];
-        }
-        break;
-      case 'capital':
-        if (balanceSheet.balanceSheet.capital?.accounts) {
-          accounts = [...accounts, ...balanceSheet.balanceSheet.capital.accounts.map(a => ({...a, subCategory: 'Capital'}))];
-        }
-        break;
-      default:
-        return [];
+
+    const accounts = [];
+    const balanceData = balanceSheet.balanceSheet;
+
+    // Dynamically traverse the API response structure
+    const traverse = (node, subCat = '') => {
+      if (Array.isArray(node)) {
+        node.forEach(acc => accounts.push({ ...acc, subCategory: subCat }));
+      } else if (typeof node === 'object' && node !== null) {
+        Object.entries(node).forEach(([key, value]) => {
+          if (key === 'accounts' && Array.isArray(value)) {
+            traverse(value, subCat);
+          } else if (typeof value === 'object' && value !== null) {
+            // Use the object key as sub-category label (humanized)
+            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            traverse(value, label);
+          }
+        });
+      }
+    };
+
+    // Start traversal from the requested top-level category
+    if (balanceData[category]) {
+      traverse(balanceData[category], '');
     }
+
     return accounts;
   };
 
@@ -267,11 +261,17 @@ const BalanceSheet = ({ selectedCompanyId }) => {
     return <Loader variant="section" message="Loading balance sheet..." />;
   }
 
+  const humanize = (str) => str.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+  const categoryKeys = balanceSheet?.balanceSheet
+    ? Object.keys(balanceSheet.balanceSheet)
+    : ['assets', 'liabilities', 'capital'];
   const categories = [
-    { key: 'all', label: 'All Categories', count: (getCategoryAccounts('assets').length + getCategoryAccounts('liabilities').length + getCategoryAccounts('capital').length) },
-    { key: 'assets', label: 'Assets', count: getCategoryAccounts('assets').length },
-    { key: 'liabilities', label: 'Liabilities', count: getCategoryAccounts('liabilities').length },
-    { key: 'capital', label: 'Capital', count: getCategoryAccounts('capital').length }
+    {
+      key: 'all',
+      label: 'All Categories',
+      count: categoryKeys.reduce((sum, key) => sum + getCategoryAccounts(key).length, 0)
+    },
+    ...categoryKeys.map(key => ({ key, label: humanize(key), count: getCategoryAccounts(key).length }))
   ];
 
   return (
@@ -459,7 +459,7 @@ const BalanceSheet = ({ selectedCompanyId }) => {
           </div>
         ) : (
           <div className="space-y-6">
-            {['assets', 'liabilities', 'capital'].map(category => {
+            {categoryKeys.map(category => {
               if (selectedCategory !== 'all' && selectedCategory !== category) return null;
               
               const accounts = filterAccounts(getCategoryAccounts(category));
@@ -475,36 +475,43 @@ const BalanceSheet = ({ selectedCompanyId }) => {
                   </div>
                   
                   <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left py-3 px-4 text-gray-700 font-semibold text-sm">Account Name</th>
-                          <th className="text-left py-3 px-4 text-gray-700 font-semibold text-sm">Sub Category</th>
-                          <th className="text-right py-3 px-4 text-gray-700 font-semibold text-sm">Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {accounts.map((account, index) => (
-                          <tr key={account.accountId || index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                            <td className="py-3 px-4">
-                              <span className="font-medium text-gray-800">{account.accountName || '-'}</span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className="text-sm text-gray-600">{account.subCategory || '-'}</span>
-                            </td>
-                            <td className="py-3 px-4 text-right">
-                              <span className={`font-bold ${
-                                category === 'assets' ? 'text-green-700' : 
-                                category === 'liabilities' ? 'text-red-700' : 
-                                'text-purple-700'
-                              }`}>
-                                ₹{Number(account.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    {Object.entries(accounts.reduce((acc, a) => {
+                      const key = a.subCategory || '-';
+                      (acc[key] = acc[key] || []).push(a);
+                      return acc;
+                    }, {})).map(([subCat, list]) => (
+                      <div key={subCat} className="mb-4">
+                        <div className="px-4 py-2 bg-gray-50 border-t border-b border-gray-200">
+                          <span className="text-sm font-semibold text-gray-700">{subCat || '-'} ({list.length})</span>
+                        </div>
+                        <table className="w-full">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="text-left py-3 px-4 text-gray-700 font-semibold text-sm">Account Name</th>
+                              <th className="text-right py-3 px-4 text-gray-700 font-semibold text-sm">Balance</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {list.map((account, index) => (
+                              <tr key={account.accountId || `${subCat}-${index}`} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                                <td className="py-3 px-4">
+                                  <span className="font-medium text-gray-800">{account.accountName || '-'}</span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className={`font-bold ${
+                                    category === 'assets' ? 'text-green-700' : 
+                                    category === 'liabilities' ? 'text-red-700' : 
+                                    'text-purple-700'
+                                  }`}>
+                                    ₹{Number(account.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );

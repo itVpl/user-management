@@ -147,33 +147,19 @@ export default function Loads() {
   // Vehicle Type options - Dynamic based on load type
 
   const getVehicleTypeOptions = (type) => {
-
     if (type === "DRAYAGE") {
-
       return [
-
         "20' Standard",
-
         "40' Standard",
-
         "45' Standard",
-
         "20' Reefer",
-
         "40' Reefer",
-
         "Open Top Container",
-
         "Flat Rack Container",
-
         "Tank Container",
-
         "40' High Cube",
-
         "45' High Cube"
-
       ];
-
     } else { // OTR
 
       return [
@@ -758,8 +744,7 @@ export default function Loads() {
 
     try {
 
-      if (!ZIP5.test(zip)) return;
-
+      if (!(which === 'return' ? /^\d{6}$/.test(zip) : ZIP5.test(zip))) return;
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
 
@@ -1637,17 +1622,11 @@ const MaterialShipperDropdown = ({
       
 
       // If user is typing digits only (ZIP code), trigger search
-
-      if (/^\d+$/.test(value) && value.length <= 5) {
-
+      if (/^\d+$/.test(value) && value.length <= (which === 'return' ? 6 : 5)) {
         if (which === 'from') setFromZipQuery("");
-
         else if (which === 'to') setToZipQuery("");
-
         else setReturnZipQuery("");
-
         debounceZip(name, () => fetchCityStateByZip(value, which), 450);
-
       }
 
       // If user is typing a complete address or clearing the field, just update the value
@@ -1701,9 +1680,7 @@ const MaterialShipperDropdown = ({
 
 
     if (name === 'returnZip') {
-
-      value = value.replace(/[^\d]/g, '').slice(0, 5);
-
+      value = value.replace(/[^\d]/g, '').slice(0, 6);
     }
 
 
@@ -2006,6 +1983,14 @@ const MaterialShipperDropdown = ({
 
       ];
 
+    }
+
+    if (loadType === 'OTR') {
+      Object.keys(errs).forEach((k) => {
+        if (/_(?:weight|commodity|pickupDate|deliveryDate)$/.test(k)) {
+          delete errs[k];
+        }
+      });
     }
 
     return [];
@@ -2474,6 +2459,7 @@ const MaterialShipperDropdown = ({
         returnState: (loadForm.returnState || "").trim(),
 
         returnZip: (loadForm.returnZip || "").trim(),
+        returnLocation: (loadForm.returnAddress || "").trim(),
         origins: origins,
         destinations: destinations
       };
@@ -2900,6 +2886,7 @@ const MaterialShipperDropdown = ({
         returnState: (loadForm.returnState || "").trim(),
 
         returnZip: (loadForm.returnZip || "").trim(),
+        returnLocation: (loadForm.returnAddress || "").trim(),
         origins: originsEdit,
         destinations: destinationsEdit
       };
@@ -2959,7 +2946,7 @@ const MaterialShipperDropdown = ({
           returnState: (loadForm.returnState || '').trim(),
 
           returnZip: (loadForm.returnZip || '').trim(),
-
+          returnLocation: (loadForm.returnAddress || '').trim(),
         } : {}),
 
       };
@@ -4305,8 +4292,8 @@ const MaterialShipperDropdown = ({
     
 
     // Set load type based on the load data
-
-    setLoadType(load.loadType || 'OTR');
+    const lt = load.loadType || 'OTR';
+    setLoadType(lt);
 
     
 
@@ -4545,7 +4532,7 @@ const MaterialShipperDropdown = ({
 
       other: String(otherTotal),
 
-      ...(loadType !== 'DRAYAGE' ? { rateType: load.rateType || 'Flat Rate' } : {}),
+      ...(lt !== 'DRAYAGE' ? { rateType: load.rateType || 'Flat Rate' } : {}),
 
       bidDeadline: load.bidDeadline ? formatDateTimeForInput(load.bidDeadline) : '',
 
@@ -4610,8 +4597,7 @@ const MaterialShipperDropdown = ({
 
 
     // Populate location arrays for OTR loads
-
-    if (load.loadType === 'OTR' && load.origins && load.destinations) {
+    if (lt === 'OTR' && load.origins && Array.isArray(load.origins) && load.origins.length > 0 && load.destinations && Array.isArray(load.destinations) && load.destinations.length > 0) {
 
       // Convert origins to pickup locations
 
@@ -4686,7 +4672,35 @@ const MaterialShipperDropdown = ({
       }));
 
       setDeliveryLocations(deliveryLocs);
-
+    } else if (lt === 'OTR') {
+      // Fallback: build single pickup/delivery from top-level fields when arrays are missing
+      const pickupLocs = [
+        {
+          id: `pickup-${Date.now()}-0`,
+          address: load.fromAddress || '',
+          city: load.fromCity || '',
+          state: load.fromState || '',
+          zip: load.fromZip || '',
+          weight: load.weight || '',
+          commodity: load.commodity || '',
+          pickupDate: load.pickupDate ? formatDateTimeForInput(load.pickupDate) : '',
+          deliveryDate: load.deliveryDate ? formatDateTimeForInput(load.deliveryDate) : ''
+        }
+      ];
+      const deliveryLocs = [
+        {
+          id: `delivery-${Date.now()}-0`,
+          address: load.toAddress || '',
+          city: load.toCity || '',
+          state: load.toState || '',
+          zip: load.toZip || '',
+          weight: load.weight || '',
+          commodity: load.commodity || '',
+          deliveryDate: load.deliveryDate ? formatDateTimeForInput(load.deliveryDate) : ''
+        }
+      ];
+      setPickupLocations(pickupLocs);
+      setDeliveryLocations(deliveryLocs);
     }
 
 
@@ -7058,7 +7072,7 @@ const MaterialShipperDropdown = ({
 
                             name="fromZip"
 
-                            placeholder="Enter 5-digit ZIP code"
+                            placeholder="Enter 6-digit ZIP code"
 
                             value={loadForm.fromZip}
 
@@ -7274,7 +7288,7 @@ const MaterialShipperDropdown = ({
 
                             name="toZip"
 
-                            placeholder="Enter 5-digit ZIP code"
+                            placeholder="Enter 6-digit ZIP code"
 
                             value={loadForm.toZip}
 

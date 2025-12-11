@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
 import CreateLedgerModal from './Ledger/CreateLedgerModal.jsx';
+import LedgerEntries from './LedgerEntries.jsx';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -136,8 +137,21 @@ const SearchableDropdown = ({
 const LedgerManagement = ({ selectedCompanyId }) => {
   // Account Types
   const ACCOUNT_TYPES = [
-    'Cash', 'Bank', 'Sales', 'Purchase', 'Expense', 'Income', 'Asset', 
-    'Liability', 'Capital', 'Sundry Debtor', 'Sundry Creditor', 'Investment', 'Loan', 'Duty & Tax', 'Other'
+    'Cash',
+    'Bank',
+    'Sales',
+    'Purchase',
+    'Sundry Debtor',
+    'Sundry Creditor',
+    'Income',
+    'Capital',
+    'Expense',
+    'Asset',
+    'Liability',
+    'Investment',
+    'Loan',
+    'Duty & Tax',
+    'Other'
   ];
 
   // State Management
@@ -146,6 +160,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
   const [filteredLedgers, setFilteredLedgers] = useState([]);
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [isActiveFilter, setIsActiveFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
@@ -171,6 +186,9 @@ const LedgerManagement = ({ selectedCompanyId }) => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEntriesModal, setShowEntriesModal] = useState(false);
+  const [entriesLedgerId, setEntriesLedgerId] = useState(null);
+  const [entriesLedger, setEntriesLedger] = useState(null);
   const [selectedLedger, setSelectedLedger] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -277,7 +295,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
         params.append('endDate', format(range.endDate, 'yyyy-MM-dd'));
       }
 
-      if (searchTerm) params.append('search', searchTerm);
+      if (debouncedSearchTerm) params.append('search', debouncedSearchTerm);
       if (isActiveFilter !== '') params.append('isActive', isActiveFilter);
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/tally/ledger/all?${params}`, {
@@ -456,6 +474,15 @@ const LedgerManagement = ({ selectedCompanyId }) => {
       setSubmitting(true);
       const token = getAuthToken();
 
+      const ob = Number(selectedLedger.openingBalance || 0);
+      if (ob > 0) {
+        alertify.error('Cannot delete ledger: opening balance exists');
+        setShowDeleteModal(false);
+        setSelectedLedger(null);
+        setSubmitting(false);
+        return;
+      }
+
       const response = await axios.delete(`${API_CONFIG.BASE_URL}/api/v1/tally/ledger/${selectedLedger._id}/delete`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -522,6 +549,8 @@ const LedgerManagement = ({ selectedCompanyId }) => {
     }
   };
 
+  
+
   // Reset Form
   const resetForm = () => {
     setFormData({
@@ -568,6 +597,9 @@ const LedgerManagement = ({ selectedCompanyId }) => {
 
   // Open Create Modal
   const openCreateModal = () => {
+    if (selectedCompanyId) {
+      setFormData(prev => ({ ...prev, company: selectedCompanyId }));
+    }
     setShowCreateModal(true);
   };
 
@@ -577,7 +609,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
     const fullLedger = await fetchLedgerById(ledger._id);
     if (fullLedger) {
       setFormData({
-        company: fullLedger.company?._id || fullLedger.company || '',
+        company: selectedCompanyId || fullLedger.company?._id || fullLedger.company || '',
         name: fullLedger.name || '',
         alias: fullLedger.alias || '',
         accountCode: fullLedger.accountCode || '',
@@ -659,20 +691,28 @@ const LedgerManagement = ({ selectedCompanyId }) => {
 
   useEffect(() => {
     if (selectedCompanyId) {
-      fetchStats(); // Fetch stats for counts
-      fetchLedgers(currentPage);
+      fetchStats();
     }
-  }, [selectedCompanyId, currentPage, isActiveFilter, dateFilterApplied]);
+  }, [selectedCompanyId]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (selectedCompanyId) {
-        setCurrentPage(1);
-        fetchLedgers(1);
-      }
+    if (selectedCompanyId) {
+      fetchLedgers(currentPage);
+    }
+  }, [selectedCompanyId, currentPage, isActiveFilter, dateFilterApplied, debouncedSearchTerm]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim());
     }, 500);
-    return () => clearTimeout(timer);
+    return () => clearTimeout(t);
   }, [searchTerm]);
+
+  useEffect(() => {
+    if (selectedCompanyId) {
+      setCurrentPage(1);
+    }
+  }, [debouncedSearchTerm]);
 
   // Loading State
   if (loading && ledgers.length === 0) {
@@ -791,13 +831,14 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Balance Type</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">MSME</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Entries</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="py-20 text-center">
+                  <td colSpan="9" className="py-20 text-center">
                     <div className="flex justify-center items-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                     </div>
@@ -805,73 +846,83 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                 </tr>
               ) : filteredLedgers.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="py-20 text-center">
+                  <td colSpan="9" className="py-20 text-center">
                     <FileText className="mx-auto h-16 w-16 text-gray-400 mb-4" />
                     <h3 className="text-xl font-semibold text-gray-700 mb-2">No Ledgers Found</h3>
                     <p className="text-gray-500">Create your first ledger account</p>
                   </td>
                 </tr>
               ) : (
-                filteredLedgers.map((ledger, index) => (
-                  <tr key={ledger._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{ledger.name}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-base font-semibold text-gray-700">{ledger.accountCode || 'N/A'}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{ledger.accountType}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">₹{Number(ledger.openingBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{ledger.openingBalanceType || 'N/A'}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ledger.isMSME ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {ledger.isMSME ? 'Yes' : 'No'}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ledger.isActive !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {ledger.isActive !== false ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex gap-2">
+                <>
+                  {filteredLedgers.map((ledger, index) => (
+                    <tr key={ledger._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{ledger.name}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-mono text-base font-semibold text-gray-700">{ledger.accountCode || 'N/A'}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{ledger.accountType}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">₹{Number(ledger.openingBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{ledger.openingBalanceType || 'N/A'}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ledger.isMSME ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'}`}>
+                          {ledger.isMSME ? 'Yes' : 'No'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ledger.isActive !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {ledger.isActive !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3">
                         <button
-                          onClick={() => openViewModal(ledger)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                          onClick={() => { setEntriesLedgerId(ledger._id); setEntriesLedger(ledger); setShowEntriesModal(true); }}
+                          className="bg-yellow-700 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                         >
-                          View
+                          All Entries
                         </button>
-                        <button
-                          onClick={() => openEditModal(ledger)}
-                          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
-                        >
-                          Edit
-                        </button>
-                        {ledger.isActive === false ? (
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex gap-2">
                           <button
-                            onClick={() => activateLedger(ledger._id)}
-                            className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            onClick={() => openViewModal(ledger)}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                           >
-                            Activate
+                            View
                           </button>
-                        ) : (
                           <button
-                            onClick={() => openDeleteModal(ledger)}
-                            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            onClick={() => openEditModal(ledger)}
+                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                           >
-                            Delete
+                            Edit
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {ledger.isActive === false ? (
+                            <button
+                              onClick={() => activateLedger(ledger._id)}
+                              className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              Activate
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openDeleteModal(ledger)}
+                              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </>
               )}
             </tbody>
           </table>
@@ -1003,14 +1054,18 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Company <span className="text-red-500">*</span></label>
                     <SearchableDropdown
-                      value={formData.company}
-                      onChange={(value) => handleFormChange('company', value)}
+                      value={selectedCompanyId || formData.company}
+                      onChange={(value) => {
+                        if (selectedCompanyId) return;
+                        handleFormChange('company', value);
+                      }}
                       options={companies.map(c => ({ 
                         value: c._id || c.id, 
                         label: c.companyName || c.name || 'Unknown' 
                       }))}
                       placeholder="Select Company"
                       searchPlaceholder="Search companies..."
+                      disabled={!!selectedCompanyId}
                     />
                     {errors.company && <p className="text-red-600 text-xs mt-1">{errors.company}</p>}
                   </div>
@@ -1232,7 +1287,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
 
               {/* Tax Details */}
               <div className="bg-teal-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-teal-800 mb-4">Tax Details</h3>
+                <h3 className="text-lg font-semibold text-teal-800 mb-4">Documents</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN</label>
@@ -1598,7 +1653,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
 
               {/* Tax Details */}
               <div className="bg-teal-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold text-teal-800 mb-4">Tax Details</h3>
+                <h3 className="text-lg font-semibold text-teal-800 mb-4">Documents</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN</label>
@@ -1760,6 +1815,10 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                   <h3 className="text-lg font-bold text-gray-800">Basic Information</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-4 bg-white border border-blue-200 rounded-xl">
+                  {/* <div className="bg-white rounded-xl p-4 ">
+                    <p className="text-sm text-gray-600 mb-1">Ledger ID</p>
+                    <p className="font-mono font-semibold text-gray-800">{selectedLedger._id || selectedLedger.id || 'N/A'}</p>
+                  </div> */}
                   <div className="bg-white rounded-xl p-4 ">
                     <p className="text-sm text-gray-600 mb-1">Account Code</p>
                     <p className="font-semibold text-gray-800">{selectedLedger.accountCode || 'N/A'}</p>
@@ -1770,7 +1829,7 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                   </div>
                   <div className="bg-white rounded-xl p-4">
                     <p className="text-sm text-gray-600 mb-1">Alias</p>
-                    <p className="font-semibold text-gray-800">{selectedLedger.alias || 'N/A'}</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.alias || 'Not Provided'}</p>
                   </div>
                   <div className="bg-white rounded-xl p-4">
                     <p className="text-sm text-gray-600 mb-1">Account Type</p>
@@ -1797,6 +1856,30 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                     )}
                   </div>
                   <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">Maintain Bill-wise</p>
+                    {selectedLedger.maintainBillWise ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Enabled</span>
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">Disabled</span>
+                    )}
+                  </div>
+                  <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">Enable GST</p>
+                    {selectedLedger.enableGST ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Enabled</span>
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">Disabled</span>
+                    )}
+                  </div>
+                  <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">Enable TDS</p>
+                    {selectedLedger.enableTDS ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Enabled</span>
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">Disabled</span>
+                    )}
+                  </div>
+                  <div className="bg-white rounded-xl p-4">
                     <p className="text-sm text-gray-600 mb-1">Status</p>
                     {selectedLedger.isActive !== false ? (
                       <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium flex items-center gap-1 w-fit">
@@ -1810,137 +1893,141 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                       </span>
                     )}
                   </div>
-                  {selectedLedger.msmeRegistrationNumber && (
-                    <div className="bg-white rounded-xl p-4">
-                      <p className="text-sm text-gray-600 mb-1">MSME Registration Number</p>
-                      <p className="font-semibold text-gray-800">{selectedLedger.msmeRegistrationNumber}</p>
-                    </div>
-                  )}
+                  <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">Company</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.company?.companyName || 'N/A'}</p>
+                    <p className="text-xs text-gray-500">{selectedLedger.company?.companyCode || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">Created At</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.createdAt ? new Date(selectedLedger.createdAt).toLocaleString() : 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">Updated At</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.updatedAt ? new Date(selectedLedger.updatedAt).toLocaleString() : 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">Created By</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.createdBy || 'Not Provided'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">Updated By</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.updatedBy || 'Not Provided'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4">
+                    <p className="text-sm text-gray-600 mb-1">MSME Registration Number</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.msmeRegistrationNumber || 'Not Provided'}</p>
+                  </div>
                 </div>
               </div>
 
               {/* Address Information */}
-              {selectedLedger.address && (selectedLedger.address.addressLine1 || selectedLedger.address.city) && (
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Building className="text-purple-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Address Information</h3>
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Building className="text-purple-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Address Information</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4 bg-white rounded-xl p-4 border border-purple-200">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Address Line 1</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.address?.addressLine1 || 'Not Provided'}</p>
                   </div>
-                  <div className="bg-white rounded-xl p-4 border border-purple-200">
-                    <p className="text-sm text-gray-600 mb-2">Address</p>
-                    <p className="font-semibold text-gray-800">
-                      {selectedLedger.address.addressLine1 || ''}
-                      {selectedLedger.address.addressLine2 && `, ${selectedLedger.address.addressLine2}`}
-                      {selectedLedger.address.city && `, ${selectedLedger.address.city}`}
-                      {selectedLedger.address.state && `, ${selectedLedger.address.state}`}
-                      {selectedLedger.address.pincode && ` - ${selectedLedger.address.pincode}`}
-                      {selectedLedger.address.country && `, ${selectedLedger.address.country}`}
-                    </p>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Address Line 2</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.address?.addressLine2 || 'Not Provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">City</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.address?.city || 'Not Provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">State</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.address?.state || 'Not Provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Pincode</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.address?.pincode || 'Not Provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Country</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.address?.country || 'Not Provided'}</p>
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Contact Information */}
-              {selectedLedger.contact && (selectedLedger.contact.phone || selectedLedger.contact.email) && (
-                <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Users className="text-orange-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Contact Information</h3>
+              <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="text-orange-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Contact Information</h3>
+                </div>
+                <div className="grid grid-cols-2 bg-white gap-4 border border-orange-200 rounded-xl p-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Phone</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.contact?.phone || 'Not Provided'}</p>
                   </div>
-                  <div className="grid grid-cols-2 bg-white gap-4 border border-orange-200 rounded-xl">
-                    {selectedLedger.contact.phone && (
-                      <div className=" rounded-xl p-4 ">
-                        <p className="text-sm text-gray-600 mb-1">Phone</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.contact.phone}</p>
-                      </div>
-                    )}
-                    {selectedLedger.contact.mobile && (
-                      <div className="bg-white rounded-xl p-4 ">
-                        <p className="text-sm text-gray-600 mb-1">Mobile</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.contact.mobile}</p>
-                      </div>
-                    )}
-                    {selectedLedger.contact.email && (
-                      <div className="bg-white rounded-xl p-4 ">
-                        <p className="text-sm text-gray-600 mb-1">Email</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.contact.email}</p>
-                      </div>
-                    )}
-                    {selectedLedger.contact.website && (
-                      <div className="bg-white rounded-xl p-4 ">
-                        <p className="text-sm text-gray-600 mb-1">Website</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.contact.website}</p>
-                      </div>
-                    )}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Mobile</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.contact?.mobile || 'Not Provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Email</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.contact?.email || 'Not Provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Website</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.contact?.website || 'Not Provided'}</p>
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Tax Details */}
-              {selectedLedger.taxDetails && (selectedLedger.taxDetails.gstin || selectedLedger.taxDetails.pan) && (
-                <div className="bg-teal-100 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <CreditCard className="text-teal-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Tax Details</h3>
+              <div className="bg-teal-100 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <CreditCard className="text-teal-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Documents</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4 bg-white border border-teal-400 rounded-xl p-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">GSTIN</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.taxDetails?.gstin || 'Not Provided'}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 bg-white border border-teal-400 rounded-xl">
-                    {selectedLedger.taxDetails.gstin && (
-                      <div className="bg-white rounded-xl p-4 ">
-                        <p className="text-sm text-gray-600 mb-1">GSTIN</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.taxDetails.gstin}</p>
-                      </div>
-                    )}
-                    {selectedLedger.taxDetails.pan && (
-                      <div className="bg-white rounded-xl p-4 ">
-                        <p className="text-sm text-gray-600 mb-1">PAN</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.taxDetails.pan}</p>
-                      </div>
-                    )}
-                    {selectedLedger.taxDetails.aadhar && (
-                      <div className="bg-white rounded-xl p-4 ">
-                        <p className="text-sm text-gray-600 mb-1">Aadhar</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.taxDetails.aadhar}</p>
-                      </div>
-                    )}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">PAN</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.taxDetails?.pan || 'Not Provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Aadhar</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.taxDetails?.aadhar || 'Not Provided'}</p>
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Bank Details */}
-              {selectedLedger.bankDetails && selectedLedger.bankDetails.bankName && (
-                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Wallet className="text-indigo-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Bank Details</h3>
+              <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Wallet className="text-indigo-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Bank Details</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                    <p className="text-sm text-gray-600 mb-1">Bank Name</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.bankDetails?.bankName || 'Not Provided'}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {selectedLedger.bankDetails.bankName && (
-                      <div className="bg-white rounded-xl p-4 border border-indigo-200">
-                        <p className="text-sm text-gray-600 mb-1">Bank Name</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.bankDetails.bankName}</p>
-                      </div>
-                    )}
-                    {selectedLedger.bankDetails.accountNumber && (
-                      <div className="bg-white rounded-xl p-4 border border-indigo-200">
-                        <p className="text-sm text-gray-600 mb-1">Account Number</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.bankDetails.accountNumber}</p>
-                      </div>
-                    )}
-                    {selectedLedger.bankDetails.ifscCode && (
-                      <div className="bg-white rounded-xl p-4 border border-indigo-200">
-                        <p className="text-sm text-gray-600 mb-1">IFSC Code</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.bankDetails.ifscCode}</p>
-                      </div>
-                    )}
-                    {selectedLedger.bankDetails.branch && (
-                      <div className="bg-white rounded-xl p-4 border border-indigo-200">
-                        <p className="text-sm text-gray-600 mb-1">Branch</p>
-                        <p className="font-semibold text-gray-800">{selectedLedger.bankDetails.branch}</p>
-                      </div>
-                    )}
+                  <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                    <p className="text-sm text-gray-600 mb-1">Account Number</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.bankDetails?.accountNumber || 'Not Provided'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                    <p className="text-sm text-gray-600 mb-1">IFSC Code</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.bankDetails?.ifscCode || 'Not Provided'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                    <p className="text-sm text-gray-600 mb-1">Branch</p>
+                    <p className="font-semibold text-gray-800">{selectedLedger.bankDetails?.branch || 'Not Provided'}</p>
                   </div>
                 </div>
-              )}
+              </div>
 
 
           
@@ -2032,6 +2119,46 @@ const LedgerManagement = ({ selectedCompanyId }) => {
                   {submitting ? 'Deleting...' : 'Delete Ledger'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEntriesModal && (
+        <div 
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowEntriesModal(false)}
+        >
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <Eye className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Ledger Entries{entriesLedger?.name ? ` - ${entriesLedger.name}` : ''}</h2>
+                    <p className="text-blue-100">View vouchers including this ledger</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowEntriesModal(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="p-4">
+              <LedgerEntries selectedCompanyId={selectedCompanyId} initialLedgerId={entriesLedgerId} />
             </div>
           </div>
         </div>

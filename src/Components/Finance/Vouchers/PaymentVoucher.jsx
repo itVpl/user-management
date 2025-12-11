@@ -131,7 +131,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function PaymentVoucher({ selectedCompanyId = null }) {
+export default function PaymentVoucher({ selectedCompanyId = null, globalRange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -157,6 +157,11 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
   };
   
   const [range, setRange] = useState(getDefaultDateRange());
+  useEffect(() => {
+    if (globalRange && globalRange.startDate && globalRange.endDate) {
+      setRange({ startDate: new Date(globalRange.startDate), endDate: new Date(globalRange.endDate), key: 'selection' });
+    }
+  }, [globalRange]);
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [dateFilterApplied, setDateFilterApplied] = useState(true);
   const [companyId, setCompanyId] = useState(selectedCompanyId);
@@ -522,7 +527,7 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
 
   // Handle create payment
   const handleCreatePayment = () => {
-    const defaultCompanyId = companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
+    const defaultCompanyId = selectedCompanyId || companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
     
     setFormData({
       company: defaultCompanyId,
@@ -572,7 +577,7 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
         ? voucherData.paymentAccount._id || voucherData.paymentAccount.id 
         : voucherData.paymentAccount;
       
-      const editCompanyId = voucherData.company?._id || voucherData.company || companyId || '';
+      const editCompanyId = selectedCompanyId || voucherData.company?._id || voucherData.company || companyId || '';
       
       setFormData({
         company: editCompanyId,
@@ -1229,16 +1234,18 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
                           required
                           value={formData.company}
                           onChange={(e) => {
-                            const selectedCompanyId = e.target.value;
-                            setFormData({ ...formData, company: selectedCompanyId, paymentAccount: '' });
-                            setCompanyId(selectedCompanyId);
-                            if (selectedCompanyId) {
-                              fetchAllLedgers(selectedCompanyId);
+                            if (selectedCompanyId) return;
+                            const value = e.target.value;
+                            setFormData({ ...formData, company: value, paymentAccount: '' });
+                            setCompanyId(value);
+                            if (value) {
+                              fetchAllLedgers(value);
                             } else {
                               setLedgers([]);
                             }
                           }}
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={!!selectedCompanyId}
                         >
                           <option value="">Select Company *</option>
                           {companies.map((company) => (
@@ -1280,10 +1287,15 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
                       <SearchableDropdown
                         value={formData.paymentAccount}
                         onChange={(value) => setFormData({ ...formData, paymentAccount: value })}
-                        options={ledgers.map(ledger => ({ 
-                          value: ledger._id || ledger.id, 
-                          label: ledger.name || 'Unknown'
-                        }))}
+                        options={ledgers
+                          .filter(ledger => {
+                            const t = (ledger.accountType || '').toLowerCase();
+                            return t === 'cash' || t === 'bank';
+                          })
+                          .map(ledger => ({ 
+                            value: ledger._id || ledger.id, 
+                            label: ledger.name || 'Unknown'
+                          }))}
                         placeholder="Select Payment Account *"
                         searchPlaceholder="Search ledgers..."
                         loading={loadingLedgers}
@@ -1320,13 +1332,7 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
                 <div className="bg-green-50 p-4 rounded-lg">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold text-blue-800">Payment Entries</h3>
-                    <button
-                      type="button"
-                      onClick={handleAddEntry}
-                      className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition"
-                    >
-                      + Add Entry
-                    </button>
+                  
                   </div>
                   
                   {formData.entries.map((entry, index) => (
@@ -1359,10 +1365,15 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
                           <SearchableDropdown
                             value={entry.account}
                             onChange={(value) => handleUpdateEntry(index, 'account', value)}
-                            options={ledgers.map(ledger => ({ 
-                              value: ledger._id || ledger.id, 
-                              label: ledger.name || 'Unknown'
-                            }))}
+                            options={ledgers
+                              .filter(ledger => {
+                                const t = (ledger.accountType || '').toLowerCase();
+                                return t === 'expenses' || t === 'expense' || t === 'purchase';
+                              })
+                              .map(ledger => ({ 
+                                value: ledger._id || ledger.id, 
+                                label: ledger.name || 'Unknown'
+                              }))}
                             placeholder="Select Account *"
                             searchPlaceholder="Search accounts..."
                             loading={loadingLedgers}
@@ -1531,6 +1542,13 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
                       </div>
                     </div>
                   ))}
+                    <button
+                      type="button"
+                      onClick={handleAddEntry}
+                      className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition"
+                    >
+                      + Add Entry
+                    </button>
                 </div>
 
                 {/* Additional Information Section */}
@@ -1956,5 +1974,3 @@ export default function PaymentVoucher({ selectedCompanyId = null }) {
     </div>
   );
 }
-
-
