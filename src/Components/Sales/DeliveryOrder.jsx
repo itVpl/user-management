@@ -950,14 +950,43 @@ export default function DeliveryOrder() {
     return Array.from(new Set(out));
   };
 
+  // Helper function to get load number from order (similar to getLoadNumber in view modal)
+  const getLoadNumberForSearch = (order) => {
+    if (!order) return '';
+
+    // 1) customers[].loadNo (first non-empty)
+    const fromCustomers = Array.isArray(order.customers)
+      ? (order.customers.map(c => (c?.loadNo || '').trim()).find(v => v))
+      : null;
+
+    // 2) doNum field (commonly used for Load Number)
+    const fromDoNum = (order.doNum || '').trim();
+
+    // 3) legacy/other fields on order object
+    const fromOrder =
+      (order.loadNo || order.loadNumber || order.loadId || order.referenceNo || '').trim();
+
+    // 4) workOrderNo as fallback
+    const fromWON =
+      Array.isArray(order.customers)
+        ? (order.customers.map(c => (c?.workOrderNo || '').trim()).find(v => v) || '')
+        : '';
+
+    // priority: customers.loadNo → doNum → order.* → workOrderNo → ''
+    return (fromCustomers || fromDoNum || fromOrder || fromWON || '').toLowerCase();
+  };
+
   // Filter orders based on search term
   const filteredOrders = orders.filter(order => {
     const text = searchTerm.toLowerCase();
+    const loadNumber = getLoadNumberForSearch(order);
+    
     const matchesText =
-      order.id.toLowerCase().includes(text) ||
-      order.clientName.toLowerCase().includes(text) ||
-      order.pickupLocation.toLowerCase().includes(text) ||
-      order.deliveryLocation.toLowerCase().includes(text);
+      (order.id?.toLowerCase() || '').includes(text) ||
+      (order.clientName?.toLowerCase() || '').includes(text) ||
+      (order.pickupLocation?.toLowerCase() || '').includes(text) ||
+      (order.deliveryLocation?.toLowerCase() || '').includes(text) ||
+      loadNumber.includes(text);
 
     const created = order.createdAt || ''; // e.g., "2025-08-27"
     const inRange = created >= ymd(range.startDate) && created <= ymd(range.endDate);
