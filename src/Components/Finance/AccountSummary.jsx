@@ -133,7 +133,7 @@ const SearchableDropdown = ({
   );
 };
 
-const AccountSummary = ({ selectedCompanyId }) => {
+const AccountSummary = ({ selectedCompanyId, globalRange }) => {
   // State Management
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
@@ -159,6 +159,11 @@ const AccountSummary = ({ selectedCompanyId }) => {
 
   const [range, setRange] = useState(getDefaultDateRange());
   const [showCustomRange, setShowCustomRange] = useState(false);
+  useEffect(() => {
+    if (globalRange && globalRange.startDate && globalRange.endDate) {
+      setRange({ startDate: new Date(globalRange.startDate), endDate: new Date(globalRange.endDate), key: 'selection' });
+    }
+  }, [globalRange]);
 
   // Get Auth Token
   const getAuthToken = () => {
@@ -175,6 +180,7 @@ const AccountSummary = ({ selectedCompanyId }) => {
 
     try {
       setLoading(true);
+      setSummary(null);
       const token = getAuthToken();
       const params = new URLSearchParams({
         fromDate: format(range.startDate, 'yyyy-MM-dd'),

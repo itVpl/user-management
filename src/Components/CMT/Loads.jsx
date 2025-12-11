@@ -147,33 +147,19 @@ export default function Loads() {
   // Vehicle Type options - Dynamic based on load type
 
   const getVehicleTypeOptions = (type) => {
-
     if (type === "DRAYAGE") {
-
       return [
-
         "20' Standard",
-
         "40' Standard",
-
         "45' Standard",
-
         "20' Reefer",
-
         "40' Reefer",
-
         "Open Top Container",
-
         "Flat Rack Container",
-
         "Tank Container",
-
         "40' High Cube",
-
         "45' High Cube"
-
       ];
-
     } else { // OTR
 
       return [

@@ -131,7 +131,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function CreditNoteVoucher({ selectedCompanyId = null }) {
+export default function CreditNoteVoucher({ selectedCompanyId = null, globalRange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -157,6 +157,11 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
   };
   
   const [range, setRange] = useState(getDefaultDateRange());
+  useEffect(() => {
+    if (globalRange && globalRange.startDate && globalRange.endDate) {
+      setRange({ startDate: new Date(globalRange.startDate), endDate: new Date(globalRange.endDate), key: 'selection' });
+    }
+  }, [globalRange]);
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [dateFilterApplied, setDateFilterApplied] = useState(true);
   const [companyId, setCompanyId] = useState(selectedCompanyId);
@@ -554,7 +559,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
 
   // Handle create credit note
   const handleCreateCreditNote = () => {
-    const defaultCompanyId = companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
+    const defaultCompanyId = selectedCompanyId || companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
     
     setFormData({
       company: defaultCompanyId,
@@ -580,7 +585,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
       setLoading(true);
       const voucherData = await getCreditNoteById(voucher._id || voucher.id);
       
-      const editCompanyId = voucherData.company?._id || voucherData.company || companyId || '';
+      const editCompanyId = selectedCompanyId || voucherData.company?._id || voucherData.company || companyId || '';
       
       setFormData({
         company: editCompanyId,
@@ -1129,16 +1134,18 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                         required
                         value={formData.company}
                         onChange={(e) => {
-                          const selectedCompanyId = e.target.value;
-                          setFormData({ ...formData, company: selectedCompanyId });
-                          setCompanyId(selectedCompanyId);
-                          if (selectedCompanyId) {
-                            fetchAllLedgers(selectedCompanyId);
+                          if (selectedCompanyId) return;
+                          const value = e.target.value;
+                          setFormData({ ...formData, company: value });
+                          setCompanyId(value);
+                          if (value) {
+                            fetchAllLedgers(value);
                           } else {
                             setLedgers([]);
                           }
                         }}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!!selectedCompanyId}
                       >
                         <option value="">Select Company *</option>
                         {companies.map((company) => (
@@ -1209,13 +1216,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-green-800">Customers (Credit Side)</h3>
-                  <button
-                    type="button"
-                    onClick={addCustomer}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm"
-                  >
-                    <Plus size={16} /> Add Customer
-                  </button>
+                
                 </div>
                 {formData.customers.map((customer, index) => (
                   <div key={index} className="bg-white p-4 rounded-lg mb-3 border border-green-200">
@@ -1234,7 +1235,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium text-gray-700">Customer Account Name *</label>
+                          <label className="text-sm font-medium text-gray-700">Sales Account Name *</label>
                           <button
                             type="button"
                             onClick={() => setShowLedgerCreateModal(true)}
@@ -1246,10 +1247,12 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                         <SearchableDropdown
                           value={customer.account}
                           onChange={(value) => updateCustomer(index, 'account', value)}
-                          options={ledgers.map(ledger => ({
-                            value: ledger._id || ledger.id,
-                            label: `${ledger.name} [${ledger.accountCode || 'N/A'}] (${ledger.accountType})`
-                          }))}
+                          options={ledgers
+                            .filter(l => l.accountType === 'Sales')
+                            .map(ledger => ({
+                              value: ledger._id || ledger.id,
+                              label: `${ledger.name} (${ledger.accountType})`
+                            }))}
                           placeholder="Select Customer *"
                           searchPlaceholder="Search customers..."
                           loading={loadingLedgers}
@@ -1325,19 +1328,20 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                     </div>
                   </div>
                 ))}
+                  <button
+                    type="button"
+                    onClick={addCustomer}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm"
+                  >
+                    <Plus size={16} /> Add Customer
+                  </button>
               </div>
 
               {/* Entries Section (Debit Side) */}
               <div className="bg-red-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-red-800">Debit Entries (Sales/Income)</h3>
-                  <button
-                    type="button"
-                    onClick={addEntry}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm"
-                  >
-                    <Plus size={16} /> Add Entry
-                  </button>
+                
                 </div>
                 {formData.entries.map((entry, index) => (
                   <div key={index} className="bg-white p-4 rounded-lg mb-3 border border-red-200">
@@ -1356,7 +1360,7 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium text-gray-700">Account Holder Name *</label>
+                          <label className="text-sm font-medium text-gray-700">Sundry Debtor Account *</label>
                           <button
                             type="button"
                             onClick={() => setShowLedgerCreateModal(true)}
@@ -1368,10 +1372,12 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                         <SearchableDropdown
                           value={entry.account}
                           onChange={(value) => updateEntry(index, 'account', value)}
-                          options={ledgers.map(ledger => ({
-                            value: ledger._id || ledger.id,
-                            label: `${ledger.name} [${ledger.accountCode || 'N/A'}] (${ledger.accountType})`
-                          }))}
+                          options={ledgers
+                            .filter(l => l.accountType === 'Sundry Debtor')
+                            .map(ledger => ({
+                              value: ledger._id || ledger.id,
+                              label: `${ledger.name} (${ledger.accountType})`
+                            }))}
                           placeholder="Select Account *"
                           searchPlaceholder="Search accounts..."
                           loading={loadingLedgers}
@@ -1548,6 +1554,13 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
                     </div>
                   </div>
                 ))}
+                  <button
+                    type="button"
+                    onClick={addEntry}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm"
+                  >
+                    <Plus size={16} /> Add Entry
+                  </button>
               </div>
 
               {/* Additional Details */}
@@ -1989,5 +2002,3 @@ export default function CreditNoteVoucher({ selectedCompanyId = null }) {
     </div>
   );
 }
-
-

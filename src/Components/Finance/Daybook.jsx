@@ -131,7 +131,7 @@ const SearchableDropdown = ({
   );
 };
 
-const Daybook = ({ selectedCompanyId }) => {
+const Daybook = ({ selectedCompanyId, globalRange, applyGlobalRange = false }) => {
   // State Management
   const [loading, setLoading] = useState(false);
   const [vouchers, setVouchers] = useState([]);
@@ -148,12 +148,15 @@ const Daybook = ({ selectedCompanyId }) => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState(null);
 
-  // Date range state - Default: Jan 1 of previous year to Jan 1 of next year
+  // Date range state - Default: Current Financial Year (April 1 to March 31)
   const getDefaultDateRange = () => {
-    const currentYear = new Date().getFullYear();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const fyStartYear = month < 3 ? year - 1 : year;
     return {
-      startDate: new Date(currentYear - 1, 0, 1), // Jan 1 of previous year
-      endDate: new Date(currentYear + 1, 0, 1),   // Jan 1 of next year
+      startDate: new Date(fyStartYear, 3, 1),
+      endDate: new Date(fyStartYear + 1, 2, 31),
       key: 'selection'
     };
   };
@@ -161,6 +164,12 @@ const Daybook = ({ selectedCompanyId }) => {
   const [range, setRange] = useState(getDefaultDateRange());
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [dateFilterApplied, setDateFilterApplied] = useState(true); // Default filter applied
+  useEffect(() => {
+    if (applyGlobalRange && globalRange && globalRange.startDate && globalRange.endDate) {
+      setRange({ startDate: new Date(globalRange.startDate), endDate: new Date(globalRange.endDate), key: 'selection' });
+      setDateFilterApplied(true);
+    }
+  }, [applyGlobalRange, globalRange]);
 
   // Get Auth Token
   const getAuthToken = () => {
@@ -579,6 +588,24 @@ const Daybook = ({ selectedCompanyId }) => {
               </tbody>
             </table>
           </div>
+
+          {/* Totals Footer (Tally-style) */}
+          {!loading && filteredVouchers.length > 0 && (
+            <div className="flex justify-end gap-12 p-4 border-t border-gray-200">
+              <div className="text-right">
+                <div className="text-xs text-gray-600">Total Debit</div>
+                <div className="text-lg font-bold text-green-700">
+                  ₹{filteredVouchers.reduce((sum, v) => sum + Number(v.debitAmount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-600">Total Credit</div>
+                <div className="text-lg font-bold text-red-700">
+                  ₹{filteredVouchers.reduce((sum, v) => sum + Number(v.creditAmount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {pagination.pages > 1 && !loading && filteredVouchers.length > 0 && (
             <div className="flex justify-center items-center gap-2 p-4 border-t border-gray-100">

@@ -141,7 +141,7 @@ const SearchableDropdown = ({
 };
 
 
-export default function ContraVoucher({ selectedCompanyId = null }) {
+export default function ContraVoucher({ selectedCompanyId = null, globalRange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -173,6 +173,12 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
+
+  useEffect(() => {
+    if (globalRange && globalRange.startDate && globalRange.endDate) {
+      setRange({ startDate: new Date(globalRange.startDate), endDate: new Date(globalRange.endDate), key: 'selection' });
+    }
+  }, [globalRange]);
 
 
   // Form state for create/edit
@@ -475,7 +481,7 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
 
   // Handle create contra
   const handleCreateContra = () => {
-    const defaultCompanyId = companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
+    const defaultCompanyId = selectedCompanyId || companyId || (companies.length > 0 ? (companies[0]._id || companies[0].id) : '');
    
     setFormData({
       company: defaultCompanyId,
@@ -508,7 +514,7 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
         ? voucherData.toAccount._id || voucherData.toAccount.id
         : voucherData.toAccount;
      
-      const editCompanyId = voucherData.company?._id || voucherData.company || companyId || '';
+      const editCompanyId = selectedCompanyId || voucherData.company?._id || voucherData.company || companyId || '';
      
       setFormData({
         company: editCompanyId,
@@ -967,16 +973,18 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
                         required
                         value={formData.company}
                         onChange={(e) => {
-                          const selectedCompanyId = e.target.value;
-                          setFormData({ ...formData, company: selectedCompanyId, fromAccount: '', toAccount: '' });
-                          setCompanyId(selectedCompanyId);
-                          if (selectedCompanyId) {
-                            fetchAllLedgers(selectedCompanyId);
+                          if (selectedCompanyId) return;
+                          const value = e.target.value;
+                          setFormData({ ...formData, company: value, fromAccount: '', toAccount: '' });
+                          setCompanyId(value);
+                          if (value) {
+                            fetchAllLedgers(value);
                           } else {
                             setLedgers([]);
                           }
                         }}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!!selectedCompanyId}
                       >
                         <option value="">Select Company *</option>
                         {companies.map((company) => (
@@ -1031,20 +1039,21 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
                     <SearchableDropdown
                       value={formData.fromAccount}
                       onChange={(value) => setFormData({ ...formData, fromAccount: value })}
-                      options={ledgers.map(ledger => {
-                        const companyName = ledger.company?.companyName || 'Unknown Company';
-                        const accountCode = ledger.accountCode || 'N/A';
-                        return {
-                          value: ledger._id || ledger.id,
-                          label: `${ledger.name} [${accountCode}] (${ledger.accountType}) - ${companyName}`
-                        };
-                      })}
+                      options={ledgers
+                        .filter(l => l.accountType === 'Cash' || l.accountType === 'Bank')
+                        .map(ledger => {
+                          
+                         
+                          return {
+                            value: ledger._id || ledger.id,
+                            label: `${ledger.name} (${ledger.accountType})`
+                          };
+                        })}
                       placeholder="Select From Account *"
                       searchPlaceholder="Search by name, code, or company..."
                       loading={loadingLedgers}
                       disabled={loadingLedgers}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Cash/Bank account to debit (from all companies)</p>
                   </div>
                   <div>
                     <div className="flex justify-between items-center mb-2">
@@ -1060,20 +1069,20 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
                     <SearchableDropdown
                       value={formData.toAccount}
                       onChange={(value) => setFormData({ ...formData, toAccount: value })}
-                      options={ledgers.map(ledger => {
-                        const companyName = ledger.company?.companyName || 'Unknown Company';
-                        const accountCode = ledger.accountCode || 'N/A';
-                        return {
-                          value: ledger._id || ledger.id,
-                          label: `${ledger.name} [${accountCode}] (${ledger.accountType}) - ${companyName}`
-                        };
-                      })}
+                      options={ledgers
+                        .filter(l => l.accountType === 'Cash' || l.accountType === 'Bank')
+                        .map(ledger => {
+                          
+                          return {
+                            value: ledger._id || ledger.id,
+                            label: `${ledger.name}  (${ledger.accountType}) `
+                          };
+                        })}
                       placeholder="Select To Account *"
                       searchPlaceholder="Search by name, code, or company..."
                       loading={loadingLedgers}
                       disabled={loadingLedgers}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Cash/Bank account to credit (from all companies)</p>
                   </div>
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Reference Number</label>
@@ -1394,6 +1403,3 @@ export default function ContraVoucher({ selectedCompanyId = null }) {
     </div>
   );
 }
-
-
-

@@ -497,7 +497,7 @@ const CompanyForm = ({ mode = 'create', company = null, onClose, onSuccess }) =>
 
           {/* Tax Details - Indigo Section */}
           <div className="bg-indigo-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold text-indigo-800 mb-4">Tax Details</h3>
+            <h3 className="text-lg font-semibold text-indigo-800 mb-4">Company Documents</h3>
             <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

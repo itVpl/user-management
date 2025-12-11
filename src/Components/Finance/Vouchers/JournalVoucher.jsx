@@ -5,7 +5,7 @@ import API_CONFIG from '../../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import { DateRange } from 'react-date-range';
-import { addDays, format } from 'date-fns';
+import { format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
 import CreateLedgerModal from '../Ledger/CreateLedgerModal.jsx';
@@ -19,7 +19,6 @@ const SearchableDropdown = ({
   disabled = false,
   loading = false,
   className = "",
-  searchPlaceholder = "Search...",
   compact = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -141,7 +140,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function JournalVoucher({ selectedCompanyId = null }) {
+export default function JournalVoucher({ selectedCompanyId = null, globalRange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -167,8 +166,12 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
   };
   
   const [range, setRange] = useState(getDefaultDateRange());
+  useEffect(() => {
+    if (globalRange && globalRange.startDate && globalRange.endDate) {
+      setRange({ startDate: new Date(globalRange.startDate), endDate: new Date(globalRange.endDate), key: 'selection' });
+    }
+  }, [globalRange]);
   const [showCustomRange, setShowCustomRange] = useState(false);
-  const [dateFilterApplied, setDateFilterApplied] = useState(true);
   const [companyId, setCompanyId] = useState(selectedCompanyId);
   const [companies, setCompanies] = useState([]);
   const [ledgers, setLedgers] = useState([]);
@@ -376,18 +379,7 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
       
       formData.entries.forEach(entry => {
         const entryAmount = parseFloat(entry.amount) || 0;
-        
-        // Add TDS and GST to the entry amount
-        let entryTotal = entryAmount;
-        if (entry.tds?.applicable && entry.tds?.amount) {
-          const tdsAmount = parseFloat(entry.tds.amount) || 0;
-          entryTotal += tdsAmount;
-        }
-        if (entry.gst?.applicable && entry.gst?.gstAmount) {
-          const gstAmount = parseFloat(entry.gst.gstAmount) || 0;
-          entryTotal += gstAmount;
-        }
-        
+        const entryTotal = entryAmount;
         if (entry.entryType === 'Debit') {
           totalDebit += entryTotal;
         } else if (entry.entryType === 'Credit') {
@@ -596,14 +588,7 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
         return;
       }
 
-      // Calculate total including TDS and GST
       let entryTotal = amount;
-      if (entry.tds?.applicable && entry.tds?.amount) {
-        entryTotal += parseFloat(entry.tds.amount) || 0;
-      }
-      if (entry.gst?.applicable && entry.gst?.gstAmount) {
-        entryTotal += parseFloat(entry.gst.gstAmount) || 0;
-      }
 
       if (entry.entryType === 'Debit') {
         totalDebit += entryTotal;
@@ -798,16 +783,7 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
     let credit = 0;
     formData.entries.forEach(entry => {
       const amount = parseFloat(entry.amount) || 0;
-      
-      // Add TDS and GST to the entry amount
-      let entryTotal = amount;
-      if (entry.tds?.applicable && entry.tds?.amount) {
-        entryTotal += parseFloat(entry.tds.amount) || 0;
-      }
-      if (entry.gst?.applicable && entry.gst?.gstAmount) {
-        entryTotal += parseFloat(entry.gst.gstAmount) || 0;
-      }
-      
+      const entryTotal = amount;
       if (entry.entryType === 'Debit') debit += entryTotal;
       else if (entry.entryType === 'Credit') credit += entryTotal;
     });
@@ -1209,13 +1185,15 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
                     required
                     value={formData.company}
                     onChange={(e) => {
-                      const selectedCompanyId = e.target.value;
-                      setFormData({ ...formData, company: selectedCompanyId });
-                      setCompanyId(selectedCompanyId);
-                      if (selectedCompanyId) fetchAllLedgers(selectedCompanyId);
+                      if (selectedCompanyId) return;
+                      const value = e.target.value;
+                      setFormData({ ...formData, company: value });
+                      setCompanyId(value);
+                      if (value) fetchAllLedgers(value);
                       else setLedgers([]);
                     }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    disabled={!!selectedCompanyId}
                   >
                     <option value="">Select Company *</option>
                     {companies.map((company) => (
@@ -1271,13 +1249,7 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-green-800">Journal Entries</h3>
-                  <button
-                    type="button"
-                    onClick={handleAddEntry}
-                    className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition"
-                  >
-                    + Add Entry
-                  </button>
+                 
                 </div>
 
                 {/* Balance Summary */}
@@ -1491,6 +1463,13 @@ export default function JournalVoucher({ selectedCompanyId = null }) {
                     </div>
                   </div>
                 ))}
+                 <button
+                    type="button"
+                    onClick={handleAddEntry}
+                    className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition"
+                  >
+                    + Add Entry
+                  </button>
               </div>
 
               {/* Additional Details */}

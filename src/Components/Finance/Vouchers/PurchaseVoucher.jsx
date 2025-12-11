@@ -128,7 +128,7 @@ const SearchableDropdown = ({
   );
 };
 
-export default function PurchaseVoucher({ selectedCompanyId = null }) {
+export default function PurchaseVoucher({ selectedCompanyId = null, globalRange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -154,6 +154,11 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
   };
   
   const [range, setRange] = useState(getDefaultDateRange());
+  useEffect(() => {
+    if (globalRange && globalRange.startDate && globalRange.endDate) {
+      setRange({ startDate: new Date(globalRange.startDate), endDate: new Date(globalRange.endDate), key: 'selection' });
+    }
+  }, [globalRange]);
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [dateFilterApplied, setDateFilterApplied] = useState(true);
@@ -185,7 +190,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
     voucherDate: '',
     voucherNumber: '',
     invoiceNumber: '',
-    purchaseType: 'Credit',
+    purchaseType: 'Debit',
     supplierAccount: '',
     cashBankAccount: '',
     paymentMode: 'Cash',
@@ -451,7 +456,8 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
       .filter(ledger => {
         if (accountType === 'supplier') return ledger.accountType === 'Sundry Creditors';
         if (accountType === 'cashBank') return ['Cash', 'Bank'].includes(ledger.accountType);
-        if (accountType === 'purchase') return ['Purchase', 'Expense', 'Asset'].includes(ledger.accountType);
+        if (accountType === 'purchase') return ['Purchase', 'Expense', 'Expenses', 'Asset', 'Assets'].includes(ledger.accountType);
+        if (['Purchase', 'Expense', 'Expenses', 'Asset', 'Assets'].includes(accountType)) return ledger.accountType === accountType;
         if (accountType === 'gst') return ledger.accountType === 'Duties & Taxes';
         return true;
       })
@@ -1049,16 +1055,18 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                         required
                         value={formData.company}
                         onChange={(e) => {
-                          const selectedCompanyId = e.target.value;
-                          setFormData({ ...formData, company: selectedCompanyId });
-                          setCompanyId(selectedCompanyId);
-                          if (selectedCompanyId) {
-                            fetchAllLedgers(selectedCompanyId);
+                          if (selectedCompanyId) return;
+                          const value = e.target.value;
+                          setFormData({ ...formData, company: value });
+                          setCompanyId(value);
+                          if (value) {
+                            fetchAllLedgers(value);
                           } else {
                             setLedgers([]);
                           }
                         }}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        disabled={!!selectedCompanyId}
                       >
                         <option value="">Select Company *</option>
                         {companies.map((company) => (
@@ -1124,7 +1132,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                   {formData.purchaseType === 'Credit' ? (
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <label className="text-sm font-medium text-gray-700">Supplier Account *</label>
+                        <label className="text-sm font-medium text-gray-700">Purchase Account *</label>
                         <button
                           type="button"
                           onClick={() => setShowLedgerCreateModal(true)}
@@ -1149,7 +1157,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                     <>
                       <div>
                         <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium text-gray-700">Cash/Bank Account *</label>
+                          <label className="text-sm font-medium text-gray-700">Sundry Creditor Account *</label>
                           <button
                             type="button"
                             onClick={() => setShowLedgerCreateModal(true)}
@@ -1165,7 +1173,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                             value: ledger._id,
                             label: `${ledger.name} (${ledger.accountType})`
                           }))}
-                          placeholder="Select Cash/Bank Account *"
+                          placeholder="Select Supplier Account *"
                           loading={loadingLedgers}
                           searchPlaceholder="Search all accounts..."
                         />
@@ -1189,13 +1197,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
               <div className="bg-purple-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-purple-800">Purchase Entries</h3>
-                  <button
-                    type="button"
-                    onClick={addEntry}
-                    className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
-                  >
-                    + Add Entry
-                  </button>
+                  
                 </div>
 
                 {formData.entries.map((entry, index) => (
@@ -1216,7 +1218,7 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                     <div className="grid grid-cols-3 gap-4 mb-3">
                       <div className="col-span-2">
                         <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium text-gray-700">Purchase Account *</label>
+                          <label className="text-sm font-medium text-gray-700">Sundry Creditor Account *</label>
                           <button
                             type="button"
                             onClick={() => setShowLedgerCreateModal(true)}
@@ -1228,12 +1230,10 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                         <SearchableDropdown
                           value={entry.account}
                           onChange={(value) => updateEntry(index, 'account', value)}
-                          options={index === 0 
-                            ? ledgers.map(ledger => ({
-                                value: ledger._id,
-                                label: `${ledger.name} (${ledger.accountType})`
-                              }))
-                            : getLedgersByType('purchase')}
+                          options={ledgers.map(ledger => ({
+                            value: ledger._id,
+                            label: `${ledger.name} (${ledger.accountType})`
+                          }))}
                           placeholder="Select Purchase Account *"
                           loading={loadingLedgers}
                           searchPlaceholder="Search accounts..."
@@ -1411,6 +1411,14 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
                     </div>
                   </div>
                 ))}
+
+                <button
+                    type="button"
+                    onClick={addEntry}
+                    className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-purple-600 transition"
+                  >
+                    + Add Entry
+                  </button>
 
                 {/* Total Amount Display */}
                 <div className="mt-4 p-4 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg">
@@ -1714,5 +1722,3 @@ export default function PurchaseVoucher({ selectedCompanyId = null }) {
     </div>
   );
 }
-
-
