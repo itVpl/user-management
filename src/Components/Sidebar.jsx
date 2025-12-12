@@ -37,7 +37,7 @@ import LogoutConfirmationModal from "./LogoutConfirmationModal";
 
 const menuItems = [
   { name: "Dashboard", icon: DashboardImage, whiteIcon: WhiteDashboard, path: "/dashboard" },
-  { name: "Companies", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/companies" },
+  { name: "Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/companies" },
   { name: "Tracking", icon: LiveTracker, whiteIcon: WhiteLiveTracker, path: "/live-tracker" },
   { name: "Manage Users", icon: ManageUser, whiteIcon: WhiteManageUser, path: "/manage-users" },
   { name: "Users Permissions", icon: UserPermision, whiteIcon: WhiteUserPermission, path: "/permissions" },
@@ -204,7 +204,7 @@ const Sidebar = () => {
           if (matchedMenus.length === 0) {
             console.warn("⚠️ No modules matched, showing basic menus");
             const basicMenus = menuItems.filter(item => 
-              ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
+              ['Dashboard', 'Tracking'].includes(item.name)
             );
             setFilteredMenuItems(basicMenus);
           } else {
@@ -225,7 +225,7 @@ const Sidebar = () => {
           console.error("❌ API response not successful:", data);
           // Fallback: show basic menus if API fails
           const basicMenus = menuItems.filter(item => 
-            ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
+            ['Dashboard', 'Tracking'].includes(item.name)
           );
           setFilteredMenuItems(basicMenus);
         }
@@ -233,7 +233,7 @@ const Sidebar = () => {
         console.error("❌ Failed to fetch modules:", err);
         // Fallback: show basic menus on error
         const basicMenus = menuItems.filter(item => 
-          ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
+          ['Dashboard', 'Tracking'].includes(item.name)
         );
         setFilteredMenuItems(basicMenus);
       } finally {
