@@ -7,6 +7,7 @@ import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import Logo from '../../assets/LogoFinal.png';
+import IdentificaLogo from '../../assets/identifica_logo.png';
 
 /* ====================== Helpers ====================== */
 const fmtCurrency = (amount) => {
@@ -252,7 +253,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         else qtyRaw = 1;
         const qty = toNum(qtyRaw) || 1;
 
-        let rateRaw = (ch && ch.rate !== undefined && ch.rate !== null) ? ch.rate : 0;
+        let rateRaw = (ch && ch.amount !== undefined && ch.amount !== null) ? ch.amount : 0;
         const rate = toNum(rateRaw);
 
         let totalRaw = null;
@@ -574,6 +575,17 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   const generateInvoicePDF = (order) => {
     try {
       const printWindow = window.open('', '_blank');
+      const orderCompanyName = order?.company || order?.addDispature || '';
+      const pdfLogo = (orderCompanyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+      let companyDisplayName = '';
+      let companyDisplayAddress = '';
+      if (orderCompanyName === 'V Power Logistics') {
+        companyDisplayName = 'V Power Logistics';
+        companyDisplayAddress = '7945 14TH AVE SW SEATTLE, WA 98106';
+      } else if (orderCompanyName === 'IDENTIFICA LLC') {
+        companyDisplayName = 'IDENTIFICA LLC';
+        companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
+      }
 
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
@@ -583,11 +595,18 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       const invoiceNo = order.doNum || cust.loadNo || 'N/A';
       const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
-      // ---- ONLY customer rates ----
       const LH = Number(cust.lineHaul) || 0;
-      const FSC = Number(cust.fsc) || 0;
-      const OTH = Number(cust.other) || 0;
-      const CUSTOMER_TOTAL = LH + FSC + OTH;
+      const FSC_PERCENT = Number(cust.fsc) || 0;
+      const FSC_AMOUNT = LH * (FSC_PERCENT / 100);
+      const otherFromCharges = Array.isArray(cust.chargeRows)
+        ? cust.chargeRows.reduce((s, r) => s + (Number(r?.total) || 0), 0)
+        : 0;
+      const OTH = Number(
+        (cust.otherTotal !== undefined && cust.otherTotal !== null) ? cust.otherTotal :
+        (cust.other !== undefined && cust.other !== null) ? cust.other :
+        otherFromCharges
+      ) || 0;
+      const CUSTOMER_TOTAL = LH + FSC_AMOUNT + OTH;
 
       // helpers
       const fmtDate = (d) => {
@@ -626,7 +645,13 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   body{font-family:Arial,sans-serif;line-height:1.4;color:#333;background:#fff;font-size:12px}
   .invoice{max-width:800px;margin:0 auto;background:#fff;padding:20px}
   .header{display:flex;gap:16px;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px}
-  .logo{width:140px;height:90px;object-fit:contain;flex:0 0 auto}
+  .logo{width:280px;height:180px;object-fit:contain;flex:0 0 auto}
+  .logo-container{margin-bottom:12px;width:100%}
+  .company-table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}
+  .company-table th,.company-table td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
+  .company-table th{background:#f5f5f5;font-weight:bold}
+  .company-table th:first-child{width:20%}
+  .company-table th:last-child{width:80%}
   .header-right{flex:1 1 auto}
   .billto{border-collapse:collapse;width:65%;font-size:12px;margin-left:auto}
   .billto th,.billto td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
@@ -644,13 +669,13 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   <div class="invoice">
     <!-- HEADER: logo (left) + Bill To table (right) -->
     <div class="header">
-      <div style="width:140px; height:90px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; border:1px solid #ddd;">
-        <img src="${logoSrc}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
-             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/>
-        <div style="display:none; text-align:center; color:#666; font-size:12px;">
-          <div style="font-weight:bold;">COMPANY</div>
-          <div>LOGO</div>
+      <div>
+        <div class="logo-container">
+          <img src="${pdfLogo}" alt="Company Logo" class="logo" style="width:100%; max-width:300px; height:auto; object-fit:contain;" >
         </div>
+        <table class="company-table">
+          <tr><th>Bill From</th><td>${companyDisplayName ? `${companyDisplayName}<br>${companyDisplayAddress}` : 'N/A'}</td></tr>
+        </table>
       </div>
       <div class="header-right">
         <table class="billto">
@@ -699,6 +724,61 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       </table>
     </div>
 
+    ${(() => {
+      const returnLoc = order.returnLocation || {};
+      const loadType = order.loadType || '';
+      if (loadType !== 'DRAYAGE' || !returnLoc) return '';
+      const hasReturnData = returnLoc.address || returnLoc.returnFullAddress || returnLoc.city || returnLoc.state || returnLoc.zipCode;
+      if (!hasReturnData) return '';
+      const fullAddr2 = (loc) => {
+        if (!loc) return 'N/A';
+        const parts = [loc.address, loc.city, loc.state, loc.zipCode].filter(Boolean);
+        return parts.length ? parts.join(', ') : 'N/A';
+      };
+      const fmtDate2 = (d) => {
+        if (!d) return 'N/A';
+        const dt = new Date(d);
+        return isNaN(dt) ? 'N/A' : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      };
+      let returnAddr = 'N/A';
+      if (returnLoc.returnFullAddress && returnLoc.returnFullAddress.trim()) {
+        returnAddr = returnLoc.returnFullAddress.trim();
+      } else {
+        returnAddr = fullAddr2({
+          address: returnLoc.address || '',
+          city: returnLoc.city || '',
+          state: returnLoc.state || '',
+          zipCode: returnLoc.zipCode || ''
+        });
+      }
+      const contNo2 = order.shipper?.containerNo || 'N/A';
+      const contTp2 = order.shipper?.containerType || 'N/A';
+      const qty2 = 1;
+      const dateSrc2 = returnLoc.returnDate;
+      return `
+    <div class="section">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Return Address</th>
+            <th>Container No</th>
+            <th>Container Type</th>
+            <th>Qty</th>
+            <th>Return Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${returnAddr}</td>
+            <td>${contNo2}</td>
+            <td>${contTp2}</td>
+            <td>${qty2}</td>
+            <td>${fmtDate2(dateSrc2)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+    })()}
     <!-- Drop Locations -->
     <div class="section">
       <table class="tbl">
@@ -742,7 +822,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         <thead><tr><th>Description</th><th>Amount</th></tr></thead>
         <tbody>
           ${LH > 0 ? `<tr><td>Line Haul</td><td class="amount">$${LH.toLocaleString()}</td></tr>` : ''}
-          ${FSC > 0 ? `<tr><td>FSC</td><td class="amount">$${FSC.toLocaleString()}</td></tr>` : ''}
+          ${FSC_AMOUNT > 0 ? `<tr><td>FSC</td><td class="amount">$${FSC_AMOUNT.toLocaleString()}</td></tr>` : ''}
           ${OTH > 0 ? `<tr><td>Other</td><td class="amount">$${OTH.toLocaleString()}</td></tr>` : ''}
           <tr class="total-row">
             <td><strong>TOTAL</strong></td>
@@ -817,9 +897,9 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       if (!arr.length && order?.bolInformation) arr.push(String(order.bolInformation));
       return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
     })();
-
-    // Use your actual logo
-    const safeLogo = logoSrc;
+    const companyName = order?.company || order?.addDispature || '';
+    const pdfLogo = (companyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+    const safeLogo = order.logoSrc || pdfLogo || logoSrc;
 
     // ---------- HELPERS ----------
     const fmtDate = (d) => {
@@ -907,7 +987,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     <div class="grid">
       <div class="box">
         <div class="box-title">Shipper Information</div>
-        <div class="field"><span class="label">Name:</span><span class="value">${shipper.name || 'N/A'}</span></div>
+        <div class="field"><span class="label">Name:</span><span class="value">${shipper?.dropLocations?.[0]?.name || 'N/A'}</span></div>
         <div class="field"><span class="label">Container No:</span><span class="value">${shipper.containerNo || 'N/A'}</span></div>
         <div class="field"><span class="label">Container Type:</span><span class="value">${shipper.containerType || 'N/A'}</span></div>
         <div class="field"><span class="label">Weight:</span><span class="value">${shipper.weight || 'N/A'}</span></div>
