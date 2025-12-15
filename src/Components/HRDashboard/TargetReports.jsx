@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Clock, Target, CheckCircle, XCircle, Calendar, TrendingUp, BarChart3, Phone, Truck, RefreshCw } from 'lucide-react';
+import { Users, Clock, Target, CheckCircle, XCircle, Calendar, TrendingUp, BarChart3, Phone, Truck, RefreshCw, Paperclip, Eye, X } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
@@ -12,6 +12,7 @@ export default function TargetReports() {
   const [loading, setLoading] = useState(false);
   const [salesData, setSalesData] = useState(null);
   const [cmtData, setCmtData] = useState(null);
+  const [selectedEmployee, setSelectedEmployee] = useState(null); // For modal
 
 
   // Check if user is logged in
@@ -308,6 +309,7 @@ export default function TargetReports() {
                     </th>
                     <th className="text-left py-3 px-6 text-gray-700 font-semibold">Status</th>
                     <th className="text-left py-3 px-6 text-gray-700 font-semibold">Details</th>
+                    <th className="text-left py-3 px-6 text-gray-700 font-semibold">Reason & Attachments</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -354,6 +356,19 @@ export default function TargetReports() {
                           {employee.statusMessage}
                         </div>
                       </td>
+                      <td className="py-4 px-6">
+                        {(employee.reason || (employee.attachments && Array.isArray(employee.attachments) && employee.attachments.length > 0)) ? (
+                          <button
+                            onClick={() => setSelectedEmployee({ ...employee })}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 transition-colors text-sm font-medium"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -366,6 +381,126 @@ export default function TargetReports() {
           <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500 text-lg">No data available for the selected date</p>
           <p className="text-gray-400 text-sm">Try selecting a different date</p>
+        </div>
+      )}
+
+      {/* Reason & Attachments Modal */}
+      {selectedEmployee && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" aria-modal="true" role="dialog" style={{ zIndex: 9999 }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedEmployee(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ zIndex: 10000 }}>
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white p-6 rounded-t-2xl">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-xl font-bold">Reason & Attachments</h3>
+                  <p className="text-blue-100 text-sm mt-1">
+                    {selectedEmployee.employeeName} ({selectedEmployee.empId})
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedEmployee(null)}
+                  className="text-white hover:text-gray-200 transition-colors p-1"
+                  aria-label="Close modal"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Reason Section */}
+              {selectedEmployee?.reason && String(selectedEmployee.reason).trim().length > 0 ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                      <Target className="w-4 h-4 text-amber-700" />
+                    </div>
+                    <h4 className="text-lg font-semibold text-amber-900">Reason</h4>
+                  </div>
+                  <p className="text-sm text-amber-800 leading-relaxed whitespace-pre-wrap break-words">
+                    {String(selectedEmployee.reason)}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 text-center">
+                  <Target className="w-6 h-6 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No reason provided</p>
+                </div>
+              )}
+
+              {/* Attachments Section */}
+              {selectedEmployee?.attachments && Array.isArray(selectedEmployee.attachments) && selectedEmployee.attachments.length > 0 ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Paperclip className="w-4 h-4 text-blue-700" />
+                    </div>
+                    <h4 className="text-lg font-semibold text-blue-900">
+                      Attachments ({selectedEmployee.attachmentCount || selectedEmployee.attachments.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-3">
+                    {selectedEmployee.attachments.map((att, idx) => (
+                      <a
+                        key={att._id || idx}
+                        href={att.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-between p-4 bg-white border border-blue-200 rounded-lg hover:border-blue-400 hover:shadow-md transition-all group"
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Paperclip className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-900 truncate group-hover:text-blue-700">
+                              {att.fileName || `Attachment ${idx + 1}`}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1">
+                              {att.fileSize && (
+                                <span className="text-xs text-gray-500">
+                                  {(att.fileSize / 1024).toFixed(2)} KB
+                                </span>
+                              )}
+                              {att.uploadedAt && (
+                                <span className="text-xs text-gray-500">
+                                  Uploaded: {new Date(att.uploadedAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="ml-4 flex-shrink-0">
+                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 text-center">
+                  <Paperclip className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No attachments uploaded</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 rounded-b-2xl flex justify-end">
+              <button
+                onClick={() => setSelectedEmployee(null)}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
