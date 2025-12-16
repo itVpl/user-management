@@ -231,6 +231,7 @@ export default function AddTruckerForm({ onSuccess }) {
     city: "",
     zipcode: "",
     phoneNo: "",
+    secondaryPhoneNo: "",
     mc_dot_no: "",
     carrierType: "",
     fleetsize: "",
@@ -408,6 +409,11 @@ React.useEffect(() => {
         //   return "Please enter the valid mobile number.";
         break;
       }
+      case "secondaryPhoneNo": {
+        // Optional field - only validate format if provided
+        if (value?.trim() && /\s/.test(value)) return "Please enter the valid mobile number.";
+        break;
+      }
       case "mc_dot_no":
         if (!value?.trim()) return "Please enter the mc/dot no.";
         break;
@@ -522,6 +528,10 @@ React.useEffect(() => {
       // Only digits; no spaces
       newValue = value.replace(/\D+/g, "").slice(0, 10);
     }
+    if (name === "secondaryPhoneNo") {
+      // Only digits; no spaces
+      newValue = value.replace(/\D+/g, "").slice(0, 10);
+    }
 
     setFormData((prev) => ({ ...prev, [name]: newValue }));
 
@@ -586,6 +596,7 @@ React.useEffect(() => {
     truckerData.append("city", formData.city.trim());
     truckerData.append("zipcode", formData.zipcode.trim());
     truckerData.append("phoneNo", formData.phoneNo.trim());
+    truckerData.append("secondaryPhoneNo", formData.secondaryPhoneNo?.trim() || "");
     truckerData.append("email", formData.email.trim());
     truckerData.append("password", formData.password);
 
@@ -639,6 +650,7 @@ React.useEffect(() => {
           city: "",
           zipcode: "",
           phoneNo: "",
+          secondaryPhoneNo: "",
           mc_dot_no: "",
           carrierType: "",
           fleetsize: "",
@@ -822,6 +834,22 @@ React.useEffect(() => {
                 />
                 {renderError("phoneNo")}
               </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Secondary Phone Number
+              </label>
+              <input
+                type="text"
+                name="secondaryPhoneNo"
+                placeholder="Secondary Phone Number (Optional)"
+                value={formData.secondaryPhoneNo}
+                onChange={handleChange}
+                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                inputMode="numeric"
+              />
+              {renderError("secondaryPhoneNo")}
             </div>
           </div>
         </div>
