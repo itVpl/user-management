@@ -3870,9 +3870,9 @@ const handleUpdateOrder = async (e) => {
       <table class="tbl">
         <thead>
           <tr>
-           
+            <th>Location Name</th>
             <th>Return Address</th>
-           
+            <th>Weight (lbs)</th>
             <th>Container No</th>
             <th>Container Type</th>
             <th>Qty</th>
@@ -3881,9 +3881,9 @@ const handleUpdateOrder = async (e) => {
         </thead>
         <tbody>
           <tr>
-           
-            <td>${returnAddr}</td>
-            
+            <td>${returnLoc.name || 'N/A'}</td>
+            <td>${returnAddr} ${returnLoc.city || ''} ${returnLoc.state || ''} ${returnLoc.zipCode || ''}</td>
+            <td>${weight}</td>
             <td>${contNo}</td>
             <td>${contTp}</td>
             <td>${qty}</td>
@@ -6555,7 +6555,7 @@ const handleUpdateOrder = async (e) => {
                           <p className="text-sm text-gray-600">Name</p>
                           <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.name || 'N/A'}</p>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-1">
                           <p className="text-sm text-gray-600">Return Full Address</p>
                           <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.returnFullAddress || 'N/A'}</p>
                         </div>
