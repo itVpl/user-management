@@ -601,6 +601,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
       compName: trucker.compName || '',
       email: trucker.email || trucker.emailId || trucker.contactEmail || '',
       phoneNo: trucker.phoneNo || '',
+      secondaryPhoneNo: trucker.secondaryPhoneNo || '',
       mc_dot_no: trucker.mc_dot_no || '',
       carrierType: trucker.carrierType || '',
       fleetsize: trucker.fleetsize || '',
@@ -796,6 +797,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
         compName: editFormData.compName,
         email: editFormData.email,
         phoneNo: editFormData.phoneNo,
+        secondaryPhoneNo: editFormData.secondaryPhoneNo || '',
         mc_dot_no: editFormData.mc_dot_no,
         carrierType: editFormData.carrierType,
         fleetsize: editFormData.fleetsize,
@@ -1332,6 +1334,24 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       />
                       {editErrors.mc_dot_no && <p className="text-xs text-red-600 mt-1">Please enter the mc/dot no.</p>}
                     </div>
+                  </div>
+
+                  {/* Secondary Phone Number */}
+                  <div className="mt-3">
+                    <label className="text-sm font-medium text-gray-700">Secondary Phone Number</label>
+                    <input
+                      type="text"
+                      name="secondaryPhoneNo"
+                      placeholder="Secondary Phone Number (Optional)"
+                      value={editFormData.secondaryPhoneNo || ''}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setEditFormData(prev => ({ ...prev, secondaryPhoneNo: v }));
+                      }}
+                      onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                      inputMode="numeric"
+                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                    />
                   </div>
 
                   {/* City | State */}
@@ -2166,6 +2186,17 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       <p className="font-semibold text-gray-800">{selectedTrucker.phoneNo}</p>
                     </div>
                   </div>
+                  {selectedTrucker.secondaryPhoneNo && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <Phone className="text-green-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Secondary Phone Number</p>
+                        <p className="font-semibold text-gray-800">{selectedTrucker.secondaryPhoneNo}</p>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                       <Truck className="text-orange-600" size={16} />
