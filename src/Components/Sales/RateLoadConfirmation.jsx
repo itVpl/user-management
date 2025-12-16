@@ -121,11 +121,11 @@ export default function RateLoadConfirmation() {
             }
             .rates-table th:nth-child(1),
             .rates-table td:nth-child(1) {
-              width: 35%;
+              width: 25%;
             }
             .rates-table th:nth-child(2),
             .rates-table td:nth-child(2) {
-              width: 20%;
+              width: 25%;
             }
             .rates-table th:nth-child(3),
             .rates-table td:nth-child(3) {
@@ -133,10 +133,14 @@ export default function RateLoadConfirmation() {
             }
             .rates-table th:nth-child(4),
             .rates-table td:nth-child(4) {
-              width: 15%;
+              width: 10%;
             }
             .rates-table th:nth-child(5),
             .rates-table td:nth-child(5) {
+              width: 10%;
+            }
+            .rates-table th:nth-child(6),
+            .rates-table td:nth-child(6) {
               width: 15%;
             }
             .rates-table th {
@@ -248,7 +252,7 @@ export default function RateLoadConfirmation() {
                   <tr>
                     <td>${order.shipper.name || 'N/A'}</td>
                     <td>${order.shipper.containerNo || 'N/A'}</td>
-                    <td>${order.shipper.weight || 'N/A'} lbs</td>
+                    <td>${order.shipper.weight || order.weight || 'N/A'} lbs</td>
                     <td>${order.shipper.pickUpDate ? new Date(order.shipper.pickUpDate).toLocaleDateString() : 'N/A'}</td>
                     <td>${order.shipper.dropDate ? new Date(order.shipper.dropDate).toLocaleDateString() : 'N/A'}</td>
                   </tr>
@@ -265,6 +269,7 @@ export default function RateLoadConfirmation() {
                   <th>City</th>
                   <th>State</th>
                   <th>Zip Code</th>
+                  <th>Weight</th>
                 </tr>
               </thead>
               <tbody>
@@ -276,6 +281,7 @@ export default function RateLoadConfirmation() {
                       <td>${location.city || 'N/A'}</td>
                       <td>${location.state || 'N/A'}</td>
                       <td>${location.zipCode || 'N/A'}</td>
+                      <td>${location.weight || 'N/A'}</td>
                     </tr>
                   `).join('') : ''
                 }
@@ -291,6 +297,7 @@ export default function RateLoadConfirmation() {
                   <th>City</th>
                   <th>State</th>
                   <th>Zip Code</th>
+                  <th>Weight</th>
                 </tr>
               </thead>
               <tbody>
@@ -302,6 +309,7 @@ export default function RateLoadConfirmation() {
                       <td>${location.city || 'N/A'}</td>
                       <td>${location.state || 'N/A'}</td>
                       <td>${location.zipCode || 'N/A'}</td>
+                      <td>${location.weight || 'N/A'}</td>
                     </tr>
                   `).join('') : ''
                 }

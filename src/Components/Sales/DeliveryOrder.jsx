@@ -3308,7 +3308,7 @@ const handleUpdateOrder = async (e) => {
             '<strong>Time:</strong> N/A<br>' +
             '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
             '<strong>Quantity:</strong> 1<br>' +
-            '<strong>Weight:</strong> ' + ((ship.weight !== undefined && ship.weight !== null) ? ship.weight : 'N/A') + ' lbs' +
+            '<strong>Weight:</strong> ' + ((l.weight !== undefined && l.weight !== null && l.weight !== '') ? l.weight : (order.weight || 'N/A')) + ' lbs' +
             '</td>' +
             '<td style="width:50%;padding:8px;">' +
             '<strong>Purchase Order #:</strong> N/A<br>' +
@@ -3346,7 +3346,7 @@ const handleUpdateOrder = async (e) => {
             '<strong>Time:</strong> N/A<br>' +
             '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
             '<strong>Quantity:</strong> 1<br>' +
-            '<strong>Weight:</strong> ' + ((ship.weight !== undefined && ship.weight !== null) ? ship.weight : 'N/A') + ' lbs' +
+            '<strong>Weight:</strong> ' + ((l.weight !== undefined && l.weight !== null && l.weight !== '') ? l.weight : (order.weight || 'N/A')) + ' lbs' +
             '</td>' +
             '<td style="width:50%;padding:8px;">' +
             '<strong>Purchase Order #:</strong> N/A<br>' +
@@ -6570,6 +6570,10 @@ const handleUpdateOrder = async (e) => {
                         <div>
                           <p className="text-sm text-gray-600">Zip Code</p>
                           <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.zipCode || 'N/A'}</p>
+                        </div>
+                         <div>
+                          <p className="text-sm text-gray-600">Weight</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.returnLocation?.weight || 'N/A'}</p>
                         </div>
                         
                         <div>
