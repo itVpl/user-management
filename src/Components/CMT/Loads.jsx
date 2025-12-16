@@ -3877,6 +3877,17 @@ const MaterialShipperDropdown = ({
 
   };
 
+  const composeAddress = (obj) => {
+    if (!obj) return 'N/A';
+    if (typeof obj === 'string') return obj.trim() || 'N/A';
+    const addr = (obj.addressLine1 || obj.address || '').trim();
+    const city = (obj.city || '').trim();
+    const state = (obj.state || '').trim();
+    const zip = (obj.zip || obj.zipcode || obj.zipCode || obj.postalCode || '').trim();
+  
+    const parts = [addr, city, state].filter(Boolean).join(', ');
+    return parts ? (zip ? `${parts} ${zip}` : parts) : (zip || 'N/A');
+  };
 
 
   // Function to handle tab changes
@@ -8705,7 +8716,13 @@ const MaterialShipperDropdown = ({
 
                       <span className="text-gray-600">Origin:</span>
 
-                      <p className="font-medium">{selectedLoadForAction.origin}</p>
+                      <p className="font-medium">
+                        {composeAddress(
+                          (selectedLoadForAction.origins && selectedLoadForAction.origins[0]) ||
+                          selectedLoadForAction.originRaw ||
+                          selectedLoadForAction.origin
+                        )}
+                      </p>
 
                     </div>
 
@@ -8713,8 +8730,24 @@ const MaterialShipperDropdown = ({
 
                       <span className="text-gray-600">Destination:</span>
 
-                      <p className="font-medium">{selectedLoadForAction.destination}</p>
+                      <p className="font-medium">
+                        {composeAddress(
+                          (selectedLoadForAction.destinations && selectedLoadForAction.destinations[0]) ||
+                          selectedLoadForAction.destinationRaw ||
+                          selectedLoadForAction.destination
+                        )}
+                      </p>
 
+                    </div>
+                    <div>
+                      
+                      <span className="text-gray-600">Return Location:</span>
+                      
+                      <div className="mt-1">
+                        <p className="font-medium">
+                          {([selectedLoadForAction.returnAddress, selectedLoadForAction.returnCity, selectedLoadForAction.returnState, selectedLoadForAction.returnZip].filter(Boolean).join(', ')) || 'N/A'}
+                        </p>
+                      </div>
                     </div>
 
                     {selectedLoadForAction.weight && (

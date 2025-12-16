@@ -1889,9 +1889,6 @@ export default function DeliveryOrder() {
       const returnLocationData = (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && formData.returnLocation ? {
         returnFullAddress: [
           formData.returnLocation.address,
-          formData.returnLocation.city,
-          formData.returnLocation.state,
-          formData.returnLocation.zipCode
         ].filter(Boolean).join(', ') || '',
         name: formData.returnLocation.name || '',
         city: formData.returnLocation.city || '',
@@ -2920,9 +2917,6 @@ const handleUpdateOrder = async (e) => {
     const returnLocationData = (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && formData.returnLocation ? {
       returnFullAddress: [
         formData.returnLocation.address,
-        formData.returnLocation.city,
-        formData.returnLocation.state,
-        formData.returnLocation.zipCode
       ].filter(Boolean).join(', ') || '',
       name: formData.returnLocation.name || '',
       city: formData.returnLocation.city || '',
@@ -3862,10 +3856,7 @@ const handleUpdateOrder = async (e) => {
         returnAddr = returnLoc.returnFullAddress.trim();
       } else {
         returnAddr = fullAddr({
-          address: returnLoc.address || '',
-          city: returnLoc.city || '',
-          state: returnLoc.state || '',
-          zipCode: returnLoc.zipCode || ''
+          address: returnLoc.address 
         });
       }
       const weight = (returnLoc.weight ?? '') !== '' && returnLoc.weight !== null ? returnLoc.weight : 'N/A';
