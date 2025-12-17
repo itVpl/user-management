@@ -1887,33 +1887,7 @@ const MaterialShipperDropdown = ({
 
     pickupDate: (v) => v ? '' : 'Please select the Pickup Date .',
 
-    deliveryDate: (v, all) => {
-
-      if (!v) return 'Please select the Delivery Date .';
-
-      // must be >= pickupDate and >= now
-
-      const nowMs = Date.now();
-
-      const vMs = Date.parse(v);
-
-      if (Number.isFinite(vMs)) {
-
-        if (all.pickupDate) {
-
-          const pMs = Date.parse(all.pickupDate);
-
-          if (Number.isFinite(pMs) && vMs < pMs) return 'Delivery date should be greater than or equal to Pickup Date.';
-
-        }
-
-        if (vMs < nowMs) return 'The calendar shows only present and future dates only.';
-
-      }
-
-      return '';
-
-    },
+    deliveryDate: (v) => v ? '' : 'Please select the Delivery Date .',
 
     bidDeadline: (v) => v ? '' : 'Please select the Bid Deadline .',
 
@@ -5412,23 +5386,23 @@ const MaterialShipperDropdown = ({
 
           <div className="overflow-x-auto">
 
-            <table className="w-full table-fixed">
+            <table className="w-full">
 
               <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
 
                 <tr>
 
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Load ID</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[8rem]">Load ID</th>
 
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-80">Origin</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[20rem]">Origin</th>
 
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-80">Destination</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[20rem]">Destination</th>
 
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Rate</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[6rem]">Rate</th>
 
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Status</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[8rem]">Status</th>
 
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Action</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[12rem]">Action</th>
 
                 </tr>
 
@@ -5440,13 +5414,13 @@ const MaterialShipperDropdown = ({
 
                   <tr key={load.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
 
-                    <td className="py-2 px-3 w-32">
+                    <td className="py-2 px-3 min-w-[8rem]">
 
                       <span className="font-medium text-gray-700 text-sm">{load.id}</span>
 
                     </td>
 
-                    <td className="py-2 px-3 w-80">
+                    <td className="py-2 px-3 min-w-[20rem]">
 
                       <span className="font-medium text-gray-700 text-sm leading-relaxed" title={load.origin}>
 
@@ -5456,7 +5430,7 @@ const MaterialShipperDropdown = ({
 
                     </td>
 
-                    <td className="py-2 px-3 w-80">
+                    <td className="py-2 px-3 min-w-[20rem]">
 
                       <span className="font-medium text-gray-700 text-sm leading-relaxed" title={load.destination}>
 
@@ -5466,13 +5440,13 @@ const MaterialShipperDropdown = ({
 
                     </td>
 
-                    <td className="py-2 px-3 w-24">
+                    <td className="py-2 px-3 min-w-[6rem]">
 
                       <span className="font-bold text-green-600 text-sm">${load.rate.toLocaleString()}</span>
 
                     </td>
 
-                    <td className="py-2 px-3 w-32">
+                    <td className="py-2 px-3 min-w-[8rem]">
 
                       <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${statusColor(load.status)}`}>
 
@@ -5500,7 +5474,7 @@ const MaterialShipperDropdown = ({
 
                     </td>
 
-                    <td className="py-2 px-3 w-48">
+                    <td className="py-2 px-3 min-w-[12rem]">
 
                       <div className="flex items-center gap-1">
 
@@ -6086,10 +6060,6 @@ const MaterialShipperDropdown = ({
 
           <div 
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4"
-            onClick={() => {
-              setShowLoadCreationModal(false);
-              resetLoadForm();
-            }}
           >
 
             <div 
@@ -6597,7 +6567,7 @@ const MaterialShipperDropdown = ({
 
                                       onChange={(e) => updatePickupLocation(location.id, 'deliveryDate', e.target.value)}
 
-                                      min={location.pickupDate || todayStr()}
+                                      min={todayStr()}
 
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 
@@ -8014,7 +7984,7 @@ const MaterialShipperDropdown = ({
 
                           onChange={handleChange}
 
-                          min={loadForm.pickupDate || todayStr()}
+                          min={todayStr()}
 
                           className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
 
@@ -9254,11 +9224,6 @@ const MaterialShipperDropdown = ({
 
           <div 
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4"
-            onClick={() => {
-              setShowEditModal(false);
-              setSelectedLoadForAction(null);
-              resetLoadForm();
-            }}
           >
 
             <div 
@@ -9760,7 +9725,7 @@ const MaterialShipperDropdown = ({
 
                                       onChange={(e) => updatePickupLocation(location.id, 'deliveryDate', e.target.value)}
 
-                                      min={location.pickupDate || todayStr()}
+                                      min={todayStr()}
 
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 
@@ -11170,7 +11135,7 @@ const MaterialShipperDropdown = ({
 
                           onChange={handleChange}
 
-                          min={loadForm.pickupDate || todayStr()}
+                          min={todayStr()}
 
                           className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer ${
 

@@ -2352,7 +2352,6 @@ useEffect(() => {
       {isModalOpen && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden"
-          onClick={closeModal}
         >
           <div 
             className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
@@ -2969,7 +2968,6 @@ useEffect(() => {
       {approvalModal.visible && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
-          onClick={() => setApprovalModal({ visible: false, load: null })}
         >
           <div 
             className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-blue-100"
@@ -3083,7 +3081,6 @@ useEffect(() => {
       {bidDetailsModal.visible && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
-          onClick={() => setBidDetailsModal({ visible: false, load: null })}
         >
           <div 
             className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-6xl p-8 border border-purple-100"
@@ -3371,7 +3368,6 @@ useEffect(() => {
       {showChargesPopup && (
         <div 
           className="fixed inset-0 flex items-center justify-center z-[60]"
-          onClick={closeChargesPopup}
         >
           <div 
             className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto"

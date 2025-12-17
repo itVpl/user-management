@@ -669,7 +669,6 @@ const AddCustomer = () => {
       {open && (
         <div
           className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={handleClose}
         >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }

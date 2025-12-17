@@ -1043,7 +1043,6 @@ const handleCitySelect = (city) => {
     return (
       <div 
         className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-        onClick={() => setShowEditModal(false)}
       >
         <div 
           className="relative w-full max-w-2xl rounded-2xl shadow-2xl overflow-auto max-h-[90vh] p-4 bg-gradient-to-br from-blue-200 via-white to-blue-300" 
@@ -2052,7 +2051,6 @@ const handleCitySelect = (city) => {
       {showAddTruckerForm && (
         <div 
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center"
-          onClick={() => setShowAddTruckerForm(false)}
         >
           <div
             className="relative w-full max-w-3xl rounded-2xl shadow-2xl overflow-auto max-h-[90vh] p-4 bg-gradient-to-br from-blue-200 via-white to-blue-300"

@@ -309,7 +309,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
             '<strong>Time:</strong> N/A<br>' +
             '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
             '<strong>Quantity:</strong> 1<br>' +
-            '<strong>Weight:</strong> ' + ((ship.weight !== undefined && ship.weight !== null) ? ship.weight : 'N/A') + ' lbs' +
+            '<strong>Weight:</strong> ' + ((l.weight !== undefined && l.weight !== null) ? l.weight : 'N/A') + ' lbs' +
             '</td>' +
             '<td style="width:50%;padding:8px;">' +
             '<strong>Purchase Order #:</strong> N/A<br>' +
@@ -347,7 +347,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
             '<strong>Time:</strong> N/A<br>' +
             '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
             '<strong>Quantity:</strong> 1<br>' +
-            '<strong>Weight:</strong> ' + ((ship.weight !== undefined && ship.weight !== null) ? ship.weight : 'N/A') + ' lbs' +
+            '<strong>Weight:</strong> ' + ((l.weight !== undefined && l.weight !== null) ? l.weight : 'N/A') + ' lbs' +
             '</td>' +
             '<td style="width:50%;padding:8px;">' +
             '<strong>Purchase Order #:</strong> N/A<br>' +
@@ -856,8 +856,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     // ---------- SAFE DEFAULTS ----------
     const order = orderInput || {};
     const shipper = order.shipper || {};
-    const pickupLocs = Array.isArray(shipper.pickUpLocations) ? shipper.pickUpLocations : [];
-    const dropLocs = Array.isArray(shipper.dropLocations) ? shipper.dropLocations : [];
+    const pickupLocs = Array.isArray(shipper.pickUpLocations) ? shipper.pickUpLocations : (Array.isArray(order.origins) ? order.origins : []);
+    const dropLocs = Array.isArray(shipper.dropLocations) ? shipper.dropLocations : (Array.isArray(order.destinations) ? order.destinations : []);
 
     // Multi-key Load Number (first available)
     const getLoadNumber = () => {
@@ -990,7 +990,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         <div class="field"><span class="label">Name:</span><span class="value">${shipper?.dropLocations?.[0]?.name || 'N/A'}</span></div>
         <div class="field"><span class="label">Container No:</span><span class="value">${shipper.containerNo || 'N/A'}</span></div>
         <div class="field"><span class="label">Container Type:</span><span class="value">${shipper.containerType || 'N/A'}</span></div>
-        <div class="field"><span class="label">Weight:</span><span class="value">${shipper.weight || 'N/A'}</span></div>
+        <div class="field"><span class="label">Weight:</span><span class="value">${pickupLocs[0]?.weight || shipper.weight || order.weight || 'N/A'} lbs</span></div>
       </div>
       <div class="box">
         <div class="box-title">Order Information</div>
@@ -1051,7 +1051,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <tr>
                 <td>1</td>
                 <td>${getLoadNumber()}</td>
-                <td>${loc?.weight ? loc.weight + ' lbs' : 'N/A'}</td>
+                <td>${(loc.weight !== undefined && loc.weight !== null) ? loc.weight + ' lbs' : 'N/A'}</td>
                 <td>${shipper.containerType || 'N/A'}</td>
                 <td>${loc?.remarks || 'N/A'}</td>
               </tr>
