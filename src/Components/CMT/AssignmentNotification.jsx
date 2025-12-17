@@ -65,10 +65,6 @@ const AssignmentNotification = ({ assignment, onAccept, onCancel, onClose }) => 
               <span className="text-gray-600">Shipment No:</span>
               <span className="font-medium text-gray-800">{assignment.shipmentNo || 'N/A'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Shipper:</span>
-              <span className="font-medium text-gray-800">{assignment.shipperName || 'N/A'}</span>
-            </div>
             {assignment.pickupAddress && (
               <div className="flex justify-between">
                 <span className="text-gray-600">Pickup:</span>

@@ -87,13 +87,6 @@ const LoadAssignmentPopup = ({ assignment, onClose, hasBothPopups = false }) => 
               </span>
             </div>
 
-            <div className="flex justify-between items-start border-b border-gray-700 pb-2">
-              <span className="text-gray-400 font-normal tracking-wider">Shipper Name</span>
-              <span className="font-medium text-white text-right max-w-[60%]">
-                {assignment.shipperName || 'N/A'}
-              </span>
-            </div>
-
             {assignment.pickupAddress && (
               <div className="flex justify-between items-start border-b border-gray-700 pb-2">
                 <span className="text-gray-400 font-normal tracking-wider">Pickup Location</span>
