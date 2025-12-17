@@ -181,6 +181,16 @@ export default function DailyFollowUp() {
     fetchFollowUps();
   }, []);
 
+  // Set current date when Add Follow-Up modal opens
+  useEffect(() => {
+    if (showAddFollowUpForm) {
+      setFormData(prev => ({
+        ...prev,
+        followUpDate: toLocalISO()
+      }));
+    }
+  }, [showAddFollowUpForm]);
+
   // Status color helper
   const statusColor = (status) => {
     if (status === 'completed') return 'bg-green-100 text-green-700';
@@ -234,6 +244,7 @@ export default function DailyFollowUp() {
     const e = {};
     const today = toLocalISO();
 
+    // Customer Information Section - VALIDATION REQUIRED
     // Customer Name
     if (!formData.customerName.trim()) e.customerName = 'Please enter the customer name.';
     else if (!onlyLetters.test(formData.customerName.trim())) e.customerName = 'Only alphabets are allowed.';
@@ -247,43 +258,26 @@ export default function DailyFollowUp() {
     else if (/\s/.test(formData.customerEmail)) e.customerEmail = 'Email should not contain spaces.';
     else if (!emailRe.test(formData.customerEmail)) e.customerEmail = 'Please enter the valid email id.';
 
-    // Address  ⬅️ NEW: mandatory
+    // Address
     if (!formData.customerAddress?.trim()) e.customerAddress = 'Please enter the customer address.';
 
+    // Follow-Up Details Section - VALIDATION REQUIRED
     // Follow-Up Date (today/future)
     if (!formData.followUpDate) e.followUpDate = 'Please select the Follow-Up Date.';
     else if (formData.followUpDate < today) e.followUpDate = 'Follow-Up Date cannot be in the past.';
 
-    // Contact Person  ⬅️ mandatory
+    // Contact Person
     if (!formData.contactPerson.trim()) e.contactPerson = 'Please enter the Contact Person name.';
     else if (!onlyLetters.test(formData.contactPerson.trim())) e.contactPerson = 'Only alphabets are allowed.';
 
-    // Concerned Person  ⬅️ mandatory
+    // Concerned Person
     if (!formData.concernedPerson.trim()) e.concernedPerson = 'Please enter the Concerned Person name.';
     else if (!onlyLetters.test(formData.concernedPerson.trim())) e.concernedPerson = 'Only alphabets are allowed.';
 
-    // Follow-Up Type / Status  ⬅️ mandatory
+    // Follow-Up Type
     if (!formData.followUpType) e.followUpType = 'Please select the Follow-Up Type.';
-    if (!formData.status) e.status = 'Please select the status.';
 
-    // Credit Check  ⬅️ NEW: mandatory
-    if (!formData.creditCheck?.trim()) e.creditCheck = 'Please enter the credit check details.';
-
-    // Remark  ⬅️ NEW: mandatory
-    if (!formData.remark?.trim()) e.remark = 'Please enter the remark.';
-
-    // Follow-up Notes  ⬅️ NEW: mandatory
-    if (!formData.followupNotes?.trim()) e.followupNotes = 'Please enter the follow-up notes.';
-
-    // Next Follow-Up Date  ⬅️ NEW: mandatory + rules
-    if (!formData.nextFollowUpDate) {
-      e.nextFollowUpDate = 'Please select the Next Follow-Up Date.';
-    } else {
-      if (formData.nextFollowUpDate < today)
-        e.nextFollowUpDate = 'Next Follow-Up Date cannot be in the past.';
-      if (formData.followUpDate && formData.nextFollowUpDate <= formData.followUpDate)
-        e.nextFollowUpDate = 'Next Follow-Up Date must be greater than the Follow-Up Date.';
-    }
+    // Others Section - NO VALIDATION (Status, Credit Check, Remark, Follow-up Notes, Next Follow-Up Date are optional)
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -1493,7 +1487,7 @@ export default function DailyFollowUp() {
             {/* Form */}
             <form noValidate onInvalid={(e) => e.preventDefault()} onSubmit={handleSubmit} className="p-6">
 
-              <div className="grid grid-cols-3 gap-6 max-h-[60vh] overflow-y-auto pr-2 scrollbar-hide">
+              <div className="grid grid-cols-2 gap-6 max-h-[60vh] overflow-y-auto pr-2 scrollbar-hide">
                 {/* Customer Information */}
                 <div className="bg-blue-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
                   <h3 className="text-lg font-semibold text-blue-800 mb-4">Customer Information</h3>
@@ -1671,117 +1665,6 @@ export default function DailyFollowUp() {
 
 
                     </div>
-                  </div>
-                </div>
-
-                {/* Others */}
-                <div className="bg-purple-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
-                  <h3 className="text-lg font-semibold text-purple-800 mb-4">Others</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">Status *</label>
-                      <select
-                        id="status"
-                        name="status"
-                        value={formData.status}
-                        onChange={handleInputChange}
-                        aria-invalid={!!errors.status}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.status ? 'border-red-400' : 'border-gray-300'
-                          }`}
-                      >
-                        <option value="">Select</option>
-                        <option value="New">New</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Qualified">Qualified</option>
-                        <option value="Proposal Sent">Proposal Sent</option>
-                        <option value="Negotiation">Negotiation</option>
-                        <option value="Closed Won">Closed Won</option>
-                        <option value="Closed Lost">Closed Lost</option>
-                        <option value="On Hold">On Hold</option>
-                      </select>
-                      {errors.status && <p className="text-red-600 text-xs mt-1">{errors.status}</p>}
-
-
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Credit Check *</label>
-                      <input
-                        type="text"
-                        name="creditCheck"
-                        value={formData.creditCheck}
-                        onChange={handleInputChange}
-                        aria-invalid={!!errors.creditCheck}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.creditCheck ? 'border-red-400' : 'border-gray-300'}`}
-                        placeholder="Enter credit check details"
-                      />
-                      {errors.creditCheck && <p className="text-red-600 text-xs mt-1">{errors.creditCheck}</p>}
-
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Remark *</label>
-                      <input
-                        type="text"
-                        name="remark"
-                        value={formData.remark}
-                        onChange={handleInputChange}
-                        aria-invalid={!!errors.remark}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.remark ? 'border-red-400' : 'border-gray-300'}`}
-                        placeholder="Enter any remarks"
-                      />
-                      {errors.remark && <p className="text-red-600 text-xs mt-1">{errors.remark}</p>}
-
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Notes *</label>
-                      <textarea
-                        name="followupNotes"
-                        value={formData.followupNotes}
-                        onChange={handleInputChange}
-                        rows="3"
-                        aria-invalid={!!errors.followupNotes}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.followupNotes ? 'border-red-400' : 'border-gray-300'}`}
-                        placeholder="Enter detailed follow-up notes"
-                      />
-                      {errors.followupNotes && <p className="text-red-600 text-xs mt-1">{errors.followupNotes}</p>}
-
-                    </div>
-                    {/* Next Follow-Up Date */}
-                    <div
-                      className="cursor-pointer"
-                      onClick={() => {
-                        if (editNextFollowUpDateRef.current?.showPicker) editNextFollowUpDateRef.current.showPicker();
-                        else editNextFollowUpDateRef.current?.focus();
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          if (editNextFollowUpDateRef.current?.showPicker) editNextFollowUpDateRef.current.showPicker();
-                          else editNextFollowUpDateRef.current?.focus();
-                        }
-                      }}
-                    >
-                      <label htmlFor="editNextFollowUpDate" className="block text-sm font-medium text-gray-700 mb-2">
-                        Next Follow-Up Date *
-                      </label>
-                      <input
-                        id="editNextFollowUpDate"
-                        ref={editNextFollowUpDateRef}
-                        type="date"
-                        name="nextFollowUpDate"
-                        value={formData.nextFollowUpDate}
-                        onChange={handleInputChange}
-                        min={getNextMinDate(formData.followUpDate)}   // ✅ same rule
-                        aria-invalid={!!errors.nextFollowUpDate}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${errors.nextFollowUpDate ? 'border-red-400' : 'border-gray-300'
-                          }`}
-                      />
-                    </div>
-                    {errors.nextFollowUpDate && (
-                      <p className="text-red-600 text-xs mt-1">{errors.nextFollowUpDate}</p>
-                    )}
-
                   </div>
                 </div>
               </div>
