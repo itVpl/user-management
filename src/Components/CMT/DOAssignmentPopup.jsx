@@ -84,11 +84,6 @@ const DOAssignmentPopup = ({ assignment, onClose, hasBothPopups = false }) => {
               </span>
             </div>
             
-            <div className="flex justify-between items-start border-b border-gray-700 pb-2">
-              <span className="text-gray-400 font-normal tracking-wider">Client</span>
-              <span className="font-medium text-white text-right">{assignment.customerName || 'N/A'}</span>
-            </div>
-            
             <div className="flex justify-between items-start">
               <span className="text-gray-400 font-normal tracking-wider">Load Type</span>
               <span className="font-medium text-white text-right uppercase">{assignment.loadType || 'N/A'}</span>
