@@ -807,11 +807,6 @@ export default function AssignLoad() {
                 {reassignModal.load?.loadId ? `L-${reassignModal.load.loadId.slice(-5)}` : 'N/A'}
               </div>
               <div>
-                <strong>Shipper:</strong>
-                <br />
-                {reassignModal.load?.shipperName || 'N/A'}
-              </div>
-              <div>
                 <strong>Weight:</strong>
                 <br />
                 {reassignModal.load?.weight || 0} Kg

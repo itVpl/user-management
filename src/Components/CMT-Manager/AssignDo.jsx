@@ -730,11 +730,6 @@ export default function AssignDo() {
                 {reassignModal.assignment?.doId ? `DO-${reassignModal.assignment.doId.slice(-5)}` : 'N/A'}
               </div>
               <div>
-                <strong>Customer:</strong>
-                <br />
-                {reassignModal.assignment?.customerName || 'N/A'}
-              </div>
-              <div>
                 <strong>Load Numbers:</strong>
                 <br />
                 {getLoadNumbersString(reassignModal.assignment?.loadNumbers)}
@@ -743,11 +738,6 @@ export default function AssignDo() {
                 <strong>Load Type:</strong>
                 <br />
                 {reassignModal.assignment?.loadType || 'N/A'}
-              </div>
-              <div>
-                <strong>Shipper:</strong>
-                <br />
-                {reassignModal.assignment?.shipper?.name || 'N/A'}
               </div>
               <div>
                 <strong>Carrier:</strong>

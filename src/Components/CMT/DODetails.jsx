@@ -1914,16 +1914,6 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                    <User className="text-orange-600" size={16} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Shipper Name</p>
-                    <p className="font-semibold text-gray-800">{shipper?.name || 'N/A'}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                     <FileText className="text-blue-600" size={16} />
                   </div>
@@ -2120,27 +2110,6 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <div className="text-gray-600">{createdBy.department || '—'}</div>
             </div>
           </section>
-
-          {/* Company Information */}
-          {(raw.company || raw.addDispature) && (
-            <section className={SOFT.cardBlue}>
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Company Information</h3>
-              <div className="grid grid-cols-1 gap-2 text-sm">
-                {raw.company && (
-                  <div>
-                    <div className="text-gray-500">Company</div>
-                    <div className="font-medium">{raw.company}</div>
-                  </div>
-                )}
-                {raw.addDispature && (
-                  <div>
-                    <div className="text-gray-500">Add Dispature</div>
-                    <div className="font-medium">{raw.addDispature}</div>
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
 
           {/* Load Reference */}
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
