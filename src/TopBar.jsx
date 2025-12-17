@@ -27,17 +27,6 @@ const Topbar = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [breakLoading, setBreakLoading] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
-  const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
-  const [themePrefs, setThemePrefs] = useState(() => {
-    try {
-      const saved = localStorage.getItem("themePrefs");
-      return saved ? JSON.parse(saved) : { topbarBg: "#ffffff", sidebarActive: "#3b82f6" };
-    } catch {
-      return { topbarBg: "#ffffff", sidebarActive: "#3b82f6" };
-    }
-  });
-  const [selectedSection, setSelectedSection] = useState("topbarBg");
-  const [selectedColor, setSelectedColor] = useState(themePrefs.topbarBg || "#ffffff");
   
   // User department and checklist data
   const [userDepartment, setUserDepartment] = useState(null);
@@ -73,44 +62,34 @@ const Topbar = () => {
     const handleClickOutside = (e) => {
       if (!e.target.closest("#break-dropdown")) setDropdownOpen(false);
       if (!e.target.closest("#profile-dropdown")) setProfileOpen(false);
-      if (!e.target.closest("#theme-dropdown")) setThemeDropdownOpen(false);
     };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    setSelectedColor(themePrefs[selectedSection] || "#ffffff");
-  }, [selectedSection, themePrefs]);
-
-  const saveThemePrefs = (next) => {
-    setThemePrefs(next);
-    try {
-      localStorage.setItem("themePrefs", JSON.stringify(next));
-    } catch {}
-  };
 
   // Get user department
   useEffect(() => {
     const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
-    console.log("🔍 TopBar - User String:", userString);
+    // console.log("🔍 TopBar - User String:", userString);
+    
     if (userString) {
       try {
         const userData = JSON.parse(userString);
-        console.log("🔍 TopBar - User Data:", userData);
+        // console.log("🔍 TopBar - User Data:", userData);
         const department = typeof userData?.department === 'string' 
           ? userData.department 
           : userData?.department?.name || '';
-        console.log("🔍 TopBar - Department:", department);
+        // console.log("🔍 TopBar - Department:", department);
         const departmentLower = department.toLowerCase().trim();
-        console.log("🔍 TopBar - Department Lower:", departmentLower);
+        // console.log("🔍 TopBar - Department Lower:", departmentLower);
         
         if (departmentLower === 'sales' || departmentLower === 'cmt' || departmentLower.includes('sales') || departmentLower.includes('cmt')) {
           const finalDept = departmentLower.includes('sales') ? 'sales' : 'cmt';
-          console.log("🔍 TopBar - Setting Department:", finalDept);
+          // console.log("🔍 TopBar - Setting Department:", finalDept);
           setUserDepartment(finalDept);
         } else {
-          console.log("🔍 TopBar - Department not Sales or CMT:", departmentLower);
+          // console.log("🔍 TopBar - Department not Sales or CMT:", departmentLower);
         }
       } catch (error) {
         console.error("Error parsing user data:", error);
@@ -122,9 +101,9 @@ const Topbar = () => {
 
   // Fetch checklist data based on department
   useEffect(() => {
-    console.log("🔍 TopBar - userDepartment:", userDepartment);
+    // console.log("🔍 TopBar - userDepartment:", userDepartment);
     if (!userDepartment) {
-      console.log("🔍 TopBar - No department, returning");
+      // console.log("🔍 TopBar - No department, returning");
       return;
     }
 
@@ -182,11 +161,14 @@ const Topbar = () => {
               return 'blank';
             };
 
+            // Check if rating should be hidden for VPL006 and VPL007
+            const shouldHideRating = empId === 'VPL006' || empId === 'VPL007' || empId === 'VPL005';
+
             items = [
-              getStatus(checklist.talktime4Hours),
+              getStatus(checklist.talktime4Hours), 
               getStatus(checklist.threePlusLoadSubmitted),
               getStatus(checklist.attendance),
-              getStatus(checklist.rating)
+              ...(shouldHideRating ? [] : [getStatus(checklist.rating)])
             ];
 
             tooltips = [
@@ -195,9 +177,11 @@ const Topbar = () => {
               checklist.attendance?.status 
                 ? 'Attendance: Present' 
                 : 'Attendance: Not marked',
-              checklist.rating?.status 
-                ? `Manager Rating: ${checklist.rating?.value || 'Completed'}` 
-                : 'Manager Rating: Pending'
+              ...(shouldHideRating ? [] : [
+                checklist.rating?.status 
+                  ? `Manager Rating: ${checklist.rating?.value || 'Completed'}` 
+                  : 'Manager Rating: Pending'
+              ])
             ];
           } else if (userDepartment === 'cmt') {
             // CMT checklist: talktime3Hours, onePlusTruckerAdded, login (attendance), threePlusBidPosted
@@ -240,22 +224,30 @@ const Topbar = () => {
             ];
           }
 
-          console.log("🔍 TopBar - Checklist Items:", items);
-          console.log("🔍 TopBar - Checklist Tooltips:", tooltips);
+          // console.log("🔍 TopBar - Checklist Items:", items);
+          // console.log("🔍 TopBar - Checklist Tooltips:", tooltips);
           setChecklistItems(items);
           setChecklistTooltips(tooltips);
         } else {
           // Fallback: Set default blank items if API fails
           console.log("🔍 TopBar - Using fallback checklist");
-          setChecklistItems(['blank', 'blank', 'blank', 'blank']);
+          // Check if rating should be hidden for VPL006 and VPL007
+          const shouldHideRating = empId === 'VPL006' || empId === 'VPL007';
+          
           if (userDepartment === 'sales') {
-            setChecklistTooltips([
+            setChecklistItems(shouldHideRating ? ['blank', 'blank', 'blank'] : ['blank', 'blank', 'blank', 'blank']);
+            setChecklistTooltips(shouldHideRating ? [
+              'Talktime: 0.0 hrs (Target: 3+ hrs)',
+              'Loads Created: 0 (Target: 3+)',
+              'Attendance: Not marked'
+            ] : [
               'Talktime: 0.0 hrs (Target: 3+ hrs)',
               'Loads Created: 0 (Target: 3+)',
               'Attendance: Not marked',
               'Manager Rating: Pending'
             ]);
           } else {
+            setChecklistItems(['blank', 'blank', 'blank', 'blank']);
             setChecklistTooltips([
               'Talktime: 0.0 hrs (Target: 3 hrs)',
               'Truckers Added: 0 (Target: 1+)',
@@ -267,9 +259,16 @@ const Topbar = () => {
        } catch (error) {
          console.error("Error fetching checklist data:", error);
          // Set default blank items on error so checklist still shows
+         // Check if rating should be hidden for VPL006 and VPL007
+         const shouldHideRating = empId === 'VPL006' || empId === 'VPL007';
+         
          if (userDepartment === 'sales') {
-           setChecklistItems(['blank', 'blank', 'blank', 'blank']);
-           setChecklistTooltips([
+           setChecklistItems(shouldHideRating ? ['blank', 'blank', 'blank'] : ['blank', 'blank', 'blank', 'blank']);
+           setChecklistTooltips(shouldHideRating ? [
+             'Talktime: 0.0 hrs (Target: 3+ hrs)',
+             'Loads Created: 0 (Target: 3+)',
+             'Attendance: Not marked'
+           ] : [
              'Talktime: 0.0 hrs (Target: 3+ hrs)',
              'Loads Created: 0 (Target: 3+)',
              'Attendance: Not marked',
@@ -363,8 +362,7 @@ const Topbar = () => {
 
   return (
     <div
-      className="fixed w-full top-0 right-0 h-20 shadow z-10 px-6 flex items-center pl-[220px]"
-      style={{ backgroundColor: themePrefs.topbarBg || "#ffffff" }}
+      className="fixed w-full top-0 right-0 h-20 shadow z-10 px-6 flex items-center pl-[220px] bg-white"
     >
       {/* Left Section - Empty for now */}
       <div className="flex-1"></div>
@@ -501,65 +499,6 @@ const Topbar = () => {
       
       {/* Right Section - Existing elements */}
       <div className="flex-1 flex items-center justify-end gap-4">
-        <div className="relative" id="theme-dropdown">
-          <button
-            onClick={() => setThemeDropdownOpen(!themeDropdownOpen)}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium px-4 py-1 rounded-full border border-gray-300 transition"
-          >
-            🎨 Theme
-          </button>
-          {themeDropdownOpen && (
-            <div className="absolute right-0 top-12 w-64 bg-white rounded-lg shadow-lg p-3 z-50">
-              <div className="mb-2">
-                <select
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                  value={selectedSection}
-                  onChange={(e) => setSelectedSection(e.target.value)}
-                >
-                  <option value="topbarBg">Topbar</option>
-                  <option value="sidebarActive">Sidebar Active</option>
-                </select>
-              </div>
-              <div className="mb-3 flex items-center gap-2">
-                <input
-                  type="color"
-                  className="w-10 h-8 p-0 border border-gray-300 rounded"
-                  value={selectedColor}
-                  onChange={(e) => setSelectedColor(e.target.value)}
-                />
-                <input
-                  type="text"
-                  className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
-                  value={selectedColor}
-                  onChange={(e) => setSelectedColor(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="flex-1 bg-blue-500 text-white text-sm px-3 py-1 rounded"
-                  onClick={() => {
-                    const next = { ...themePrefs, [selectedSection]: selectedColor };
-                    saveThemePrefs(next);
-                    setThemeDropdownOpen(false);
-                  }}
-                >
-                  Save
-                </button>
-                <button
-                  className="flex-1 bg-gray-100 text-gray-800 text-sm px-3 py-1 rounded border border-gray-300"
-                  onClick={() => {
-                    const defaults = { topbarBg: "#ffffff", sidebarActive: "#3b82f6" };
-                    saveThemePrefs(defaults);
-                    setSelectedColor(defaults[selectedSection]);
-                    setThemeDropdownOpen(false);
-                  }}
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
         <div className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
           <span className="text-base">🕒</span>
           <span className="font-medium">{elapsedTime}</span>

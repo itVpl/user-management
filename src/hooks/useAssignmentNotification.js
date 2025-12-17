@@ -129,10 +129,10 @@ export const useAssignmentNotification = (empId, enabled = true) => {
             return true;
           });
 
-          console.log(
-            "📦 Filtered assigned loads (removed null loads):",
-            assignedLoads.length
-          );
+          // console.log(
+          //   "📦 Filtered assigned loads (removed null loads):",
+          //   assignedLoads.length
+          // );
 
           // Log structure of first assignment for debugging
           if (assignedLoads.length > 0) {
@@ -216,8 +216,7 @@ export const useAssignmentNotification = (empId, enabled = true) => {
 
               // Skip if user has already acknowledged this load
               if (acknowledgedLoadIdsRef.current.has(loadId)) {
-                console.log("✅ Load already acknowledged, skipping:", loadId);
-                return;
+                // console.log("✅ Load already acknowledged, skipping:", loadId);
               }
 
               const currentData = currentAssignmentMap.get(loadId);
@@ -246,12 +245,12 @@ export const useAssignmentNotification = (empId, enabled = true) => {
                 console.log("🆕 New assignment detected for loadId:", loadId);
                 newAssignments.push(al);
               } else if (isReassignment) {
-                console.log("🔄 Reassignment detected for loadId:", loadId, {
-                  previousTimestamp,
-                  currentTimestamp,
-                  previousAssignmentId,
-                  currentAssignmentId,
-                });
+                // console.log("🔄 Reassignment detected for loadId:", loadId, {
+                //   previousTimestamp,
+                //   currentTimestamp,
+                //   previousAssignmentId,
+                //   currentAssignmentId,
+                // });
                 newAssignments.push(al);
               }
             });

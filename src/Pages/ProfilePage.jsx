@@ -48,6 +48,7 @@ const ProfilePage = () => {
   const [reason, setReason] = useState("");
   const [leaveMessage, setLeaveMessage] = useState("");
   const [leaveHistory, setLeaveHistory] = useState([]);
+  const [leaveBalance, setLeaveBalance] = useState(null);
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [leaveErrors, setLeaveErrors] = useState({
     leaveType: "",
@@ -63,6 +64,8 @@ const ProfilePage = () => {
   // Attendance state (default = today)
   const [attendanceDate, setAttendanceDate] = useState(() => todayISO());
   const [attendanceRecord, setAttendanceRecord] = useState(null);
+  const [attendanceSessionPage, setAttendanceSessionPage] = useState(1);
+  const sessionsPerPage = 5;
 
   // HR Activity state (kept from your code)
   const [callLogs, setCallLogs] = useState([]);
@@ -112,11 +115,22 @@ const ProfilePage = () => {
     }
   };
 
+  const fetchLeaveBalance = async () => {
+    if (!empId) return;
+    try {
+      const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/leave/balance/${empId}`, authHeader());
+      if (res.data.success) setLeaveBalance(res.data);
+      else setLeaveBalance(null);
+    } catch (err) {
+      setLeaveBalance(null);
+    }
+  };
+
   const fetchAttendanceData = async (date) => {
     const d = date || attendanceDate;
-    if (!d) return;
+    if (!d || !empId) return;
     try {
-      const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/attendance/my?date=${d}`, authHeader());
+      const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/activity/user/${empId}?date=${d}`, authHeader());
       if (res.data.success) setAttendanceRecord(res.data);
       else setAttendanceRecord(null);
     } catch {
@@ -153,26 +167,62 @@ const ProfilePage = () => {
         if (res.data.success) setEmployee(res.data.employee);
       })
       .then(fetchLeaveHistory)
+      .then(fetchLeaveBalance)
       .then(() => fetchAttendanceData(todayISO()))
       .catch(() => {});
   }, [empId]);
 
   useEffect(() => {
-    if (empId && attendanceDate) fetchAttendanceData(attendanceDate);
+    if (activeTab === "leave" && empId) {
+      fetchLeaveBalance();
+    }
+  }, [activeTab, empId]);
+
+  // Reset leave page when filtered leaves change
+  useEffect(() => {
+    const filteredLeaves = leaveHistory.filter(leave => {
+      const reason = String(leave.reason || "").toLowerCase();
+      return !reason.includes("automatic half-day leave") && !reason.includes("incomplete daily");
+    });
+    const maxPage = Math.ceil(filteredLeaves.length / recordsPerPage);
+    if (leavePage > maxPage && maxPage > 0) {
+      setLeavePage(1);
+    }
+  }, [leaveHistory]);
+
+  useEffect(() => {
+    if (empId && attendanceDate) {
+      fetchAttendanceData(attendanceDate);
+      setAttendanceSessionPage(1); // Reset to first page when date changes
+    }
   }, [attendanceDate, empId]);
 
   /* ========= Attendance computed fields ========= */
-  const sessionsToday =
-    attendanceRecord?.sessions?.filter(
-      (s) =>
-        (s.loginTime && s.loginTime.startsWith(attendanceRecord.date)) ||
-        (s.logoutTime && s.logoutTime.startsWith(attendanceRecord.date))
-    ) || [];
+  // Helper function to parse DD-MM-YYYY HH:mm:ss format to Date
+  const parseDateTime = (dateTimeStr) => {
+    if (!dateTimeStr) return null;
+    // Format: "15-12-2025 15:33:56"
+    const parts = dateTimeStr.split(' ');
+    if (parts.length !== 2) return null;
+    const [datePart, timePart] = parts;
+    const [day, month, year] = datePart.split('-');
+    return new Date(`${year}-${month}-${day}T${timePart}`);
+  };
 
-  const firstLogin = sessionsToday.length ? sessionsToday[0].loginTime : null;
-  const lastLogout = sessionsToday.length ? sessionsToday[sessionsToday.length - 1].logoutTime : null;
-  const loginTimeDisp = formatTimeHM(firstLogin);
-  const logoutTimeDisp = lastLogout ? formatTimeHM(lastLogout) : "--";
+  // Extract login/logout times from new API structure
+  const firstLoginTime = attendanceRecord?.timings?.firstLoginTime || null;
+  const lastLogoutTime = attendanceRecord?.timings?.lastLogoutTime || null;
+  const loginTimeDisp = firstLoginTime ? (() => {
+    const d = parseDateTime(firstLoginTime);
+    return d ? formatTimeHM(d.toISOString()) : firstLoginTime.split(' ')[1]?.slice(0, 5) || "--";
+  })() : "--";
+  const logoutTimeDisp = lastLogoutTime ? (() => {
+    const d = parseDateTime(lastLogoutTime);
+    return d ? formatTimeHM(d.toISOString()) : lastLogoutTime.split(' ')[1]?.slice(0, 5) || "--";
+  })() : "--";
+
+  // Use sessions directly from new API
+  const filteredSessions = attendanceRecord?.sessions || [];
 
   /* ========= Leave validations ========= */
   const validateLeave = () => {
@@ -251,7 +301,7 @@ const ProfilePage = () => {
       };
 
       const res = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/leave/apply",
+        "https://vpl-liveproject-1.onrender.com/api/v1/leave/apply-with-balance",
         payload,
         authHeader()
       );
@@ -264,6 +314,7 @@ const ProfilePage = () => {
         setToDate("");
         setReason("");
         fetchLeaveHistory();
+        fetchLeaveBalance();
       } else {
         setLeaveMessage(res.data?.message || "Something went wrong.");
       }
@@ -412,19 +463,12 @@ const ProfilePage = () => {
     );
   }
 
-  const filteredSessions = attendanceRecord?.sessions
-    ? attendanceRecord.sessions.filter(
-        (session) =>
-          session.loginTime?.startsWith(attendanceRecord.date) ||
-          session.logoutTime?.startsWith(attendanceRecord.date)
-      )
-    : [];
 
   /* ============ Render ============ */
   return (
-    <div className="p-6 pt-2 bg-gradient-to-b from-slate-100 to-blue-50 min-h-screen font-sans">
-      <div className="relative w-full h-40 bg-gradient-to-r from-indigo-200 to-indigo-400 rounded-xl shadow-md">
-        <div className="absolute -bottom-12 left-8 w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg">
+    <div className="p-4 pt-2 bg-gradient-to-b from-slate-100 to-blue-50 min-h-screen font-sans">
+      <div className="relative w-full h-32 bg-gradient-to-r from-indigo-200 to-indigo-400 rounded-xl shadow-md">
+        <div className="absolute -bottom-10 left-6 w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-lg">
           <img
             src="https://cdn-icons-png.flaticon.com/512/147/147144.png"
             alt="Profile"
@@ -433,7 +477,7 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      <div className="flex justify-between items-center mt-16 px-6">
+      <div className="flex justify-between items-center mt-12 px-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">{employee.employeeName || "No Name"}</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -443,8 +487,8 @@ const ProfilePage = () => {
         <span className="text-green-500 font-semibold text-sm">● {employee.status || "Active"}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 px-6 mt-6">
-        <div className="bg-white p-6 rounded-2xl shadow-lg border border-indigo-100 hover:shadow-indigo-200 transition duration-300 ease-in-out">
+      <div className="grid grid-cols-2 gap-4 px-4 mt-4">
+        <div className="bg-white p-4 rounded-2xl shadow-lg border border-indigo-100 hover:shadow-indigo-200 transition duration-300 ease-in-out">
           <h2 className="text-xl font-semibold mb-4 text-indigo-700 flex items-center gap-2">
             <svg className="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
               <path d="M10 0a6 6 0 00-6 6v1a6 6 0 1012 0V6a6 6 0 00-6-6zM4 7v-.96A6.98 6.98 0 001 12c0 3.866 3.134 7 7 7h4a7 7 0 007-7 6.98 6.98 0 00-3-5.96V7a8 8 0 11-16 0z" />
@@ -458,8 +502,8 @@ const ProfilePage = () => {
           </ul>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-lg border border-indigo-100 hover:shadow-indigo-200 transition duration-300 ease-in-out">
-          <h2 className="text-xl font-semibold mb-4 text-indigo-700 flex items-center gap-2">
+        <div className="bg-white p-4 rounded-2xl shadow-lg border border-indigo-100 hover:shadow-indigo-200 transition duration-300 ease-in-out">
+          <h2 className="text-lg font-semibold mb-3 text-indigo-700 flex items-center gap-2">
             <svg className="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 24 24">
               <path d="M2 3h20v18H2V3zm11 16h7V5h-7v14zM4 5v14h7V5H4z" />
             </svg>
@@ -473,8 +517,8 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      <div className="px-6 mt-8">
-        <div className="flex gap-4 mb-4">
+      <div className="px-4 mt-6">
+        <div className="flex gap-3 mb-4">
           <button
             onClick={() => setActiveTab("attendance")}
             className={`px-4 py-2 cursor-pointer rounded-md font-semibold ${activeTab === "attendance" ? "bg-indigo-600 text-white" : "bg-white text-indigo-600 border border-indigo-300"}`}
@@ -503,13 +547,55 @@ const ProfilePage = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 gap-4">
 
           {/* ================= LEAVE TAB ================= */}
           {activeTab === "leave" && (
-            <div className="grid grid-cols-3 gap-6">
-              <div className="col-span-1 bg-gradient-to-br from-white to-indigo-50 p-8 rounded-3xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
+            <div className="grid grid-cols-3 gap-4">
+              {/* Leave Balance Card - Quarterly Information Only */}
+              <div className="col-span-3 bg-gradient-to-br from-white to-indigo-50 p-5 rounded-2xl shadow-xl border border-indigo-200 mb-3">
                 <h2 className="text-2xl font-bold text-indigo-800 mb-6 flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
+                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                      <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  Leave Balance
+                </h2>
+                {leaveBalance?.quarterlyInfo ? (
+                  <div className="bg-gradient-to-r from-indigo-100 to-purple-100 p-6 rounded-xl border border-indigo-200">
+                    <div className="text-lg font-semibold text-indigo-800 mb-4">Quarterly Information</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <div className="text-xs text-gray-600 mb-1">Current Quarter</div>
+                        <div className="text-lg font-bold text-indigo-700">{leaveBalance.quarterlyInfo.currentQuarter}</div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <div className="text-xs text-gray-600 mb-1">Quarter Period</div>
+                        <div className="text-sm font-bold text-indigo-700">
+                          {leaveBalance.quarterlyInfo.quarterStartDate} to {leaveBalance.quarterlyInfo.quarterEndDate}
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <div className="text-xs text-gray-600 mb-1">Quarterly Used</div>
+                        <div className="text-lg font-bold text-indigo-700">
+                          {leaveBalance.quarterlyInfo.quarterlyUsed} / {leaveBalance.quarterlyInfo.quarterlyLimit}
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <div className="text-xs text-gray-600 mb-1">Last Allocation</div>
+                        <div className="text-sm font-bold text-indigo-700">{leaveBalance.quarterlyInfo.lastMonthlyAllocation}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">Loading quarterly information...</div>
+                )}
+              </div>
+
+              <div className="col-span-1 bg-gradient-to-br from-white to-indigo-50 p-5 rounded-2xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
+                <h2 className="text-xl font-bold text-indigo-800 mb-4 flex items-center gap-2">
                   <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
                     <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M6 2a2 2 0 00-2 2v2h12V4a2 2 0 00-2-2H6zM4 8v8a2 2 0 002 2h8a2 2 0 002-2V8H4z" />
@@ -661,20 +747,28 @@ const ProfilePage = () => {
               </div>
 
               {/* Leave History */}
-              <div className="col-span-2 bg-gradient-to-br from-white to-indigo-50 p-8 rounded-3xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-indigo-800 flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
-                      <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    Leave History
-                  </h2>
-                  <div className="text-sm text-indigo-600 bg-indigo-100 px-3 py-1 rounded-full font-medium">
-                    {leaveHistory.length} Records
-                  </div>
-                </div>
+              <div className="col-span-2 bg-gradient-to-br from-white to-indigo-50 p-5 rounded-2xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
+                {(() => {
+                  // Filter out automatic half-day leaves due to incomplete tasks
+                  const filteredLeaves = leaveHistory.filter(leave => {
+                    const reason = String(leave.reason || "").toLowerCase();
+                    return !reason.includes("automatic half-day leave") && !reason.includes("incomplete daily");
+                  });
+                  return (
+                    <>
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-indigo-800 flex items-center gap-2">
+                          <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          Leave History
+                        </h2>
+                        <div className="text-sm text-indigo-600 bg-indigo-100 px-3 py-1 rounded-full font-medium">
+                          {filteredLeaves.length} Records
+                        </div>
+                      </div>
 
                 <div className="overflow-hidden rounded-2xl border border-indigo-200 bg-white shadow-lg">
                   <div className="overflow-x-auto">
@@ -689,8 +783,8 @@ const ProfilePage = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {leaveHistory.length > 0 ? (
-                          leaveHistory
+                        {filteredLeaves.length > 0 ? (
+                          filteredLeaves
                             .slice((leavePage - 1) * recordsPerPage, leavePage * recordsPerPage)
                             .map((leave, idx) => (
                               <tr key={idx} className="hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 group">
@@ -741,48 +835,55 @@ const ProfilePage = () => {
                   </div>
                 </div>
 
-                {leaveHistory.length > recordsPerPage && (
-                  <div className="flex justify-between items-center mt-6 px-2">
-                    <div className="text-sm text-gray-600">
-                      Showing {((leavePage - 1) * recordsPerPage) + 1} to {Math.min(leavePage * recordsPerPage, leaveHistory.length)} of {leaveHistory.length} records
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
-                        onClick={() => setLeavePage((p) => Math.max(1, p - 1))}
-                        disabled={leavePage === 1}
-                      >
-                        Previous
-                      </button>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.ceil(leaveHistory.length / recordsPerPage) }, (_, i) => (
-                          <button
-                            key={i}
-                            className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${leavePage === i + 1 ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                            onClick={() => setLeavePage(i + 1)}
-                          >
-                            {i + 1}
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
-                        onClick={() => setLeavePage((p) => Math.min(Math.ceil(leaveHistory.length / recordsPerPage), p + 1))}
-                        disabled={leavePage === Math.ceil(leaveHistory.length / recordsPerPage)}
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                )}
+                      {filteredLeaves.length > recordsPerPage && (
+                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 px-2 py-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="text-sm text-gray-600 font-medium">
+                            Showing {((leavePage - 1) * recordsPerPage) + 1} to {Math.min(leavePage * recordsPerPage, filteredLeaves.length)} of {filteredLeaves.length} records
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                              onClick={() => setLeavePage((p) => Math.max(1, p - 1))}
+                              disabled={leavePage === 1}
+                            >
+                              Previous
+                            </button>
+                            <div className="flex items-center gap-1 flex-wrap justify-center">
+                              {Array.from({ length: Math.ceil(filteredLeaves.length / recordsPerPage) }, (_, i) => (
+                                <button
+                                  key={i}
+                                  className={`px-2.5 py-1 rounded text-xs font-medium transition-all duration-200 ${
+                                    leavePage === i + 1
+                                      ? "bg-indigo-600 text-white shadow-md"
+                                      : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
+                                  }`}
+                                  onClick={() => setLeavePage(i + 1)}
+                                >
+                                  {i + 1}
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                              onClick={() => setLeavePage((p) => Math.min(Math.ceil(filteredLeaves.length / recordsPerPage), p + 1))}
+                              disabled={leavePage === Math.ceil(filteredLeaves.length / recordsPerPage)}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
 
           {/* ================= TERMS AND CONDITIONS TAB ================= */}
           {activeTab === "terms" && (
-            <div className="bg-gradient-to-br from-white to-indigo-50 p-8 rounded-3xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-center justify-between mb-6">
+            <div className="bg-gradient-to-br from-white to-indigo-50 p-5 rounded-2xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center gap-3">
                   <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-2 rounded-xl">
                     <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -809,8 +910,8 @@ const ProfilePage = () => {
 
           {/* ================= ATTENDANCE TAB ================= */}
           {activeTab === "attendance" && (
-            <div className="col-span-3 bg-gradient-to-br from-white to-indigo-50 p-8 rounded-3xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
-              <div className="flex justify-between items-center mb-6">
+            <div className="col-span-3 bg-gradient-to-br from-white to-indigo-50 p-5 rounded-2xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
+              <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center gap-3">
                   <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-2 rounded-xl">
                     <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -844,13 +945,12 @@ const ProfilePage = () => {
 
               {attendanceRecord ? (
                 <>
-                  <div className="mb-6 bg-white rounded-2xl p-6 shadow-lg border border-indigo-100">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                      <InfoChip title="Date" value={attendanceRecord.date} tone="blue" />
+                  <div className="mb-4 bg-white rounded-2xl p-4 shadow-lg border border-indigo-100">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <InfoChip title="Date" value={attendanceRecord.date || "--"} tone="blue" />
                       <InfoChip title="Login Time" value={loginTimeDisp} tone="green" />
                       <InfoChip title="Logout Time" value={logoutTimeDisp} tone="red" />
-                      <InfoChip title="Total Hours" value={attendanceRecord.totalTime || "--"} tone="purple" />
-                      <InfoChip title="Status" value={attendanceRecord.status || "--"} tone="yellow" badge />
+                      <InfoChip title="Total Hours" value={attendanceRecord.statistics?.totalHoursFormatted || "--"} tone="purple" />
                     </div>
                   </div>
 
@@ -867,31 +967,68 @@ const ProfilePage = () => {
                       <table className="w-full text-sm">
                         <thead className="bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700">
                           <tr>
-                            <th className="py-4 px-6 font-semibold border-b border-indigo-200">Session Login</th>
-                            <th className="py-4 px-6 font-semibold border-b border-indigo-200">Session Logout</th>
-                            <th className="py-4 px-6 font-semibold border-b border-indigo-200">Duration</th>
+                            <th className="py-4 px-6 font-semibold border-b border-indigo-200 text-center">Session #</th>
+                            <th className="py-4 px-6 font-semibold border-b border-indigo-200 text-center">Login Time</th>
+                            <th className="py-4 px-6 font-semibold border-b border-indigo-200 text-center">Logout Time</th>
+                            <th className="py-4 px-6 font-semibold border-b border-indigo-200 text-center">Duration</th>
+                            <th className="py-4 px-6 font-semibold border-b border-indigo-200 text-center">Status</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredSessions.length ? (
-                            filteredSessions.map((session, idx) => (
-                              <tr key={idx} className={`transition-all duration-200 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                                <td className="py-3 px-6 text-gray-800 font-medium">
-                                  {session.loginTime ? `${formatTimeHM(session.loginTime)} (${attendanceRecord.date})` : "--"}
-                                </td>
-                                <td className="py-3 px-6 text-gray-800 font-medium">
-                                  {session.logoutTime ? `${formatTimeHM(session.logoutTime)} (${attendanceRecord.date})` : "--"}
-                                </td>
-                                <td className="py-3 px-6">
-                                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                    ⏱️ {session.duration || "--"}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))
+                            filteredSessions
+                              .slice((attendanceSessionPage - 1) * sessionsPerPage, attendanceSessionPage * sessionsPerPage)
+                              .map((session, idx) => {
+                                // Parse login/logout times from DD-MM-YYYY HH:mm:ss format
+                                const loginTimeStr = session.loginTime || "";
+                                const logoutTimeStr = session.logoutTime || "";
+                                const loginDisplay = loginTimeStr ? (() => {
+                                  const parts = loginTimeStr.split(' ');
+                                  return parts.length === 2 ? parts[1].slice(0, 5) : loginTimeStr;
+                                })() : "--";
+                                const logoutDisplay = logoutTimeStr ? (() => {
+                                  const parts = logoutTimeStr.split(' ');
+                                  return parts.length === 2 ? parts[1].slice(0, 5) : logoutTimeStr;
+                                })() : "--";
+                                
+                                return (
+                                  <tr key={idx} className={`transition-all duration-200 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                                    <td className="py-3 px-6 text-gray-800 font-medium text-center">
+                                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold">
+                                        {session.sessionNumber || (attendanceSessionPage - 1) * sessionsPerPage + idx + 1}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-6 text-gray-800 font-medium text-center">
+                                      {loginDisplay !== "--" ? `${loginDisplay} (${loginTimeStr.split(' ')[0]})` : "--"}
+                                    </td>
+                                    <td className="py-3 px-6 text-gray-800 font-medium text-center">
+                                      {logoutDisplay !== "--" ? `${logoutDisplay} (${logoutTimeStr.split(' ')[0]})` : "--"}
+                                    </td>
+                                    <td className="py-3 px-6 text-center">
+                                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                        ⏱️ {session.duration || "--"}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-6 text-center">
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                                          session.status === "completed"
+                                            ? "bg-green-100 text-green-700 border border-green-200"
+                                            : session.status === "active"
+                                            ? "bg-blue-100 text-blue-700 border border-blue-200"
+                                            : "bg-gray-100 text-gray-700 border border-gray-200"
+                                        }`}
+                                      >
+                                        {session.status === "completed" ? "✓" : session.status === "active" ? "●" : ""}
+                                        {session.status || "--"}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })
                           ) : (
                             <tr>
-                              <td colSpan={3} className="text-center text-gray-400 py-8">
+                              <td colSpan={5} className="text-center text-gray-400 py-8">
                                 <div className="flex flex-col items-center gap-2">
                                   <svg className="w-12 h-12 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
@@ -904,6 +1041,44 @@ const ProfilePage = () => {
                         </tbody>
                       </table>
                     </div>
+                    {filteredSessions.length > sessionsPerPage && (
+                      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 px-2 py-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="text-sm text-gray-600 font-medium">
+                          Showing {((attendanceSessionPage - 1) * sessionsPerPage) + 1} to {Math.min(attendanceSessionPage * sessionsPerPage, filteredSessions.length)} of {filteredSessions.length} sessions
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                            onClick={() => setAttendanceSessionPage((p) => Math.max(1, p - 1))}
+                            disabled={attendanceSessionPage === 1}
+                          >
+                            Previous
+                          </button>
+                          <div className="flex items-center gap-1 flex-wrap justify-center">
+                            {Array.from({ length: Math.ceil(filteredSessions.length / sessionsPerPage) }, (_, i) => (
+                              <button
+                                key={i}
+                                className={`px-2.5 py-1 rounded text-xs font-medium transition-all duration-200 ${
+                                  attendanceSessionPage === i + 1
+                                    ? "bg-indigo-600 text-white shadow-md"
+                                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
+                                }`}
+                                onClick={() => setAttendanceSessionPage(i + 1)}
+                              >
+                                {i + 1}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                            onClick={() => setAttendanceSessionPage((p) => Math.min(Math.ceil(filteredSessions.length / sessionsPerPage), p + 1))}
+                            disabled={attendanceSessionPage === Math.ceil(filteredSessions.length / sessionsPerPage)}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (

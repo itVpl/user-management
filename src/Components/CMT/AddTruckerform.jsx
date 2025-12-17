@@ -10,6 +10,7 @@ import {
   XCircle,
   Eye,
   EyeOff,
+  PlusCircle,
 } from "lucide-react";
 // ========= Searchable dropdown (no lib) =========
 function SearchableSelect({
@@ -230,12 +231,15 @@ export default function AddTruckerForm({ onSuccess }) {
     city: "",
     zipcode: "",
     phoneNo: "",
+    secondaryPhoneNo: "",
     mc_dot_no: "",
     carrierType: "",
     fleetsize: "",
     email: "",
     password: "",
     confirmPassword: "",
+    // Working Address (array of {state, city, attachment})
+    workingAddress: [],
     // docs
     brokeragePacket: null,
     carrierPartnerAgreement: null,
@@ -268,6 +272,7 @@ const [countryOptions, setCountryOptions] = React.useState([]);
 const [stateOptions, setStateOptions]     = React.useState([]);
 const [cityOptions, setCityOptions]       = React.useState([]);
 const [geoLoading, setGeoLoading]         = React.useState({ countries: false, states: false, cities: false });
+const [workingAddressRefresh, setWorkingAddressRefresh] = React.useState(0); // Force re-render for working address cities
 
 const statesCacheRef = React.useRef({});  // { [country]: [{label,value}] }
 const citiesCacheRef = React.useRef({});  // { [`${country}|${state}`]: [{label,value}] }
@@ -404,6 +409,11 @@ React.useEffect(() => {
         //   return "Please enter the valid mobile number.";
         break;
       }
+      case "secondaryPhoneNo": {
+        // Optional field - only validate format if provided
+        if (value?.trim() && /\s/.test(value)) return "Please enter the valid mobile number.";
+        break;
+      }
       case "mc_dot_no":
         if (!value?.trim()) return "Please enter the mc/dot no.";
         break;
@@ -470,6 +480,18 @@ React.useEffect(() => {
       if (msg) newErrors[f] = msg;
     });
 
+    // Working Address validation (optional - validate each entry if filled)
+    if (formData.workingAddress && formData.workingAddress.length > 0) {
+      formData.workingAddress.forEach((addr, idx) => {
+        if (addr.state?.trim() && !addr.city?.trim()) {
+          newErrors[`workingAddress_${idx}_city`] = "Please enter the city for this working address.";
+        }
+        if (addr.city?.trim() && !addr.state?.trim()) {
+          newErrors[`workingAddress_${idx}_state`] = "Please enter the state for this working address.";
+        }
+      });
+    }
+
     // Documents
     documentFields.forEach((doc) => {
       const file = formData[doc.key];
@@ -503,6 +525,10 @@ React.useEffect(() => {
     let newValue = value;
 
     if (name === "phoneNo") {
+      // Only digits; no spaces
+      newValue = value.replace(/\D+/g, "").slice(0, 10);
+    }
+    if (name === "secondaryPhoneNo") {
       // Only digits; no spaces
       newValue = value.replace(/\D+/g, "").slice(0, 10);
     }
@@ -570,8 +596,32 @@ React.useEffect(() => {
     truckerData.append("city", formData.city.trim());
     truckerData.append("zipcode", formData.zipcode.trim());
     truckerData.append("phoneNo", formData.phoneNo.trim());
+    truckerData.append("secondaryPhoneNo", formData.secondaryPhoneNo?.trim() || "");
     truckerData.append("email", formData.email.trim());
     truckerData.append("password", formData.password);
+
+    // Working Address (optional - send as JSON string, attachments separately)
+    if (formData.workingAddress && formData.workingAddress.length > 0) {
+      const validAddresses = formData.workingAddress.filter(addr => 
+        addr.state?.trim() || addr.city?.trim()
+      );
+      
+      if (validAddresses.length > 0) {
+        // Send workingAddress as JSON string (without attachments)
+        const workingAddressJson = validAddresses.map(addr => ({
+          state: addr.state?.trim() || "",
+          city: addr.city?.trim() || ""
+        }));
+        truckerData.append("workingAddress", JSON.stringify(workingAddressJson));
+        
+        // Send attachments separately as workingAddressAttachments (multiple files)
+        validAddresses.forEach((addr) => {
+          if (addr.attachment) {
+            truckerData.append("workingAddressAttachments", addr.attachment);
+          }
+        });
+      }
+    }
 
     // Documents
     documentFields.forEach((doc) => {
@@ -600,12 +650,14 @@ React.useEffect(() => {
           city: "",
           zipcode: "",
           phoneNo: "",
+          secondaryPhoneNo: "",
           mc_dot_no: "",
           carrierType: "",
           fleetsize: "",
           email: "",
           password: "",
           confirmPassword: "",
+          workingAddress: [],
           brokeragePacket: null,
           carrierPartnerAgreement: null,
           w9Form: null,
@@ -783,6 +835,167 @@ React.useEffect(() => {
                 {renderError("phoneNo")}
               </div>
             </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Secondary Phone Number
+              </label>
+              <input
+                type="text"
+                name="secondaryPhoneNo"
+                placeholder="Secondary Phone Number (Optional)"
+                value={formData.secondaryPhoneNo}
+                onChange={handleChange}
+                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                inputMode="numeric"
+              />
+              {renderError("secondaryPhoneNo")}
+            </div>
+          </div>
+        </div>
+
+        {/* Working Address */}
+        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-2xl font-bold">Working Address (Optional)</h4>
+            <button
+              type="button"
+              onClick={() => {
+                setFormData(prev => ({
+                  ...prev,
+                  workingAddress: [...(prev.workingAddress || []), { state: "", city: "", attachment: null }]
+                }));
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              <PlusCircle size={18} /> Add More
+            </button>
+          </div>
+          <div className="w-full flex flex-col gap-4">
+            {formData.workingAddress && formData.workingAddress.length > 0 ? (
+              formData.workingAddress.map((addr, idx) => (
+                <div key={idx} className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <h5 className="text-lg font-semibold text-gray-700">Working Address #{idx + 1}</h5>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          workingAddress: prev.workingAddress.filter((_, i) => i !== idx)
+                        }));
+                      }}
+                      className="text-red-600 hover:text-red-700 font-semibold"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">State</label>
+                      <SearchableSelect
+                        name={`workingAddress_${idx}_state`}
+                        value={addr.state || ""}
+                        onChange={async (val) => {
+                          const updated = [...formData.workingAddress];
+                          updated[idx] = { ...updated[idx], state: val, city: "" }; // Clear city when state changes
+                          setFormData(prev => ({ ...prev, workingAddress: updated }));
+                          
+                          // Load cities for the selected state and cache them
+                          if (val && formData.country) {
+                            const key = `${formData.country}|${val}`;
+                            console.log('Loading cities for working address:', key, 'Cached?', !!citiesCacheRef.current[key]);
+                            if (!citiesCacheRef.current[key]) {
+                              try {
+                                setGeoLoading(p => ({ ...p, cities: true }));
+                                const cities = await fetchCitiesAPI(formData.country, val);
+                                console.log('Loaded cities:', cities.length, cities);
+                                citiesCacheRef.current[key] = cities;
+                                // Force re-render to update city dropdown
+                                setWorkingAddressRefresh(prev => prev + 1);
+                              } catch (e) {
+                                console.error("Failed to load cities for working address", e);
+                              } finally {
+                                setGeoLoading(p => ({ ...p, cities: false }));
+                              }
+                            } else {
+                              console.log('Using cached cities:', citiesCacheRef.current[key].length);
+                              // Even if cached, force re-render to show cities
+                              setWorkingAddressRefresh(prev => prev + 1);
+                            }
+                          } else {
+                            console.warn('Cannot load cities - missing state or country:', { state: val, country: formData.country });
+                          }
+                        }}
+                        options={stateOptions}
+                        placeholder="Search state…"
+                        loading={geoLoading.states}
+                        error={errors[`workingAddress_${idx}_state`]}
+                      />
+                      {errors[`workingAddress_${idx}_state`] && (
+                        <p className="text-xs text-red-600 mt-1">{errors[`workingAddress_${idx}_state`]}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">City</label>
+                      <SearchableSelect
+                        name={`workingAddress_${idx}_city`}
+                        value={addr.city || ""}
+                        onChange={(val) => {
+                          const updated = [...formData.workingAddress];
+                          updated[idx] = { ...updated[idx], city: val };
+                          setFormData(prev => ({ ...prev, workingAddress: updated }));
+                        }}
+                        options={(() => {
+                          // Force re-computation when refresh state changes (use refresh state to trigger)
+                          const _ = workingAddressRefresh; // Depend on refresh state
+                          if (!addr.state) return [];
+                          const key = `${formData.country}|${addr.state}`;
+                          return citiesCacheRef.current[key] || [];
+                        })()}
+                        placeholder={addr.state ? "Search city…" : "Select state first"}
+                        allowCustom
+                        disabled={!addr.state}
+                        loading={geoLoading.cities}
+                        error={errors[`workingAddress_${idx}_city`]}
+                      />
+                      {errors[`workingAddress_${idx}_city`] && (
+                        <p className="text-xs text-red-600 mt-1">{errors[`workingAddress_${idx}_city`]}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <FileText size={16} />
+                      Attachment (Optional)
+                    </label>
+                    <div className="relative mt-2">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          const updated = [...formData.workingAddress];
+                          updated[idx] = { ...updated[idx], attachment: file };
+                          setFormData(prev => ({ ...prev, workingAddress: updated }));
+                        }}
+                        className="w-full border border-gray-400 px-4 py-2 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        accept=".pdf,.doc,.docx"
+                      />
+                      {addr.attachment && (
+                        <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
+                          <CheckCircle size={16} />
+                          {addr.attachment.name}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No working addresses added. Click "Add More" to add one.</p>
+              </div>
+            )}
           </div>
         </div>
 

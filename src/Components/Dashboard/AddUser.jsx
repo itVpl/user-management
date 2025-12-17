@@ -475,14 +475,10 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
           timeout: 60000,
           onUploadProgress: (pe) => {
             const pct = Math.round((pe.loaded * 100) / (pe.total || 1));
-            console.log('Upload progress:', pct + '%');
+
           },
         }
       );
-
-
-      console.log('API Response:', response.data);
-
 
       // Mark success for any selected file
       Object.keys(files).forEach((key) => {
@@ -786,7 +782,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                                 try {
                                   e.target.showPicker?.();
                                 } catch (err) {
-                                  console.log('Picker not available');
+
                                 }
                               }
                             }}
@@ -795,7 +791,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                                 try {
                                   e.target.showPicker?.();
                                 } catch (err) {
-                                  console.log('Picker not available');
+
                                 }
                               }
                             }}
@@ -1007,7 +1003,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                             try {
                               e.target.showPicker?.();
                             } catch (err) {
-                              console.log('Picker not available');
+
                             }
                           }
                         }}
@@ -1016,7 +1012,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                             try {
                               e.target.showPicker?.();
                             } catch (err) {
-                              console.log('Picker not available');
+
                             }
                           }
                         }}

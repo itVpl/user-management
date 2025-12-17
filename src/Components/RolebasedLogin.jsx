@@ -24,8 +24,7 @@ const RoleBasedDashboard = () => {
   const department = user?.department;
 
   // Debug logging
-  console.log("User department:", department);
-  console.log("User role:", role);
+
 
   // Temporary fallback for testing
   if (!role && !department) {
@@ -43,13 +42,13 @@ const RoleBasedDashboard = () => {
 
   // Sales department should show AgentDashboard
   if (department === "Sales" || department === "sales") {
-    console.log("Sales department detected, showing AgentDashboard");
+
     return <AgentDashboard />;
   }
 
   // Finance department should show FinanceDashboard
   if (department === "Finance" || department === "finance") {
-    console.log("Finance department detected, showing FinanceDashboard");
+
     return <FinanceDashboard />;
   }
 
@@ -71,7 +70,7 @@ const RoleBasedDashboard = () => {
 
 
     default:
-      console.log("Rendering AgentDashboard for role:", role);
+
       return <AgentDashboard />;
   }
 };

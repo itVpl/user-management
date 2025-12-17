@@ -174,13 +174,13 @@ const HRDashboard = () => {
 
   // Monitor newJoinersData changes
   useEffect(() => {
-    // console.log("New Joiners Data Updated:", newJoinersData);
+    // 
   }, [newJoinersData]);
 
   // Monitor currentMonthLeaves changes
   useEffect(() => {
-    // console.log("Current Month Leaves Updated:", currentMonthLeaves);
-    // console.log("Current Month Leaves Length:", currentMonthLeaves.length);
+    // 
+    // 
   }, [currentMonthLeaves]);
 
   const CircularProgress = ({ percentage, size = 120, strokeWidth = 8, color = "green" }) => {

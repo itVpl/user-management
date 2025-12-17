@@ -127,8 +127,6 @@ const ManageUser = () => {
         { withCredentials: true }
       );
 
-      console.log('API Response:', response.data);
-
       // Update the specific user's status in local state immediately
       const userToUpdate = updatedUsers.find(u => u.empId === user.empId);
       if (userToUpdate) {
@@ -365,7 +363,6 @@ const ManageUser = () => {
 
 
   const handleRoleChange = async (empId, newRole) => {
-    console.log("PATCH /assign-role/", empId, "Payload:", { role: newRole });
 
     try {
       await axios.patch(
@@ -399,7 +396,6 @@ const ManageUser = () => {
         config
       );
 
-      console.log('Update Response:', response.data);
       alert('User updated successfully!');
       setShowEditModal(false);
       setEditingUser(null);

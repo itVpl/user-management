@@ -93,7 +93,7 @@ const Email = () => {
 
   const loadEmails = async () => {
     if (!createdAccountId) {
-      console.log('No account ID, showing sample emails');
+
       setEmails(sampleEmails);
       return;
     }
@@ -103,33 +103,30 @@ const Email = () => {
     
     try {
       const response = await fetchInboxEmails(createdAccountId);
-      
-      console.log('Checking response for emails...');
-      console.log('Full API Response:', response);
-      console.log('response.emails:', response?.emails);
-      console.log('response.data:', response?.data);
-      console.log('response.data?.emails:', response?.data?.emails);
-      
+
+
+
+
+
       // Try different response structures
       const fetchedEmails = response?.emails || 
                            response?.data?.emails || 
                            response?.data || 
                            [];
-      
-      console.log('Fetched emails count:', fetchedEmails.length);
+
       console.log('First email from API (before transform):', fetchedEmails[0]);
       
       if (fetchedEmails.length > 0) {
         const transformedEmails = fetchedEmails.map((email, index) => {
           const transformed = transformEmail(email, index);
-          console.log(`Email ${index} - Original uid:`, email.uid, 'Transformed uid:', transformed.uid);
+
           return transformed;
         });
-        console.log('Transformed emails:', transformedEmails);
-        console.log('First transformed email uid:', transformedEmails[0]?.uid);
+
+
         setEmails(transformedEmails);
       } else {
-        console.log('No emails found, showing sample emails');
+
         setEmails(sampleEmails);
       }
     } catch (err) {
@@ -148,15 +145,13 @@ const Email = () => {
 
     try {
       const response = await createEmailAccount(accountData);
-      
-      console.log('Checking response for account ID...');
-      console.log('response._id:', response._id);
-      console.log('response.id:', response.id);
-      console.log('response.data?._id:', response.data?._id);
-      console.log('response.data?.id:', response.data?.id);
-      console.log('response.emailAccount?._id:', response.emailAccount?._id);
-      console.log('response.account?._id:', response.account?._id);
-      
+
+
+
+
+
+
+
       // Extract account ID from response - try all possible structures
       const accountId = response._id || 
                        response.id || 
@@ -168,7 +163,7 @@ const Email = () => {
                        response.account?.id;
       
       if (accountId) {
-        console.log('✅ Found Account ID:', accountId);
+
         setCreatedAccountId(accountId);
         setCreateSuccess(true);
       } else {
@@ -221,10 +216,9 @@ const Email = () => {
   };
 
   const handleEmailSelect = async (email) => {
-    console.log('Email selected:', email);
-    console.log('Email UID:', email.uid);
-    console.log('Account ID:', createdAccountId);
-    
+
+
+
     // Set basic email info first
     setSelectedEmail(email);
     if (!email.isRead) {
@@ -233,14 +227,13 @@ const Email = () => {
 
     // Fetch full email details if uid is available
     if (email.uid && createdAccountId) {
-      console.log(`Fetching full email details for UID: ${email.uid}, Account ID: ${createdAccountId}`);
+
       try {
         const response = await fetchEmailByUid(email.uid, createdAccountId);
-        console.log('Full email response:', response);
 
         if (response.success && response.email) {
           const fullEmail = response.email;
-          console.log('Full email data:', fullEmail);
+
           const transformedFullEmail = transformEmail(fullEmail);
           const updatedEmail = {
             ...email,
@@ -254,7 +247,7 @@ const Email = () => {
             attachmentCount: fullEmail.attachmentCount || (fullEmail.attachments?.length || 0),
             messageId: fullEmail.messageId || fullEmail.messageID || fullEmail.message_id || email.messageId || null
           };
-          console.log('Updated email with full details:', updatedEmail);
+
           setSelectedEmail(updatedEmail);
         } else {
           console.warn('Response does not have success or email:', response);

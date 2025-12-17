@@ -67,13 +67,10 @@ export default function AddFleet() {
                 }
             });
 
-            console.log('API Response:', response);
-            console.log('Response Data:', response.data);
 
              // Check if response has data property
              if (response.data && response.data.success) {
                  const vehiclesData = response.data.vehicles || [];
-                 console.log('Vehicles Data:', vehiclesData);
 
                  if (Array.isArray(vehiclesData)) {
                      const transformedData = vehiclesData.map((vehicle, index) => {
@@ -104,14 +101,13 @@ export default function AddFleet() {
                          };
                      });
 
-                     console.log('Transformed Data:', transformedData);
                      setFleets(transformedData);
                  } else {
-                     console.log('Vehicles data is not an array:', vehiclesData);
+
                      toast.error('API returned data is not in expected format');
                  }
              } else {
-                 console.log('Unexpected response structure:', response.data);
+
                  toast.error('Unexpected response structure from API');
              }
         } catch (error) {
@@ -313,8 +309,6 @@ export default function AddFleet() {
                 reason: assignDescription.trim()
             };
 
-            console.log('Assign payload:', payload);
-
             // Make API call to assign fleet
             const response = await axios.post(
                 `${API_CONFIG.BASE_URL}/api/v1/fleet/assign`,
@@ -333,10 +327,10 @@ export default function AddFleet() {
                 closeAssignModal();
 
                 // Refresh the data immediately and then again after a delay to ensure updated data
-                console.log('Refreshing data after assignment...');
+
                 fetchFleets();
                 setTimeout(() => {
-                    console.log('Second refresh after assignment...');
+
                     fetchFleets();
                 }, 2000);
             } else {

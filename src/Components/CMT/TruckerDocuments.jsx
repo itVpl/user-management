@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt, FaEdit } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload } from 'lucide-react';
 import AddTruckerForm from './AddTruckerform';
@@ -219,9 +219,15 @@ const isValidEmail = (val = '') =>
 // const isValidPhone = (val) =>
 //   /^[6-9]\d{9}$/.test(String(val || '').trim());
 
-// INDIA PIN code: exactly 6 digits, first not 0
-const isValidZip = (val) =>
-  /^[1-9]\d{5}$/.test(String(val || '').trim());
+// ZIP validation: Supports US (5 digits or 5-4 format) and India (6 digits)
+const isValidZip = (val) => {
+  const trimmed = String(val || '').trim();
+  // US format: 5 digits or 5-4 format (e.g., 12345 or 12345-6789)
+  const usZipPattern = /^\d{5}(-\d{4})?$/;
+  // India PIN: exactly 6 digits, first not 0
+  const indiaPinPattern = /^[1-9]\d{5}$/;
+  return usZipPattern.test(trimmed) || indiaPinPattern.test(trimmed);
+};
 
 const ALLOWED_DOC_EXT = ['PDF', 'DOC', 'DOCX'];
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -286,6 +292,19 @@ const [geoLoading, setGeoLoading] = useState({
   states: false,
   cities: false,
 });
+
+// Secondary Address Geo dropdown state
+const [secondaryStateOptions, setSecondaryStateOptions] = useState([]);
+const [secondaryCityOptions, setSecondaryCityOptions] = useState([]);
+const [secondaryGeoLoading, setSecondaryGeoLoading] = useState({
+  states: false,
+  cities: false,
+});
+
+// Cache refs for geo data
+const statesCacheRef = useRef({});  // { [country]: [{label,value}] }
+const citiesCacheRef = useRef({});  // { [`${country}|${state}`]: [{label,value}] }
+
 useEffect(() => {
   // Jab edit modal open ho, countries lao; aur agar form me country/state pehle se hai to dependent bhi
   if (!showEditModal) return;
@@ -319,6 +338,28 @@ useEffect(() => {
         setStateOptions([]);
         setCityOptions([]);
       }
+
+      // Load working address cities if exists (preload for existing states)
+      if (editFormData.workingAddress && editFormData.workingAddress.length > 0) {
+        const country = editFormData.country || "";
+        if (country) {
+          for (const addr of editFormData.workingAddress) {
+            if (addr.state) {
+              const key = `${country}|${addr.state}`;
+              if (!citiesCacheRef.current[key]) {
+                try {
+                  const cities = await fetchCitiesAPI(country, addr.state);
+                  if (mounted) {
+                    citiesCacheRef.current[key] = cities;
+                  }
+                } catch (e) {
+                  console.error("Failed to preload cities for working address", e);
+                }
+              }
+            }
+          }
+        }
+      }
     } catch (e) {
       console.error("Countries/States preload failed:", e?.message || e);
       // minimal fallback
@@ -327,6 +368,7 @@ useEffect(() => {
       }
     } finally {
       setGeoLoading({ countries: false, states: false, cities: false });
+      setSecondaryGeoLoading({ states: false, cities: false });
     }
   })();
 
@@ -362,6 +404,52 @@ const handleStateSelect = async (state) => {
 
 const handleCitySelect = (city) => {
   setEditFormData((p) => ({ ...p, city }));
+};
+
+// Working Address handlers
+const handleAddWorkingAddress = () => {
+  setEditFormData(prev => ({
+    ...prev,
+    workingAddress: [...(prev.workingAddress || []), { state: "", city: "", attachment: null, attachmentUrl: "" }]
+  }));
+};
+
+const handleRemoveWorkingAddress = (idx) => {
+  setEditFormData(prev => ({
+    ...prev,
+    workingAddress: prev.workingAddress.filter((_, i) => i !== idx)
+  }));
+};
+
+const handleWorkingAddressStateChange = async (idx, state) => {
+  const updated = [...editFormData.workingAddress];
+  updated[idx] = { ...updated[idx], state, city: "" };
+  setEditFormData(prev => ({ ...prev, workingAddress: updated }));
+  
+  // Load cities for the selected state and cache them
+  if (state && editFormData.country) {
+    try {
+      const key = `${editFormData.country}|${state}`;
+      if (!citiesCacheRef.current[key]) {
+        const cities = await fetchCitiesAPI(editFormData.country, state);
+        citiesCacheRef.current[key] = cities;
+      }
+    } catch (e) {
+      console.error("Failed to load cities", e);
+    }
+  }
+};
+
+const handleWorkingAddressCityChange = (idx, city) => {
+  const updated = [...editFormData.workingAddress];
+  updated[idx] = { ...updated[idx], city };
+  setEditFormData(prev => ({ ...prev, workingAddress: updated }));
+};
+
+const handleWorkingAddressFileChange = (idx, file) => {
+  const updated = [...editFormData.workingAddress];
+  updated[idx] = { ...updated[idx], attachment: file };
+  setEditFormData(prev => ({ ...prev, workingAddress: updated }));
 };
 
   // Document fields configuration
@@ -415,13 +503,13 @@ const handleCitySelect = (city) => {
         response = await axiosInstance.get('/api/v1/shipper_driver/cmt/truckers');
         response = response.data; // Extract data from axios response
       } catch (cmtError) {
-        console.log('CMT endpoint failed, trying general truckers endpoint:', cmtError);
+
         try {
           // Fallback to general truckers endpoint
           response = await axiosInstance.get('/api/v1/truckers');
           response = response.data; // Extract data from axios response
         } catch (generalError) {
-          console.log('General endpoint also failed:', generalError);
+
           // Try one more endpoint
           response = await axiosInstance.get('/api/v1/shipper_driver/truckers');
           response = response.data; // Extract data from axios response
@@ -442,7 +530,7 @@ const handleCitySelect = (city) => {
       
       // Debug: Log first trucker to see structure
       if (truckersList.length > 0) {
-        console.log('=== FIRST TRUCKER FROM API ===');
+
         console.log(JSON.stringify(truckersList[0], null, 2));
       }
       
@@ -497,22 +585,23 @@ const handleCitySelect = (city) => {
   // NOTE: Currently using data from table row. There is NO API call to fetch a single trucker.
   // The edit form data comes directly from the trucker object passed when clicking Edit button.
   const handleEditTrucker = (trucker) => {
-    console.log('Trucker data for editing:', trucker);
-    
+
     // Get company address - API uses 'compAdd' field
     const companyAddress = trucker.compAdd || trucker.address || trucker.companyAddress || trucker.compAddress || '';
     
     // Get zip code - API uses 'zipcode' field (lowercase)
     const zipCodeValue = trucker.zipcode || trucker.zipCode || trucker.pinCode || trucker.pincode || trucker.postalCode || trucker.zip || '';
-    
-    console.log('Company Address:', companyAddress);
-    console.log('Zip Code:', zipCodeValue);
 
+
+    // Get working address data
+    const workingAddr = trucker.workingAddress || [];
+    
     setEditFormData({
       _id: trucker._id || trucker.userId,
       compName: trucker.compName || '',
       email: trucker.email || trucker.emailId || trucker.contactEmail || '',
       phoneNo: trucker.phoneNo || '',
+      secondaryPhoneNo: trucker.secondaryPhoneNo || '',
       mc_dot_no: trucker.mc_dot_no || '',
       carrierType: trucker.carrierType || '',
       fleetsize: trucker.fleetsize || '',
@@ -523,6 +612,13 @@ const handleCitySelect = (city) => {
       address: companyAddress,
       // Zip code - API response uses 'zipcode' (lowercase)
       zipCode: zipCodeValue,
+      // Working Address (array)
+      workingAddress: Array.isArray(workingAddr) ? workingAddr.map(addr => ({
+        state: addr.state || '',
+        city: addr.city || '',
+        attachment: null, // File will be uploaded separately
+        attachmentUrl: addr.attachment || '' // Keep existing URL if any
+      })) : [],
       status: trucker.status || 'pending',
 
       // ... (baaki document URLs same rakhna)
@@ -648,10 +744,60 @@ const handleCitySelect = (city) => {
         }
       });
 
+      // Add workingAddress and attachments to documentsFormData
+      if (editFormData.workingAddress && editFormData.workingAddress.length > 0) {
+        // Filter addresses that have at least state, city, or attachment
+        const validAddresses = editFormData.workingAddress.filter(addr => 
+          addr.state?.trim() || addr.city?.trim() || (addr.attachment && addr.attachment instanceof File)
+        );
+        
+        if (validAddresses.length > 0) {
+          // Filter addresses that have state/city for JSON (attachments can be separate)
+          const addressesWithLocation = validAddresses.filter(addr => 
+            addr.state?.trim() || addr.city?.trim()
+          );
+          
+          // Send workingAddress as JSON string (only state and city, no attachments in JSON)
+          const workingAddressJson = addressesWithLocation.map(addr => ({
+            state: addr.state?.trim() || "",
+            city: addr.city?.trim() || ""
+          }));
+          
+          // Always send workingAddress JSON
+          if (workingAddressJson.length > 0) {
+            documentsFormData.append("workingAddress", JSON.stringify(workingAddressJson));
+            console.log('workingAddress JSON:', JSON.stringify(workingAddressJson));
+          }
+          
+          // Send workingAddressAttachments (multiple files)
+          // IMPORTANT: Send attachments in the SAME order as addressesWithLocation array
+          // Backend will match attachment[0] with workingAddress[0], etc.
+          // Match by iterating through addressesWithLocation and sending File if present
+          let attachmentCount = 0;
+          addressesWithLocation.forEach((addr, idx) => {
+            // Only send if it's a File object (new upload), not a URL string (existing)
+            if (addr.attachment && addr.attachment instanceof File) {
+              documentsFormData.append("workingAddressAttachments", addr.attachment);
+              attachmentCount++;
+              console.log(`Added workingAddressAttachments[${idx}]:`, addr.attachment.name, `(${addr.attachment.size} bytes) for address: ${addr.state}, ${addr.city}`);
+            } else {
+              console.log(`No new attachment for workingAddress[${idx}]:`, addr.state, addr.city, `(existing: ${addr.attachmentUrl || 'none'})`);
+            }
+          });
+          console.log(`Total workingAddressAttachments to send: ${attachmentCount} out of ${addressesWithLocation.length} addresses`);
+          
+          // Ensure we're sending workingAddress even if no attachments (backend needs it)
+          if (attachmentCount === 0 && workingAddressJson.length > 0) {
+            console.warn('⚠️ No attachments to send, but workingAddress JSON will be sent');
+          }
+        }
+      }
+
       const jsonData = {
         compName: editFormData.compName,
         email: editFormData.email,
         phoneNo: editFormData.phoneNo,
+        secondaryPhoneNo: editFormData.secondaryPhoneNo || '',
         mc_dot_no: editFormData.mc_dot_no,
         carrierType: editFormData.carrierType,
         fleetsize: editFormData.fleetsize,
@@ -659,7 +805,16 @@ const handleCitySelect = (city) => {
         state: editFormData.state,
         country: editFormData.country,
         address: editFormData.address,
-        zipCode: editFormData.zipCode
+        zipCode: editFormData.zipCode,
+        // Working Address (only if array has entries, without attachments)
+        ...(editFormData.workingAddress && editFormData.workingAddress.length > 0 ? {
+          workingAddress: editFormData.workingAddress
+            .filter(addr => addr.state?.trim() || addr.city?.trim())
+            .map(addr => ({
+              state: addr.state?.trim() || "",
+              city: addr.city?.trim() || ""
+            }))
+        } : {})
       };
 
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
@@ -670,13 +825,41 @@ const handleCitySelect = (city) => {
 
       // 4) API calls
       const hasFileUploads = documentFields.some(doc => editFormData[doc.key]);
-      if (hasFileUploads) {
-        await axiosInstance.put(
-          `/api/v1/shipper_driver/update/${editFormData._id}/documents`,
-          documentsFormData
-        );
+      const hasWorkingAddressAttachments = editFormData.workingAddress?.some(addr => 
+        addr.attachment && addr.attachment instanceof File
+      );
+      
+      // Debug: Log FormData contents
+      console.log('Documents FormData contents:');
+      for (let [key, value] of documentsFormData.entries()) {
+        if (value instanceof File) {
+          console.log(`${key}:`, value.name, `(${value.size} bytes)`);
+        } else {
+          console.log(`${key}:`, value);
+        }
+      }
+      
+      // Send documents and workingAddress attachments together to documents endpoint
+      if (hasFileUploads || hasWorkingAddressAttachments) {
+        console.log('Sending to documents endpoint:', hasFileUploads, hasWorkingAddressAttachments);
+        try {
+          // Note: Don't set Content-Type header - let axios set it automatically with boundary
+          const documentsResponse = await axiosInstance.put(
+            `/api/v1/shipper_driver/update/${editFormData._id}/documents`,
+            documentsFormData
+          );
+          console.log('Documents API Response:', documentsResponse.data);
+          if (documentsResponse.data?.workingAddress) {
+            console.log('Updated workingAddress from API:', documentsResponse.data.workingAddress);
+          }
+        } catch (error) {
+          console.error('Error uploading documents/workingAddress attachments:', error);
+          console.error('Error response:', error.response?.data);
+          throw error; // Re-throw to show error to user
+        }
       }
 
+      // Send main update (workingAddress included in jsonData if present)
       await axiosInstance.put(
         `/api/v1/shipper_driver/update/${editFormData._id}`,
         jsonData,
@@ -864,12 +1047,12 @@ const handleCitySelect = (city) => {
 
     for (const endpoint of endpoints) {
       try {
-        console.log(`Testing endpoint: ${endpoint}`);
+
         const response = await axiosInstance.get(endpoint);
-        console.log(`✅ Success for ${endpoint}:`, response.data);
+
         return response.data;
       } catch (error) {
-        console.log(`❌ Failed for ${endpoint}:`, error.message);
+
       }
     }
   };
@@ -1152,6 +1335,24 @@ const handleCitySelect = (city) => {
                     </div>
                   </div>
 
+                  {/* Secondary Phone Number */}
+                  <div className="mt-3">
+                    <label className="text-sm font-medium text-gray-700">Secondary Phone Number</label>
+                    <input
+                      type="text"
+                      name="secondaryPhoneNo"
+                      placeholder="Secondary Phone Number (Optional)"
+                      value={editFormData.secondaryPhoneNo || ''}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setEditFormData(prev => ({ ...prev, secondaryPhoneNo: v }));
+                      }}
+                      onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                      inputMode="numeric"
+                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                    />
+                  </div>
+
                   {/* City | State */}
                   <div className="grid grid-cols-2 gap-4 mt-3">
                       <div>
@@ -1226,6 +1427,106 @@ const handleCitySelect = (city) => {
                       )}
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Working Address Card (Optional) */}
+              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-2xl font-bold">Working Address (Optional)</h4>
+                  <button
+                    type="button"
+                    onClick={handleAddWorkingAddress}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  >
+                    <PlusCircle size={18} /> Add More
+                  </button>
+                </div>
+                <div className="w-full flex flex-col gap-4">
+                  {editFormData.workingAddress && editFormData.workingAddress.length > 0 ? (
+                    editFormData.workingAddress.map((addr, idx) => {
+                      // Get cities for this address's state
+                      const addrStateCities = addr.state ? (citiesCacheRef.current[`${editFormData.country}|${addr.state}`] || []) : [];
+                      
+                      return (
+                        <div key={idx} className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50">
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="text-lg font-semibold text-gray-700">Working Address #{idx + 1}</h5>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveWorkingAddress(idx)}
+                              className="text-red-600 hover:text-red-700 font-semibold"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-sm font-medium text-gray-700">State</label>
+                              <SelectWithSearch
+                                name={`workingAddress_${idx}_state`}
+                                value={addr.state || ''}
+                                onChange={(val) => handleWorkingAddressStateChange(idx, val)}
+                                options={stateOptions}
+                                placeholder="Search state…"
+                                loading={geoLoading.states}
+                                error=""
+                              />
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-gray-700">City</label>
+                              <SelectWithSearch
+                                name={`workingAddress_${idx}_city`}
+                                value={addr.city || ''}
+                                onChange={(val) => handleWorkingAddressCityChange(idx, val)}
+                                options={addrStateCities}
+                                placeholder={addr.state ? "Search city…" : "Select state first"}
+                                allowCustom
+                                disabled={!addr.state}
+                                loading={geoLoading.cities}
+                                error=""
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-4">
+                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                              <FileText size={16} />
+                              Attachment (Optional)
+                            </label>
+                            <div className="relative mt-2">
+                              <input
+                                type="file"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  handleWorkingAddressFileChange(idx, file);
+                                }}
+                                className="w-full border border-gray-400 px-4 py-2 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                accept=".pdf,.doc,.docx"
+                              />
+                              {addr.attachment && (
+                                <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
+                                  <CheckCircle size={16} />
+                                  {addr.attachment.name}
+                                </div>
+                              )}
+                              {addr.attachmentUrl && !addr.attachment && (
+                                <div className="mt-2 text-sm text-blue-600 flex items-center gap-2">
+                                  <FileText size={16} />
+                                  <a href={addr.attachmentUrl.startsWith('http') ? addr.attachmentUrl : `${API_CONFIG.BASE_URL}/${addr.attachmentUrl}`} target="_blank" rel="noreferrer" className="hover:underline">
+                                    Current Attachment
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No working addresses added. Click "Add More" to add one.</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1884,6 +2185,17 @@ const handleCitySelect = (city) => {
                       <p className="font-semibold text-gray-800">{selectedTrucker.phoneNo}</p>
                     </div>
                   </div>
+                  {selectedTrucker.secondaryPhoneNo && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <Phone className="text-green-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Secondary Phone Number</p>
+                        <p className="font-semibold text-gray-800">{selectedTrucker.secondaryPhoneNo}</p>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                       <Truck className="text-orange-600" size={16} />
@@ -1956,6 +2268,63 @@ const handleCitySelect = (city) => {
                   </div>
                 </div>
               </div>
+
+              {/* Working Address Information */}
+              {selectedTrucker.workingAddress && Array.isArray(selectedTrucker.workingAddress) && selectedTrucker.workingAddress.length > 0 && (
+                <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6 mt-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <MapPin className="text-orange-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Working Address</h3>
+                    <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                      {selectedTrucker.workingAddress.length} {selectedTrucker.workingAddress.length === 1 ? 'address' : 'addresses'}
+                    </span>
+                  </div>
+                  <div className="space-y-4">
+                    {selectedTrucker.workingAddress.map((addr, idx) => (
+                      <div key={idx} className="bg-white rounded-xl p-4 border border-orange-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-gray-800">Working Address #{idx + 1}</h4>
+                          {addr.attachment && (
+                            <a
+                              href={addr.attachment.startsWith('http') ? addr.attachment : `${API_CONFIG.BASE_URL}/${addr.attachment}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
+                            >
+                              <FileText size={14} />
+                              View Attachment
+                            </a>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          {addr.state && (
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                                <MapPin className="text-orange-600" size={16} />
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">State</p>
+                                <p className="font-semibold text-gray-800">{addr.state}</p>
+                              </div>
+                            </div>
+                          )}
+                          {addr.city && (
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                                <MapPin className="text-orange-600" size={16} />
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">City</p>
+                                <p className="font-semibold text-gray-800">{addr.city}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Documents Section */}
               {selectedTrucker.documentPreview && Object.keys(selectedTrucker.documentPreview).length > 0 && (
