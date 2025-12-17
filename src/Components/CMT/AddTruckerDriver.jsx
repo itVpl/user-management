@@ -33,7 +33,7 @@ const ViewDriverDetailsModal = ({ isOpen, onClose, driverData }) => {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" />
       <div 
         className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden flex flex-col transform transition-all duration-300 scale-100"
         onClick={(e) => e.stopPropagation()}
@@ -504,7 +504,7 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" onClick={resetFormAndClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" />
       <div 
         className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden flex flex-col transform transition-all duration-300 scale-100"
         onClick={(e) => e.stopPropagation()}

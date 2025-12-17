@@ -2155,8 +2155,61 @@ const validateForm = (mode = formMode) => {
     next.customers[idx] = rowErr;
   });
 
-  // Rest of your validation code remains the same...
-  // ... [carrier, shipper, pickup, drop validations]
+  // Carrier Validation
+  const carrierErr = {};
+  if (!formData.carrierName?.trim()) carrierErr.carrierName = 'Carrier Name is required';
+  if (!formData.equipmentType?.trim()) carrierErr.equipmentType = 'Equipment Type is required';
+  if (!formData.carrierFees && formData.carrierFees !== 0) carrierErr.fees = 'Carrier Fees are required';
+  next.carrier = carrierErr;
+
+  // Shipper Validation
+  const shipperErr = {};
+  if (!formData.shipmentNo?.trim()) shipperErr.shipmentNo = 'Shipment No is required';
+  if (!formData.containerNo?.trim()) shipperErr.containerNo = 'Container No is required';
+  if (selectedLoadType === 'DRAYAGE') {
+     const ct = formData.containerType || formData.equipmentType;
+     if (!ct?.trim()) shipperErr.containerType = 'Container Type is required';
+  }
+  next.shipper = shipperErr;
+
+  // Pickup Validation
+  (formData.pickupLocations || []).forEach((l, i) => {
+     const row = {};
+     if (!l.name?.trim()) row.name = 'Location Name is required';
+     if (!l.address?.trim()) row.address = 'Address is required';
+     if (!l.city?.trim()) row.city = 'City is required';
+     if (!l.state?.trim()) row.state = 'State is required';
+     if (!l.zipCode?.trim()) row.zipCode = 'Zip Code is required';
+     if (l.weight === '' || l.weight === null) row.weight = 'Weight is required';
+     if (!l.pickUpDate) row.pickUpDate = 'Pickup Date is required';
+     next.pickups[i] = row;
+  });
+
+  // Drop Validation
+  (formData.dropLocations || []).forEach((l, i) => {
+     const row = {};
+     if (!l.name?.trim()) row.name = 'Location Name is required';
+     if (!l.address?.trim()) row.address = 'Address is required';
+     if (!l.city?.trim()) row.city = 'City is required';
+     if (!l.state?.trim()) row.state = 'State is required';
+     if (!l.zipCode?.trim()) row.zipCode = 'Zip Code is required';
+     if (l.weight === '' || l.weight === null) row.weight = 'Weight is required';
+     if (!l.dropDate) row.dropDate = 'Drop Date is required';
+     next.drops[i] = row;
+  });
+
+  // Return Location Validation (for DRAYAGE)
+  if ((formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && formData.returnLocation) {
+      const l = formData.returnLocation;
+      const row = {};
+      if (!l.name?.trim()) row.name = 'Location Name is required';
+      if (!l.address?.trim()) row.address = 'Address is required';
+      if (!l.city?.trim()) row.city = 'City is required';
+      if (!l.state?.trim()) row.state = 'State is required';
+      if (!l.zipCode?.trim()) row.zipCode = 'Zip Code is required';
+      if (!l.returnDate) row.returnDate = 'Return Date is required';
+      next.returnLocation = row;
+  }
 
   setErrors(next);
 
@@ -2167,12 +2220,9 @@ const validateForm = (mode = formMode) => {
 
   const hasPickErr = next.pickups.some(row => Object.keys(row || {}).length);
   const hasDropErr = next.drops.some(row => Object.keys(row || {}).length);
-  const hasCarrierErr = Object.keys(next.carrier || {}).length && 
-    (next.carrier.carrierName || next.carrier.equipmentType || next.carrier.fees ||
-     (Array.isArray(next.carrier.chargeRows) && next.carrier.chargeRows.some(r => r.name || r.quantity || r.amt)));
-
-  const hasReturnLocationErr = formData.loadType === 'DRAYAGE' && next.returnLocation && Object.keys(next.returnLocation).length > 0;
-  const hasShipperErr = next.shipper.shipmentNo || next.shipper.containerNo || next.shipper.containerType;
+  const hasCarrierErr = Object.keys(next.carrier || {}).length > 0;
+  const hasReturnLocationErr = (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && next.returnLocation && Object.keys(next.returnLocation).length > 0;
+  const hasShipperErr = Object.keys(next.shipper || {}).length > 0;
 
   const valid = !(
     hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || hasShipperErr || hasReturnLocationErr || next.docs
@@ -4705,7 +4755,7 @@ const handleUpdateOrder = async (e) => {
 
       {/* Add Delivery Order Modal */}
       {showAddOrderForm && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={handleCloseModal}>
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
           {/* Hide scrollbar for modal content */}
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }

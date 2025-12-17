@@ -524,7 +524,7 @@ export default function TaskScheduling() {
       {showCreateModal && (
         <div
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => !createLoading && setShowCreateModal(false)}
+          // onClick={() => !createLoading && setShowCreateModal(false)}
         >
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"

@@ -870,7 +870,6 @@ export default function DailyFollowUp() {
       {showAddFollowUpForm && (
         <div 
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={handleCloseModal}
         >
           <div 
             className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full"
@@ -1464,7 +1463,6 @@ export default function DailyFollowUp() {
       {showEditModal && selectedFollowUp && (
         <div 
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => setShowEditModal(false)}
         >
           <div 
             className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full"
@@ -1842,7 +1840,6 @@ export default function DailyFollowUp() {
       {showAddNewFollowUpForm && selectedFollowUp && (
         <div 
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => setShowAddNewFollowUpForm(false)}
         >
           <div 
             className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full"

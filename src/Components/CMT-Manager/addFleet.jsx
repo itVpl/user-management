@@ -910,11 +910,11 @@ export default function AddFleet() {
              )}
 
              {/* Add Fleet Modal */}
-             {showAddModal && (
-                 <div 
-                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 p-4"
-                     onClick={() => setShowAddModal(false)}
-                 >
+            {showAddModal && (
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 p-4"
+                    // onClick={() => setShowAddModal(false)}
+                >
                      <div 
                          className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide border border-green-100"
                          onClick={(e) => e.stopPropagation()}
