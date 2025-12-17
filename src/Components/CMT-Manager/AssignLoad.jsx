@@ -475,7 +475,6 @@ export default function AssignLoad() {
                   <tr>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Shipper</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Pickup</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Delivery</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight</th>
@@ -495,12 +494,6 @@ export default function AssignLoad() {
                       </td>
                       <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{load.loadId ? `L-${load.loadId.slice(-5)}` : 'N/A'}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div>
-                          <span className="font-medium text-gray-700">{load.shipperName}</span>
-                          <p className="text-xs text-gray-500">{load.shipperEmail}</p>
-                        </div>
                       </td>
                       <td className="py-2 px-3">
                         <div>

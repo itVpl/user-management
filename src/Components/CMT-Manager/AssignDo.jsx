@@ -443,9 +443,7 @@ export default function AssignDo() {
                   <tr>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">DO ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Customer</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Load Numbers</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Shipper</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Carrier</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load Type</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Assignment Status</th>
@@ -469,18 +467,7 @@ export default function AssignDo() {
                           <span className="font-medium text-gray-700">{assignment.doId ? `DO-${assignment.doId.slice(-5)}` : 'N/A'}</span>
                         </td>
                         <td className="py-2 px-3">
-                          <div>
-                            <span className="font-medium text-gray-700">{assignment.customerName}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 px-3">
                           <span className="font-medium text-gray-700 text-sm">{getLoadNumbersString(assignment.loadNumbers)}</span>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <span className="font-medium text-gray-700 text-sm">{assignment.shipper?.name || 'N/A'}</span>
-                            <p className="text-xs text-gray-500">{assignment.shipper?.email || ''}</p>
-                          </div>
                         </td>
                         <td className="py-2 px-3">
                           <div>

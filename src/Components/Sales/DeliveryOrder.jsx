@@ -5,6 +5,7 @@ import { FaArrowLeft, FaDownload } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
 import Logo from '../../assets/LogoFinal.png';
 import IdentificaLogo from '../../assets/identifica_logo.png';
+import MtPoconoLogo from '../../assets/mtPocono.png';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -74,11 +75,12 @@ const SearchableDropdown = ({
   };
 
   const selectedOption = options.find(option => option.value === value);
+  const hasError = className.includes('border-red');
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <div
-        className={`w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
+        className={`w-full px-4 py-3 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'} ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
           }`}
         onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
       >
@@ -345,6 +347,7 @@ export default function DeliveryOrder() {
     pickups: [],        // [{name:'', address:'', city:'', state:'', zipCode:'', weight:'', pickUpDate:''}]
     drops: [],          // [{name:'', address:'', city:'', state:'', zipCode:'', weight:'', dropDate:''}]
     returnLocation: {},  // { address:'', city:'', state:'', zipCode:'' } for DRAYAGE
+    company: '',        // Company Name validation error
     docs: ''            // error string
   });
   // --- shared error style helpers ---
@@ -2109,6 +2112,7 @@ const validateForm = (mode = formMode) => {
     shipper: {},
     pickups: [],
     drops: [],
+    company: '',
     docs: ''
   };
 
@@ -2211,6 +2215,11 @@ const validateForm = (mode = formMode) => {
       next.returnLocation = row;
   }
 
+  // Company Name Validation
+  if (!formData.company || formData.company.trim() === '') {
+    next.company = 'Please select the company name.';
+  }
+
   setErrors(next);
 
   // Check if any customer has errors
@@ -2223,9 +2232,10 @@ const validateForm = (mode = formMode) => {
   const hasCarrierErr = Object.keys(next.carrier || {}).length > 0;
   const hasReturnLocationErr = (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') && next.returnLocation && Object.keys(next.returnLocation).length > 0;
   const hasShipperErr = Object.keys(next.shipper || {}).length > 0;
+  const hasCompanyErr = next.company && next.company.trim() !== '';
 
   const valid = !(
-    hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || hasShipperErr || hasReturnLocationErr || next.docs
+    hasCustomerErr || hasPickErr || hasDropErr || hasCarrierErr || hasShipperErr || hasReturnLocationErr || hasCompanyErr || next.docs
   );
 
   return valid;
@@ -3240,7 +3250,12 @@ const handleUpdateOrder = async (e) => {
   try {
     // Determine logo based on company name
     const companyName = order?.company || order?.addDispature || '';
-    const pdfLogo = (companyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+    let pdfLogo = Logo;
+    if (companyName === 'IDENTIFICA LLC') {
+      pdfLogo = IdentificaLogo;
+    } else if (companyName === 'Mt Pocono Transportation') {
+      pdfLogo = MtPoconoLogo;
+    }
 
     // 1) Dispatcher info
     let dispatcherPhone = 'N/A';
@@ -3679,7 +3694,12 @@ const handleUpdateOrder = async (e) => {
 
       // Determine logo based on company name
       const orderCompanyName = order?.company || order?.addDispature || '';
-      const pdfLogo = (orderCompanyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+      let pdfLogo = Logo;
+      if (orderCompanyName === 'IDENTIFICA LLC') {
+        pdfLogo = IdentificaLogo;
+      } else if (orderCompanyName === 'Mt Pocono Transportation') {
+        pdfLogo = MtPoconoLogo;
+      }
 
       // ---- Company Name and Address based on selection ----
       let companyDisplayName = '';
@@ -3690,6 +3710,9 @@ const handleUpdateOrder = async (e) => {
       } else if (orderCompanyName === 'IDENTIFICA LLC') {
         companyDisplayName = 'IDENTIFICA LLC';
         companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
+      } else if (orderCompanyName === 'Mt Pocono Transportation') {
+        companyDisplayName = 'Mt Pocono Transportation';
+        companyDisplayAddress = '1900 CORPORATE CENTER DRIVE EAST TOBYHANNA, PA 18466';
       }
 
       // ---- Bill To + Address (from shippers list if available) ----
@@ -4031,7 +4054,12 @@ const handleUpdateOrder = async (e) => {
 
     // Determine logo based on company name git change 
     const companyName = order?.company || order?.addDispature || '';
-    const pdfLogo = (companyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+    let pdfLogo = Logo;
+    if (companyName === 'IDENTIFICA LLC') {
+      pdfLogo = IdentificaLogo;
+    } else if (companyName === 'Mt Pocono Transportation') {
+      pdfLogo = MtPoconoLogo;
+    }
     
     // Logo fallback (1x1 transparent if not provided)
     const safeLogo = order.logoSrc || pdfLogo || (typeof logoSrc !== 'undefined' ? logoSrc :
@@ -5296,11 +5324,14 @@ const handleUpdateOrder = async (e) => {
                       onChange={handleCompanyChange}
                       options={[
                         { value: 'V Power Logistics', label: 'V Power Logistics' },
-                        { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' }
+                        { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' },
+                        { value: 'Mt Pocono Transportation', label: 'Mt Pocono Transportation' }
                       ]}
                       placeholder="Select Company"
                       searchPlaceholder="Search companies..."
+                      className={errors.company ? 'border-red-500' : ''}
                     />
+                    {errors.company && <p className="text-red-600 text-xs mt-1">{errors.company}</p>}
                   </div>
                 </div>
               </div>

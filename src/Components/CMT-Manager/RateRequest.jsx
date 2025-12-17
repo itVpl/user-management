@@ -1845,7 +1845,6 @@ useEffect(() => {
                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                   <tr>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight (lbs)</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
@@ -1864,12 +1863,6 @@ useEffect(() => {
                     >
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-700">{loadShort(item.loadId || item._id)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="font-medium text-gray-700">{item.shipper?.compName || 'N/A'}</span>
-                          <p className="text-xs text-gray-500">{item.shipper?.email || ''}</p>
-                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-700">{item.weight} lbs</span>
@@ -2007,7 +2000,7 @@ useEffect(() => {
                   ))}
                   {filteredRequests.length === 0 && (
                     <tr>
-                      <td colSpan="10" className="text-center py-12">
+                      <td colSpan="9" className="text-center py-12">
                         <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">
                           {search ? 'No pending requests found matching your search' : 'No pending requests found'}
@@ -2419,10 +2412,6 @@ useEffect(() => {
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Commodity</div>
                       <div className="text-sm font-semibold text-gray-800">{selectedRequest?.commodity || 'N/A'}</div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Shipper</div>
-                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.shipper?.compName || 'N/A'}</div>
                     </div>
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rate</div>
@@ -3249,7 +3238,6 @@ useEffect(() => {
                       <tr>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load ID</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Shipper</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Origin</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Destination</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight (lbs)</th>
@@ -3277,12 +3265,6 @@ useEffect(() => {
                           </td>
                           <td className="py-2 px-3">
                             <span className="font-medium text-gray-700">{load.load?._id ? `L-${load.load._id.slice(-5)}` : 'N/A'}</span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <div>
-                              <span className="font-medium text-gray-700 text-sm">{load.load?.shipper?.compName || 'N/A'}</span>
-                              <p className="text-xs text-gray-500">{load.load?.shipper?.email || 'N/A'}</p>
-                            </div>
                           </td>
                           <td className="py-2 px-3">
                             <div>
@@ -3328,7 +3310,7 @@ useEffect(() => {
                       ))}
                       {rateDetailsData.length === 0 && (
                         <tr>
-                          <td colSpan="11" className="text-center py-12">
+                          <td colSpan="10" className="text-center py-12">
                             <div className="text-gray-500">
                               <BarChart3 className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                               <p className="text-lg font-medium">No rate details found</p>

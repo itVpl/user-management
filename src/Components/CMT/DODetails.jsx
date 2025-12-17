@@ -8,6 +8,7 @@ import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import Logo from '../../assets/LogoFinal.png';
 import IdentificaLogo from '../../assets/identifica_logo.png';
+import MtPoconoLogo from '../../assets/mtPocono.png';
 
 /* ====================== Helpers ====================== */
 const fmtCurrency = (amount) => {
@@ -197,6 +198,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   // Generate Rate Load Confirmation PDF function
   const generateRateLoadConfirmationPDF = async (order) => {
     try {
+      // Determine logo based on company name
+      const companyName = order?.company || order?.addDispature || '';
+      let pdfLogo = Logo;
+      if (companyName === 'IDENTIFICA LLC') {
+        pdfLogo = IdentificaLogo;
+      } else if (companyName === 'Mt Pocono Transportation') {
+        pdfLogo = MtPoconoLogo;
+      }
+      
       // 1) Dispatcher info
       let dispatcherPhone = 'N/A';
       let dispatcherEmail = 'N/A';
@@ -419,7 +429,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     <!-- Header -->
     <div class="header">
       <div style="width:120px; height:90px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; border:1px solid #ddd;">
-        <img src="${logoSrc}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
+        <img src="${pdfLogo}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
              onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/>
         <div style="display:none; text-align:center; color:#666; font-size:12px;">
           <div style="font-weight:bold;">COMPANY</div>
@@ -576,7 +586,12 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     try {
       const printWindow = window.open('', '_blank');
       const orderCompanyName = order?.company || order?.addDispature || '';
-      const pdfLogo = (orderCompanyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+      let pdfLogo = Logo;
+      if (orderCompanyName === 'IDENTIFICA LLC') {
+        pdfLogo = IdentificaLogo;
+      } else if (orderCompanyName === 'Mt Pocono Transportation') {
+        pdfLogo = MtPoconoLogo;
+      }
       let companyDisplayName = '';
       let companyDisplayAddress = '';
       if (orderCompanyName === 'V Power Logistics') {
@@ -898,7 +913,12 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
     })();
     const companyName = order?.company || order?.addDispature || '';
-    const pdfLogo = (companyName === 'IDENTIFICA LLC') ? IdentificaLogo : Logo;
+    let pdfLogo = Logo;
+    if (companyName === 'IDENTIFICA LLC') {
+      pdfLogo = IdentificaLogo;
+    } else if (companyName === 'Mt Pocono Transportation') {
+      pdfLogo = MtPoconoLogo;
+    }
     const safeLogo = order.logoSrc || pdfLogo || logoSrc;
 
     // ---------- HELPERS ----------
@@ -1701,8 +1721,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
         {/* Content */}
         <div className="modal-content overflow-y-auto flex-1 p-6 space-y-6">
-          {/* Customer Information */}
-          {customers.length > 0 && (
+          {/* Customer Information - Hidden per user request */}
+          {false && customers.length > 0 && (
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
               <div className="flex items-center gap-2 mb-4">
                 <User className="text-green-600" size={20} />
@@ -2100,6 +2120,27 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <div className="text-gray-600">{createdBy.department || '—'}</div>
             </div>
           </section>
+
+          {/* Company Information */}
+          {(raw.company || raw.addDispature) && (
+            <section className={SOFT.cardBlue}>
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Company Information</h3>
+              <div className="grid grid-cols-1 gap-2 text-sm">
+                {raw.company && (
+                  <div>
+                    <div className="text-gray-500">Company</div>
+                    <div className="font-medium">{raw.company}</div>
+                  </div>
+                )}
+                {raw.addDispature && (
+                  <div>
+                    <div className="text-gray-500">Add Dispature</div>
+                    <div className="font-medium">{raw.addDispature}</div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
           {/* Load Reference */}
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
@@ -2589,29 +2630,6 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <h3 className="text-lg font-bold text-gray-800">Generate Documents</h3>
             </div>
             <div className="flex flex-wrap gap-3">
-              {/* Invoice */}
-              <button
-                onClick={() => generateDoc('invoice')}
-                disabled={genLoading === 'invoice'}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${genLoading === 'invoice'
-                    ? 'bg-emerald-300 text-white cursor-not-allowed'
-                    : 'bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 shadow-lg hover:shadow-xl'
-                  }`}
-                title="Generate Invoice PDF"
-              >
-                {genLoading === 'invoice' ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <FaDownload size={16} />
-                    <span>Invoice PDF</span>
-                  </>
-                )}
-              </button>
-
               {/* Rate Confirmation */}
               <button
                 onClick={() => generateDoc('rate')}
@@ -3195,7 +3213,6 @@ export default function DODetails({ overrideEmpId }) {
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S.No</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Dispatcher</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Amount</th>
@@ -3210,7 +3227,6 @@ export default function DODetails({ overrideEmpId }) {
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.sNo}</span></td>
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.doId}</span></td>
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.loadNo}</span></td>
-                      <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.billTo}</span></td>
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.dispatcherName}</span></td>
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.carrierName}</span></td>
                       <td className="py-2 px-3"><span className="font-medium text-gray-700">{fmtCurrency(order.totalAmount)}</span></td>
