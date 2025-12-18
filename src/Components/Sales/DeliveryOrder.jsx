@@ -1025,6 +1025,47 @@ export default function DeliveryOrder() {
     setCurrentPage(page);
   };
 
+  // Generate smart pagination page numbers
+  const getPaginationPages = () => {
+    const pages = [];
+    const maxVisible = 7; // Maximum visible page numbers
+    
+    if (totalPages <= maxVisible) {
+      // If total pages are less than maxVisible, show all
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+      
+      if (currentPage <= 4) {
+        // Near the beginning
+        for (let i = 2; i <= 5; i++) {
+          pages.push(i);
+        }
+        pages.push('ellipsis');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 3) {
+        // Near the end
+        pages.push('ellipsis');
+        for (let i = totalPages - 4; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        // In the middle
+        pages.push('ellipsis');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pages.push(i);
+        }
+        pages.push('ellipsis');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
+
   // Reset to first page when search term changes
   useEffect(() => {
     setCurrentPage(1);
@@ -4769,30 +4810,40 @@ const handleUpdateOrder = async (e) => {
             Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
             {searchTerm && ` (filtered from ${orders.length} total)`}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
             >
               Previous
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'border-gray-300 hover:bg-gray-50'
+            {getPaginationPages().map((page, index) => {
+              if (page === 'ellipsis') {
+                return (
+                  <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                    ...
+                  </span>
+                );
+              }
+              return (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`px-3 py-2 border rounded-lg transition-colors text-sm font-medium min-w-[40px] ${
+                    currentPage === page
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'border-gray-300 hover:bg-gray-50 text-gray-700'
                   }`}
-              >
-                {page}
-              </button>
-            ))}
+                >
+                  {page}
+                </button>
+              );
+            })}
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
             >
               Next
             </button>
