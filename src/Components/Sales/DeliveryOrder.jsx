@@ -3253,7 +3253,7 @@ const handleUpdateOrder = async (e) => {
     let pdfLogo = Logo;
     if (companyName === 'IDENTIFICA LLC') {
       pdfLogo = IdentificaLogo;
-    } else if (companyName === 'Mt Pocono Transportation') {
+    } else if (companyName === 'MT. POCONO TRANSPORTATION INC') {
       pdfLogo = MtPoconoLogo;
     }
 
@@ -3697,7 +3697,7 @@ const handleUpdateOrder = async (e) => {
       let pdfLogo = Logo;
       if (orderCompanyName === 'IDENTIFICA LLC') {
         pdfLogo = IdentificaLogo;
-      } else if (orderCompanyName === 'Mt Pocono Transportation') {
+      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC') {
         pdfLogo = MtPoconoLogo;
       }
 
@@ -3710,8 +3710,8 @@ const handleUpdateOrder = async (e) => {
       } else if (orderCompanyName === 'IDENTIFICA LLC') {
         companyDisplayName = 'IDENTIFICA LLC';
         companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
-      } else if (orderCompanyName === 'Mt Pocono Transportation') {
-        companyDisplayName = 'Mt Pocono Transportation';
+      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC') {
+        companyDisplayName = 'MT. POCONO TRANSPORTATION INC';
         companyDisplayAddress = '1900 CORPORATE CENTER DRIVE EAST TOBYHANNA, PA 18466';
       }
 
@@ -4057,7 +4057,7 @@ const handleUpdateOrder = async (e) => {
     let pdfLogo = Logo;
     if (companyName === 'IDENTIFICA LLC') {
       pdfLogo = IdentificaLogo;
-    } else if (companyName === 'Mt Pocono Transportation') {
+    } else if (companyName === 'MT. POCONO TRANSPORTATION INC') {
       pdfLogo = MtPoconoLogo;
     }
     
@@ -5325,7 +5325,7 @@ const handleUpdateOrder = async (e) => {
                       options={[
                         { value: 'V Power Logistics', label: 'V Power Logistics' },
                         { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' },
-                        { value: 'Mt Pocono Transportation', label: 'Mt Pocono Transportation' }
+                        { value: 'MT. POCONO TRANSPORTATION INC', label: 'MT. POCONO TRANSPORTATION INC' }
                       ]}
                       placeholder="Select Company"
                       searchPlaceholder="Search companies..."
