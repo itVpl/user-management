@@ -203,7 +203,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       let pdfLogo = Logo;
       if (companyName === 'IDENTIFICA LLC') {
         pdfLogo = IdentificaLogo;
-      } else if (companyName === 'Mt Pocono Transportation') {
+      } else if (companyName === 'MT. POCONO TRANSPORTATION INC' || companyName === 'Mt Pocono Transportation') {
         pdfLogo = MtPoconoLogo;
       }
       
@@ -589,7 +589,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       let pdfLogo = Logo;
       if (orderCompanyName === 'IDENTIFICA LLC') {
         pdfLogo = IdentificaLogo;
-      } else if (orderCompanyName === 'Mt Pocono Transportation') {
+      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC' || orderCompanyName === 'Mt Pocono Transportation') {
         pdfLogo = MtPoconoLogo;
       }
       let companyDisplayName = '';
@@ -601,6 +601,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         companyDisplayName = 'IDENTIFICA LLC';
         companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
       }
+
+      // hi
 
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
@@ -916,7 +918,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     let pdfLogo = Logo;
     if (companyName === 'IDENTIFICA LLC') {
       pdfLogo = IdentificaLogo;
-    } else if (companyName === 'Mt Pocono Transportation') {
+    } else if (companyName === 'MT. POCONO TRANSPORTATION INC' || companyName === 'Mt Pocono Transportation') {
       pdfLogo = MtPoconoLogo;
     }
     const safeLogo = order.logoSrc || pdfLogo || logoSrc;
