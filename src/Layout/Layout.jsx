@@ -85,10 +85,10 @@ const Layout = () => {
           <Outlet />
         </main>
       </div>
-      {/* Food Preference Modal */}
+{/*      
       {showFoodModal && (
         <FoodPreferenceModal onClose={() => setShowFoodModal(false)} user={user} />
-      )}
+      )} */}
 
       {/* DO Assignment Popup for CMT users */}
       {isCMTUser && newDOAssignment && (
