@@ -1028,7 +1028,8 @@ export default function DeliveryOrder() {
   const handleCompanyChange = (value) => {
     setFormData(prev => ({
       ...prev,
-      company: value
+      company: value,
+      addDispature: value // Also set addDispature when company is selected
     }));
   };
 
@@ -1942,6 +1943,8 @@ export default function DeliveryOrder() {
         fd.append('loadType', formData.loadType || selectedLoadType);
         fd.append('shipperId', shipperId || '');
         fd.append('carrierId', carrierId || '');
+        fd.append('company', formData.company || formData.addDispature || ''); // Company name for both DRAYAGE and OTR
+        fd.append('addDispature', formData.company || formData.addDispature || ''); // Also set addDispature field
         fd.append('companyName', formData.company || formData.addDispature || ''); // Company name for both DRAYAGE and OTR
 
         fd.append('customers', JSON.stringify(customersWithTotals));
@@ -2473,6 +2476,7 @@ const validateForm = (mode = formMode) => {
           commodity: fullOrderData.shipper?.pickUpLocations?.[0]?.commodity || fullOrderData.shipper?.dropLocations?.[0]?.commodity || '',
           selectedLoad: fullOrderData.loadReference || '',
           company: fullOrderData.company || fullOrderData.addDispature || fullOrderData.customerName || '',
+          addDispature: fullOrderData.company || fullOrderData.addDispature || fullOrderData.customerName || '',
           loadType: fullOrderData.loadType || 'OTR',
           
           // Return location for DRAYAGE
@@ -2994,10 +2998,8 @@ const handleUpdateOrder = async (e) => {
       carrier: carrier,
       shipper: shipper,
       ...(formData.selectedLoad && formData.selectedLoad.trim() ? { loadReference: formData.selectedLoad } : {}),
-      ...(formData.company && formData.company.trim() ? { 
-        company: formData.company,
-        addDispature: formData.company 
-      } : {}),
+      company: formData.company || formData.addDispature || '',
+      addDispature: formData.company || formData.addDispature || '',
       remarks: formData.remarks || '',
       bols: (formData.bols || [])
         .filter(b => (b.bolNo || '').trim())
