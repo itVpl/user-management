@@ -1066,8 +1066,6 @@ export default function DailyFollowUp() {
                         <option value="email">Email</option>
                       </select>
                       {errors.followUpType && <p className="text-red-600 text-xs mt-1">{errors.followUpType}</p>}
-
-
                     </div>
                   </div>
                 </div>
