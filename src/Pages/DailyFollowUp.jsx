@@ -1070,7 +1070,7 @@ export default function DailyFollowUp() {
                   </div>
                 </div>
 
-                {/* Others */}
+                {/* Othersdd */}
                 <div className="bg-purple-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
                   <h3 className="text-lg font-semibold text-purple-800 mb-4">Others</h3>
                   <div className="space-y-4">
