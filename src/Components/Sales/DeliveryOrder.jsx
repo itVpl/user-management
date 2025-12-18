@@ -657,6 +657,7 @@ export default function DeliveryOrder() {
             assignmentStatus: order.assignmentStatus || 'unassigned',
             createdAt: new Date(order.date).toISOString().split('T')[0],
             createdBy: `Employee ${order.empId || 'N/A'}`,
+            createdByEmpId: order.empId || 'N/A', // Store empId separately for filter
             docUpload: 'sample-doc.jpg',
             productName: order.shipper?.containerType || 'N/A',
             // --------- PATCH: quantity fallback includes top-level shipper.weight if any ----------
@@ -667,7 +668,12 @@ export default function DeliveryOrder() {
             carrierName: order.carrier?.carrierName || 'N/A',
             carrierFees: order.carrier?.totalCarrierFees || 0,
             createdBySalesUser: order.createdBySalesUser || 'N/A',
-            supportingDocs: order.supportingDocs || []
+            supportingDocs: order.supportingDocs || [],
+            // Store customers and shipper data for table display
+            customers: order.customers || [],
+            shipper: order.shipper || {},
+            // Store full order data for view modal
+            _fullOrderData: order
           };
         });
 
@@ -984,12 +990,22 @@ export default function DeliveryOrder() {
     const text = searchTerm.toLowerCase();
     const loadNumber = getLoadNumberForSearch(order);
     
+    // Get searchable fields
+    const workOrderNo = (order.customers?.[0]?.workOrderNo || '').toLowerCase();
+    const shipmentNo = (order.shipper?.shipmentNo || '').toLowerCase();
+    const containerNo = (order.shipper?.containerNo || '').toLowerCase();
+    const carrierName = (order.carrierName || '').toLowerCase();
+    
     const matchesText =
       (order.id?.toLowerCase() || '').includes(text) ||
       (order.clientName?.toLowerCase() || '').includes(text) ||
       (order.pickupLocation?.toLowerCase() || '').includes(text) ||
       (order.deliveryLocation?.toLowerCase() || '').includes(text) ||
-      loadNumber.includes(text);
+      loadNumber.includes(text) ||
+      workOrderNo.includes(text) ||
+      shipmentNo.includes(text) ||
+      containerNo.includes(text) ||
+      carrierName.includes(text);
 
     const created = order.createdAt || ''; // e.g., "2025-08-27"
     const inRange = created >= ymd(range.startDate) && created <= ymd(range.endDate);
@@ -4633,45 +4649,45 @@ const handleUpdateOrder = async (e) => {
             <table className="w-full">
               <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                 <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEES</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">WORK ORDER NO</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPMENT NO</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CONTAINER NO</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
-                {currentOrders.map((order, index) => (
-                  <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.id}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-base font-semibold text-gray-700">{order.doNum}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.clientName}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.carrierName}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">${order.carrierFees || 0}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === 'close'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-green-100 text-green-800'
-                        }`}>
-                        {order.status === 'close' ? 'Close' : (order.status === 'open' ? 'Open' : 'Open')}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>
-                    </td>
+                {currentOrders.map((order, index) => {
+                  const workOrderNo = order.customers?.[0]?.workOrderNo || 'N/A';
+                  const shipmentNo = order.shipper?.shipmentNo || 'N/A';
+                  const containerNo = order.shipper?.containerNo || 'N/A';
+                  
+                  return (
+                    <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                      <td className="py-2 px-3">
+                        <span className="font-mono text-base font-semibold text-gray-700">{order.doNum}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.clientName}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.carrierName}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{workOrderNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{shipmentNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{containerNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>
+                      </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-2">
                         <button
@@ -4727,7 +4743,8 @@ const handleUpdateOrder = async (e) => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
