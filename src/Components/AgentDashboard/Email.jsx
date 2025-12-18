@@ -46,14 +46,14 @@ import {
   Add as AddIcon,
   AttachFile as AttachFileIcon,
   Inbox as InboxIcon,
-  Drafts as DraftsIcon,
   Send as SentIcon,
-  Star as StarredIcon,
-  Delete as TrashIcon,
   MoreVert as MoreVertIcon,
   Settings as SettingsIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
+import ReplyDialog from '../Email/ReplyDialog';
+import { replyToEmailWithFiles } from '../Email/emailService';
 
 // API Base URL from environment variable
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1';
@@ -82,7 +82,24 @@ const Email = () => {
   const [createSuccess, setCreateSuccess] = useState(false);
   const [createError, setCreateError] = useState(null);
   const [createdAccountId, setCreatedAccountId] = useState(() => {
-    // Load from localStorage on init
+    // First try to get from sessionStorage user object (from login response)
+    const userStr = sessionStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.emailAccountId) {
+          return user.emailAccountId;
+        }
+      } catch (e) {
+        console.error('Error parsing user data:', e);
+      }
+    }
+    // Fallback to sessionStorage emailAccountId
+    const sessionAccountId = sessionStorage.getItem('emailAccountId');
+    if (sessionAccountId) {
+      return sessionAccountId;
+    }
+    // Last fallback to localStorage (for backward compatibility)
     return localStorage.getItem('emailAccountId') || null;
   });
   const [testLoading, setTestLoading] = useState(false);
@@ -101,13 +118,17 @@ const Email = () => {
     attachments: []
   });
 
+  // Reply state
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyLoading, setReplyLoading] = useState(false);
+  const [replySuccess, setReplySuccess] = useState(false);
+  const [replyError, setReplyError] = useState(null);
+  const [replyToEmail, setReplyToEmail] = useState(null);
+
   // Tab configuration
   const tabs = [
     { label: 'Inbox', icon: <InboxIcon />, count: emails.filter(e => !e.isRead && e.folder === 'inbox').length },
     { label: 'Sent', icon: <SentIcon />, count: emails.filter(e => e.folder === 'sent').length },
-    { label: 'Drafts', icon: <DraftsIcon />, count: emails.filter(e => e.folder === 'drafts').length },
-    { label: 'Starred', icon: <StarredIcon />, count: emails.filter(e => e.isStarred).length },
-    { label: 'Trash', icon: <TrashIcon />, count: emails.filter(e => e.folder === 'trash').length },
   ];
 
   // Sample email data
@@ -226,9 +247,79 @@ const Email = () => {
     }
   };
 
+  const loadSentEmails = async () => {
+    if (!createdAccountId) {
+      setEmails(sampleEmails.filter(e => e.folder === 'sent'));
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Get authentication token
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || 
+                    sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      
+      if (!token) {
+        setError('Please login to access emails');
+        setLoading(false);
+        return;
+      }
+
+      const response = await axios.get(
+        `${API_BASE_URL}/email-inbox/sent?emailAccountId=${createdAccountId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Transform API response to match our email format
+      const fetchedEmails = response.data?.emails || response.data?.data || [];
+      const transformedEmails = fetchedEmails.map((email, index) => ({
+        id: email._id || email.id || index,
+        uid: email.uid || email._id || email.id,
+        from: email.from || email.sender || 'unknown@example.com',
+        fromName: email.fromName || email.senderName || email.from || 'Unknown Sender',
+        to: email.to || email.recipient || 'you@example.com',
+        subject: email.subject || 'No Subject',
+        body: email.body || email.text || email.textBody || email.content || '',
+        html: email.html || email.htmlBody || email.htmlContent || '',
+        timestamp: email.timestamp || email.date || email.createdAt || new Date(),
+        isRead: email.isRead || email.read || email.seen || false,
+        isStarred: email.isStarred || email.starred || false,
+        folder: 'sent', // Ensure folder is 'sent'
+        priority: email.priority || 'normal',
+        attachments: email.attachments || [],
+        hasAttachments: email.hasAttachments || false,
+        attachmentCount: email.attachmentCount || 0,
+        inlineImages: email.inlineImages || email.images || []
+      }));
+
+      setEmails(transformedEmails.length > 0 ? transformedEmails : []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load sent emails');
+      console.error('Error loading sent emails:', err);
+      setEmails([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
     setSelectedEmail(null);
+    
+    // Load sent emails when Sent tab (index 1) is selected
+    if (newValue === 1 && createdAccountId) {
+      loadSentEmails();
+    } else if (newValue === 0 && createdAccountId) {
+      // Load inbox emails when Inbox tab (index 0) is selected
+      loadEmails();
+    }
   };
 
   // State for loading single email
@@ -550,16 +641,54 @@ const Email = () => {
     }
   };
 
+  const handleReply = (email) => {
+    setReplyToEmail(email);
+    setReplyOpen(true);
+    setReplyError(null);
+    setReplySuccess(false);
+  };
+
+  const handleReplySubmit = async (replyData) => {
+    setReplyLoading(true);
+    setReplyError(null);
+    setReplySuccess(false);
+
+    try {
+      // Use reply-files endpoint with FormData
+      const response = await replyToEmailWithFiles({
+        ...replyData,
+        emailAccountId: createdAccountId
+      });
+
+      if (response.success) {
+        setReplySuccess(true);
+        // Reload sent emails after replying
+        if (createdAccountId) {
+          setTimeout(() => {
+            loadSentEmails();
+          }, 500);
+        }
+        setTimeout(() => {
+          setReplyOpen(false);
+          setReplySuccess(false);
+          setReplyToEmail(null);
+        }, 2000);
+      } else {
+        setReplyError(response.message || 'Failed to send reply');
+      }
+    } catch (err) {
+      setReplyError(err.response?.data?.message || err.message || 'Failed to send reply');
+    } finally {
+      setReplyLoading(false);
+    }
+  };
+
   const getFilteredEmails = () => {
     let filtered = emails;
-    const tabFolders = ['inbox', 'sent', 'drafts', 'starred', 'trash'];
+    const tabFolders = ['inbox', 'sent'];
     
-    if (selectedTab < 4) {
-      if (selectedTab === 3) {
-        filtered = filtered.filter(email => email.isStarred);
-      } else {
-        filtered = filtered.filter(email => email.folder === tabFolders[selectedTab]);
-      }
+    if (selectedTab < tabs.length) {
+      filtered = filtered.filter(email => email.folder === tabFolders[selectedTab]);
     }
 
     if (searchQuery) {
@@ -718,7 +847,7 @@ const Email = () => {
                   </IconButton>
                 </Tooltip>
                 <Tooltip title="Reply">
-                  <IconButton size="small">
+                  <IconButton size="small" onClick={() => handleReply(selectedEmail)}>
                     <ReplyIcon sx={{ fontSize: 20, color: '#5f6368' }} />
                   </IconButton>
                 </Tooltip>
@@ -1071,13 +1200,29 @@ const Email = () => {
   );
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box sx={{ 
+      height: 'calc(100vh - 120px)', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      overflow: 'hidden',
+      width: '100%'
+    }}>
       {/* Gmail-style Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #e0e0e0', backgroundColor: 'white', minHeight: 64, flexShrink: 0 }}>
-        <Typography variant="h6" sx={{ fontWeight: 400, color: '#5f6368', mr: 4 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        p: 2, 
+        borderBottom: '1px solid #e0e0e0', 
+        backgroundColor: 'white', 
+        minHeight: 64, 
+        flexShrink: 0,
+        overflow: 'hidden',
+        minWidth: 0
+      }}>
+        <Typography variant="h6" sx={{ fontWeight: 400, color: '#5f6368', mr: 4, flexShrink: 0 }}>
           V Power Mail
         </Typography>
-        <Box sx={{ flexGrow: 1, maxWidth: 600, position: 'relative' }}>
+        <Box sx={{ flexGrow: 1, maxWidth: 600, position: 'relative', minWidth: 0 }}>
           <TextField
             placeholder="Search mail"
             size="small"
@@ -1095,7 +1240,15 @@ const Email = () => {
             sx={{ width: '100%' }}
           />
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1, 
+          ml: 'auto',
+          flexShrink: 0,
+          minWidth: 0,
+          flexWrap: 'wrap'
+        }}>
           <IconButton size="small" onClick={loadEmails}>
             <RefreshIcon />
           </IconButton>
@@ -1113,6 +1266,7 @@ const Email = () => {
               color: isAccountTested ? '#9e9e9e' : '#1a73e8',
               fontWeight: 500,
               ml: 1,
+              whiteSpace: 'nowrap',
               '&:hover': { 
                 borderColor: isAccountTested ? '#9e9e9e' : '#1557b0', 
                 backgroundColor: isAccountTested ? 'transparent' : '#e8f0fe' 
@@ -1142,6 +1296,7 @@ const Email = () => {
               color: 'white',
               fontWeight: 500,
               ml: 1,
+              whiteSpace: 'nowrap',
               '&:hover': { backgroundColor: '#2d8e47' },
               '&.Mui-disabled': {
                 backgroundColor: '#e0e0e0',
@@ -1155,9 +1310,25 @@ const Email = () => {
       </Box>
 
       {/* Main Content Area */}
-      <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexGrow: 1, 
+        overflow: 'hidden',
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        maxWidth: '100%',
+        boxSizing: 'border-box'
+      }}>
         {/* Left Sidebar */}
-        <Box sx={{ width: 256, backgroundColor: 'white', borderRight: '1px solid #e0e0e0', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ 
+          width: 256, 
+          backgroundColor: 'white', 
+          borderRight: '1px solid #e0e0e0', 
+          display: 'flex', 
+          flexDirection: 'column',
+          flexShrink: 0
+        }}>
           <Box sx={{ p: 2 }}>
             <Button
               variant="contained"
@@ -1209,7 +1380,15 @@ const Email = () => {
         </Box>
 
         {/* Email List */}
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ 
+          width: { xs: '100%', md: 'calc(100% - 256px)' },
+          flexGrow: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          backgroundColor: 'white',
+          boxSizing: 'border-box'
+        }}>
           <Box sx={{ display: 'flex', alignItems: 'center', p: 1, borderBottom: '1px solid #e0e0e0', backgroundColor: 'white', minHeight: 48 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
               <IconButton size="small" onClick={loadEmails}>
@@ -1281,13 +1460,6 @@ const Email = () => {
             )}
           </Box>
         </Box>
-
-        {/* Email Viewer - Right Panel */}
-        {selectedEmail && (
-          <Box sx={{ width: 400, borderLeft: '1px solid #e0e0e0', backgroundColor: 'white', display: 'flex', flexDirection: 'column' }}>
-            <EmailViewer />
-          </Box>
-        )}
       </Box>
       
       {/* Create Account Dialog */}
@@ -1494,6 +1666,250 @@ const Email = () => {
       </Dialog>
 
       <ComposeDialog />
+
+      <ReplyDialog
+        open={replyOpen}
+        onClose={() => {
+          setReplyOpen(false);
+          setReplyToEmail(null);
+          setReplyError(null);
+          setReplySuccess(false);
+        }}
+        onReply={handleReplySubmit}
+        loading={replyLoading}
+        success={replySuccess}
+        error={replyError}
+        emailAccountId={createdAccountId}
+        originalEmail={replyToEmail}
+      />
+
+      {/* Email Viewer Modal */}
+      <Dialog
+        open={!!selectedEmail}
+        onClose={() => setSelectedEmail(null)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            height: '90vh',
+            maxHeight: '90vh',
+            borderRadius: 2,
+            overflow: 'hidden'
+          }
+        }}
+      >
+        {selectedEmail && (
+          <Box sx={{ 
+            height: '100%', 
+            width: '100%',
+            display: 'flex', 
+            flexDirection: 'column', 
+            overflow: 'hidden',
+            minWidth: 0
+          }}>
+            {/* Email Header */}
+            <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', flexShrink: 0 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="h6" sx={{ fontWeight: 500, color: '#202124', wordBreak: 'break-word', overflowWrap: 'break-word', flex: 1, pr: 1 }}>
+                  {selectedEmail.subject}
+                </Typography>
+                <IconButton size="small" onClick={() => setSelectedEmail(null)}>
+                  <CloseIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
+                  <IconButton size="small" onClick={() => toggleStar(selectedEmail.id)}>
+                    {selectedEmail.isStarred ? 
+                      <StarIcon sx={{ color: '#fbbc04', fontSize: 20 }} /> : 
+                      <StarBorderIcon sx={{ fontSize: 20, color: '#5f6368' }} />
+                    }
+                  </IconButton>
+                  <Tooltip title="Reply">
+                    <IconButton size="small" onClick={() => handleReply(selectedEmail)}>
+                      <ReplyIcon sx={{ fontSize: 20, color: '#5f6368' }} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton size="small" onClick={() => deleteEmail(selectedEmail.id)}>
+                      <DeleteIcon sx={{ fontSize: 20, color: '#5f6368' }} />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {selectedEmail.priority === 'high' && (
+                    <Chip label="High Priority" size="small" sx={{ bgcolor: '#fce8e6', color: '#d93025', fontWeight: 500 }} />
+                  )}
+                  {(selectedEmail.hasAttachments || selectedEmail.attachmentCount > 0) && (
+                    <Chip 
+                      icon={<AttachFileIcon sx={{ fontSize: 14 }} />}
+                      label={`${selectedEmail.attachmentCount || selectedEmail.attachments?.length || ''} attachment(s)`}
+                      size="small" 
+                      sx={{ bgcolor: '#e8f0fe', color: '#1a73e8', fontWeight: 500 }} 
+                    />
+                  )}
+                </Box>
+              </Box>
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, color: '#202124', mb: 0.5, wordBreak: 'break-word' }}>
+                  {selectedEmail.fromName}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#5f6368', wordBreak: 'break-all' }}>
+                  {selectedEmail.from}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#5f6368', ml: 1, display: 'block', mt: 0.5 }}>
+                  {new Date(selectedEmail.timestamp).toLocaleString()}
+                </Typography>
+              </Box>
+            </Box>
+            
+            {/* Loading indicator for attachments */}
+            {emailLoading && (
+              <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1, borderBottom: '1px solid #e0e0e0', flexShrink: 0 }}>
+                <CircularProgress size={16} />
+                <Typography variant="caption" sx={{ color: '#5f6368' }}>Loading attachments...</Typography>
+              </Box>
+            )}
+            
+            {/* Email Body Content */}
+            <Box sx={{ 
+              p: 2, 
+              flexGrow: 1, 
+              overflow: 'auto',
+              minWidth: 0,
+              '& *': {
+                maxWidth: '100%'
+              }
+            }}>
+              {isHtmlContent(selectedEmail.body) || isHtmlContent(selectedEmail.html) ? (
+                <Box
+                  sx={{
+                    '& img': {
+                      maxWidth: '100%',
+                      height: 'auto',
+                      borderRadius: 1,
+                      my: 1
+                    },
+                    '& a': {
+                      color: '#1a73e8',
+                      textDecoration: 'none',
+                      wordBreak: 'break-all',
+                      '&:hover': { textDecoration: 'underline' }
+                    },
+                    '& p': { 
+                      margin: '8px 0',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word'
+                    },
+                    '& table': { 
+                      maxWidth: '100%',
+                      overflow: 'auto',
+                      display: 'block',
+                      wordBreak: 'break-word'
+                    },
+                    lineHeight: 1.6,
+                    color: '#202124',
+                    fontSize: '0.875rem',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word'
+                  }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: selectedEmail.html || selectedEmail.body 
+                  }}
+                />
+              ) : (
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    whiteSpace: 'pre-wrap', 
+                    lineHeight: 1.6, 
+                    color: '#202124',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                    '& a': {
+                      color: '#1a73e8',
+                      textDecoration: 'none',
+                      wordBreak: 'break-all',
+                      '&:hover': { textDecoration: 'underline' }
+                    }
+                  }}
+                >
+                  {selectedEmail.body}
+                </Typography>
+              )}
+
+              {/* Display Image Attachments */}
+              {selectedEmail.inlineImages && selectedEmail.inlineImages.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                    Images:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {selectedEmail.inlineImages.map((img, idx) => (
+                      <img 
+                        key={idx} 
+                        src={img.url || img.src} 
+                        alt={img.alt || `Image ${idx + 1}`}
+                        style={{ 
+                          maxWidth: '200px', 
+                          maxHeight: '200px', 
+                          borderRadius: '4px',
+                          objectFit: 'contain'
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+
+            {/* Action Buttons */}
+            <Box sx={{ 
+              p: 2, 
+              borderTop: '1px solid #e0e0e0',
+              backgroundColor: '#f8f9fa',
+              display: 'flex',
+              gap: 1.5,
+              flexShrink: 0,
+              flexWrap: 'wrap'
+            }}>
+              <Button
+                variant="outlined"
+                startIcon={<ReplyIcon />}
+                onClick={() => handleReply(selectedEmail)}
+                sx={{ 
+                  textTransform: 'none',
+                  borderColor: '#dadce0',
+                  color: '#3c4043',
+                  fontWeight: 500,
+                  '&:hover': { 
+                    backgroundColor: '#e8f0fe',
+                    borderColor: '#1a73e8'
+                  }
+                }}
+              >
+                Reply
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<ForwardIcon />}
+                sx={{ 
+                  textTransform: 'none',
+                  borderColor: '#dadce0',
+                  color: '#3c4043',
+                  fontWeight: 500,
+                  '&:hover': { 
+                    backgroundColor: '#e8f0fe',
+                    borderColor: '#1a73e8'
+                  }
+                }}
+              >
+                Forward
+              </Button>
+            </Box>
+          </Box>
+        )}
+      </Dialog>
     </Box>
   );
 };

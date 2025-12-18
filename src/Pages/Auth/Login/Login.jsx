@@ -70,6 +70,11 @@ function Login({ setIsAuthenticated }) {
         sessionStorage.setItem('empId', user.empId);
         sessionStorage.setItem('user', JSON.stringify(user));
         sessionStorage.setItem('authToken', token);
+        
+        // Store emailAccountId if present in login response
+        if (user.emailAccountId) {
+          sessionStorage.setItem('emailAccountId', user.emailAccountId);
+        }
 
         // Check if terms are accepted
         if (user.termsAccepted === false || user.termsAccepted === undefined) {

@@ -22,7 +22,7 @@ import {
   Print as PrintIcon,
 } from '@mui/icons-material';
 
-const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
+const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply }) => {
   if (!selectedEmail) return null;
 
   // Format email body with clickable links
@@ -72,16 +72,23 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
   return (
     <Box sx={{ 
       height: '100%', 
+      width: '100%',
       display: 'flex', 
       flexDirection: 'column', 
       backgroundColor: '#fff',
-      boxShadow: '-2px 0 8px rgba(0,0,0,0.05)'
+      overflow: 'hidden',
+      minWidth: 0,
+      position: 'relative'
     }}>
       {/* Header - Clean & Modern */}
       <Box sx={{ 
-        p: 2.5, 
+        p: { xs: 1.5, md: 2.5 }, 
         borderBottom: '1px solid #e8eaed',
-        background: 'linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%)'
+        background: 'linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%)',
+        flexShrink: 0,
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}>
         {/* Top Row - Actions */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -125,7 +132,9 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
           color: '#202124', 
           mb: 2.5,
           lineHeight: 1.4,
-          fontSize: '1.375rem'
+          fontSize: '1.375rem',
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word'
         }}>
           {selectedEmail.subject}
         </Typography>
@@ -184,18 +193,24 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
 
       {/* Email Body - Clean Design */}
       <Box sx={{ 
-        p: 3, 
+        p: { xs: 1.5, md: 2 }, 
         flexGrow: 1, 
         overflow: 'auto', 
-        backgroundColor: '#fff'
+        backgroundColor: '#fff',
+        minWidth: 0,
+        maxWidth: '100%',
+        boxSizing: 'border-box'
       }}>
         <Box sx={{ 
-          maxWidth: 800,
+          maxWidth: '100%',
+          width: '100%',
           mx: 'auto',
-          p: 3,
+          p: { xs: 1.5, md: 2 },
           backgroundColor: '#fafafa',
           borderRadius: 2,
-          border: '1px solid #e8eaed'
+          border: '1px solid #e8eaed',
+          boxSizing: 'border-box',
+          overflow: 'hidden'
         }}>
           {selectedEmail.html ? (
             <Box
@@ -207,6 +222,8 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
                 fontSize: '0.95rem',
                 fontFamily: '"Google Sans", Roboto, Arial, sans-serif',
                 wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+                maxWidth: '100%',
                 '& img': {
                   maxWidth: '100%',
                   height: 'auto',
@@ -216,9 +233,19 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
                 '& a': {
                   color: '#1a73e8',
                   textDecoration: 'none',
+                  wordBreak: 'break-all',
                   '&:hover': { textDecoration: 'underline' }
                 },
-                '& p': { margin: '8px 0' }
+                '& p': { 
+                  margin: '8px 0',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word'
+                },
+                '& table': {
+                  maxWidth: '100%',
+                  overflow: 'auto',
+                  display: 'block'
+                }
               }}
             />
           ) : (
@@ -231,10 +258,13 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
                 fontSize: '0.95rem',
                 fontFamily: '"Google Sans", Roboto, Arial, sans-serif',
                 wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+                maxWidth: '100%',
                 '& a': {
                   display: 'inline-block',
                   marginTop: '4px',
-                  marginBottom: '4px'
+                  marginBottom: '4px',
+                  wordBreak: 'break-all'
                 }
               }}
             >
@@ -319,15 +349,21 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose }) => {
 
       {/* Action Buttons - Bottom Bar */}
       <Box sx={{ 
-        p: 2, 
+        p: { xs: 1.5, md: 2 }, 
         borderTop: '1px solid #e8eaed',
         backgroundColor: '#f8f9fa',
         display: 'flex',
-        gap: 1.5
+        gap: 1.5,
+        flexShrink: 0,
+        minWidth: 0,
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}>
         <Button
           variant="outlined"
           startIcon={<ReplyIcon />}
+          onClick={() => onReply && onReply(selectedEmail)}
           sx={{ 
             textTransform: 'none',
             borderColor: '#dadce0',
