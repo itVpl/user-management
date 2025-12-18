@@ -41,6 +41,7 @@ import RateApproved from "./Components/CMT/RateApproved.jsx";
 import Loads from "./Components/CMT/Loads.jsx";
 import CarrierApproval from "./Components/CMT/CarrierApproval.jsx";
 import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
+import DOReport from "./Components/Sales/DOReport.jsx";
 import TeamRating from "./Components/Sales/TeamRating.jsx";
 import DailyFollowUp from "./Pages/DailyFollowUp.jsx";
 import AddCustomer from "./Components/Sales/AddCustomer.jsx";
@@ -423,6 +424,7 @@ function App() {
           <Route path="HrCreateTask" element={<HrCreateTask />} />
           <Route path="LeaveApproval" element={<LeaveApproval />} />
           <Route path="delivery-order" element={<DeliveryOrder />} />
+          <Route path="do-report" element={<DOReport />} />
           <Route path="team-rating" element={<TeamRating />} />
           <Route path="daily-follow-up" element={<DailyFollowUp />} />
           <Route path="AddCustomer" element={<AddCustomer />} />
