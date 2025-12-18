@@ -1066,13 +1066,11 @@ export default function DailyFollowUp() {
                         <option value="email">Email</option>
                       </select>
                       {errors.followUpType && <p className="text-red-600 text-xs mt-1">{errors.followUpType}</p>}
-
-
                     </div>
                   </div>
                 </div>
 
-                {/* Others */}
+                {/* Othersdd */}
                 <div className="bg-purple-50 p-4 rounded-lg max-h-[50vh] overflow-y-auto scrollbar-hide">
                   <h3 className="text-lg font-semibold text-purple-800 mb-4">Others</h3>
                   <div className="space-y-4">

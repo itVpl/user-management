@@ -113,26 +113,69 @@ export const fetchEmailByUid = async (uid, accountId) => {
   return response.data;
 };
 
+// Parse date string from API format: "DD/MM/YYYY, HH:MM:SS am/pm"
+const parseEmailDate = (dateString) => {
+  if (!dateString) return new Date();
+  
+  // If it's already a Date object, return it
+  if (dateString instanceof Date) return dateString;
+  
+  // If it's a number (timestamp), convert it
+  if (typeof dateString === 'number') return new Date(dateString);
+  
+  // Parse format: "19/12/2025, 12:35:26 am"
+  try {
+    const match = dateString.match(/(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})\s*(am|pm)/i);
+    if (match) {
+      const [, day, month, year, hour, minute, second, ampm] = match;
+      let hour24 = parseInt(hour, 10);
+      
+      // Convert to 24-hour format
+      if (ampm.toLowerCase() === 'pm' && hour24 !== 12) {
+        hour24 += 12;
+      } else if (ampm.toLowerCase() === 'am' && hour24 === 12) {
+        hour24 = 0;
+      }
+      
+      // Create date (month is 0-indexed in JavaScript Date)
+      return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour24, parseInt(minute, 10), parseInt(second, 10));
+    }
+    
+    // Fallback to standard Date parsing
+    return new Date(dateString);
+  } catch (e) {
+    console.error('Error parsing date:', dateString, e);
+    return new Date();
+  }
+};
+
 // Transform API email to app format
-export const transformEmail = (email, index) => ({
-  id: email._id || email.id || index,
-  uid: email.uid || email._id || email.id || index, // Preserve uid from API - this is critical for fetching full email
-  from: email.from || email.sender || 'unknown@example.com',
-  fromName: email.fromName || email.senderName || email.from || 'Unknown Sender',
-  to: email.to || email.recipient || 'you@example.com',
-  subject: email.subject || 'No Subject',
-  body: email.body || email.text || email.content || '',
-  html: email.html || email.htmlBody || email.htmlContent || '',
-  timestamp: email.timestamp || email.date || email.createdAt || new Date(),
-  isRead: email.isRead || email.read || false,
-  isStarred: email.isStarred || email.starred || false,
-  folder: email.folder || 'inbox',
-  priority: email.priority || 'normal',
-  attachments: email.attachments || [],
-  hasAttachments: email.hasAttachments || (email.attachments && email.attachments.length > 0),
-  attachmentCount: email.attachmentCount || (email.attachments ? email.attachments.length : 0),
-  messageId: email.messageId || email.messageID || email.message_id || null // Preserve messageId for threading
-});
+export const transformEmail = (email, index) => {
+  // Parse the date field from API
+  const emailDate = email.date || email.timestamp || email.createdAt;
+  const parsedDate = parseEmailDate(emailDate);
+  
+  return {
+    id: email._id || email.id || index,
+    uid: email.uid || email._id || email.id || index, // Preserve uid from API - this is critical for fetching full email
+    from: email.from || email.sender || 'unknown@example.com',
+    fromName: email.fromName || email.senderName || email.from || 'Unknown Sender',
+    to: email.to || email.recipient || 'you@example.com',
+    subject: email.subject || 'No Subject',
+    body: email.body || email.text || email.content || '',
+    html: email.html || email.htmlBody || email.htmlContent || '',
+    timestamp: parsedDate,
+    date: email.date, // Preserve original date string
+    isRead: email.isRead || email.read || email.seen || false,
+    isStarred: email.isStarred || email.starred || false,
+    folder: email.folder || 'inbox',
+    priority: email.priority || 'normal',
+    attachments: email.attachments || [],
+    hasAttachments: email.hasAttachments || (email.attachments && email.attachments.length > 0),
+    attachmentCount: email.attachmentCount || (email.attachments ? email.attachments.length : 0),
+    messageId: email.messageId || email.messageID || email.message_id || null // Preserve messageId for threading
+  };
+};
 
 // Send email
 export const sendEmail = async (emailData) => {

@@ -192,9 +192,7 @@ const Email = () => {
             ...transformed,
             from: userEmail || transformed.from,
             fromName: displayName || transformed.fromName,
-            folder: 'sent',
-            // Parse date string if it's a string
-            timestamp: email.date ? (typeof email.date === 'string' ? new Date(email.date) : email.date) : transformed.timestamp
+            folder: 'sent'
           };
         });
 
@@ -457,16 +455,38 @@ const Email = () => {
   };
 
   const formatTimestamp = (timestamp) => {
-    const now = new Date();
-    const emailDate = new Date(timestamp);
-    const diffInHours = (now - emailDate) / (1000 * 60 * 60);
+    if (!timestamp) return '';
     
-    if (diffInHours < 24) {
-      return emailDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (diffInHours < 168) {
-      return emailDate.toLocaleDateString([], { weekday: 'short' });
-    } else {
-      return emailDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const now = new Date();
+    const emailDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    
+    // Check if date is valid
+    if (isNaN(emailDate.getTime())) {
+      return '';
+    }
+    
+    // Get today's date (without time)
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const emailDay = new Date(emailDate.getFullYear(), emailDate.getMonth(), emailDate.getDate());
+    
+    // Calculate difference in days
+    const diffInDays = Math.floor((today - emailDay) / (1000 * 60 * 60 * 24));
+    
+    // If email is from today, show only time with AM/PM
+    if (diffInDays === 0) {
+      return emailDate.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    } 
+    // If email is older than one day, show full date
+    else {
+      return emailDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: emailDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+      });
     }
   };
 
