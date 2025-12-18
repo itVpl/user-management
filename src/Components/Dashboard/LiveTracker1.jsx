@@ -332,10 +332,9 @@ export default function ConsignmentTracker() {
         setTrackingData(enhancedTrack);
 
         // Debug: Log current location
-        console.log("Enhanced Tracking Data:", enhancedTrack);
-        console.log("Current Location:", enhancedTrack.currentLocation);
-        console.log("Origin:", enhancedTrack.originLatLng);
-        console.log("Destination:", enhancedTrack.destinationLatLng);
+
+
+
 
         // Fetch the road route if we have valid origin and destination coordinates
         if (enhancedTrack.originLatLng && enhancedTrack.destinationLatLng) {

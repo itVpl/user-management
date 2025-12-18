@@ -73,7 +73,7 @@ const PayrollPage = () => {
       };
 
 
-      console.log("Sending payload:", payload); // Debug log
+       // Debug log
 
 
       const url = `${API_CONFIG.BASE_URL}/api/v1/payroll`;
@@ -87,7 +87,7 @@ const PayrollPage = () => {
 
       const res = await axios.post(url, payload, config);
      
-      console.log("API Response:", res.data); // Debug log
+       // Debug log
      
       // Check for success in the response
       if (res.data.success && res.data.payroll) {

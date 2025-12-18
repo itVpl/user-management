@@ -29,14 +29,7 @@ const Layout = () => {
         
         const departmentLower = department.toLowerCase();
         const isCMT = departmentLower === 'cmt' || departmentLower.includes('cmt');
-        
-        console.log('👤 User Department Check:', {
-          department,
-          departmentLower,
-          isCMT,
-          userData: userData?.department
-        });
-        
+
         setIsCMTUser(isCMT);
       } catch (error) {
         console.error("Error parsing user data:", error);
@@ -79,14 +72,7 @@ const Layout = () => {
   // Debug logs
   useEffect(() => {
     if (isCMTUser) {
-      console.log('🔍 Layout Debug:', {
-        isCMTUser,
-        hasUser: !!user,
-        empId: user?.empId || user?.employeeId,
-        newDOAssignment: !!newDOAssignment,
-        newAssignment: !!newAssignment,
-        assignmentData: newAssignment,
-      });
+
     }
   }, [isCMTUser, user, newDOAssignment, newAssignment]);
 

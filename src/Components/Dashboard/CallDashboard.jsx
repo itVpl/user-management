@@ -9,8 +9,12 @@ import {
   XCircle,
   AlertCircle,
   Clock,
+  Paperclip,
+  X,
 } from "lucide-react";
 import API_CONFIG from '../../config/api.js';
+import alertify from 'alertifyjs';
+import 'alertifyjs/build/css/alertify.css';
 
 
 /* ============ AXIOS INSTANCE (JWT attach) ============ */
@@ -32,7 +36,7 @@ api.interceptors.request.use((config) => {
 
 /* ============ DEBUG HELPERS ============ */
 const DEBUG = true;
-// const dbg = (...args) => DEBUG && console.log("%c[DailyTarget]", "color:#2563eb;font-weight:bold", ...args);
+// const dbg = (...args) => DEBUG && 
 const dberr = (...args) => DEBUG && console.error("%c[DailyTarget]", "color:#dc2626;font-weight:bold", ...args);
 
 
@@ -163,6 +167,7 @@ const DailyTarget = () => {
   const [reasonText, setReasonText] = useState("");
   const [reasonLoading, setReasonLoading] = useState(false);
   const [reasonError, setReasonError] = useState(null);
+  const [attachmentFile, setAttachmentFile] = useState(null);
 
 
   // Clickable date
@@ -308,10 +313,7 @@ const DailyTarget = () => {
 
   /* ===== Save Reason with 404 fallback & validation ===== */
   const REASON_ENDPOINTS = useMemo(() => ([
-    "/api/v1/inhouseUser/target/reason",
-    "/api/v1/inhouseUser/sales/target/reason",
-    "/api/v1/inhouseUser/cmt/target/reason",
-    "/api/v1/inhouseUser/daily-target/reason",
+    "/api/v1/inhouseUser/{empId}/target-reason"
   ]), []);
 
 
@@ -320,21 +322,52 @@ const DailyTarget = () => {
       setReasonError("Please enter the reason.");
       return;
     }
+    if (!empId) {
+      setReasonError("Employee ID is missing.");
+      return;
+    }
     try {
       setReasonLoading(true);
       setReasonError(null);
 
-
-      const payload = { empId, date, reason: reasonText.trim() };
       let success = false;
       let lastErr = null;
 
-
       for (const ep of REASON_ENDPOINTS) {
         try {
-          const res = await api.post(ep, payload);
+          // Replace {empId} placeholder with actual empId value
+          const endpoint = ep.replace('{empId}', empId);
+          
+          // Always use FormData format as per API spec
+          const formData = new FormData();
+          formData.append('empId', empId);
+          formData.append('date', date);
+          formData.append('reason', reasonText.trim());
+          
+          // Add attachment if file is selected (field name should be 'attachments' as per API)
+          if (attachmentFile) {
+            formData.append('attachments', attachmentFile);
+          }
+          
+          const res = await api.patch(endpoint, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+          
           if (res?.data?.success !== false) {
             success = true;
+            // Update report with response data if available
+            if (res?.data?.data) {
+              setReport((prev) =>
+                prev ? { 
+                  ...prev, 
+                  reason: res.data.data.reason || reasonText.trim(),
+                  statusMessage: res.data.data.statusMessage || prev.statusMessage || "",
+                  attachments: res.data.data.attachments || []
+                } : prev
+              );
+            }
             break;
           }
         } catch (e) {
@@ -344,22 +377,37 @@ const DailyTarget = () => {
         }
       }
 
-
       if (!success) {
         const data = lastErr?.response?.data;
         const msg = data?.message || data?.error || lastErr?.message || "Failed to submit reason";
         throw new Error(msg);
       }
 
-
-      // optimistic UI
-      setReport((prev) =>
-        prev ? { ...prev, reason: reasonText.trim(), statusMessage: prev.statusMessage || "" } : prev
-      );
-
+      // Success notification
+      alertify.success("Reason updated successfully" + (attachmentFile ? " with attachment" : ""));
 
       setIsReasonOpen(false);
       setReasonText("");
+      setAttachmentFile(null);
+      
+      // Reset file input
+      const input = document.getElementById('attachmentInput');
+      if (input) input.value = '';
+      
+      // Refresh report data to show updated reason and attachments
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      if (token && canRequest && endpoint) {
+        try {
+          const params = { date, empId };
+          const res = await api.get(endpoint, { params });
+          if (res?.data?.data) {
+            setReport(res.data.data);
+          }
+        } catch (e) {
+          console.error("Failed to refresh report:", e);
+          // Don't show error to user, just log it
+        }
+      }
     } catch (e) {
       setReasonError(e.message || "Failed to submit reason");
     } finally {
@@ -698,6 +746,7 @@ const DailyTarget = () => {
                     setReasonError(null);
                     const prefill = report?.reason;
                     setReasonText(isPlaceholderReason(prefill) ? "" : String(prefill || ""));
+                    setAttachmentFile(null);
                     setIsReasonOpen(true);
                   }}
                   className="inline-flex items-center gap-1.5 text-sm font-medium bg-blue-600 text-white px-3 py-2 rounded-lg shadow hover:bg-blue-700 active:scale-[0.99] transition"
@@ -717,6 +766,33 @@ const DailyTarget = () => {
             {report.reason && !isPlaceholderReason(report.reason) && (
               <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
                 <strong>Reason:</strong> {report.reason}
+              </div>
+            )}
+            {report.attachments && Array.isArray(report.attachments) && report.attachments.length > 0 && (
+              <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Paperclip className="w-4 h-4 text-blue-600" />
+                  <strong className="text-sm text-blue-900">Attachments ({report.attachments.length}):</strong>
+                </div>
+                <div className="space-y-2">
+                  {report.attachments.map((att, idx) => (
+                    <a
+                      key={att._id || idx}
+                      href={att.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-900 hover:underline"
+                    >
+                      <Paperclip className="w-3 h-3" />
+                      <span>{att.fileName || `Attachment ${idx + 1}`}</span>
+                      {att.fileSize && (
+                        <span className="text-xs text-blue-500">
+                          ({(att.fileSize / 1024).toFixed(2)} KB)
+                        </span>
+                      )}
+                    </a>
+                  ))}
+                </div>
               </div>
             )}
           </Card>
@@ -809,28 +885,99 @@ const DailyTarget = () => {
             </div>
 
 
-            <div className="mt-4 space-y-2">
-              <label className="text-sm font-medium text-gray-700" htmlFor="reasonText">
-                Reason <span className="text-red-600">*</span>
-              </label>
-              <textarea
-                id="reasonText"
-                rows={4}
-                value={reasonText}
-                onChange={(e) => setReasonText(e.target.value)}
-                className={`w-full rounded-xl border ${reasonError ? "border-red-300" : "border-gray-200"} bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:outline-none focus:ring-2 ${reasonError ? "focus:ring-red-500/30 focus:border-red-400" : "focus:ring-blue-500/30 focus:border-blue-400"}`}
-                placeholder=""   /* no default sample text */
-                aria-invalid={!!reasonError}
-                disabled={reasonLoading}
-              />
-              {reasonError && <p className="text-xs text-red-600">{reasonError}</p>}
+            <div className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700" htmlFor="reasonText">
+                  Reason <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  id="reasonText"
+                  rows={4}
+                  value={reasonText}
+                  onChange={(e) => setReasonText(e.target.value)}
+                  className={`w-full rounded-xl border ${reasonError ? "border-red-300" : "border-gray-200"} bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:outline-none focus:ring-2 ${reasonError ? "focus:ring-red-500/30 focus:border-red-400" : "focus:ring-blue-500/30 focus:border-blue-400"}`}
+                  placeholder=""   /* no default sample text */
+                  aria-invalid={!!reasonError}
+                  disabled={reasonLoading}
+                />
+                {reasonError && <p className="text-xs text-red-600">{reasonError}</p>}
+              </div>
+
+              {/* Attachment Section */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Attachment <span className="text-gray-500 text-xs">(Optional)</span>
+                </label>
+                {!attachmentFile ? (
+                  <label
+                    htmlFor="attachmentInput"
+                    className="flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 hover:bg-gray-100 hover:border-blue-400 cursor-pointer transition-colors"
+                  >
+                    <Paperclip className="w-5 h-5 text-gray-500" />
+                    <span className="text-sm text-gray-600">Click to attach file</span>
+                    <input
+                      id="attachmentInput"
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // Check file size (max 10MB)
+                          if (file.size > 10 * 1024 * 1024) {
+                            setReasonError("File size should be less than 10MB");
+                            return;
+                          }
+                          setAttachmentFile(file);
+                          setReasonError(null);
+                        }
+                      }}
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
+                      disabled={reasonLoading}
+                    />
+                  </label>
+                ) : (
+                  <div className="flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl bg-blue-50">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Paperclip className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                      <span className="text-sm text-gray-700 truncate" title={attachmentFile.name}>
+                        {attachmentFile.name}
+                      </span>
+                      <span className="text-xs text-gray-500 flex-shrink-0">
+                        ({(attachmentFile.size / 1024).toFixed(2)} KB)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachmentFile(null);
+                        const input = document.getElementById('attachmentInput');
+                        if (input) input.value = '';
+                      }}
+                      className="ml-2 p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      disabled={reasonLoading}
+                      aria-label="Remove attachment"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500">
+                  Supported formats: PDF, DOC, DOCX, JPG, PNG, XLSX (Max 10MB)
+                </p>
+              </div>
             </div>
 
 
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setIsReasonOpen(false)}
+                onClick={() => {
+                  setIsReasonOpen(false);
+                  setReasonText("");
+                  setAttachmentFile(null);
+                  const input = document.getElementById('attachmentInput');
+                  if (input) input.value = '';
+                }}
                 className="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
                 disabled={reasonLoading}
               >

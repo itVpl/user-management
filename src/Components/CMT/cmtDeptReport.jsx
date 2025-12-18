@@ -97,13 +97,6 @@ export default function CmtDeptReport() {
         return;
       }
 
-      console.log('Fetching report data for:', {
-        reportName: reportNameFilter,
-        employee: employeeFilter,
-        empId: empId,
-        date: dateFilter
-      });
-
       let apiEndpoint = '';
       let reportType = '';
 
@@ -137,8 +130,6 @@ export default function CmtDeptReport() {
         },
         withCredentials: true
       });
-
-      console.log('Report API Response:', res.data);
 
       if (res.data && res.data.success) {
         const data = res.data.data;
@@ -328,8 +319,7 @@ export default function CmtDeptReport() {
     try {
       setEmployeesLoading(true);
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      console.log('Fetching CMT employees with token:', token ? 'Token exists' : 'No token');
-      
+
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`, {
         headers: { 
           'Content-Type': 'application/json',
@@ -338,28 +328,27 @@ export default function CmtDeptReport() {
         withCredentials: true
       });
 
-      console.log('Full API Response:', res);
-      console.log('Response Status:', res.status);
-      console.log('Response Data:', res.data);
-      console.log('Data Type:', typeof res.data);
+
+
+
       console.log('Is Array:', Array.isArray(res.data));
       
       if (res.data && Array.isArray(res.data)) {
-        console.log(`✅ Loaded ${res.data.length} CMT employees directly from array`);
-        console.log('First employee:', res.data[0]);
+
+
         setCmtEmployees(res.data);
       } else if (res.data && res.data.success && Array.isArray(res.data.data)) {
-        console.log(`✅ Loaded ${res.data.data.length} CMT employees from data property`);
-        console.log('First employee:', res.data.data[0]);
+
+
         setCmtEmployees(res.data.data);
       } else if (res.data && res.data.employees && Array.isArray(res.data.employees)) {
-        console.log(`✅ Loaded ${res.data.employees.length} CMT employees from employees property`);
-        console.log('First employee:', res.data.employees[0]);
+
+
         setCmtEmployees(res.data.employees);
       } else {
         console.error('❌ Unexpected API response format:', res.data);
         // Fallback: Use hardcoded data for testing
-        console.log('🔄 Using fallback hardcoded data');
+
         const fallbackEmployees = [
           {
             _id: "6851489a7cedeb7a7360481b",
@@ -391,7 +380,7 @@ export default function CmtDeptReport() {
       console.error('Error status:', err.response?.status);
       
       // Fallback: Use hardcoded data for testing
-      console.log('🔄 Using fallback hardcoded data due to API error');
+
       const fallbackEmployees = [
         {
           _id: "6851489a7cedeb7a7360481b",

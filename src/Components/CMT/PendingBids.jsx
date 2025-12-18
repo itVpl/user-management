@@ -28,8 +28,7 @@ export default function PendingBids() {
   // Fetch pending bids by sales user
   const fetchPendingBidsBySalesUser = async (salesUserId = '1234') => {
     try {
-      console.log('Fetching pending bids for sales user:', salesUserId);
-      
+
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${salesUserId}`, {
         timeout: 10000,
         headers: API_CONFIG.getAuthHeaders()
@@ -72,7 +71,6 @@ export default function PendingBids() {
           salesUserInfo: bid.load?.createdBySalesUser
         }));
 
-        console.log('Transformed pending bids:', transformedBids);
         return transformedBids;
       } else {
         return [];
@@ -86,7 +84,6 @@ export default function PendingBids() {
   // Fetch pending approvals
   const fetchPendingApprovals = async () => {
     try {
-      console.log('Fetching pending approvals from:', `${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`);
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
         timeout: 10000,
@@ -122,22 +119,18 @@ export default function PendingBids() {
   const fetchAllPendingData = async () => {
     setLoading(true);
     try {
-      console.log('Starting to fetch all pending data...');
-      
+
       const [salesUserBids, pendingApprovals] = await Promise.all([
         fetchPendingBidsBySalesUser(salesUserId),
         fetchPendingApprovals()
       ]);
-      
-      console.log('Sales user bids:', salesUserBids);
-      console.log('Pending approvals:', pendingApprovals);
-      
+
+
       // Combine both datasets
       const combinedBids = [...(salesUserBids || []), ...(pendingApprovals || [])];
-      console.log('Combined bids:', combinedBids);
-      
+
       setPendingBids(combinedBids);
-      console.log('State set with combined bids:', combinedBids.length);
+
     } catch (error) {
       console.error('Error fetching pending data:', error);
       alertify.error('Error refreshing data');
@@ -150,15 +143,12 @@ export default function PendingBids() {
   const handleManualApprove = async (bidId, customRate) => {
     setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
     try {
-      console.log('Approving bid with custom rate:', { bidId, customRate });
-      
+
       const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
         intermediateRate: parseInt(customRate)
       }, {
         headers: API_CONFIG.getAuthHeaders()
       });
-
-      console.log('Manual approval response:', response.data);
 
       if (response.data.success) {
         alertify.success('✅ Bid approved successfully with custom rate!');
@@ -264,7 +254,6 @@ export default function PendingBids() {
             remarks: rate.remarks || ''
           }));
 
-          console.log('Transformed rates for pending tab:', transformedRates);
           setPendingBids(transformedRates);
         } else {
           console.error('API response format error:', response.data);

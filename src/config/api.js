@@ -28,6 +28,15 @@ const API_CONFIG = {
     COMPANY_CREATE: '/api/v1/tally/company/create',
     COMPANY_ALL: '/api/v1/tally/company/all',
     COMPANY_DEFAULT: '/api/v1/tally/company/default/get',
+    
+    // Empty Truck Location endpoints
+    EMPTY_TRUCK_UPDATE: '/api/v1/empty-truck-location/update',
+    EMPTY_TRUCK_MY_TRUCKS: '/api/v1/empty-truck-location/my-trucks',
+    EMPTY_TRUCK_BY_VEHICLE: '/api/v1/empty-truck-location/vehicle',
+    EMPTY_TRUCK_CMT_UPDATE: '/api/v1/empty-truck-location/cmt/update',
+    EMPTY_TRUCK_CMT_ALL: '/api/v1/empty-truck-location/cmt/all',
+    EMPTY_TRUCK_CMT_BY_TRUCKER: '/api/v1/empty-truck-location/cmt/trucker',
+    EMPTY_TRUCK_CMT_BY_VEHICLE: '/api/v1/empty-truck-location/cmt/vehicle',
   },
   
   // Helper function to get full URL

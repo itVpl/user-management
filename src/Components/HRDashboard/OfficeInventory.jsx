@@ -392,8 +392,6 @@ const OfficeInventory = () => {
           notes: updateStockForm.notes.trim() || null
         };
 
-        console.log('🔄 Updating Stock:', updateData);
-
         const res = await axios.patch(
           `${API_CONFIG.BASE_URL}/api/v1/office-inventory/inventory/${selectedItem._id || selectedItem.id}/stock`,
           updateData,
@@ -530,8 +528,6 @@ const OfficeInventory = () => {
         minimumStock: parseInt(formData.minimumStock),
         notes: formData.notes.trim() || null
       };
-
-      console.log('🚀 Submitting Inventory Data:', submitData);
 
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/office-inventory/inventory`,

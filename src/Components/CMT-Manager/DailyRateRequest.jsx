@@ -54,7 +54,7 @@ const DailyRateRequest = () => {
 
   // ---------- Fetch (NEW API ONLY) ----------
   const fetchTodayBids = async (selectedDate) => {
-    console.log('[DailyRateRequest] fetchTodayBids');
+
     try {
       setIsFetching(true);
 
@@ -74,25 +74,15 @@ const DailyRateRequest = () => {
       const url = `${API_CONFIG.BASE_URL}/api/v1/bid/today-count?date=${selectedDate}`;
 
 
-      console.log('➡️ GET URL:', url);
-      console.log('➡️ Headers: ', headers);
-
-
       const t0 = performance.now();
       const res = await axios.get(url, { headers });
       const t1 = performance.now();
 
 
-      console.log('⏱️ API time:', t1 - t0, 'ms');
-      console.log('✅ Raw response: ', res);
-      console.log('✅ Response.data: ', res?.data);
-
 
       const data = res?.data || {};
       const recentBids = data?.recentBids || [];
       console.log('📦 recentBids (' + recentBids.length + ')');
-      console.log(recentBids);
-
 
       setApiData({
         success: !!data.success,
@@ -113,7 +103,7 @@ const DailyRateRequest = () => {
 
 
   useEffect(() => {
-    console.log('[DailyRateRequest] date changed -> fetchTodayBids', date);
+
     fetchTodayBids(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
@@ -171,8 +161,6 @@ const DailyRateRequest = () => {
 
 
     console.log('🧩 mapped rows (' + mapped.length + ')');
-    console.log(mapped);
-
 
     const term = search.trim().toLowerCase();
     const out = !term
@@ -190,8 +178,6 @@ const DailyRateRequest = () => {
         );
       });
 
-
-    console.log(`[filter] term="${term}" -> input=${mapped.length}, output=${out.length}`);
     return out;
   }, [apiData.recentBids, search]);
 

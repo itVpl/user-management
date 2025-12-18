@@ -36,10 +36,10 @@ const ManageModule = () => {
       : `https://vpl-liveproject-1.onrender.com/api/v1/module/activate/${moduleId}`;
 
 
-  //  console.log(`Toggling module: ${moduleId}`);
-  // console.log(`Current Status: ${currentStatus ? "Active" : "Inactive"}`);
-  // console.log(`New Status: ${!currentStatus ? "Activating" : "Deactivating"}`);
-  // console.log("URL:", url);
+  //  
+  // 
+  // 
+  // 
 
 
     try {

@@ -309,12 +309,10 @@ const autoAcceptingRef = useRef(new Set());
       const transformedApproved = approvedApprovals.map((approval) => {
         const loadId = approval?.loadId?._id || null;
 
-        console.log('Debug - approval object:', approval);
-        console.log('Debug - approval.loadId:', approval.loadId);
-        console.log('Debug - loadId:', loadId);
-        console.log('Debug - createdBySalesUser:', approval.loadId?.createdBySalesUser);
-        console.log('Debug - approval.createdBySalesUser:', approval.createdBySalesUser);
-        console.log('Debug - approval.salesUser:', approval.salesUser);
+
+
+
+
 
         if (!approval.loadId) {
           return {
@@ -515,8 +513,6 @@ try {
         }
       );
 
-      console.log('Rate Details API Response:', response);
-      console.log('Rate Details Data:', response.data);
 
       if (response.data && response.data.success) {
         const assignedLoads = response.data.data?.assignedLoads || [];
@@ -562,8 +558,6 @@ const fetchLoadDetailsForChat = async (loadId) => {
       return null;
     }
 
-    console.log('🔄 Fetching load details for chat, loadId:', loadId);
-
     const response = await axios.get(
       `${API_CONFIG.BASE_URL}/api/v1/load/${loadId}`,
       {
@@ -574,8 +568,6 @@ const fetchLoadDetailsForChat = async (loadId) => {
       }
     );
 
-    console.log('📦 Load details API response:', response.data);
-    
     if (response.data && response.data.success) {
       const load = response.data.data || response.data.load;
       console.log('🔍 Load object structure:', {
@@ -594,7 +586,7 @@ const fetchLoadDetailsForChat = async (loadId) => {
                            load?.assignedTo; // Sometimes assignedTo has the user info
       
       if (salesUserInfo) {
-        console.log('✅ Found sales user info in load details:', salesUserInfo);
+
         return salesUserInfo;
       } else {
         console.warn('⚠️ No sales user info found in load details');
@@ -639,8 +631,6 @@ const fetchLoadDetailsForChat = async (loadId) => {
         }
       );
 
-      console.log('Bid Details API Response:', response);
-      console.log('Bid Details Data:', response.data);
 
       if (response.data && response.data.success) {
         setBidDetailsData(response.data.data);
@@ -1117,10 +1107,9 @@ useEffect(() => {
     }
     
     // Debug: Log the selectedRequest to see what we have
-    console.log('Selected Request:', selectedRequest);
-    console.log('LoadId being sent:', actualLoadId);
-    console.log('Approval ID:', selectedRequest?._id);
-    
+
+
+
     // Calculate total bid rate
     const lineHaul = parseFloat(rate) || 0;
     const fscPct = parseFloat(fscPercentage) || 0;
@@ -1196,19 +1185,16 @@ useEffect(() => {
     }
     
     // Debug: Log all FormData entries
-    console.log('FormData entries:');
+
     for (let [key, value] of formData.entries()) {
-      console.log(key, value);
+
     }
-    console.log('Rates Array:', ratesArray);
-    console.log('Rate value:', rate);
+
 
     try {
       setSubmitting(true);
-      
-      console.log('Sending request to:', `${API_CONFIG.BASE_URL}/api/v1/bid/place-by-inhouse/`);
-      console.log('Request headers:', { Authorization: `Bearer ${token}` });
-      
+
+
       // Try with FormData first (for file upload)
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/bid/place-by-inhouse/`,
@@ -1569,7 +1555,7 @@ useEffect(() => {
   };
 
   const handleChargesClick = () => {
-    console.log('Charges popup opened, current charges state:', charges);
+
     setShowChargesPopup(true);
   };
 
@@ -1958,7 +1944,7 @@ useEffect(() => {
                                 if (salesUserInfo) {
                                   receiverEmpId = salesUserInfo.empId || salesUserInfo._id;
                                   receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
-                                  console.log('RateRequest: Fetched sales user info:', { receiverEmpId, receiverName });
+
                                 }
                               }
 
@@ -2241,27 +2227,25 @@ useEffect(() => {
                     item.salesUserInfo.name || 
                     item.salesUserInfo.username || 
                     'Sales User';
-      
-      console.log('✅ Found salesUserInfo in item:', { receiverEmpId, receiverName });
+
     }
     
     // If still no receiverEmpId, try fetch from load details
     if (!receiverEmpId && loadId) {
-      console.log('🔄 No receiverEmpId found, fetching load details...');
+
       toast.info('Fetching load details...', { autoClose: 2000 });
       const salesUserInfo = await fetchLoadDetailsForChat(loadId);
       
       if (salesUserInfo) {
         receiverEmpId = salesUserInfo.empId || salesUserInfo._id || salesUserInfo.id;
         receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
-        console.log('✅ Fetched sales user info from API:', { receiverEmpId, receiverName });
+
       }
     }
 
     // Final fallback - check if there's any user info in the item itself
     if (!receiverEmpId) {
-      console.log('🔍 Checking for alternative user info paths in item...');
-      
+
       // Check common alternative paths in your data structure
       const alternativePaths = [
         item.createdBySalesUser,
@@ -2275,7 +2259,7 @@ useEffect(() => {
         if (alt && (alt.empId || alt._id)) {
           receiverEmpId = alt.empId || alt._id;
           receiverName = alt.empName || alt.employeeName || alt.name || 'Sales User';
-          console.log('✅ Found receiver info in alternative path:', { receiverEmpId, receiverName, path: alt });
+
           break;
         }
       }

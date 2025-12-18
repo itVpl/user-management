@@ -24,7 +24,7 @@ export default function HrCreateTask() {
         { withCredentials: true }
       );
       setTasks(res.data.tasks || []);
-      console.log("Fetched tasks:", res.data.tasks);
+
     } catch (error) {
       console.error("Failed to fetch tasks", error);
     }

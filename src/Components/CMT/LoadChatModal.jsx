@@ -17,12 +17,7 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
   
   useEffect(() => {
     if (isOpen && loadId) {
-      console.log('LoadChatModal: Modal opened with context:', {
-        currentUserEmpId,
-        receiverEmpId,
-        receiverName,
-        loadId
-      });
+
     }
   }, [isOpen, loadId, currentUserEmpId, receiverEmpId, receiverName]);
 
@@ -253,8 +248,6 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
           }
         }
       );
-
-      console.log('LoadChatModal: Send message response:', response.data);
 
       if (response.data && (response.data.success || response.status === 200 || response.status === 201)) {
         // Replace optimistic message with real one

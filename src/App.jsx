@@ -41,6 +41,7 @@ import RateApproved from "./Components/CMT/RateApproved.jsx";
 import Loads from "./Components/CMT/Loads.jsx";
 import CarrierApproval from "./Components/CMT/CarrierApproval.jsx";
 import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
+import TeamRating from "./Components/Sales/TeamRating.jsx";
 import DailyFollowUp from "./Pages/DailyFollowUp.jsx";
 import AddCustomer from "./Components/Sales/AddCustomer.jsx";
 import AssignAgent from "./Components/Dashboard/AssignAgent.jsx";
@@ -75,6 +76,11 @@ import LedgerManagement from "./Components/Finance/LedgerManagement.jsx";
 import InventoryManagement from "./Components/Finance/InventoryManagement.jsx";
 import AcountentPayable from "./Components/Finance/AcountentPayable.jsx";
 import AllCustomer from "./Components/Sales/AllCustomer.jsx";
+import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
+import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
+import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
+
+
 
 // Global Notification Component
 function GlobalAssignmentNotification() {
@@ -418,6 +424,7 @@ function App() {
           <Route path="HrCreateTask" element={<HrCreateTask />} />
           <Route path="LeaveApproval" element={<LeaveApproval />} />
           <Route path="delivery-order" element={<DeliveryOrder />} />
+          <Route path="team-rating" element={<TeamRating />} />
           <Route path="daily-follow-up" element={<DailyFollowUp />} />
           <Route path="AddCustomer" element={<AddCustomer />} />
           <Route path="AssignAgent" element={<AssignAgent />} />
@@ -450,6 +457,10 @@ function App() {
           <Route path="ladger" element={<LedgerManagement />} />
           <Route path="inventory-management" element={<InventoryManagement />} />
           <Route path="acountent-payable" element={<AcountentPayable />} />
+          <Route path="empty-truck-location" element={<EmptyTruckLocation />} />
+          <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
+          <Route path="break-report" element={<BreakReport />} />
+          
           <Route path="allcustomer" element={<AllCustomer />} />
           
           {/* Catch-all for nested protected routes */}
