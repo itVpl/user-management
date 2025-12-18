@@ -123,20 +123,20 @@ const SearchableDropdown = ({
 };
 
 const ACCOUNT_TYPES = [
-  'Cash',
-  'Bank',
-  'Sales',
-  'Purchase',
-  'Sundry Debtor',
-  'Sundry Creditor',
-  'Income',
-  'Capital',
-  'Expense',
   'Asset',
-  'Liability',
+  'Bank',
+  'Capital',
+  'Cash',
+  'Expense',
+  'Income',
   'Investment',
+  'Liability',
   'Loan',
-  'Other'
+  'Purchase',
+  'Sales',
+  'Sundry Creditor',
+  'Sundry Debtor',
+  'Suspence'
 ];
 
 const getAuthToken = () => {

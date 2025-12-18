@@ -5,12 +5,14 @@ import Sidebar from "../Components/Sidebar";
 import Topbar from "../TopBar";
 import DOAssignmentPopup from "../Components/CMT/DOAssignmentPopup";
 import LoadAssignmentPopup from "../Components/CMT/LoadAssignmentPopup";
+import FoodPreferenceModal from "../Components/FoodPreferenceModal";
 import { useDOAssignmentNotification } from "../hooks/useDOAssignmentNotification";
 import { useAssignmentNotification } from "../hooks/useAssignmentNotification";
 
 const Layout = () => {
   const [user, setUser] = useState(null);
   const [isCMTUser, setIsCMTUser] = useState(false);
+  const [showFoodModal, setShowFoodModal] = useState(false);
   
   // Get user data and check if CMT user
   useEffect(() => {
@@ -34,6 +36,19 @@ const Layout = () => {
       }
     }
   }, []);
+
+  // Check for food preference
+  useEffect(() => {
+    if (user) {
+      const today = new Date().toISOString().split('T')[0];
+      const empId = user.empId || user.employeeId || 'unknown';
+      const hasPreference = localStorage.getItem(`food_preference_${empId}_${today}`);
+      
+      if (!hasPreference) {
+        setShowFoodModal(true);
+      }
+    }
+  }, [user]);
 
   // Use both assignment notification hooks only for CMT users
   const { newDOAssignment, clearNotification: clearDONotification } = useDOAssignmentNotification(
@@ -70,6 +85,11 @@ const Layout = () => {
           <Outlet />
         </main>
       </div>
+      {/* Food Preference Modal */}
+      {showFoodModal && (
+        <FoodPreferenceModal onClose={() => setShowFoodModal(false)} user={user} />
+      )}
+
       {/* DO Assignment Popup for CMT users */}
       {isCMTUser && newDOAssignment && (
         <DOAssignmentPopup 

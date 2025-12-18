@@ -76,6 +76,7 @@ import TallyManagement from "./Components/Finance/TallyManagement.jsx";
 import LedgerManagement from "./Components/Finance/LedgerManagement.jsx";
 import InventoryManagement from "./Components/Finance/InventoryManagement.jsx";
 import AcountentPayable from "./Components/Finance/AcountentPayable.jsx";
+import AllCustomer from "./Components/Sales/AllCustomer.jsx";
 import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
 import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
 import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
@@ -462,6 +463,7 @@ function App() {
           <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
           <Route path="break-report" element={<BreakReport />} />
           
+          <Route path="allcustomer" element={<AllCustomer />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
