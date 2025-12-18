@@ -137,21 +137,20 @@ const SearchableDropdown = ({
 const LedgerManagement = ({ selectedCompanyId }) => {
   // Account Types
   const ACCOUNT_TYPES = [
-    'Cash',
-    'Bank',
-    'Sales',
-    'Purchase',
-    'Sundry Debtor',
-    'Sundry Creditor',
-    'Income',
-    'Capital',
-    'Expense',
-    'Asset',
-    'Liability',
-    'Investment',
-    'Loan',
-    'Duty & Tax',
-    'Other'
+  'Asset',
+  'Bank',
+  'Capital',
+  'Cash',
+  'Expense',
+  'Income',
+  'Investment',
+  'Liability',
+  'Loan',
+  'Purchase',
+  'Sales',
+  'Sundry Creditor',
+  'Sundry Debtor',
+  'Suspence'
   ];
 
   // State Management

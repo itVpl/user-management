@@ -74,6 +74,7 @@ import TallyManagement from "./Components/Finance/TallyManagement.jsx";
 import LedgerManagement from "./Components/Finance/LedgerManagement.jsx";
 import InventoryManagement from "./Components/Finance/InventoryManagement.jsx";
 import AcountentPayable from "./Components/Finance/AcountentPayable.jsx";
+import AllCustomer from "./Components/Sales/AllCustomer.jsx";
 
 // Global Notification Component
 function GlobalAssignmentNotification() {
@@ -449,6 +450,7 @@ function App() {
           <Route path="ladger" element={<LedgerManagement />} />
           <Route path="inventory-management" element={<InventoryManagement />} />
           <Route path="acountent-payable" element={<AcountentPayable />} />
+          <Route path="allcustomer" element={<AllCustomer />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
