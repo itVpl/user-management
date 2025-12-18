@@ -678,6 +678,9 @@ export default function DOReport() {
             carrierFees: order.carrier?.totalCarrierFees || 0,
             createdBySalesUser: order.createdBySalesUser || 'N/A',
             supportingDocs: order.supportingDocs || [],
+            // Store customers and shipper data for table display
+            customers: order.customers || [],
+            shipper: order.shipper || {},
             // Store full order data for view modal
             _fullOrderData: order
           };
@@ -1028,17 +1031,42 @@ export default function DOReport() {
     return (fromCustomers || fromDoNum || fromOrder || fromWON || '').toLowerCase();
   };
 
+  // Helper function to exclude orders created by Shyam Singh or empId 1234
+  const excludeShyamSinghOrders = (order) => {
+    const createdByName = order.createdBySalesUser?.employeeName || order.createdBySalesUser || '';
+    const createdByEmpId = order.createdByEmpId || '';
+    return !(createdByName === 'Shyam Singh' || createdByEmpId === '1234');
+  };
+
+  // Total orders excluding Shyam Singh/1234 (for display count)
+  const totalOrdersExcludingShyam = orders.filter(excludeShyamSinghOrders);
+
   // Filter orders based on search term, date range, and created by
   const filteredOrders = orders.filter(order => {
+    // Exclude orders created by Shyam Singh or empId 1234
+    if (!excludeShyamSinghOrders(order)) {
+      return false;
+    }
+
     const text = searchTerm.toLowerCase();
     const loadNumber = getLoadNumberForSearch(order);
+    
+    // Get searchable fields
+    const workOrderNo = (order.customers?.[0]?.workOrderNo || '').toLowerCase();
+    const shipmentNo = (order.shipper?.shipmentNo || '').toLowerCase();
+    const containerNo = (order.shipper?.containerNo || '').toLowerCase();
+    const carrierName = (order.carrierName || '').toLowerCase();
     
     const matchesText =
       (order.id?.toLowerCase() || '').includes(text) ||
       (order.clientName?.toLowerCase() || '').includes(text) ||
       (order.pickupLocation?.toLowerCase() || '').includes(text) ||
       (order.deliveryLocation?.toLowerCase() || '').includes(text) ||
-      loadNumber.includes(text);
+      loadNumber.includes(text) ||
+      workOrderNo.includes(text) ||
+      shipmentNo.includes(text) ||
+      containerNo.includes(text) ||
+      carrierName.includes(text);
 
     const created = order.createdAt || ''; // e.g., "2025-08-27"
     const inRange = created >= ymd(range.startDate) && created <= ymd(range.endDate);
@@ -1066,6 +1094,65 @@ export default function DOReport() {
   // Handle page change
   const handlePageChange = (page) => {
     setCurrentPage(page);
+  };
+
+  // Export to CSV function
+  const exportToCSV = () => {
+    try {
+      if (filteredOrders.length === 0) {
+        alertify.warning('No data to export');
+        return;
+      }
+
+      // Define CSV headers
+      const headers = [
+        'Load Num',
+        'Bill To',
+        'Carrier Name',
+        'Work Order No',
+        'Shipment No',
+        'Container No',
+        'Created By'
+      ];
+
+      // Convert data to CSV format
+      const csvContent = [
+        headers.join(','),
+        ...filteredOrders.map(order => {
+          const workOrderNo = order.customers?.[0]?.workOrderNo || 'N/A';
+          const shipmentNo = order.shipper?.shipmentNo || 'N/A';
+          const containerNo = order.shipper?.containerNo || 'N/A';
+          
+          return [
+            `"${order.doNum || 'N/A'}"`,
+            `"${order.clientName || 'N/A'}"`,
+            `"${order.carrierName || 'N/A'}"`,
+            `"${workOrderNo}"`,
+            `"${shipmentNo}"`,
+            `"${containerNo}"`,
+            `"${order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}"`
+          ].join(',');
+        })
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      const dateStr = format(new Date(), 'yyyy-MM-dd');
+      link.setAttribute('download', `DO_Report_${dateStr}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      alertify.success('CSV exported successfully!');
+    } catch (error) {
+      console.error('Export to CSV error:', error);
+      alertify.error('Failed to export CSV');
+    }
   };
 
   // Generate smart pagination page numbers
@@ -1201,7 +1288,7 @@ export default function DOReport() {
                 const dateSource = origin.pickupDate || loadData.pickupDate;
                 if (dateSource) {
                   try {
-                    const date = new Date(dateSource);
+                    const date = new Date(dateSource);  //h
                     if (!isNaN(date.getTime())) {
                       const year = date.getFullYear();
                       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -4512,7 +4599,7 @@ const handleUpdateOrder = async (e) => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Orders</p>
-                <p className="text-xl font-bold text-gray-800">{orders.length}</p>
+                <p className="text-xl font-bold text-gray-800">{totalOrdersExcludingShyam.length}</p>
               </div>
             </div>
           </div>
@@ -4538,17 +4625,6 @@ const handleUpdateOrder = async (e) => {
                 </div>
               </div>
             </div> */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <Calendar className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{orders.filter(order => order.createdAt === new Date().toISOString().split('T')[0]).length}</p>
-              </div>
-            </div>
-          </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -4656,6 +4732,15 @@ const handleUpdateOrder = async (e) => {
               className="w-[250px]"
             />
           </div>
+
+          {/* Export to CSV Button */}
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+          >
+            <FaDownload size={16} />
+            Export CSV
+          </button>
 
         </div>
       </div>
@@ -4785,57 +4870,58 @@ const handleUpdateOrder = async (e) => {
             <table className="w-full">
               <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                 <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEES</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">WORK ORDER NO</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPMENT NO</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CONTAINER NO</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
-                {currentOrders.map((order, index) => (
-                  <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.id}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-base font-semibold text-gray-700">{order.doNum}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.clientName}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.carrierName}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">${order.carrierFees || 0}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${order.status === 'close'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-green-100 text-green-800'
-                        }`}>
-                        {order.status === 'close' ? 'Close' : (order.status === 'open' ? 'Open' : 'Open')}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleViewOrder(order)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
-                        >
-                          View
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {currentOrders.map((order, index) => {
+                  const workOrderNo = order.customers?.[0]?.workOrderNo || 'N/A';
+                  const shipmentNo = order.shipper?.shipmentNo || 'N/A';
+                  const containerNo = order.shipper?.containerNo || 'N/A';
+                  
+                  return (
+                    <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                      <td className="py-2 px-3">
+                        <span className="font-mono text-base font-semibold text-gray-700">{order.doNum}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.clientName}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.carrierName}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{workOrderNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{shipmentNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{containerNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleViewOrder(order)}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            View
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
