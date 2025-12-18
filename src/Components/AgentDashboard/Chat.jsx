@@ -57,6 +57,8 @@ const ChatPage = () => {
   const [loading, setLoading] = useState(true);
   const [loadingChatList, setLoadingChatList] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingGroupMessages, setLoadingGroupMessages] = useState(false);
   const [newMessagesMap, setNewMessagesMap] = useState({});
   const [newGroupMessagesMap, setNewGroupMessagesMap] = useState({}); // Track unread group messages
   const [isTyping, setIsTyping] = useState(false);
@@ -226,6 +228,7 @@ const ChatPage = () => {
   const fetchMessages = async (selectedEmpId) => {
     if (!storedUser?.empId || !selectedEmpId) return;
     try {
+      setLoadingMessages(true);
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/chat/with/${selectedEmpId}`,
         { withCredentials: true }
@@ -239,6 +242,8 @@ const ChatPage = () => {
     } catch (err) {
       console.error("❌ Failed to load messages:", err);
       setMessages([]);
+    } finally {
+      setLoadingMessages(false);
     }
   };
 
@@ -314,6 +319,7 @@ const ChatPage = () => {
   const fetchGroupMessages = async (groupId) => {
     if (!groupId) return;
     try {
+      setLoadingGroupMessages(true);
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages`,
         { withCredentials: true }
@@ -325,6 +331,8 @@ const ChatPage = () => {
     } catch (err) {
       console.error("❌ Failed to fetch group messages", err);
       setGroupMessages([]);
+    } finally {
+      setLoadingGroupMessages(false);
     }
   };
 
@@ -1506,9 +1514,16 @@ const ChatPage = () => {
             </div>
 
             {/* Group Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
               <div className="space-y-2">
-                {groupMessages.length === 0 ? (
+                {loadingGroupMessages ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-gray-500 font-medium">Loading messages...</p>
+                    </div>
+                  </div>
+                ) : groupMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-gray-400">
                     <MessageCircle size={64} className="mb-4 text-gray-300" />
                     <h3 className="text-xl font-semibold mb-2">No messages yet</h3>
@@ -1535,23 +1550,23 @@ const ChatPage = () => {
                             </span>
                           </div>
                         )}
-                        <div className={`flex ${isSentByMe ? "justify-end" : "justify-start"}`}>
-                          <div className={`flex max-w-[70%] ${isSentByMe ? "flex-row-reverse" : "flex-row"}`}>
+                        <div className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}>
+                          <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
-                              <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm mr-2 mt-1">
+                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0">
                                 {msg.senderName?.charAt(0).toUpperCase() || 'U'}
                               </div>
                             )}
                             <div className="flex flex-col">
                               {!isSentByMe && (
-                                <span className="text-xs text-gray-500 mb-1 px-1">
+                                <span className="text-xs text-gray-600 font-medium mb-1 px-1">
                                   {msg.senderAliasName ? `${msg.senderName}/${msg.senderAliasName}` : (msg.senderName || 'Unknown')}
                                 </span>
                               )}
                               <div
-                                className={`px-4 py-2 rounded-lg shadow-sm ${
+                                className={`px-4 py-3 rounded-2xl shadow-md ${
                                   isSentByMe
-                                    ? "bg-blue-500 text-white rounded-br-md"
+                                    ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-md"
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
@@ -1598,11 +1613,16 @@ const ChatPage = () => {
                                   })()
                                 )}
                                 {!(msg.message && msg.message.includes('Sent an image:') || msg.message && msg.message.includes('Sent a file:')) && (
-                                  <p className="text-sm">{msg.message}</p>
+                                  <p className={`text-sm leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>{msg.message}</p>
                                 )}
-                                <span className={`text-xs mt-1 block ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>
-                                  {formatTime(msg.timestamp)}
-                                </span>
+                                <div className={`flex items-center justify-end mt-2 gap-1`}>
+                                  <span className={`text-xs ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>
+                                    {formatTime(msg.timestamp)}
+                                  </span>
+                                  {isSentByMe && (
+                                    <CheckCheck size={12} className="text-blue-100" />
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1616,10 +1636,10 @@ const ChatPage = () => {
             </div>
 
             {/* Group Message Input */}
-            <div className="p-4 border-t border-gray-200 bg-white">
+            <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
               <div className="flex items-end gap-3">
                 <div className="flex-1 relative">
-                  <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                  <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 transition-all shadow-sm">
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile || isSendingMessage}
@@ -1732,9 +1752,16 @@ const ChatPage = () => {
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
               <div className="space-y-2">
-                {messages.length === 0 ? (
+                {loadingMessages ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-gray-500 font-medium">Loading messages...</p>
+                    </div>
+                  </div>
+                ) : messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-gray-400">
                     <MessageCircle size={64} className="mb-4 text-gray-300" />
                     <h3 className="text-xl font-semibold mb-2">No messages yet</h3>
@@ -1764,19 +1791,24 @@ const ChatPage = () => {
                           </div>
                         )}
                         <div
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"}`}
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}
                         >
-                          <div className={`flex max-w-[70%] ${isSentByMe ? "flex-row-reverse" : "flex-row"}`}>
+                          <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
-                              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm mr-2 mt-1">
+                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0">
                                 {selectedUser.employeeName?.charAt(0).toUpperCase()}
                               </div>
                             )}
                             <div className="flex flex-col">
+                              {!isSentByMe && (
+                                <span className="text-xs text-gray-600 font-medium mb-1 px-1">
+                                  {formatEmployeeName(selectedUser)}
+                                </span>
+                              )}
                               <div
-                                className={`px-4 py-2 rounded-lg shadow-sm ${
+                                className={`px-4 py-3 rounded-2xl shadow-md ${
                                   isSentByMe
-                                    ? "bg-blue-500 text-white rounded-br-md"
+                                    ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-md"
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
@@ -1937,18 +1969,10 @@ const ChatPage = () => {
             </div>
 
             {/* Message Input */}
-            <div className="p-4 border-t border-gray-200 bg-white">
+            <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
               <div className="flex items-end gap-3">
                 <div className="flex-1 relative">
-                  <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-                    <button
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      disabled={uploadingFile || isSendingMessage}
-                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Add emoji"
-                    >
-                      <Smile size={20} className="text-gray-500" />
-                    </button>
+                  <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all shadow-sm">
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile || isSendingMessage}
@@ -1975,25 +1999,13 @@ const ChatPage = () => {
                     >
                       <Image size={20} className="text-gray-500" />
                     </button>
-                    {input.trim() ? (
+                    {input.trim() && (
                       <button
                         onClick={sendMessage}
                         disabled={uploadingFile || isSendingMessage}
                         className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <Send size={20} />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={isRecording ? stopRecording : startRecording}
-                        disabled={uploadingFile || isSendingMessage}
-                        className={`p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                          isRecording 
-                            ? 'bg-red-500 text-white hover:bg-red-600' 
-                            : 'bg-blue-500 text-white hover:bg-blue-600'
-                        }`}
-                      >
-                        <Mic size={20} />
                       </button>
                     )}
                   </div>
