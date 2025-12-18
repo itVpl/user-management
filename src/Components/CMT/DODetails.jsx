@@ -602,6 +602,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
       }
 
+      // hi
+
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
       const companyName = (cust.billTo || order?.customerName || '').trim();
