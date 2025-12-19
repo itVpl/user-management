@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { FaPhone, FaEnvelope, FaCalendar, FaClock, FaUser, FaCheckCircle, FaTimesCircle, FaExclamationTriangle, FaPlus, FaSearch } from 'react-icons/fa';
+import { FaPhone, FaEnvelope, FaCalendar, FaClock, FaUser, FaCheckCircle, FaTimesCircle, FaExclamationTriangle, FaPlus, FaSearch, FaFilePdf, FaDownload } from 'react-icons/fa';
 import API_CONFIG from '../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -97,7 +97,7 @@ export default function DailyFollowUp() {
     remark: '',
     followupNotes: '',
     nextFollowUpDate: '',
-    documents: null
+    attachments: null
   });
 
 
@@ -192,6 +192,80 @@ export default function DailyFollowUp() {
   }, [showAddFollowUpForm]);
 
   // Status color helper
+  const renderAttachment = (path) => {
+    if (!path) return null;
+
+    const paths = Array.isArray(path) ? path : [path];
+    if (paths.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-4">
+        {paths.map((fileItem, index) => {
+          let filePath = fileItem;
+          // Handle object structure from API (e.g., { fileUrl: "...", fileName: "..." })
+          if (typeof fileItem === 'object' && fileItem !== null) {
+            filePath = fileItem.fileUrl || fileItem.file || fileItem.path || '';
+          }
+
+          if (typeof filePath !== 'string' || !filePath) return null;
+          
+          // Clean up the path (trim spaces and remove backticks if present)
+          const cleanPath = filePath.trim().replace(/^`|`$/g, '').trim();
+          
+          const normalizedPath = cleanPath.replace(/\\/g, '/');
+          const url = normalizedPath.startsWith('http')
+            ? normalizedPath
+            : `${API_CONFIG.BASE_URL}/${normalizedPath.replace(/^\//, '')}`;
+          const isPdf = normalizedPath.toLowerCase().endsWith('.pdf');
+          
+          // Get a display name
+          const fileName = fileItem.fileName || cleanPath.split('/').pop() || `Attachment ${index + 1}`;
+
+          if (isPdf) {
+             return (
+              <a 
+                key={index}
+                href={url}
+                download
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors group w-full max-w-sm"
+              >
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center group-hover:bg-red-200 transition-colors">
+                  <FaFilePdf className="text-red-500" size={20} />
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <p className="text-sm font-medium text-gray-700 truncate">{fileName}</p>
+                  <p className="text-xs text-red-500 font-medium mt-0.5">Click to Download PDF</p>
+                </div>
+                <FaDownload className="text-gray-400 group-hover:text-red-500 transition-colors" size={16} />
+              </a>
+             );
+          }
+
+          // For Images: Show Preview
+          return (
+            <div key={index} className="mt-3 relative group">
+              <p className="text-xs font-semibold text-gray-500 mb-1">Attachment {paths.length > 1 ? index + 1 : ''}</p>
+              <div className="border rounded-lg overflow-hidden bg-gray-50 h-48 w-full max-w-sm relative group">
+                <img src={url} alt="Attachment" className="w-full h-full object-contain" />
+                 <a 
+                    href={url} 
+                    download 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium cursor-pointer"
+                  >
+                    <FaDownload className="mr-2" /> Download Image
+                  </a>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const statusColor = (status) => {
     if (status === 'completed') return 'bg-green-100 text-green-700';
     if (status === 'pending') return 'bg-yellow-100 text-yellow-700';
@@ -211,8 +285,13 @@ export default function DailyFollowUp() {
 
   // Handle form input changes
   const handleInputChange = (e) => {
-    const { name } = e.target;
+    const { name, type, files } = e.target;
     let value = e.target.value;
+
+    if (type === 'file') {
+      setFormData((prev) => ({ ...prev, [name]: files })); // Store FileList
+      return;
+    }
 
     // Email: never allow spaces
     if (name === 'customerEmail') {
@@ -321,21 +400,27 @@ export default function DailyFollowUp() {
     try {
       setSubmitting(true);
 
-      const apiData = {
-        customerName: formData.customerName.trim(),
-        address: formData.customerAddress?.trim(),
-        phone: formData.customerPhone,
-        contactPerson: formData.contactPerson.trim(),
-        concernedPerson: formData.concernedPerson.trim(),
-        email: formData.customerEmail.trim(),
-        remarks: formData.remark?.trim(),
-        callingDate: formData.followUpDate,
-        status: formData.status,
-        creditCheck: formData.creditCheck?.trim(),
-        followUpType: formData.followUpType.charAt(0).toUpperCase() + formData.followUpType.slice(1),
-        followUpNotes: formData.followupNotes?.trim(),
-        nextFollowUpDate: formData.nextFollowUpDate || undefined
-      };
+      const formDataToSend = new FormData();
+      formDataToSend.append('customerName', formData.customerName.trim());
+      formDataToSend.append('address', formData.customerAddress?.trim() || '');
+      formDataToSend.append('phone', formData.customerPhone);
+      formDataToSend.append('contactPerson', formData.contactPerson.trim());
+      formDataToSend.append('concernedPerson', formData.concernedPerson.trim());
+      formDataToSend.append('email', formData.customerEmail.trim());
+      formDataToSend.append('remarks', formData.remark?.trim() || '');
+      formDataToSend.append('callingDate', formData.followUpDate);
+      formDataToSend.append('status', formData.status);
+      formDataToSend.append('creditCheck', formData.creditCheck?.trim() || '');
+      formDataToSend.append('followUpType', formData.followUpType.charAt(0).toUpperCase() + formData.followUpType.slice(1));
+      formDataToSend.append('followUpNotes', formData.followupNotes?.trim() || '');
+      if (formData.nextFollowUpDate) {
+        formDataToSend.append('nextFollowUpDate', formData.nextFollowUpDate);
+      }
+      if (formData.attachments && formData.attachments.length > 0) {
+        for (let i = 0; i < formData.attachments.length; i++) {
+          formDataToSend.append('attachments', formData.attachments[i]);
+        }
+      }
 
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
       if (!token) {
@@ -343,8 +428,8 @@ export default function DailyFollowUp() {
         return;
       }
 
-      await axios.post(`${API_CONFIG.BASE_URL}/api/v1/sales-followup/create`, apiData, {
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      await axios.post(`${API_CONFIG.BASE_URL}/api/v1/sales-followup/create`, formDataToSend, {
+        headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` },
         withCredentials: true
       });
 
@@ -355,7 +440,7 @@ export default function DailyFollowUp() {
         customerName: '', customerPhone: '', customerEmail: '', customerAddress: '',
         followUpDate: '', contactPerson: '', concernedPerson: '',
         followUpType: '', status: '', creditCheck: '', remark: '',
-        followupNotes: '', nextFollowUpDate: '', documents: null
+        followupNotes: '', nextFollowUpDate: '', attachments: null
       });
     } catch (error) {
       console.error('Error creating follow-up:', error);
@@ -436,7 +521,7 @@ export default function DailyFollowUp() {
         customerName: '', customerPhone: '', customerEmail: '', customerAddress: '',
         followUpDate: '', contactPerson: '', concernedPerson: '',
         followUpType: '', status: '', creditCheck: '', remark: '',
-        followupNotes: '', nextFollowUpDate: '', documents: null
+        followupNotes: '', nextFollowUpDate: '', attachments: null
       });
     } catch (error) {
       console.error('Error updating follow-up:', error);
@@ -551,7 +636,7 @@ export default function DailyFollowUp() {
           remark: followUpData.remarks || '',
           followupNotes: latestFollowUpDetails.followUpNotes || '',
           nextFollowUpDate: latestFollowUpDetails.nextFollowUpDate ? new Date(latestFollowUpDetails.nextFollowUpDate).toISOString().split('T')[0] : '',
-          documents: null
+          attachments: null
         });
 
         setSelectedFollowUp(followUpData);
@@ -595,22 +680,24 @@ export default function DailyFollowUp() {
       remark: '',
       followupNotes: '',
       nextFollowUpDate: '',
-      documents: null
+      attachments: null
     });
     setNewFollowUpData({
       followUpType: '',
       followUpNotes: '',
-      nextFollowUpDate: ''
+      nextFollowUpDate: '',
+      attachments: null
     });
 
 
   };
 
   const handleNewFollowUpInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, files } = e.target;
+    const val = type === 'file' ? files : value;
     setNewFollowUpData(prev => ({
       ...prev,
-      [name]: value
+      [name]: val
     }));
   };
 
@@ -631,19 +718,25 @@ export default function DailyFollowUp() {
       }
 
       // Prepare the data for the new follow-up
-      const followUpData = {
-        followUpType: newFollowUpData.followUpType
-    ? newFollowUpData.followUpType.charAt(0).toUpperCase() + newFollowUpData.followUpType.slice(1)
-    : '',
-        followUpNotes: newFollowUpData.followUpNotes,
-        nextFollowUpDate: newFollowUpData.nextFollowUpDate
-      };
+      const formDataToSend = new FormData();
+      formDataToSend.append('followUpType', newFollowUpData.followUpType
+        ? newFollowUpData.followUpType.charAt(0).toUpperCase() + newFollowUpData.followUpType.slice(1)
+        : '');
+      formDataToSend.append('followUpNotes', newFollowUpData.followUpNotes);
+      if (newFollowUpData.nextFollowUpDate) {
+        formDataToSend.append('nextFollowUpDate', newFollowUpData.nextFollowUpDate);
+      }
+      if (newFollowUpData.attachments && newFollowUpData.attachments.length > 0) {
+        for (let i = 0; i < newFollowUpData.attachments.length; i++) {
+          formDataToSend.append('attachments', newFollowUpData.attachments[i]);
+        }
+      }
 
       // Add new follow-up to the existing sales follow-up record
-      const response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/sales-followup/${selectedFollowUp._id}/followup`, followUpData, {
+      const response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/sales-followup/${selectedFollowUp._id}/followup`, formDataToSend, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'multipart/form-data'
         },
         withCredentials: true
       });
@@ -658,7 +751,8 @@ export default function DailyFollowUp() {
         setNewFollowUpData({
           followUpType: 'call',
           followUpNotes: '',
-          nextFollowUpDate: ''
+          nextFollowUpDate: '',
+          attachments: null
         });
 
         // Refresh the follow-ups data
@@ -1062,8 +1156,12 @@ export default function DailyFollowUp() {
                           }`}
                       >
                         <option value="">Select</option>
-                        <option value="call">Call</option>
-                        <option value="email">Email</option>
+                        <option value="Call">Call</option>
+                        <option value="Email">Email</option>
+                        <option value="Meeting">Meeting</option>
+                        <option value="WhatsApp">WhatsApp</option>
+                        <option value="Visit">Visit</option>
+                        <option value="Other">Other</option>
                       </select>
                       {errors.followUpType && <p className="text-red-600 text-xs mt-1">{errors.followUpType}</p>}
                     </div>
@@ -1177,6 +1275,18 @@ export default function DailyFollowUp() {
                     {errors.nextFollowUpDate && (
                       <p className="text-red-600 text-xs mt-1">{errors.nextFollowUpDate}</p>
                     )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Attachments (PDF/Image)</label>
+                      <input
+                        type="file"
+                        name="attachments"
+                        onChange={handleInputChange}
+                        accept=".pdf,image/*"
+                        multiple
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                      />
+                    </div>
 
                   </div>
                 </div>
@@ -1395,6 +1505,17 @@ export default function DailyFollowUp() {
                     <p className="text-gray-800">{selectedFollowUp.remarks}</p>
                   </div>
                 )}
+
+                {/* Initial Attachment */}
+                 <div className="flex items-center gap-2 mb-4 mt-10">
+                    <FaCalendar className="text-purple-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Attachments</h3>
+                  </div>
+                {selectedFollowUp.attachments && (
+                  <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                     {renderAttachment(selectedFollowUp.attachments)}
+                  </div>
+                )}
               </div>
 
               {/* Follow-Ups History */}
@@ -1439,6 +1560,8 @@ export default function DailyFollowUp() {
                             })}</span>
                           </div>
                         )}
+                        {/* History Attachment */}
+                        {followUp.attachments && renderAttachment(followUp.attachments)}
                       </div>
                     ))}
                   </div>
@@ -1654,8 +1777,12 @@ export default function DailyFollowUp() {
                           }`}
                       >
                         <option value="">Select</option>
-                        <option value="call">Call</option>
-                        <option value="email">Email</option>
+                        <option value="Call">Call</option>
+                        <option value="Email">Email</option>
+                        <option value="Meeting">Meeting</option>
+                        <option value="WhatsApp">WhatsApp</option>
+                        <option value="Visit">Visit</option>
+                        <option value="Other">Other</option>
                       </select>
                       {errors.followUpType && <p className="text-red-600 text-xs mt-1">{errors.followUpType}</p>}
 
@@ -1758,8 +1885,12 @@ export default function DailyFollowUp() {
                     className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${newErrors.followUpType ? 'border-red-400' : 'border-gray-300'}`}
                   >
                     <option value="">Select</option>
-                    <option value="call">Call</option>
-                    <option value="email">Email</option>
+                    <option value="Call">Call</option>
+                    <option value="Email">Email</option>
+                    <option value="Meeting">Meeting</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Visit">Visit</option>
+                    <option value="Other">Other</option>
                   </select>
                   {newErrors.followUpType && <p className="text-red-600 text-xs mt-1">{newErrors.followUpType}</p>}
                 </div>
@@ -1805,6 +1936,18 @@ export default function DailyFollowUp() {
                   />
                 </div>
                 {newErrors.nextFollowUpDate && <p className="text-red-600 text-xs mt-1">{newErrors.nextFollowUpDate}</p>}
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Attachments (PDF/Image)</label>
+                  <input
+                    type="file"
+                    name="attachments"
+                    onChange={handleNewFollowUpInputChange}
+                    accept=".pdf,image/*"
+                    multiple
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
               </div>
 
               {/* Form Actions */}

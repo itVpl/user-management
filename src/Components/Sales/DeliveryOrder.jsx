@@ -2107,6 +2107,7 @@ export default function DeliveryOrder() {
 
         // reset form
         setShowAddOrderForm(false);
+        await fetchOrders();
         setFormData({
           customers: [{
             billTo: '', dispatcherName: '', workOrderNo: '',
@@ -2335,8 +2336,9 @@ const validateForm = (mode = formMode) => {
   };
 
   // Reset form when modal closes
-  const handleCloseModal = () => {
+  const handleCloseModal = async () => {
     setShowAddOrderForm(false);
+    await fetchOrders();
     setSelectedLoadType('OTR');
     setFormData({
       customers: [
@@ -3120,7 +3122,7 @@ const handleUpdateOrder = async (e) => {
     alertify.success('Delivery order updated successfully!');
     
     // Close modal and refresh data
-    setShowEditModal(false);
+    setShowAddOrderForm(false);
     setEditingOrder(null);
     
     // Refresh the orders list
@@ -4694,7 +4696,7 @@ const handleUpdateOrder = async (e) => {
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">WORK ORDER NO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPMENT NO</th>
+                  {/* <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPMENT NO</th> */}
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CONTAINER NO</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
@@ -4720,9 +4722,9 @@ const handleUpdateOrder = async (e) => {
                       <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{workOrderNo}</span>
                       </td>
-                      <td className="py-2 px-3">
+                      {/* <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{shipmentNo}</span>
-                      </td>
+                      </td> */}
                       <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{containerNo}</span>
                       </td>
