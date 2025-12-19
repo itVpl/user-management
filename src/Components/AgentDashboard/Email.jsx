@@ -53,6 +53,7 @@ import {
 import axios from 'axios';
 import ReplyDialog from '../Email/ReplyDialog';
 import { replyToEmailWithFiles } from '../Email/emailService';
+import { validateEmailRecipients, getRecipientCount } from '../../utils/emailUtils';
 
 // API Base URL from environment variable
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1';
@@ -110,8 +111,6 @@ const Email = () => {
   // Compose email state
   const [composeData, setComposeData] = useState({
     to: '',
-    cc: '',
-    bcc: '',
     subject: '',
     body: '',
     attachments: []
@@ -415,6 +414,7 @@ const Email = () => {
   // State for compose loading and sending
   const [composeSending, setComposeSending] = useState(false);
   const [composeError, setComposeError] = useState(null);
+  const [emailValidation, setEmailValidation] = useState({ valid: true, invalidEmails: [] });
 
   // Convert file to base64 (without data:xxx;base64, prefix)
   const fileToBase64 = (file) => {
@@ -463,6 +463,14 @@ const Email = () => {
     setComposeError(null);
 
     try {
+      // Validate emails before sending
+      const validation = validateEmailRecipients(composeData.to);
+      if (!validation.valid) {
+        setEmailValidation(validation);
+        setComposeSending(false);
+        return;
+      }
+
       const token = sessionStorage.getItem("token") || localStorage.getItem("token") || 
                     sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
       
@@ -473,8 +481,9 @@ const Email = () => {
       }
 
       // Use FormData for file uploads (new API endpoint)
+      // API accepts comma-separated string for multiple recipients
       const formData = new FormData();
-      formData.append('to', composeData.to);
+      formData.append('to', composeData.to.trim());
       formData.append('subject', composeData.subject);
       formData.append('text', composeData.body);
       
@@ -521,7 +530,8 @@ const Email = () => {
         };
         setEmails(prev => [newEmail, ...prev]);
         setComposeOpen(false);
-        setComposeData({ to: '', cc: '', bcc: '', subject: '', body: '', attachments: [] });
+        setComposeData({ to: '', subject: '', body: '', attachments: [] });
+        setEmailValidation({ valid: true, invalidEmails: [] });
       } else {
         setComposeError(response.data.message || 'Failed to send email');
       }
@@ -1121,7 +1131,15 @@ const Email = () => {
   const ComposeDialog = () => (
     <Dialog
       open={composeOpen}
-      onClose={() => !composeSending && setComposeOpen(false)}
+      onClose={(event, reason) => {
+        // Only close when clicking the X button, not on backdrop click or ESC key
+        if (reason && (reason === 'backdropClick' || reason === 'escapeKeyDown')) {
+          return;
+        }
+        if (!composeSending) {
+          setComposeOpen(false);
+        }
+      }}
       maxWidth="md"
       fullWidth
       fullScreen={isMobile}
@@ -1142,17 +1160,42 @@ const Email = () => {
           </Alert>
         )}
         <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-          <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="body2" sx={{ minWidth: 60, color: '#5f6368', fontWeight: 500 }}>To</Typography>
-            <TextField
-              value={composeData.to}
-              onChange={(e) => setComposeData(prev => ({ ...prev, to: e.target.value }))}
-              fullWidth
-              placeholder="Recipients"
-              variant="standard"
-              InputProps={{ disableUnderline: true, sx: { fontSize: '0.875rem' } }}
-              required
-            />
+          <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Typography variant="body2" sx={{ minWidth: 60, color: '#5f6368', fontWeight: 500, pt: 1 }}>To</Typography>
+            <Box sx={{ flex: 1 }}>
+              <TextField
+                value={composeData.to}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setComposeData(prev => ({ ...prev, to: value }));
+                  // Validate emails when 'to' field changes
+                  const validation = validateEmailRecipients(value);
+                  setEmailValidation(validation);
+                }}
+                fullWidth
+                placeholder="Recipients (separate multiple emails with commas)"
+                variant="standard"
+                error={!emailValidation.valid && composeData.to.length > 0}
+                helperText={
+                  composeData.to.length > 0 ? (
+                    emailValidation.valid ? (
+                      getRecipientCount(composeData.to) > 1 
+                        ? `${getRecipientCount(composeData.to)} recipients` 
+                        : '1 recipient'
+                    ) : (
+                      emailValidation.invalidEmails.length > 0
+                        ? `Invalid email(s): ${emailValidation.invalidEmails.join(', ')}`
+                        : 'Please enter at least one valid email address'
+                    )
+                  ) : (
+                    'Enter email addresses separated by commas'
+                  )
+                }
+                InputProps={{ disableUnderline: true, sx: { fontSize: '0.875rem' } }}
+                FormHelperTextProps={{ sx: { fontSize: '0.7rem', mt: 0.5 } }}
+                required
+              />
+            </Box>
           </Box>
           <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="body2" sx={{ minWidth: 60, color: '#5f6368', fontWeight: 500 }}>Subject</Typography>
@@ -1233,7 +1276,7 @@ const Email = () => {
             variant="contained"
             startIcon={composeSending ? <CircularProgress size={16} sx={{ color: 'white' }} /> : <SendIcon />}
             onClick={handleComposeSubmit}
-            disabled={!composeData.to || !composeData.subject || !composeData.body || composeSending}
+            disabled={!composeData.to || !composeData.subject || !composeData.body || composeSending || !emailValidation.valid}
             sx={{ backgroundColor: '#1a73e8', textTransform: 'none', fontWeight: 500, px: 3 }}
           >
             {composeSending ? 'Sending...' : 'Send'}
@@ -1258,7 +1301,8 @@ const Email = () => {
         <Button 
           onClick={() => {
             setComposeOpen(false);
-            setComposeData({ to: '', cc: '', bcc: '', subject: '', body: '', attachments: [] });
+            setComposeData({ to: '', subject: '', body: '', attachments: [] });
+            setEmailValidation({ valid: true, invalidEmails: [] });
             setComposeError(null);
           }} 
           disabled={composeSending}
