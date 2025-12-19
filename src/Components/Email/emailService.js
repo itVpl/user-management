@@ -177,7 +177,10 @@ export const transformEmail = (email, index) => {
   };
 };
 
-// Send email
+// Send email (JSON with base64 attachments)
+// Supports multiple recipients: array or comma-separated string
+// API automatically parses and handles multiple recipients
+// Example: { to: ["email1@example.com", "email2@example.com"] } or { to: "email1@example.com, email2@example.com" }
 export const sendEmail = async (emailData) => {
   const token = getAuthToken();
   
@@ -195,6 +198,8 @@ export const sendEmail = async (emailData) => {
 };
 
 // Send email with file uploads using FormData
+// Supports multiple recipients: comma-separated string (e.g., "email1@example.com, email2@example.com")
+// API automatically parses and handles multiple recipients
 export const sendEmailWithAttachments = async (emailData) => {
   const token = getAuthToken();
   
@@ -206,6 +211,8 @@ export const sendEmailWithAttachments = async (emailData) => {
   const formData = new FormData();
   
   // Add text fields
+  // 'to' can be a single email or comma-separated string for multiple recipients
+  // API supports: "email1@example.com, email2@example.com" or array format
   formData.append('to', emailData.to);
   formData.append('subject', emailData.subject);
   formData.append('text', emailData.text || emailData.body || '');
@@ -247,6 +254,8 @@ export const sendEmailWithAttachments = async (emailData) => {
 };
 
 // Reply to email with file uploads using FormData
+// Supports multiple recipients: comma-separated string (e.g., "email1@example.com, email2@example.com")
+// API automatically parses and handles multiple recipients
 export const replyToEmailWithFiles = async (replyData) => {
   const token = getAuthToken();
   
@@ -258,6 +267,7 @@ export const replyToEmailWithFiles = async (replyData) => {
   const formData = new FormData();
   
   // Add text fields
+  // 'to' can be a single email or comma-separated string for multiple recipients
   formData.append('to', replyData.to);
   formData.append('subject', replyData.subject);
   formData.append('text', replyData.text || replyData.body || '');
