@@ -37,6 +37,8 @@ const calculateDateRange = (key) => {
       startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       endDate = new Date(now.getFullYear(), now.getMonth(), 0);
       break;
+    case "AllTime":
+      return { startDate: null, endDate: null };
     default:
       return null;
   }
@@ -48,6 +50,7 @@ const calculateDateRange = (key) => {
 };
 
 const dateOptions = [
+  { label: "All Time", key: "AllTime" },
   { label: "Today", key: "Today" },
   { label: "Yesterday", key: "Yesterday" },
   { label: "Last 7 Days", key: "Last7Days" },
@@ -62,8 +65,8 @@ const DateRangeSelector = ({ dateRange, setDateRange }) => {
   const [isCustom, setIsCustom] = useState(false);
   const [range, setRange] = useState([
     {
-      startDate: new Date(dateRange.startDate),
-      endDate: new Date(dateRange.endDate),
+      startDate: new Date(dateRange.startDate || new Date()),
+      endDate: new Date(dateRange.endDate || new Date()),
       key: "selection",
     },
   ]);
@@ -83,6 +86,9 @@ const DateRangeSelector = ({ dateRange, setDateRange }) => {
   }, []);
 
   const getDisplayText = () => {
+    if (!dateRange.startDate || !dateRange.endDate) {
+      return "All Time";
+    }
     const start = new Date(dateRange.startDate).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -125,14 +131,14 @@ const DateRangeSelector = ({ dateRange, setDateRange }) => {
           setIsOpen(!isOpen);
           setIsCustom(false);
         }}
-        className="flex items-center justify-between px-3 py-1 border border-gray-300 rounded-lg text-sm w-56 bg-white shadow-sm hover:border-blue-500 transition"
+        className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg text-base w-56 bg-white shadow-sm hover:border-blue-500 transition"
       >
         <span className="flex items-center gap-2 truncate">
-          <Calendar size={16} className="text-gray-500" />
+          <Calendar size={20} className="text-gray-500" />
           {getDisplayText()}
         </span>
         <ChevronDown
-          size={16}
+          size={20}
           className={`ml-2 transition-transform ${
             isOpen ? "transform rotate-180" : ""
           }`}
@@ -147,7 +153,9 @@ const DateRangeSelector = ({ dateRange, setDateRange }) => {
               <li
                 key={option.key}
                 onClick={() => handleSelect(option.key)}
-                className="px-3 py-2 text-sm text-gray-700 cursor-pointer hover:bg-indigo-50 hover:text-indigo-700"
+                className={`px-3 py-2 text-sm text-gray-700 cursor-pointer hover:bg-indigo-50 hover:text-indigo-700 ${
+                  option.key === "CustomRange" ? "border-t border-gray-300 mt-1 pt-2" : ""
+                }`}
               >
                 {option.label}
               </li>
@@ -169,7 +177,7 @@ const DateRangeSelector = ({ dateRange, setDateRange }) => {
           />
           <button
             onClick={handleApplyCustom}
-            className="w-full text-center text-sm font-medium text-indigo-600 hover:text-indigo-800 pt-2 border-t mt-2"
+            className="w-full text-center text-base font-medium text-indigo-600 hover:text-indigo-800 pt-2 border-t mt-2"
           >
             Done
           </button>
