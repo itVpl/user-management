@@ -1104,7 +1104,7 @@ export default function DOReport() {
         return;
       }
 
-      // Define CSV headers
+      // Define CSV headers - matching table columns
       const headers = [
         'Load Num',
         'Bill To',
@@ -1112,6 +1112,9 @@ export default function DOReport() {
         'Work Order No',
         'Shipment No',
         'Container No',
+        'Customer Fee',
+        'Carrier Fee',
+        'Margin',
         'Created By'
       ];
 
@@ -1122,6 +1125,11 @@ export default function DOReport() {
           const workOrderNo = order.customers?.[0]?.workOrderNo || 'N/A';
           const shipmentNo = order.shipper?.shipmentNo || 'N/A';
           const containerNo = order.shipper?.containerNo || 'N/A';
+          const customerFee = order?.customers?.[0]?.totalAmount || 0;
+          const carrierFee = order?.carrierFees || 0;
+          const marginAmount = customerFee - carrierFee;
+          const marginPercentage = carrierFee > 0 ? ((marginAmount / carrierFee) * 100).toFixed(1) : 0;
+          const marginDisplay = `$${marginAmount} / ${marginPercentage}%`;
           
           return [
             `"${order.doNum || 'N/A'}"`,
@@ -1130,6 +1138,9 @@ export default function DOReport() {
             `"${workOrderNo}"`,
             `"${shipmentNo}"`,
             `"${containerNo}"`,
+            `"$${customerFee}"`,
+            `"$${carrierFee}"`,
+            `"${marginDisplay}"`,
             `"${order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}"`
           ].join(',');
         })
@@ -4876,6 +4887,9 @@ const handleUpdateOrder = async (e) => {
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">WORK ORDER NO</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPMENT NO</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CONTAINER NO</th>
+                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CUSTOMER FEE</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEE</th>
+                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">MARGIN</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
                 </tr>
@@ -4905,6 +4919,28 @@ const handleUpdateOrder = async (e) => {
                       </td>
                       <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{containerNo}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{order?.customers?.[0]?.totalAmount || 'N/A'}</span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">
+                          {order?.carrierFees !== undefined && order?.carrierFees !== null 
+                            ? order.carrierFees 
+                            : 0}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">
+                          {(() => {
+                            const customerFee = order?.customers?.[0]?.totalAmount || 0;
+                            const carrierFee = order?.carrierFees || 0;
+                            const marginAmount = customerFee - carrierFee;
+                            const marginPercentage = carrierFee > 0 ? ((marginAmount / carrierFee) * 100).toFixed(1) : 0;
+                            
+                            return `$${marginAmount} / ${marginPercentage}%`;
+                          })()}
+                        </span>
                       </td>
                       <td className="py-2 px-3">
                         <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>

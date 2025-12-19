@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import apiService from '../../services/apiService.js';
-import { FaArrowLeft, FaDownload } from 'react-icons/fa';
+import { FaArrowLeft, FaDownload, FaFilePdf } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
 import Logo from '../../assets/LogoFinal.png';
 import IdentificaLogo from '../../assets/identifica_logo.png';
@@ -479,14 +479,7 @@ export default function FollowUpReport() {
   // Handle view order
   const handleViewOrder = async (rowOrder) => {
     try {
-      // Use stored full order data from report API
-      if (rowOrder._fullOrderData) {
-        setSelectedOrder(rowOrder._fullOrderData);
-        setShowOrderModal(true);
-        return;
-      }
-
-      // Fallback: fetch from API if full data not available
+      // Always fetch from API to ensure we have full data including attachments
       const orderId = rowOrder.originalId || rowOrder._id || null;
 
       if (!orderId) {
@@ -494,6 +487,7 @@ export default function FollowUpReport() {
         return;
       }
 
+      setLoadingOrderId(orderId); // Show loading indicator
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const res = await axios.get(
         `https://vpl-liveproject-1.onrender.com/api/v1/sales-followup/${orderId}`,
@@ -509,6 +503,8 @@ export default function FollowUpReport() {
     } catch (err) {
       console.error('View order failed:', err?.response?.data || err);
       alertify.error('Failed to fetch follow-up details');
+    } finally {
+      setLoadingOrderId(null);
     }
   };
 
@@ -570,6 +566,81 @@ export default function FollowUpReport() {
       console.error('Error updating status:', error);
       alertify.error('Failed to update status. Please try again.');
     }
+  };
+
+  // Status color helper
+  const renderAttachment = (path) => {
+    if (!path) return null;
+
+    const paths = Array.isArray(path) ? path : [path];
+    if (paths.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-4">
+        {paths.map((fileItem, index) => {
+          let filePath = fileItem;
+          // Handle object structure from API (e.g., { fileUrl: "...", fileName: "..." })
+          if (typeof fileItem === 'object' && fileItem !== null) {
+            filePath = fileItem.fileUrl || fileItem.file || fileItem.path || '';
+          }
+
+          if (typeof filePath !== 'string' || !filePath) return null;
+          
+          // Clean up the path (trim spaces and remove backticks if present)
+          const cleanPath = filePath.trim().replace(/^`|`$/g, '').trim();
+          
+          const normalizedPath = cleanPath.replace(/\\/g, '/');
+          const url = normalizedPath.startsWith('http')
+            ? normalizedPath
+            : `${API_CONFIG.BASE_URL}/${normalizedPath.replace(/^\//, '')}`;
+          const isPdf = normalizedPath.toLowerCase().endsWith('.pdf');
+          
+          // Get a display name
+          const fileName = fileItem.fileName || cleanPath.split('/').pop() || `Attachment ${index + 1}`;
+
+          if (isPdf) {
+             return (
+              <a 
+                key={index}
+                href={url}
+                download
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors group w-full max-w-sm"
+              >
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center group-hover:bg-red-200 transition-colors">
+                  <FaFilePdf className="text-red-500" size={20} />
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <p className="text-sm font-medium text-gray-700 truncate">{fileName}</p>
+                  <p className="text-xs text-red-500 font-medium mt-0.5">Click to Download PDF</p>
+                </div>
+                <FaDownload className="text-gray-400 group-hover:text-red-500 transition-colors" size={16} />
+              </a>
+             );
+          }
+
+          // For Images: Show Preview
+          return (
+            <div key={index} className="mt-3 relative group">
+              <p className="text-xs font-semibold text-gray-500 mb-1">Attachment {paths.length > 1 ? index + 1 : ''}</p>
+              <div className="border rounded-lg overflow-hidden bg-gray-50 h-48 w-full max-w-sm relative group">
+                <img src={url} alt="Attachment" className="w-full h-full object-contain" />
+                 <a 
+                    href={url} 
+                    download 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium cursor-pointer"
+                  >
+                    <FaDownload className="mr-2" /> Download Image
+                  </a>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   // Loading state
@@ -1054,6 +1125,14 @@ export default function FollowUpReport() {
                           <p className="text-sm text-gray-700 mt-2">
                             {followUp.followUpNotes || followUp.note || 'No notes'}
                           </p>
+
+                          {/* Attachments for this follow-up */}
+                          {followUp.attachments && (
+                            <div className="mt-3">
+                              {renderAttachment(followUp.attachments)}
+                            </div>
+                          )}
+
                           {followUp.createdBy && (
                             <div className="text-xs text-gray-500 mt-2">
                               By: {followUp.createdBy.employeeName || followUp.createdBy.name || 'Unknown'}
@@ -1074,6 +1153,19 @@ export default function FollowUpReport() {
                     </div>
                     <div className="bg-white rounded-lg p-4 border border-yellow-200">
                       <p className="text-gray-700">{selectedOrder.remarks}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Attachments */}
+                {selectedOrder.attachments && selectedOrder.attachments.length > 0 && (
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Calendar className="text-blue-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Attachments</h3>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-blue-200">
+                       {renderAttachment(selectedOrder.attachments)}
                     </div>
                   </div>
                 )}
