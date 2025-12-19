@@ -110,11 +110,22 @@ const EmailList = ({
             </Typography>
           </Box>
           {/* Emails in this group */}
-          {group.emails.map((email) => (
+          {group.emails.map((email, emailIndex) => {
+            // Use UID as primary identifier if available, otherwise use ID
+            const emailKey = email.uid !== null && email.uid !== undefined && email.uid !== '' 
+              ? `uid-${email.uid}` 
+              : `id-${email.id}-${emailIndex}`;
+            
+            // Compare using UID if both have it, otherwise use ID
+            const isSelected = email.uid !== null && email.uid !== undefined && email.uid !== '' && selectedEmail?.uid !== null && selectedEmail?.uid !== undefined && selectedEmail?.uid !== ''
+              ? selectedEmail.uid === email.uid
+              : selectedEmail?.id === email.id;
+            
+            return (
             <ListItem
-              key={email.id}
+              key={emailKey}
               onClick={() => onEmailSelect(email)}
-              selected={selectedEmail?.id === email.id}
+              selected={isSelected}
               sx={{
                 borderBottom: '1px solid #e8eaed',
                 backgroundColor: email.isRead ? 'white' : '#f2f6fc',
@@ -180,7 +191,8 @@ const EmailList = ({
                 </Box>
               </Box>
             </ListItem>
-          ))}
+            );
+          })}
         </React.Fragment>
       ))}
     </List>
