@@ -70,6 +70,7 @@ import OfficeExpenses from "./Components/HRDashboard/OfficeExpenses.jsx";
 import EmpLeaves from "./Components/HRDashboard/EmpLeaves.jsx";
 import AddTruckerDriver from "./Components/CMT/AddTruckerDriver.jsx";
 import  AssignDo  from "./Components/CMT-Manager/AssignDo.jsx";
+import TruckerReassign from "./Components/CMT-Manager/TruckerReassign.jsx";
 import CompanyList from "./Components/Accountant/Company/CompanyList.jsx";
 import TallyManagement from "./Components/Finance/TallyManagement.jsx";
 import LedgerManagement from "./Components/Finance/LedgerManagement.jsx";
@@ -460,8 +461,8 @@ function App() {
           <Route path="empty-truck-location" element={<EmptyTruckLocation />} />
           <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
           <Route path="break-report" element={<BreakReport />} />
-          
           <Route path="allcustomer" element={<AllCustomer />} />
+          <Route path="trucker-reassign" element={<TruckerReassign />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -3355,7 +3355,7 @@ const handleUpdateOrder = async (e) => {
             '<tr>' +
             '<td style="width:50%;padding:8px;">' +
             '<strong>Date:</strong> ' + dateStr + '<br>' +
-            '<strong>Time:</strong> N/A<br>' +
+            // '<strong>Time:</strong> N/A<br>' +
             '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
             '<strong>Quantity:</strong> 1<br>' +
             '<strong>Weight:</strong> ' + ((l.weight !== undefined && l.weight !== null && l.weight !== '') ? l.weight : (order.weight || 'N/A')) + ' lbs' +
@@ -3393,7 +3393,7 @@ const handleUpdateOrder = async (e) => {
             '<tr>' +
             '<td style="width:50%;padding:8px;">' +
             '<strong>Date:</strong> ' + dateStr + '<br>' +
-            '<strong>Time:</strong> N/A<br>' +
+            // '<strong>Time:</strong> N/A<br>' +
             '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
             '<strong>Quantity:</strong> 1<br>' +
             '<strong>Weight:</strong> ' + ((l.weight !== undefined && l.weight !== null && l.weight !== '') ? l.weight : (order.weight || 'N/A')) + ' lbs' +
@@ -3569,7 +3569,7 @@ const handleUpdateOrder = async (e) => {
         '<tr>' +
         '<td style="width:50%;padding:8px;">' +
         '<strong>Date:</strong> ' + returnDateStr + '<br>' +
-        '<strong>Time:</strong> ' + returnTimeStr + '<br>' +
+        // '<strong>Time:</strong> ' + returnTimeStr + '<br>' +
         '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
         '<strong>Quantity:</strong> 1<br>' +
         '<strong>Weight:</strong> ' + (returnLoc.weight ? returnLoc.weight + ' lbs' : 'N/A') +
