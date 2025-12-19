@@ -187,12 +187,27 @@ const Email = () => {
       if (fetchedEmails.length > 0) {
         const transformedEmails = fetchedEmails.map((email, index) => {
           const transformed = transformEmail(email, index);
+          // Preserve original UID from API response (can be number or string)
+          const originalUid = email.uid !== null && email.uid !== undefined && email.uid !== '' 
+            ? email.uid 
+            : transformed.uid;
+          
           // For sent emails, set from to the user's email and ensure folder is 'sent'
+          // Preserve content, attachments, and other fields directly from API response
           return {
             ...transformed,
+            // Explicitly preserve UID from API response
+            uid: originalUid,
             from: userEmail || transformed.from,
             fromName: displayName || transformed.fromName,
-            folder: 'sent'
+            folder: 'sent',
+            // Preserve content field from API (it's already in the list response)
+            content: email.content || transformed.content || transformed.body,
+            body: email.content || transformed.body || transformed.content, // Map content to body
+            // Preserve attachments from API response
+            attachments: email.attachments || transformed.attachments || [],
+            hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : transformed.hasAttachments,
+            attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : transformed.attachmentCount
           };
         });
 
@@ -297,37 +312,208 @@ const Email = () => {
   };
 
   const handleEmailSelect = async (email) => {
-
-
-
-    // Set basic email info first
-    setSelectedEmail(email);
+    // Preserve ALL original email properties to ensure correct selection
+    const originalId = email.id;
+    const originalUid = email.uid;
+    const originalSubject = email.subject;
+    const originalFrom = email.from;
+    const originalTimestamp = email.timestamp;
+    const emailFolder = email.folder || 'inbox';
+    
+    console.log('🔵 Selecting email:', { 
+      id: originalId, 
+      uid: originalUid, 
+      subject: originalSubject,
+      from: originalFrom,
+      folder: emailFolder,
+      hasContent: !!(email.content || email.body),
+      contentPreview: (email.content || email.body || '').substring(0, 50)
+    });
+    
+    // Set basic email info first with preserved ID
+    setSelectedEmail({
+      ...email,
+      id: originalId,
+      uid: originalUid
+    });
+    
     if (!email.isRead) {
-      markAsRead(email.id);
+      markAsRead(originalId);
     }
 
-    // Fetch full email details if uid is available
-    if (email.uid && createdAccountId) {
-
+    // For sent emails, the list response already includes content and attachments
+    // We should use that content directly to avoid fetching wrong emails
+    const hasValidUid = originalUid !== null && originalUid !== undefined && originalUid !== '';
+    const hasContentFromList = email.content || email.body;
+    const isSentEmail = emailFolder === 'sent';
+    
+    // For sent emails, ALWAYS use content from list - never fetch
+    if (isSentEmail && hasContentFromList) {
+      console.log('✅ Sent email with content - using list data directly (no fetch)');
+      const selectedEmailData = {
+        ...email,
+        id: originalId,
+        uid: originalUid,
+        subject: originalSubject,
+        from: originalFrom,
+        fromName: email.fromName || email.from,
+        timestamp: originalTimestamp,
+        folder: 'sent',
+        body: email.content || email.body || email.text || '',
+        content: email.content || email.body || email.text || '',
+        attachments: email.attachments || [],
+        hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : (email.attachments?.length > 0),
+        attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : (email.attachments?.length || 0)
+      };
+      console.log('✅ Setting sent email:', {
+        id: selectedEmailData.id,
+        uid: selectedEmailData.uid,
+        subject: selectedEmailData.subject,
+        contentPreview: selectedEmailData.content.substring(0, 50)
+      });
+      setSelectedEmail(selectedEmailData);
+      return;
+    }
+    
+    console.log('🔵 Email selection details:', {
+      id: originalId,
+      uid: originalUid,
+      uidType: typeof originalUid,
+      hasValidUid,
+      hasContentFromList: !!hasContentFromList,
+      contentPreview: hasContentFromList ? (hasContentFromList.substring(0, 50) + '...') : 'no content',
+      subject: originalSubject,
+      attachments: email.attachments?.length || 0
+    });
+    
+    // If we already have content from the list response, use it directly
+    // The list response has the correct content for the correct email
+    // DO NOT fetch - the list already has all the information we need
+    if (hasContentFromList) {
+      console.log('✅ Using content from list response - this is the correct email content', {
+        uid: originalUid,
+        subject: originalSubject,
+        contentLength: (email.content || email.body || '').length,
+        contentPreview: (email.content || email.body || '').substring(0, 50)
+      });
+      
+      // Use content from list directly (NO FETCH - prevents wrong email from being displayed)
+      // Explicitly preserve all original fields including content
+      const selectedEmailData = {
+        ...email,
+        id: originalId,
+        uid: originalUid,
+        subject: originalSubject,
+        from: originalFrom,
+        fromName: email.fromName || email.from,
+        timestamp: originalTimestamp,
+        // Ensure content and body are from the original email (from list)
+        body: email.content || email.body || email.text || '',
+        content: email.content || email.body || email.text || '',
+        // Preserve attachments from list
+        attachments: email.attachments || [],
+        hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : (email.attachments?.length > 0),
+        attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : (email.attachments?.length || 0)
+      };
+      
+      console.log('✅ Setting selected email with list content:', {
+        id: selectedEmailData.id,
+        uid: selectedEmailData.uid,
+        subject: selectedEmailData.subject,
+        contentPreview: selectedEmailData.content.substring(0, 50)
+      });
+      
+      setSelectedEmail(selectedEmailData);
+      return;
+    }
+    
+    // Only fetch if we don't have content from list
+    if (hasValidUid && createdAccountId) {
       try {
-        const response = await fetchEmailByUid(email.uid, createdAccountId);
+        // fetchEmailByUid will convert UID to string if needed
+        const response = await fetchEmailByUid(originalUid, createdAccountId);
 
         if (response.success && response.email) {
           const fullEmail = response.email;
-
+          
+          // Validate that the fetched email matches the selected one by UID
+          const fetchedUid = fullEmail.uid;
+          const fetchedSubject = fullEmail.subject || fullEmail.Subject || '';
+          const fetchedFrom = fullEmail.from || fullEmail.From || '';
+          
+          console.log('✅ Fetched email:', { 
+            requestedUid: originalUid,
+            fetchedUid: fetchedUid,
+            uidMatch: String(fetchedUid) === String(originalUid),
+            subject: fetchedSubject,
+            from: fetchedFrom 
+          });
+          
+          // Verify it's the same email by comparing UID first, then subject
+          const uidMatches = fetchedUid !== null && fetchedUid !== undefined && String(fetchedUid) === String(originalUid);
+          const subjectMatches = !originalSubject || !fetchedSubject || originalSubject.trim() === fetchedSubject.trim();
+          const isValidEmail = uidMatches && subjectMatches;
+          
+          if (!uidMatches) {
+            console.error('❌ UID mismatch! Wrong email fetched! Using original email data only.', {
+              requested: originalUid,
+              fetched: fetchedUid,
+              originalSubject: originalSubject,
+              fetchedSubject: fetchedSubject
+            });
+            // Don't use fetched email if UID doesn't match - use original email only
+            setSelectedEmail(email);
+            return;
+          } else if (!subjectMatches) {
+            console.warn('⚠️ Subject mismatch (but UID matches):', {
+              original: { uid: originalUid, subject: originalSubject },
+              fetched: { uid: fetchedUid, subject: fetchedSubject }
+            });
+            // UID matches but subject doesn't - still use fetched content but preserve original subject
+          }
+          
           const transformedFullEmail = transformEmail(fullEmail);
+          
+          // Only use fetched email content if UID matches
+          // Always preserve original email's key properties (subject, from, etc.)
+          // Priority: Original email content from list > Fetched email content
+          // The list response already has the correct content - always use that!
           const updatedEmail = {
-            ...email,
-            ...transformedFullEmail,
-            id: email.id || transformedFullEmail.uid,
-            uid: transformedFullEmail.uid || email.uid,
-            body: fullEmail.content || fullEmail.text || email.body,
-            html: fullEmail.html || email.html,
-            attachments: fullEmail.attachments || email.attachments || [],
-            hasAttachments: fullEmail.hasAttachments || (fullEmail.attachments?.length > 0),
-            attachmentCount: fullEmail.attachmentCount || (fullEmail.attachments?.length || 0),
+            ...email, // Start with ALL original email properties (includes content from list)
+            // Only update with fetched data if UID matches
+            id: originalId, // Always use the original ID from the list
+            uid: originalUid, // Always preserve original UID
+            subject: originalSubject, // Always preserve original subject
+            from: originalFrom, // Always preserve original from
+            fromName: email.fromName, // Always preserve original fromName
+            timestamp: originalTimestamp, // Always preserve original timestamp
+            // CRITICAL: Always use original content from list first - it's already correct!
+            // Only use fetched content if original is missing
+            body: email.content || email.body || email.text || fullEmail.content || fullEmail.text || transformedFullEmail.body,
+            content: email.content || email.body || email.text || fullEmail.content || fullEmail.text,
+            // HTML might only be available from fetched email, but don't overwrite body
+            html: email.html || fullEmail.html || transformedFullEmail.html,
+            // Attachments: prefer fetched if available (they're more complete), but keep original if fetched is empty
+            attachments: fullEmail.attachments?.length > 0 ? fullEmail.attachments : (email.attachments || []),
+            hasAttachments: fullEmail.hasAttachments || (fullEmail.attachments?.length > 0) || email.hasAttachments,
+            attachmentCount: fullEmail.attachmentCount || (fullEmail.attachments?.length || 0) || email.attachmentCount,
             messageId: fullEmail.messageId || fullEmail.messageID || fullEmail.message_id || email.messageId || null
           };
+          
+          console.log('📧 Final email to display:', {
+            id: updatedEmail.id,
+            uid: updatedEmail.uid,
+            subject: updatedEmail.subject,
+            bodyPreview: updatedEmail.body?.substring(0, 50) + '...',
+            from: updatedEmail.from
+          });
+
+          console.log('Final email to display:', { 
+            id: updatedEmail.id, 
+            uid: updatedEmail.uid, 
+            subject: updatedEmail.subject,
+            from: updatedEmail.from 
+          });
 
           setSelectedEmail(updatedEmail);
         } else {
@@ -339,7 +525,15 @@ const Email = () => {
         // Keep the basic email info if fetch fails
       }
     } else {
-      console.warn('Cannot fetch full email - missing uid or accountId:', { uid: email.uid, accountId: createdAccountId });
+      // Check if UID is empty/invalid
+      const hasValidUid = originalUid !== null && originalUid !== undefined && originalUid !== '';
+      if (!hasValidUid) {
+        console.log('Email has no valid UID, displaying basic info only:', { subject: originalSubject });
+        // Email has no UID, so we can't fetch full details - just use what we have
+        setSelectedEmail(email);
+      } else {
+        console.warn('Cannot fetch full email - missing uid or accountId:', { uid: originalUid, accountId: createdAccountId });
+      }
     }
   };
 

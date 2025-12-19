@@ -103,7 +103,10 @@ export const fetchEmailByUid = async (uid, accountId) => {
     throw new Error('Please login to access emails');
   }
 
-  const emailUrl = `${API_BASE_URL}/email-inbox/${uid}?emailAccountId=${accountId}`;
+  // Convert UID to string (handles both number and string UIDs)
+  const uidString = String(uid);
+  
+  const emailUrl = `${API_BASE_URL}/email-inbox/${uidString}?emailAccountId=${accountId}`;
 
   const response = await axios.get(
     emailUrl,
@@ -155,15 +158,39 @@ export const transformEmail = (email, index) => {
   const emailDate = email.date || email.timestamp || email.createdAt;
   const parsedDate = parseEmailDate(emailDate);
   
+  // Handle UID - can be number, string, or empty string
+  // Preserve the original UID value (number or string) for API calls
+  const rawUid = email.uid;
+  // Convert empty string to null, but keep numbers and non-empty strings as-is
+  const validUid = (rawUid !== null && rawUid !== undefined && rawUid !== '') ? rawUid : null;
+  
+  // Create a unique ID for React keys and selection
+  // Use uid if available (convert to string for consistency), otherwise create composite key
+  let uniqueId;
+  if (email._id) {
+    uniqueId = String(email._id);
+  } else if (email.id) {
+    uniqueId = String(email.id);
+  } else if (validUid !== null) {
+    // Use UID as ID (convert to string for consistency)
+    uniqueId = String(validUid);
+  } else {
+    // Create composite ID from subject, date, and index for uniqueness when UID is missing
+    const subjectPart = (email.subject || 'nosubject').substring(0, 20).replace(/\s+/g, '_');
+    const datePart = (email.date || email.timestamp || '').replace(/\s+/g, '_');
+    uniqueId = `sent_${subjectPart}_${datePart}_${index}`;
+  }
+  
   return {
-    id: email._id || email.id || index,
-    uid: email.uid || email._id || email.id || index, // Preserve uid from API - this is critical for fetching full email
+    id: uniqueId,
+    uid: validUid, // Preserve original UID (number or string) for API calls, null if empty
     from: email.from || email.sender || 'unknown@example.com',
     fromName: email.fromName || email.senderName || email.from || 'Unknown Sender',
     to: email.to || email.recipient || 'you@example.com',
     subject: email.subject || 'No Subject',
-    body: email.body || email.text || email.content || '',
+    body: email.body || email.text || email.content || '', // Map 'content' field from API to 'body'
     html: email.html || email.htmlBody || email.htmlContent || '',
+    content: email.content || email.body || email.text || '', // Also preserve 'content' field
     timestamp: parsedDate,
     date: email.date, // Preserve original date string
     isRead: email.isRead || email.read || email.seen || false,
