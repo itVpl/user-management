@@ -81,6 +81,7 @@ import AllCustomer from "./Components/Sales/AllCustomer.jsx";
 import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
 import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
 import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
+import FollowUpReport from "./Components/Sales/FollowUpReport.jsx";
 
 
 
@@ -465,6 +466,7 @@ function App() {
           <Route path="break-report" element={<BreakReport />} />
           <Route path="allcustomer" element={<AllCustomer />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />
+          <Route path="followUpReport" element={<FollowUpReport />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
