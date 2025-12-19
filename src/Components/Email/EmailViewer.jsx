@@ -10,15 +10,11 @@ import {
   Button,
 } from '@mui/material';
 import {
-  Star as StarIcon,
-  StarBorder as StarBorderIcon,
   Reply as ReplyIcon,
-  Delete as DeleteIcon,
   AttachFile as AttachFileIcon,
   Close as CloseIcon,
   OpenInNew as OpenInNewIcon,
   MoreVert as MoreVertIcon,
-  Print as PrintIcon,
 } from '@mui/icons-material';
 
 const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply }) => {
@@ -103,26 +99,6 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply }
               <CloseIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <Tooltip title={selectedEmail.isStarred ? 'Unstar' : 'Star'}>
-              <IconButton size="small" onClick={() => onToggleStar(selectedEmail.id)}>
-                {selectedEmail.isStarred ? 
-                  <StarIcon sx={{ color: '#fbbc04', fontSize: 20 }} /> : 
-                  <StarBorderIcon sx={{ fontSize: 20, color: '#5f6368' }} />
-                }
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Print">
-              <IconButton size="small">
-                <PrintIcon sx={{ fontSize: 20, color: '#5f6368' }} />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Delete">
-              <IconButton size="small" onClick={() => onDelete(selectedEmail.id)}>
-                <DeleteIcon sx={{ fontSize: 20, color: '#5f6368' }} />
-              </IconButton>
-            </Tooltip>
-          </Box>
         </Box>
 
         {/* Subject */}

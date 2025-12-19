@@ -1790,22 +1790,6 @@ const Email = () => {
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
-                  <IconButton size="small" onClick={() => toggleStar(selectedEmail.id)}>
-                    {selectedEmail.isStarred ? 
-                      <StarIcon sx={{ color: '#fbbc04', fontSize: 20 }} /> : 
-                      <StarBorderIcon sx={{ fontSize: 20, color: '#5f6368' }} />
-                    }
-                  </IconButton>
-                  <Tooltip title="Reply">
-                    <IconButton size="small" onClick={() => handleReply(selectedEmail)}>
-                      <ReplyIcon sx={{ fontSize: 20, color: '#5f6368' }} />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Delete">
-                    <IconButton size="small" onClick={() => deleteEmail(selectedEmail.id)}>
-                      <DeleteIcon sx={{ fontSize: 20, color: '#5f6368' }} />
-                    </IconButton>
-                  </Tooltip>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                   {selectedEmail.priority === 'high' && (
