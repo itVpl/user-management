@@ -36,7 +36,6 @@ import {
   Send as SendIcon,
   Reply as ReplyIcon,
   ReplyAll as ReplyAllIcon,
-  Forward as ForwardIcon,
   Delete as DeleteIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
@@ -1961,22 +1960,6 @@ const Email = () => {
                 }}
               >
                 Reply
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<ForwardIcon />}
-                sx={{ 
-                  textTransform: 'none',
-                  borderColor: '#dadce0',
-                  color: '#3c4043',
-                  fontWeight: 500,
-                  '&:hover': { 
-                    backgroundColor: '#e8f0fe',
-                    borderColor: '#1a73e8'
-                  }
-                }}
-              >
-                Forward
               </Button>
             </Box>
           </Box>

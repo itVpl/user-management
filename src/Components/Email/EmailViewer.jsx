@@ -13,7 +13,6 @@ import {
   Star as StarIcon,
   StarBorder as StarBorderIcon,
   Reply as ReplyIcon,
-  Forward as ForwardIcon,
   Delete as DeleteIcon,
   AttachFile as AttachFileIcon,
   Close as CloseIcon,
@@ -376,22 +375,6 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply }
           }}
         >
           Reply
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={<ForwardIcon />}
-          sx={{ 
-            textTransform: 'none',
-            borderColor: '#dadce0',
-            color: '#3c4043',
-            fontWeight: 500,
-            '&:hover': { 
-              backgroundColor: '#e8f0fe',
-              borderColor: '#1a73e8'
-            }
-          }}
-        >
-          Forward
         </Button>
       </Box>
     </Box>
