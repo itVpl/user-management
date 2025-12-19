@@ -338,55 +338,118 @@ const Email = () => {
   const [emailLoading, setEmailLoading] = useState(false);
 
   const handleEmailSelect = async (email) => {
-    // Set basic email info first
-    setSelectedEmail(email);
+    // Preserve ALL original email properties to ensure correct selection
+    const originalId = email.id;
+    const originalUid = email.uid || email.id;
+    const originalSubject = email.subject;
+    const originalFrom = email.from;
+    const originalTimestamp = email.timestamp;
+    
+    // Set basic email info first with preserved ID
+    setSelectedEmail({
+      ...email,
+      id: originalId,
+      uid: originalUid
+    });
     
     if (!email.isRead) {
-      markAsRead(email.id);
+      markAsRead(originalId);
     }
 
-    // Always fetch full email to get attachments and full content
-    setEmailLoading(true);
-    try {
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || 
-                    sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-      
-      if (!token || !createdAccountId) {
+    // For sent emails, the list response already includes content and attachments
+    // We should use that content directly to avoid fetching wrong emails
+    const hasValidUid = originalUid !== null && originalUid !== undefined && originalUid !== '';
+    const hasContentFromList = email.content || email.body;
+    
+    // If we already have content from the list response, use it directly
+    if (hasContentFromList) {
+      console.log('✅ Using content from list response - this is the correct email content');
+      // Use content from list directly (no fetch needed)
+      setSelectedEmail({
+        ...email,
+        id: originalId,
+        uid: originalUid,
+        subject: originalSubject,
+        from: originalFrom,
+        fromName: email.fromName,
+        timestamp: originalTimestamp,
+        // Ensure content and body are from the original email
+        body: email.content || email.body || email.text || '',
+        content: email.content || email.body || email.text || '',
+        // Preserve attachments from list
+        attachments: email.attachments || [],
+        hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : (email.attachments?.length > 0),
+        attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : (email.attachments?.length || 0)
+      });
+      return;
+    }
 
-        setEmailLoading(false);
-        return;
-      }
+    // Only fetch if we don't have content from list
+    if (hasValidUid && createdAccountId) {
+      setEmailLoading(true);
+      try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token") || 
+                      sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+        
+        if (!token || !createdAccountId) {
+          setEmailLoading(false);
+          return;
+        }
 
-      const uid = email.uid || email.id;
+        // Use the preserved UID
+        const uid = originalUid;
 
-      const response = await axios.get(
-        `${API_BASE_URL}/email-inbox/${uid}?emailAccountId=${createdAccountId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+        const response = await axios.get(
+          `${API_BASE_URL}/email-inbox/${uid}?emailAccountId=${createdAccountId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (response.data.success && response.data.email) {
+          const fullEmail = response.data.email;
+          const fetchedUid = fullEmail.uid;
+          
+          // Validate UID matches
+          if (String(fetchedUid) === String(originalUid)) {
+            // UID matches - safe to use fetched content
+            setSelectedEmail({
+              ...email, // Keep original email properties
+              ...fullEmail, // Merge fetched email properties
+              id: originalId, // Always use the original ID from the list
+              uid: originalUid || fullEmail.uid, // Preserve original UID
+              subject: originalSubject, // Preserve original subject
+              from: originalFrom, // Preserve original from
+              timestamp: originalTimestamp, // Preserve original timestamp
+              body: fullEmail.content || fullEmail.text || email.body,
+              content: fullEmail.content || fullEmail.text || email.body,
+              html: fullEmail.html || email.html,
+              attachments: fullEmail.attachments || email.attachments || [],
+              hasAttachments: fullEmail.hasAttachments !== undefined ? fullEmail.hasAttachments : (fullEmail.attachments?.length > 0),
+              attachmentCount: fullEmail.attachmentCount !== undefined ? fullEmail.attachmentCount : (fullEmail.attachments?.length || 0)
+            });
+          } else {
+            console.warn('⚠️ UID mismatch - using original email data only');
+            // UID doesn't match - use original email only
+            setSelectedEmail({
+              ...email,
+              id: originalId,
+              uid: originalUid,
+              subject: originalSubject,
+              from: originalFrom,
+              timestamp: originalTimestamp
+            });
           }
         }
-      );
-
-      if (response.data.success && response.data.email) {
-        const fullEmail = response.data.email;
-        setSelectedEmail({
-          ...email,
-          ...fullEmail,
-          id: email.id || fullEmail.uid,
-          uid: fullEmail.uid || email.uid,
-          body: fullEmail.content || fullEmail.text || email.body,
-          html: fullEmail.html || email.html,
-          attachments: fullEmail.attachments || [],
-          hasAttachments: fullEmail.hasAttachments || (fullEmail.attachments?.length > 0)
-        });
+      } catch (err) {
+        console.error('Error fetching full email:', err);
+        // Keep the basic email info if fetch fails
+      } finally {
+        setEmailLoading(false);
       }
-    } catch (err) {
-      console.error('Error fetching full email:', err);
-      // Keep the basic email info if fetch fails
-    } finally {
-      setEmailLoading(false);
     }
   };
 
