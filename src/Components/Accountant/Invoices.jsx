@@ -43,6 +43,7 @@ import {
   Radio,
   Tabs,
   Tab,
+  Checkbox,
 } from "@mui/material";
 import { createTheme, ThemeProvider, alpha } from "@mui/material/styles";
 import {
@@ -682,6 +683,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     paymentProof: null
   });
   const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // Bulk payment state
+  const [bulkPaymentModalOpen, setBulkPaymentModalOpen] = useState(false);
+  const [selectedDOs, setSelectedDOs] = useState(new Set());
+  const [bulkPaymentDOIds, setBulkPaymentDOIds] = useState([]); // Store DO IDs when modal opens
+  const [bulkPaymentForm, setBulkPaymentForm] = useState({
+    paymentMethod: '',
+    paymentReference: '',
+    paymentNotes: '',
+    paymentProof: null
+  });
+  const [bulkPaymentLoading, setBulkPaymentLoading] = useState(false);
 
   // Logo source for PDF generation - using your actual logo
   const logoSrc = Logo;
@@ -2095,6 +2108,95 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
   };
 
+  const handleBulkPaymentSubmit = async () => {
+    // Use the stored DO IDs from when modal was opened, or fallback to current selectedDOs
+    const doIdsToProcess = bulkPaymentDOIds.length > 0 ? bulkPaymentDOIds : Array.from(selectedDOs);
+    
+    if (doIdsToProcess.length === 0) {
+      setToast({ open: true, severity: "error", msg: "Please select at least one DO to mark as paid" });
+      return;
+    }
+
+    // Validation
+    if (!bulkPaymentForm.paymentMethod) {
+      setToast({ open: true, severity: "error", msg: "Please select a payment method" });
+      return;
+    }
+    if (!bulkPaymentForm.paymentProof) {
+      setToast({ open: true, severity: "error", msg: "Please upload payment proof document" });
+      return;
+    }
+
+    setBulkPaymentLoading(true);
+    try {
+      const formData = new FormData();
+      // Ensure we have valid DO IDs
+      const validDoIds = doIdsToProcess.filter(id => id && typeof id === 'string' && id.trim() !== '');
+      
+      if (validDoIds.length === 0) {
+        setToast({ open: true, severity: "error", msg: "No valid DO IDs found. Please select DOs again." });
+        setBulkPaymentLoading(false);
+        return;
+      }
+      
+      formData.append('doIds', JSON.stringify(validDoIds));
+      formData.append('accountantEmpId', empId);
+      formData.append('paymentMethod', bulkPaymentForm.paymentMethod);
+      if (bulkPaymentForm.paymentReference) {
+        formData.append('paymentReference', bulkPaymentForm.paymentReference);
+      }
+      if (bulkPaymentForm.paymentNotes) {
+        formData.append('paymentNotes', bulkPaymentForm.paymentNotes);
+      }
+      formData.append('paymentProof', bulkPaymentForm.paymentProof);
+
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/bulk-mark-as-paid`;
+      const resp = await axios.post(url, formData, {
+        headers: {
+          ...headers,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (resp?.data?.success) {
+        const data = resp?.data?.data || {};
+        const successfullyMarked = data.successfullyMarked || 0;
+        const alreadyPaid = data.alreadyPaid || 0;
+        const invalidStatus = data.invalidStatus || 0;
+        
+        let message = `Successfully marked ${successfullyMarked} DO(s) as paid`;
+        if (alreadyPaid > 0) {
+          message += `. ${alreadyPaid} DO(s) were already paid`;
+        }
+        if (invalidStatus > 0) {
+          message += `. ${invalidStatus} DO(s) had invalid status`;
+        }
+        
+        setToast({ open: true, severity: "success", msg: message });
+        setBulkPaymentModalOpen(false);
+        setSelectedDOs(new Set());
+        setBulkPaymentDOIds([]);
+        setBulkPaymentForm({
+          paymentMethod: '',
+          paymentReference: '',
+          paymentNotes: '',
+          paymentProof: null
+        });
+        // Refresh the data
+        fetchAccepted(acceptedPage);
+      } else {
+        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark DOs as paid" });
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.message || error?.message || "Failed to mark DOs as paid";
+      setToast({ open: true, severity: "error", msg: errorMsg });
+      console.error('Bulk payment error:', error);
+      console.error('DO IDs being sent:', doIdsToProcess);
+    } finally {
+      setBulkPaymentLoading(false);
+    }
+  };
+
   // initial loads
   useEffect(() => {
     fetchData(page);
@@ -2123,6 +2225,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acceptedPage]);
 
+  // Clean up selected DOs when acceptedRows change (remove selections for DOs that are now paid or no longer exist)
+  useEffect(() => {
+    if (acceptedRows.length > 0) {
+      const validDOIds = new Set(acceptedRows
+        .filter(r => r?.paymentStatus?.status !== 'paid')
+        .map(r => r._id));
+      setSelectedDOs(prev => new Set([...Array.from(prev)].filter(id => validDOIds.has(id))));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acceptedRows]);
+
   useEffect(() => {
     fetchRejected(rejectedPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2131,7 +2244,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // tab change pe processed search reset
   useEffect(() => {
     if (activeTab === 1) setProcessedSearch("");
-    if (activeTab === 2) setAcceptedSearch("");
+    if (activeTab === 2) {
+      setAcceptedSearch("");
+      setSelectedDOs(new Set()); // Clear selections when switching to this tab
+    }
     if (activeTab === 3) setRejectedSearch("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -2813,6 +2929,26 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   )}
                 </div>
                 <button
+                  onClick={() => {
+                    if (selectedDOs.size === 0) {
+                      setToast({ open: true, severity: "error", msg: "Please select at least one DO to mark as paid" });
+                      return;
+                    }
+                    // Store the selected DO IDs when opening modal
+                    setBulkPaymentDOIds(Array.from(selectedDOs));
+                    setBulkPaymentModalOpen(true);
+                  }}
+                  disabled={acceptedLoading || selectedDOs.size === 0}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 shadow-lg ${
+                    acceptedLoading || selectedDOs.size === 0
+                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60'
+                      : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 hover:shadow-xl'
+                  }`}
+                >
+                  <DollarSign size={18} />
+                  <span>Bulk Pay ({selectedDOs.size})</span>
+                </button>
+                <button
                   onClick={() => fetchAccepted(acceptedPage)}
                   disabled={acceptedLoading}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2847,6 +2983,22 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     <table className="w-full">
                       <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                         <tr>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-12">
+                            <Checkbox
+                              checked={acceptedFiltered.length > 0 && acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').every(r => selectedDOs.has(r._id))}
+                              indeterminate={acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').some(r => selectedDOs.has(r._id)) && !acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').every(r => selectedDOs.has(r._id))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const unpaidDOs = acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').map(r => r._id);
+                                  setSelectedDOs(new Set([...selectedDOs, ...unpaidDOs]));
+                                } else {
+                                  const unpaidDOIds = acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').map(r => r._id);
+                                  setSelectedDOs(new Set([...Array.from(selectedDOs)].filter(id => !unpaidDOIds.includes(id))));
+                                }
+                              }}
+                              size="small"
+                            />
+                          </th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
@@ -2868,8 +3020,25 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             || "—";
                           const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
                           const isPaid = row?.paymentStatus?.status === 'paid';
+                          const isSelected = selectedDOs.has(row._id);
                           return (
-                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} ${isSelected ? 'bg-blue-50' : ''}`}>
+                              <td className="py-2 px-3 text-center">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    const newSelected = new Set(selectedDOs);
+                                    if (e.target.checked) {
+                                      newSelected.add(row._id);
+                                    } else {
+                                      newSelected.delete(row._id);
+                                    }
+                                    setSelectedDOs(newSelected);
+                                  }}
+                                  disabled={isPaid}
+                                  size="small"
+                                />
+                              </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
                               </td>
@@ -4239,6 +4408,187 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                     >
                       {paymentLoading ? "Processing..." : "Mark as Paid"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Bulk Payment Modal */}
+      {bulkPaymentModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setBulkPaymentModalOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <DollarSign size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Bulk Mark as Paid</h2>
+                      <p className="text-white/80 text-sm">{bulkPaymentDOIds.length || selectedDOs.size} DO(s) selected</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setBulkPaymentModalOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                <div className="space-y-4">
+                  {/* Selected DOs Info */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <p className="text-sm font-semibold text-blue-800 mb-2">Selected DOs:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(bulkPaymentDOIds.length > 0 ? bulkPaymentDOIds : Array.from(selectedDOs)).slice(0, 10).map((doId) => (
+                        <span key={doId} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded font-mono">
+                          {shortId(doId)}
+                        </span>
+                      ))}
+                      {(bulkPaymentDOIds.length || selectedDOs.size) > 10 && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                          +{(bulkPaymentDOIds.length || selectedDOs.size) - 10} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Payment Method */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Method <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={bulkPaymentForm.paymentMethod}
+                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentMethod: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                      required
+                    >
+                      <option value="">Select Payment Method</option>
+                      <option value="cash">Cash</option>
+                      <option value="check">Check</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="online">Online</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  {/* Payment Reference */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Reference (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={bulkPaymentForm.paymentReference}
+                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentReference: e.target.value })}
+                      placeholder="Transaction ID, Check Number, etc."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Payment Notes */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Notes (Optional)
+                    </label>
+                    <textarea
+                      value={bulkPaymentForm.paymentNotes}
+                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentNotes: e.target.value })}
+                      placeholder="Additional notes about the payment"
+                      rows={3}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                    />
+                  </div>
+
+                  {/* Payment Proof Upload */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Proof <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            if (file.size > 10 * 1024 * 1024) {
+                              setToast({ open: true, severity: "error", msg: "File size must be less than 10MB" });
+                              return;
+                            }
+                            setBulkPaymentForm({ ...bulkPaymentForm, paymentProof: file });
+                          }
+                        }}
+                        className="hidden"
+                        id="bulk-payment-proof-upload"
+                        required
+                      />
+                      <label
+                        htmlFor="bulk-payment-proof-upload"
+                        className="cursor-pointer flex flex-col items-center justify-center"
+                      >
+                        {bulkPaymentForm.paymentProof ? (
+                          <div className="text-center">
+                            <CheckCircle size={32} className="text-green-500 mx-auto mb-2" />
+                            <p className="text-sm font-medium text-gray-700">{bulkPaymentForm.paymentProof.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(bulkPaymentForm.paymentProof.size / 1024).toFixed(2)} KB
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBulkPaymentForm({ ...bulkPaymentForm, paymentProof: null });
+                                document.getElementById('bulk-payment-proof-upload').value = '';
+                              }}
+                              className="mt-2 text-sm text-red-500 hover:text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <AttachFileIcon className="text-gray-400 mb-2" style={{ fontSize: 40 }} />
+                            <p className="text-sm font-medium text-gray-700">Click to upload payment proof</p>
+                            <p className="text-xs text-gray-500 mt-1">PDF, JPG, PNG (Max 10MB)</p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => setBulkPaymentModalOpen(false)}
+                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                      disabled={bulkPaymentLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleBulkPaymentSubmit}
+                      disabled={bulkPaymentLoading || !bulkPaymentForm.paymentMethod || !bulkPaymentForm.paymentProof}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                    >
+                      {bulkPaymentLoading ? "Processing..." : `Mark ${bulkPaymentDOIds.length || selectedDOs.size} DO(s) as Paid`}
                     </button>
                   </div>
                 </div>
