@@ -981,7 +981,7 @@ export default function FollowUpReport() {
                     <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                     <div className="space-y-4">
                       <div>
                         <p className="text-sm text-gray-600">Customer Name</p>
@@ -1009,12 +1009,12 @@ export default function FollowUpReport() {
                         <p className="text-sm text-gray-600">Address</p>
                         <p className="font-semibold text-gray-800">{selectedOrder.address || 'N/A'}</p>
                       </div>
-                      <div>
+                      {/* <div>
                         <p className="text-sm text-gray-600">City/State</p>
                         <p className="font-semibold text-gray-800">
                           {selectedOrder.city || ''}{selectedOrder.city && selectedOrder.state ? ', ' : ''}{selectedOrder.state || ''}
                         </p>
-                      </div>
+                      </div> */}
                       <div>
                         <p className="text-sm text-gray-600">Calling Date</p>
                         <p className="font-semibold text-gray-800">
@@ -1086,33 +1086,7 @@ export default function FollowUpReport() {
                   </div>
                   
                   <div className="bg-white rounded-lg p-4 border border-purple-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Current Status</p>
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold mt-1 ${
-                          selectedOrder.status === 'Completed' ? 'bg-green-100 text-green-700' : 
-                          selectedOrder.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 
-                          selectedOrder.status === 'New' ? 'bg-blue-100 text-blue-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {selectedOrder.status || 'Pending'}
-                        </span>
-                      </div>
-                      
-                      <SearchableDropdown
-                        value={selectedOrder.status || 'New'}
-                        onChange={(value) => handleStatusChange(value)}
-                        options={[
-                          { value: 'New', label: 'New' },
-                          { value: 'Pending', label: 'Pending' },
-                          { value: 'Completed', label: 'Completed' },
-                          { value: 'Closed', label: 'Closed' }
-                        ]}
-                        placeholder="Update Status"
-                        searchPlaceholder="Search status..."
-                        className="w-48"
-                      />
-                    </div>
+                   
                     
                     <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
                       <div>

@@ -281,43 +281,43 @@ export default function TruckerReassign() {
     return ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileType?.toUpperCase());
   };
 
-  const handleExportCSV = () => {
-    if (filteredTruckers.length === 0) {
-      alertify.error('No data to export');
-      return;
-    }
+  // const handleExportCSV = () => {
+  //   if (filteredTruckers.length === 0) {
+  //     alertify.error('No data to export');
+  //     return;
+  //   }
 
-    const headers = ["Company Name", "MC/DOT No", "Email", "Phone", "City", "State", "Status", "Created Date", "Added By"];
+  //   const headers = ["Company Name", "MC/DOT No", "Email", "Phone", "City", "State", "Status", "Created Date", "Added By"];
     
-    // Map data to rows, ensuring each value is wrapped in double quotes
-    const rows = filteredTruckers.map(trucker => [
-      `"${trucker.compName || 'N/A'}"`,
-      `"${trucker.mc_dot_no || 'N/A'}"`,
-      `"${trucker.email || 'N/A'}"`,
-      `"${trucker.phoneNo || 'N/A'}"`,
-      `"${trucker.city || 'N/A'}"`,
-      `"${trucker.state || 'N/A'}"`,
-      `"${trucker.status || 'N/A'}"`,
-      `"${new Date(trucker.createdAt).toLocaleDateString()}"`,
-      `"${trucker.addedBy?.employeeName || 'System'}"`
-    ]);
+  //   // Map data to rows, ensuring each value is wrapped in double quotes
+  //   const rows = filteredTruckers.map(trucker => [
+  //     `"${trucker.compName || 'N/A'}"`,
+  //     `"${trucker.mc_dot_no || 'N/A'}"`,
+  //     `"${trucker.email || 'N/A'}"`,
+  //     `"${trucker.phoneNo || 'N/A'}"`,
+  //     `"${trucker.city || 'N/A'}"`,
+  //     `"${trucker.state || 'N/A'}"`,
+  //     `"${trucker.status || 'N/A'}"`,
+  //     `"${new Date(trucker.createdAt).toLocaleDateString()}"`,
+  //     `"${trucker.addedBy?.employeeName || 'System'}"`
+  //   ]);
 
-    // Join headers and rows
-    const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.join(','))
-    ].join('\n');
+  //   // Join headers and rows
+  //   const csvContent = [
+  //       headers.join(','),
+  //       ...rows.map(row => row.join(','))
+  //   ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'Truckers_Report.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  //   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  //   const url = URL.createObjectURL(blob);
+  //   const link = document.createElement('a');
+  //   link.setAttribute('href', url);
+  //   link.setAttribute('download', 'Truckers_Report.csv');
+  //   link.style.visibility = 'hidden';
+  //   document.body.appendChild(link);
+  //   link.click();
+  //   document.body.removeChild(link);
+  // };
 
   // -------- FILTER + SORT (memoized) --------
   const filteredTruckers = useMemo(() => {
@@ -746,14 +746,14 @@ export default function TruckerReassign() {
             />
           </div>
 
-          <button
+          {/* <button
             onClick={handleExportCSV}
             disabled={filteredTruckers.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             title="Export to CSV"
           >
             <FaDownload size={16} />Export CSV
-          </button>
+          </button> */}
         </div>
       </div>
 

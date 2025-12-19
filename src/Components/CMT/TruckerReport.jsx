@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Search, BarChart3 } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Search, BarChart3, ChevronDown } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
+import DateRangeSelector from '../HRDashboard/DateRangeSelector';
 
 export default function TruckerReport() {
   const [truckers, setTruckers] = useState([]);
@@ -28,6 +29,14 @@ export default function TruckerReport() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchFilter, setSearchFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [createdByFilter, setCreatedByFilter] = useState('');
+  const [createdBySearch, setCreatedBySearch] = useState('');
+  const [isCreatedByDropdownOpen, setIsCreatedByDropdownOpen] = useState(false);
+  const [cmtUsers, setCmtUsers] = useState([]);
+  const [dateRange, setDateRange] = useState({
+    startDate: null,
+    endDate: null
+  });
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -35,12 +44,42 @@ export default function TruckerReport() {
 
   useEffect(() => {
     fetchTruckerReports();
+    fetchCmtUsers();
   }, []);
+
+  // Close Created By dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isCreatedByDropdownOpen && !event.target.closest('.created-by-dropdown-container')) {
+        setIsCreatedByDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCreatedByDropdownOpen]);
+
+  // Filter and Sort CMT Users for Created By Dropdown
+  const filteredCreatedByUsers = useMemo(() => {
+    let users = [...cmtUsers];
+    // Sort alphabetically
+    users.sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
+    
+    // Filter by search term
+    if (createdBySearch.trim()) {
+      users = users.filter(user => 
+        (user.employeeName?.toLowerCase() || '').includes(createdBySearch.toLowerCase())
+      );
+    }
+    return users;
+  }, [cmtUsers, createdBySearch]);
 
   // Reset to first page when search term, filter, or status filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, searchFilter, statusFilter]);
+  }, [searchTerm, searchFilter, statusFilter, dateRange, createdByFilter]);
 
   const fetchTruckerReports = async () => {
     try {
@@ -136,6 +175,18 @@ export default function TruckerReport() {
     }
   };
 
+  const fetchCmtUsers = async () => {
+    try {
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`);
+      if (res.data) {
+          const employees = res.data.employees || res.data.data || (Array.isArray(res.data) ? res.data : []);
+          setCmtUsers(employees);
+      }
+    } catch (err) {
+      console.error('Error fetching CMT users:', err);
+    }
+  };
+
   // Helpers
   const statusColor = (status) => {
     if (!status) return 'bg-yellow-100 text-yellow-700';
@@ -155,6 +206,44 @@ export default function TruckerReport() {
     return ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileType?.toUpperCase());
   };
 
+  const handleExportCSV = () => {
+    if (filteredTruckers.length === 0) {
+      alertify.error('No data to export');
+      return;
+    }
+
+    const headers = ["Company Name", "MC/DOT No", "Email", "Phone", "City", "State", "Status", "Created Date", "Added By"];
+    
+    // Map data to rows, ensuring each value is wrapped in double quotes
+    const rows = filteredTruckers.map(trucker => [
+      `"${trucker.compName || 'N/A'}"`,
+      `"${trucker.mc_dot_no || 'N/A'}"`,
+      `"${trucker.email || 'N/A'}"`,
+      `"${trucker.phoneNo || 'N/A'}"`,
+      `"${trucker.city || 'N/A'}"`,
+      `"${trucker.state || 'N/A'}"`,
+      `"${trucker.status || 'N/A'}"`,
+      `"${new Date(trucker.createdAt).toLocaleDateString()}"`,
+      `"${trucker.addedBy?.employeeName || 'System'}"`
+    ]);
+
+    // Join headers and rows
+    const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'Truckers_Report.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // -------- FILTER + SORT (memoized) --------
   const filteredTruckers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -166,6 +255,28 @@ export default function TruckerReport() {
           if (statusFilter === 'approved' && !(trucker.status === 'approved' || trucker.status === 'accountant_approved')) return false;
           if (statusFilter === 'rejected' && trucker.status !== 'rejected') return false;
           if (statusFilter === 'pending'  && trucker.status !== 'pending')  return false;
+        }
+
+        // Date range filter
+        if (dateRange.startDate && dateRange.endDate) {
+          const truckerDate = new Date(trucker.createdAt);
+          truckerDate.setHours(0, 0, 0, 0);
+          
+          const start = new Date(dateRange.startDate);
+          start.setHours(0, 0, 0, 0);
+          
+          const end = new Date(dateRange.endDate);
+          end.setHours(23, 59, 59, 999);
+
+          if (truckerDate < start || truckerDate > end) return false;
+        }
+
+        // Created By filter
+        if (createdByFilter) {
+          const addedBy = trucker.addedBy;
+          // Check against empId or _id, handling cases where addedBy might be just an ID string or an object
+          const creatorId = typeof addedBy === 'object' ? (addedBy?.empId || addedBy?._id) : addedBy;
+          if (creatorId !== createdByFilter) return false;
         }
 
         // Search filter
@@ -196,7 +307,7 @@ export default function TruckerReport() {
         }
       })
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [truckers, statusFilter, searchFilter, searchTerm]);
+  }, [truckers, statusFilter, searchFilter, searchTerm, dateRange, createdByFilter]);
 
   // -------- PAGINATION derived from FILTERED list (bug fix) --------
   const totalPages = Math.max(1, Math.ceil(filteredTruckers.length / itemsPerPage));
@@ -280,54 +391,88 @@ export default function TruckerReport() {
             </div>
           </div>
 
-          <div
-            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-2xl hover:scale-105 ${statusFilter === 'approved' ? 'ring-2 ring-green-500 bg-green-50' : ''}`}
-            onClick={() => setStatusFilter('approved')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-xl font-bold text-green-600">{statistics.approvedTruckers}</p>
-              </div>
-            </div>
-          </div>
+          
 
-          <div
-            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-2xl hover:scale-105 ${statusFilter === 'rejected' ? 'ring-2 ring-red-500 bg-red-50' : ''}`}
-            onClick={() => setStatusFilter('rejected')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                <XCircle className="text-red-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Rejected</p>
-                <p className="text-xl font-bold text-red-600">{statistics.rejectedTruckers}</p>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-2xl hover:scale-105 ${statusFilter === 'pending' ? 'ring-2 ring-yellow-500 bg-yellow-50' : ''}`}
-            onClick={() => setStatusFilter('pending')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Clock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-xl font-bold text-yellow-600">{statistics.pendingApproval}</p>
-              </div>
-            </div>
-          </div>
+         
         </div>
 
         {/* Search + Filter */}
         <div className="flex items-center gap-4">
+          <div className="relative text-md">
+            <DateRangeSelector dateRange={dateRange} setDateRange={setDateRange} />
+          </div>
+          <div className="relative created-by-dropdown-container">
+            <button
+              onClick={() => setIsCreatedByDropdownOpen(!isCreatedByDropdownOpen)}
+              className="flex items-center justify-between px-4 py-2 border border-gray-200 rounded-lg bg-white w-48 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
+            >
+              <span className="truncate text-md text-gray-700">
+                {createdByFilter 
+                  ? cmtUsers.find(u => (u.empId || u._id) === createdByFilter)?.employeeName 
+                  : 'Created By'}
+              </span>
+              <ChevronDown 
+                size={16} 
+                className={`text-gray-500 transition-transform duration-200 ${isCreatedByDropdownOpen ? 'transform rotate-180' : ''}`} 
+              />
+            </button>
+
+            {isCreatedByDropdownOpen && (
+              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <style>
+                  {`
+                    .created-by-dropdown-container div::-webkit-scrollbar {
+                      display: none;
+                    }
+                  `}
+                </style>
+                
+                {/* Search Input */}
+                <div className="sticky top-0 bg-white p-2 border-b border-gray-100 z-10">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={createdBySearch}
+                      onChange={(e) => setCreatedBySearch(e.target.value)}
+                      placeholder="Search..."
+                      className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => {
+                    setCreatedByFilter('');
+                    setCreatedBySearch('');
+                    setIsCreatedByDropdownOpen(false);
+                  }}
+                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 transition-colors ${!createdByFilter ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  Created All
+                </div>
+                {filteredCreatedByUsers.map((user) => (
+                  <div
+                    key={user._id || user.empId}
+                    onClick={() => {
+                      setCreatedByFilter(user.empId || user._id);
+                      setCreatedBySearch('');
+                      setIsCreatedByDropdownOpen(false);
+                    }}
+                    className={`px-4 py-2 text-md cursor-pointer hover:bg-blue-50 transition-colors ${createdByFilter === (user.empId || user._id) ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    {user.employeeName}
+                  </div>
+                ))}
+                {filteredCreatedByUsers.length === 0 && (
+                   <div className="px-4 py-3 text-gray-500 text-center text-xs">
+                     No users found
+                   </div>
+                )}
+              </div>
+            )}
+          </div>
           <div className="relative">
             <select
               value={searchFilter}
@@ -350,6 +495,14 @@ export default function TruckerReport() {
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+          <button
+            onClick={handleExportCSV}
+            disabled={filteredTruckers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Export to CSV"
+          >
+            <FaDownload size={16} />Export CSV
+          </button>
         </div>
       </div>
 
