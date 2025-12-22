@@ -37,10 +37,15 @@ export default function RateApproved() {
   const [finalPriceMode, setFinalPriceMode] = useState(false);
   const [finalPriceAmount, setFinalPriceAmount] = useState(0);
 
-  // Final Price Modal State (separate from Add Margin modal)
+  // Manager approved bids state
+  const [managerApprovedBids, setManagerApprovedBids] = useState([]);
+  const [managerRejectedBids, setManagerRejectedBids] = useState([]);
+  const [managerBidsLoading, setManagerBidsLoading] = useState(false);
+
+  // Final Price Modal State for rejected bids
   const [finalPriceModal, setFinalPriceModal] = useState({
     visible: false,
-    rate: null
+    bid: null
   });
   const [finalPriceModalAmount, setFinalPriceModalAmount] = useState(0);
   const [finalPriceModalMessage, setFinalPriceModalMessage] = useState('');
@@ -115,7 +120,7 @@ export default function RateApproved() {
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [salesUserId, setSalesUserId] = useState(''); // Will be set from sessionStorage
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'completed', or 'accepted'
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'completed', 'accepted', 'manager-approved', or 'manager-rejected'
 
   // Form state for Add Rate Approved
   const [formData, setFormData] = useState({
@@ -273,7 +278,203 @@ export default function RateApproved() {
     }
   };
 
-  // Fetch accepted bids
+  // Fetch manager approved bids
+  const fetchManagerApprovedBids = async () => {
+    try {
+      setManagerBidsLoading(true);
+      const userEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
+
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/sales/manager-accepted`, {
+        timeout: 10000,
+        headers: API_CONFIG.getAuthHeaders()
+      });
+
+      if (response.data && response.data.success) {
+        const transformedBids = response.data.bids.map(bid => ({
+          id: `BID-${bid._id.slice(-6)}`,
+          rateNum: bid._id,
+          loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          shipmentNumber: bid.load?.shipmentNumber || 'N/A',
+          origin: bid.origins && bid.origins.length > 0 
+            ? `${bid.origins[0].city || bid.origins[0].extractedCity || 'N/A'}, ${bid.origins[0].state || 'N/A'}`
+            : bid.load?.origins && bid.load.origins.length > 0
+            ? `${bid.load.origins[0].city || bid.load.origins[0].extractedCity || 'N/A'}, ${bid.load.origins[0].state || 'N/A'}`
+            : 'N/A, N/A',
+          destination: bid.destinations && bid.destinations.length > 0
+            ? `${bid.destinations[0].city || bid.destinations[0].extractedCity || 'N/A'}, ${bid.destinations[0].state || 'N/A'}`
+            : bid.load?.destinations && bid.load.destinations.length > 0
+            ? `${bid.load.destinations[0].city || bid.load.destinations[0].extractedCity || 'N/A'}, ${bid.load.destinations[0].state || 'N/A'}`
+            : 'N/A, N/A',
+          originalRate: bid.originalRate || bid.originalLoadRate || bid.load?.rateDetails?.totalRates || 0,
+          currentRate: bid.currentRate || bid.finalCharges || 0,
+          thresholdRate: bid.thresholdRate || 0,
+          rateDifference: bid.rateDifference || 0,
+          rateDifferencePercentage: bid.rateDifferencePercentage || '0',
+          truckerName: bid.carrier?.compName || 'N/A',
+          shipperName: bid.shipper?.compName || 'N/A',
+          status: 'manager-approved',
+          createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
+          approvedAt: bid.managerApproval?.approvedAt ? new Date(bid.managerApproval.approvedAt).toISOString().split('T')[0] : 'N/A',
+          approvedBy: bid.managerApproval?.approvedBy?.empName || bid.approvedByInhouseUser?.empName || 'Manager',
+          driverName: bid.driverName || 'N/A',
+          driverPhone: bid.driverPhone || 'N/A',
+          vehicleNumber: bid.vehicleNumber || 'N/A',
+          vehicleType: bid.vehicleType || bid.load?.vehicleType || 'N/A',
+          estimatedPickupDate: bid.estimatedPickupDate ? new Date(bid.estimatedPickupDate).toLocaleDateString() : 'N/A',
+          estimatedDeliveryDate: bid.estimatedDeliveryDate ? new Date(bid.estimatedDeliveryDate).toLocaleDateString() : 'N/A',
+          docUpload: bid.doDocument || 'sample-doc.jpg',
+          remarks: bid.message || '',
+          carrierInfo: {
+            mcDotNo: bid.carrier?.mc_dot_no || 'N/A',
+            email: bid.carrier?.email || 'N/A',
+            phone: bid.carrier?.phoneNo || 'N/A',
+            state: bid.carrier?.state || 'N/A',
+            city: bid.carrier?.city || 'N/A'
+          },
+          shipperInfo: {
+            compName: bid.shipper?.compName || 'N/A',
+            mc_dot_no: bid.shipper?.mc_dot_no || 'N/A',
+            email: bid.shipper?.email || 'N/A',
+            phoneNo: bid.shipper?.phoneNo || 'N/A',
+            state: bid.shipper?.state || 'N/A',
+            city: bid.shipper?.city || 'N/A'
+          },
+          loadInfo: {
+            weight: bid.load?.weight || 0,
+            commodity: bid.load?.commodity || 'N/A',
+            vehicleType: bid.load?.vehicleType || 'N/A',
+            pickupDate: bid.load?.pickupDate || 'N/A',
+            deliveryDate: bid.load?.deliveryDate || 'N/A'
+          },
+          // Internal negotiation data
+          internalNegotiation: bid.internalNegotiation || null,
+          forwardedToManager: bid.forwardedToManager || null
+        }));
+
+        setManagerApprovedBids(transformedBids);
+      } else {
+        console.error('Manager approved bids API response format error:', response.data);
+        setManagerApprovedBids([]);
+      }
+    } catch (error) {
+      console.error('Error fetching manager approved bids:', error);
+      alertify.error('Error fetching manager approved bids');
+      setManagerApprovedBids([]);
+    } finally {
+      setManagerBidsLoading(false);
+    }
+  };
+
+  // Fetch manager rejected bids
+  const fetchManagerRejectedBids = async () => {
+    try {
+      setManagerBidsLoading(true);
+      const userEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
+
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/sales/manager-rejected`, {
+        timeout: 10000,
+        headers: API_CONFIG.getAuthHeaders()
+      });
+
+      if (response.data && response.data.success) {
+        const transformedBids = response.data.bids.map(bid => ({
+          id: `BID-${bid._id.slice(-6)}`,
+          rateNum: bid._id,
+          loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          shipmentNumber: bid.load?.shipmentNumber || 'N/A',
+          origin: bid.load ? (() => {
+            if (bid.load.origin && bid.load.origin.city) {
+              return `${bid.load.origin.city}, ${bid.load.origin.state || 'N/A'}`;
+            }
+            if (bid.load.origins && bid.load.origins.length > 0) {
+              return `${bid.load.origins[0].city}, ${bid.load.origins[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
+          destination: bid.load ? (() => {
+            if (bid.load.destination && bid.load.destination.city) {
+              return `${bid.load.destination.city}, ${bid.load.destination.state || 'N/A'}`;
+            }
+            if (bid.load.destinations && bid.load.destinations.length > 0) {
+              return `${bid.load.destinations[0].city}, ${bid.load.destinations[0].state || 'N/A'}`;
+            }
+            return 'N/A, N/A';
+          })() : 'N/A, N/A',
+          originalRate: bid.originalRate || bid.load?.rate || 0,
+          rejectedRate: bid.rejectedRate || bid.managerRejectedRate || 0,
+          truckerName: bid.carrier?.compName || 'N/A',
+          status: 'manager-rejected',
+          createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
+          rejectedAt: bid.managerRejectedAt ? new Date(bid.managerRejectedAt).toISOString().split('T')[0] : 'N/A',
+          rejectedBy: bid.managerRejectedBy?.empName || 'Manager',
+          rejectionReason: bid.rejectionReason || 'No reason provided',
+          docUpload: bid.doDocument || 'sample-doc.jpg',
+          remarks: bid.message || '',
+          carrierInfo: {
+            mcDotNo: bid.carrier?.mc_dot_no || 'N/A',
+            email: bid.carrier?.email || 'N/A',
+            phone: bid.carrier?.phoneNo || 'N/A',
+            state: bid.carrier?.state || 'N/A',
+            city: bid.carrier?.city || 'N/A'
+          },
+          shipperInfo: bid.load?.shipper || null,
+          shipperName: bid.load?.shipper?.compName || 'N/A',
+          loadInfo: {
+            weight: bid.load?.weight || 0,
+            commodity: bid.load?.commodity || 'N/A',
+            vehicleType: bid.load?.vehicleType || 'N/A',
+            pickupDate: bid.load?.pickupDate || 'N/A',
+            deliveryDate: bid.load?.deliveryDate || 'N/A'
+          }
+        }));
+
+        setManagerRejectedBids(transformedBids);
+      } else {
+        console.error('Manager rejected bids API response format error:', response.data);
+        setManagerRejectedBids([]);
+      }
+    } catch (error) {
+      console.error('Error fetching manager rejected bids:', error);
+      alertify.error('Error fetching manager rejected bids');
+      setManagerRejectedBids([]);
+    } finally {
+      setManagerBidsLoading(false);
+    }
+  };
+
+  // Handle submit new price for approval (for rejected bids)
+  const handleSubmitNewPrice = async (bidId, newPrice, message = '') => {
+    try {
+      setSubmitting(true);
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/bids/${bidId}/manager-approve`, {
+        status: "Approved",
+        finalRate: parseFloat(newPrice),
+        message: message || ''
+      }, {
+        headers: {
+          'Authorization': `Bearer ${sessionStorage.getItem('authToken') || localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success('New price submitted for manager approval successfully!');
+        setFinalPriceModal({ visible: false, bid: null });
+        setFinalPriceModalAmount(0);
+        setFinalPriceModalMessage('');
+        // Refresh the data
+        await fetchManagerRejectedBids();
+      } else {
+        alertify.error(response.data?.message || 'Failed to submit new price');
+      }
+    } catch (error) {
+      console.error('Error submitting new price:', error);
+      alertify.error(error.response?.data?.message || 'Error submitting new price. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
   const fetchAcceptedBids = async () => {
     try {
       setLoading(true);
@@ -709,13 +910,61 @@ export default function RateApproved() {
     }
   };
 
+  // Send to Manager function
+  const handleSendToManager = async (bidId, finalPrice, message = '') => {
+    setActionLoading(prev => ({ ...prev, [bidId]: 'sendToManager' }));
+    try {
+      // Prepare API payload - include negotiatedPrice only when finalPrice is provided
+      const payload = {
+        forwardReason: message || `Negotiated price is $${finalPrice}`
+      };
+      
+      // Add negotiatedPrice only when finalPrice is provided and valid
+      if (finalPrice && Number(finalPrice) > 0) {
+        payload.negotiatedPrice = Number(finalPrice);
+      }
+
+      const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/${bidId}/forward-to-manager`, payload, {
+        headers: {
+          'Authorization': `Bearer ${sessionStorage.getItem('authToken') || localStorage.getItem('authToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data && response.data.success) {
+        alertify.success('✅ Bid sent to manager for approval successfully!');
+        // Refresh data based on active tab
+        if (activeTab === 'pending') {
+          await fetchAllData();
+        } else if (activeTab === 'completed') {
+          await fetchCompletedRates();
+        } else if (activeTab === 'manager-rejected') {
+          await fetchManagerRejectedBids();
+        }
+      } else {
+        alertify.error(response.data?.message || 'Failed to send bid to manager');
+      }
+    } catch (error) {
+      console.error('Send to manager error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
+      alertify.error(error.response?.data?.message || 'Error sending bid to manager. Please try again.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [bidId]: null }));
+    }
+  };
+
   // Then update the handleManualApprove and handleAutoApprove functions
   const handleManualApprove = async (bidId, customRate, message = '') => {
     setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
     try {
 
       const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
-        intermediateRate: parseInt(customRate),
+        intermediateRate: parseFloat(customRate),
         message: message || ''
       }, {
         headers: API_CONFIG.getAuthHeaders()
@@ -871,6 +1120,10 @@ export default function RateApproved() {
       fetchCompletedRates();
     } else if (activeTab === 'accepted') {
       fetchAcceptedBids();
+    } else if (activeTab === 'manager-approved') {
+      fetchManagerApprovedBids();
+    } else if (activeTab === 'manager-rejected') {
+      fetchManagerRejectedBids();
     }
   }, [activeTab]);
 
@@ -1783,7 +2036,7 @@ export default function RateApproved() {
   return (
     <div className="p-6">
       {/* Tabs */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-6 overflow-x-auto">
         <button
           onClick={() => setActiveTab('pending')}
           className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'pending'
@@ -1818,6 +2071,30 @@ export default function RateApproved() {
           <div className="flex items-center gap-2">
             <CheckCircle size={18} />
             <span>Accepted Bids</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('manager-approved')}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'manager-approved'
+            ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} />
+            <span>Manager Approved</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('manager-rejected')}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'manager-rejected'
+            ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white shadow-lg'
+            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+        >
+          <div className="flex items-center gap-2">
+            <XCircle size={18} />
+            <span>Manager Rejected</span>
           </div>
         </button>
       </div>
@@ -2567,14 +2844,22 @@ export default function RateApproved() {
                         <span className="font-bold text-blue-600">${rate.originalRate?.toLocaleString() || '0'}</span>
                       </td>
                       <td className="py-2 px-3">
-                        <div>
-                          <span className="font-bold text-green-600">${rate.intermediateRate?.toLocaleString() || '0'}</span>
-                          {rate.rateDifference && (
-                            <p className="text-xs text-gray-500">
-                              Diff: ${rate.rateDifference} ({rate.rateDifferencePercentage}%)
-                            </p>
-                          )}
-                        </div>
+                                              <div>
+  <span className="font-bold text-green-600">
+    ${Number(rate.intermediateRate || 0).toLocaleString()}
+  </span>
+
+  {rate.rateDifference !== undefined && rate.rateDifference !== null && (
+    <p className="text-xs text-gray-500">
+      Diff: $
+      {Number(rate.rateDifference || 0).toFixed(2)}
+      {' '}
+      (
+      {Number(rate.rateDifferencePercentage || 0).toFixed(2)}
+      %)
+    </p>
+  )}
+</div>
                       </td>
                       <td className="py-2 px-3">
                         <div>
@@ -2616,6 +2901,354 @@ export default function RateApproved() {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Manager Approved Bids Tab Content */}
+      {activeTab === 'manager-approved' && (
+        <div>
+          {/* Manager Approved Bids Content */}
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-6">
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="text-green-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Manager Approved</p>
+                    <p className="text-xl font-bold text-green-600">{managerApprovedBids.length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <DollarSign className="text-blue-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Value</p>
+                    <p className="text-xl font-bold text-blue-600">
+                      ${managerApprovedBids.reduce((sum, bid) => sum + (bid.currentRate || 0), 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search manager approved bids..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleExportToCSV}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+              >
+                <FaDownload size={16} />
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          {/* Manager Approved Bids Table */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-200">
+                  <tr>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Current Rate</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate Diff %</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Driver Info</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved Date</th>
+                    {/* <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th> */}
+                  </tr>
+                </thead>
+                <tbody>
+                  {managerBidsLoading ? (
+                    <tr>
+                      <td colSpan="12" className="py-12 text-center">
+                        <div className="flex justify-center items-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mr-3"></div>
+                          <span className="text-gray-600">Loading manager approved bids...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : managerApprovedBids.length === 0 ? (
+                    <tr>
+                      <td colSpan="12" className="py-12 text-center">
+                        <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500 text-lg">No manager approved bids found</p>
+                        <p className="text-gray-400 text-sm">No bids have been approved by manager yet</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    managerApprovedBids
+                      .filter(bid => {
+                        const searchLower = searchTerm.toLowerCase();
+                        return bid.id.toLowerCase().includes(searchLower) ||
+                          bid.shipmentNumber.toLowerCase().includes(searchLower) ||
+                          bid.origin.toLowerCase().includes(searchLower) ||
+                          bid.destination.toLowerCase().includes(searchLower) ||
+                          bid.truckerName.toLowerCase().includes(searchLower) ||
+                          (bid.shipperName && bid.shipperName.toLowerCase().includes(searchLower));
+                      })
+                      .slice(startIndex, endIndex)
+                      .map((bid, index) => (
+                        <tr key={bid.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700">{bid.id}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700">{bid.loadId}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <span className="font-medium text-gray-700">{bid.origin}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <span className="font-medium text-gray-700">{bid.destination}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-600">${bid.originalRate.toLocaleString()}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-bold text-green-600">${bid.currentRate.toLocaleString()}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className={`font-bold ${parseFloat(bid.rateDifferencePercentage) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {bid.rateDifferencePercentage}%
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <p className="font-medium text-gray-700">{bid.shipperName}</p>
+                              <p className="text-xs text-gray-500">MC: {bid.shipperInfo?.mc_dot_no || 'N/A'}</p>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <p className="font-medium text-gray-700">{bid.truckerName}</p>
+                              <p className="text-xs text-gray-500">MC: {bid.carrierInfo?.mcDotNo || 'N/A'}</p>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <p className="font-medium text-gray-700">{bid.driverName}</p>
+                              <p className="text-xs text-gray-500">Phone: {bid.driverPhone}</p>
+                              <p className="text-xs text-gray-500">Vehicle: {bid.vehicleNumber}</p>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <p className="font-medium text-gray-700">{bid.approvedAt}</p>
+                              <p className="text-xs text-gray-500">By: {bid.approvedBy}</p>
+                            </div>
+                          </td>
+                          {/* <td className="py-2 px-3">
+                            <button
+                              onClick={() => handleViewBid(bid)}
+                              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-1 rounded-lg text-sm hover:from-green-600 hover:to-emerald-700 transition-all duration-200"
+                            >
+                              View Details
+                            </button>
+                          </td> */}
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manager Rejected Bids Tab Content */}
+      {activeTab === 'manager-rejected' && (
+        <div>
+          {/* Manager Rejected Bids Content */}
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-6">
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                    <XCircle className="text-red-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Manager Rejected</p>
+                    <p className="text-xl font-bold text-red-600">{managerRejectedBids.length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <DollarSign className="text-blue-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Value</p>
+                    <p className="text-xl font-bold text-blue-600">
+                      ${managerRejectedBids.reduce((sum, bid) => sum + (bid.currentRate || 0), 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search manager rejected bids..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleExportToCSV}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+              >
+                <FaDownload size={16} />
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          {/* Manager Rejected Bids Table */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-200">
+                  <tr>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Current Rate</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate Diff %</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rejection Reason</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rejected Date</th>
+                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {managerBidsLoading ? (
+                    <tr>
+                      <td colSpan="12" className="py-12 text-center">
+                        <div className="flex justify-center items-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mr-3"></div>
+                          <span className="text-gray-600">Loading manager rejected bids...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : managerRejectedBids.length === 0 ? (
+                    <tr>
+                      <td colSpan="12" className="py-12 text-center">
+                        <XCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500 text-lg">No manager rejected bids found</p>
+                        <p className="text-gray-400 text-sm">No bids have been rejected by manager yet</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    managerRejectedBids
+                      .filter(bid => {
+                        const searchLower = searchTerm.toLowerCase();
+                        return bid.id.toLowerCase().includes(searchLower) ||
+                          bid.shipmentNumber.toLowerCase().includes(searchLower) ||
+                          bid.origin.toLowerCase().includes(searchLower) ||
+                          bid.destination.toLowerCase().includes(searchLower) ||
+                          bid.truckerName.toLowerCase().includes(searchLower) ||
+                          (bid.shipperName && bid.shipperName.toLowerCase().includes(searchLower));
+                      })
+                      .slice(startIndex, endIndex)
+                      .map((bid, index) => (
+                        <tr key={bid.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700">{bid.id}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700">{bid.loadId}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <span className="font-medium text-gray-700">{bid.origin}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <span className="font-medium text-gray-700">{bid.destination}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-600">${bid.originalRate.toLocaleString()}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-bold text-red-600">${bid.currentRate.toLocaleString()}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className={`font-bold ${parseFloat(bid.rateDifferencePercentage) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {bid.rateDifferencePercentage}%
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <p className="font-medium text-gray-700">{bid.shipperName}</p>
+                              <p className="text-xs text-gray-500">MC: {bid.shipperInfo?.mc_dot_no || 'N/A'}</p>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <p className="font-medium text-gray-700">{bid.truckerName}</p>
+                              <p className="text-xs text-gray-500">MC: {bid.carrierInfo?.mcDotNo || 'N/A'}</p>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="max-w-xs">
+                              <p className="text-sm text-red-600 truncate" title={bid.rejectionReason}>
+                                {bid.rejectionReason}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div>
+                              <p className="font-medium text-gray-700">{bid.rejectedAt}</p>
+                              <p className="text-xs text-gray-500">By: {bid.rejectedBy}</p>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <button
+                              onClick={() => handleViewBid(bid)}
+                              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-1 rounded-lg text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -3626,9 +4259,10 @@ export default function RateApproved() {
                       // Within 10% - show "Send to Manager" functionality
                       alertify.confirm('Send to Manager', 
                         `The final price ($${finalPrice.toLocaleString()}) is within 10% of the original rate amount ($${baseRate.toLocaleString()}). This will be sent to the manager for approval.`,
-                        function() {
-                          // Send to manager logic here
-                          alertify.success('Sent to manager for approval');
+                        async function() {
+                          // Send to manager API call with negotiated price
+                          const forwardMessage = finalPriceModalMessage || `Negotiated price is $${finalPrice}`;
+                          await handleSendToManager(finalPriceModal.rate.rateNum, finalPrice, forwardMessage);
                           setFinalPriceModal({ visible: false, rate: null });
                           setFinalPriceModalAmount(0);
                           setFinalPriceModalMessage('');
