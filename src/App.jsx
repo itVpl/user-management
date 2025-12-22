@@ -2,8 +2,6 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import axios from "axios";
-import API_CONFIG from "./config/api.js";
 
 import "./App.css";
 import Login from "./Pages/Auth/Login/Login";
@@ -88,22 +86,6 @@ import FollowUpReport from "./Components/Sales/FollowUpReport.jsx";
 // Global Notification Component
 function GlobalAssignmentNotification() {
   const navigate = useNavigate();
-  const prevIdsRef = useRef(new Set());
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  // Handle online/offline status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
 
   // Cross-tab communication
   useEffect(() => {
@@ -319,7 +301,7 @@ function App() {
   }, []);
 
   // Handle terms acceptance
-  const handleTermsAccepted = useCallback((termsData) => {
+  const handleTermsAccepted = useCallback(() => {
     try {
       setShowTerms(false);
       setIsAuthenticated(true);
