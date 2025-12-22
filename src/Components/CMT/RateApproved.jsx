@@ -33,6 +33,17 @@ export default function RateApproved() {
     rate: null, // the selected rate object
   });
   const [marginAmount, setMarginAmount] = useState(0);
+  const [editableMessage, setEditableMessage] = useState('');
+  const [finalPriceMode, setFinalPriceMode] = useState(false);
+  const [finalPriceAmount, setFinalPriceAmount] = useState(0);
+
+  // Final Price Modal State (separate from Add Margin modal)
+  const [finalPriceModal, setFinalPriceModal] = useState({
+    visible: false,
+    rate: null
+  });
+  const [finalPriceModalAmount, setFinalPriceModalAmount] = useState(0);
+  const [finalPriceModalMessage, setFinalPriceModalMessage] = useState('');
 
   // Accept Bid Modal State
   const [acceptBidModal, setAcceptBidModal] = useState({
@@ -699,12 +710,13 @@ export default function RateApproved() {
   };
 
   // Then update the handleManualApprove and handleAutoApprove functions
-  const handleManualApprove = async (bidId, customRate) => {
+  const handleManualApprove = async (bidId, customRate, message = '') => {
     setActionLoading(prev => ({ ...prev, [bidId]: 'manual' }));
     try {
 
       const response = await axios.put(`${API_CONFIG.BASE_URL}/api/v1/bid/intermediate/${bidId}/approve`, {
-        intermediateRate: parseInt(customRate)
+        intermediateRate: parseInt(customRate),
+        message: message || ''
       }, {
         headers: API_CONFIG.getAuthHeaders()
       });
@@ -2084,10 +2096,10 @@ export default function RateApproved() {
                             {/* Manual Approve Button */}
                             <button
                               onClick={() => {
-
-
-
                                 setMarginAmount(0); // Reset margin when opening modal
+                                setEditableMessage(rate.remarks || ''); // Initialize editable message
+                                setFinalPriceMode(false); // Reset final price mode
+                                setFinalPriceAmount(0); // Reset final price
                                 setApprovalModal({ visible: true, type: 'manual', rate });
                               }}
                               disabled={actionLoading[rate.rateNum]}
@@ -2108,6 +2120,24 @@ export default function RateApproved() {
                                 </>
                               )}
                             </button>
+                            {/* Enter Final Price Button - Only show in Approved Rates tab */}
+                            {activeTab === 'completed' && (
+                              <button
+                                onClick={() => {
+                                  setFinalPriceModalAmount(0); // Reset final price amount
+                                  setFinalPriceModalMessage(rate.remarks || ''); // Initialize message
+                                  setFinalPriceModal({ visible: true, rate });
+                                }}
+                                disabled={actionLoading[rate.rateNum]}
+                                className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum]
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                  : 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg hover:from-purple-600 hover:to-indigo-700 hover:shadow-xl'
+                                  }`}
+                              >
+                                <DollarSign size={12} />
+                                <span>Enter Final Price</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -2315,14 +2345,23 @@ export default function RateApproved() {
                         <span className="font-bold text-blue-600">${rate.originalRate?.toLocaleString() || '0'}</span>
                       </td>
                       <td className="py-2 px-3">
-                        <div>
-                          <span className="font-bold text-green-600">${rate.intermediateRate?.toLocaleString() || '0'}</span>
-                          {rate.approvalStatus && (
-                            <p className="text-xs text-gray-500">
-                              Diff: ${rate.approvalStatus.rateDifference} ({rate.approvalStatus.rateDifferencePercentage}%)
-                            </p>
-                          )}
-                        </div>
+                      <div>
+  <span className="font-bold text-green-600">
+    ${Number(rate.intermediateRate || 0).toLocaleString()}
+  </span>
+
+  {rate.approvalStatus && (
+    <p className="text-xs text-gray-500">
+      Diff: $
+      {Number(rate.approvalStatus.rateDifference || 0).toFixed(2)}
+      {' '}
+      (
+      {Number(rate.approvalStatus.rateDifferencePercentage || 0).toFixed(2)}
+      %)
+    </p>
+  )}
+</div>
+
                       </td>
                       <td className="py-2 px-3">
                         <div>
@@ -2352,8 +2391,10 @@ export default function RateApproved() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
-
                               setMarginAmount(0); // Reset margin when opening modal
+                              setEditableMessage(rate.remarks || ''); // Initialize editable message
+                              setFinalPriceMode(false); // Reset final price mode
+                              setFinalPriceAmount(0); // Reset final price
                               setApprovalModal({ visible: true, type: 'manual', rate });
                             }}
                             disabled={actionLoading[rate.rateNum]}
@@ -2374,6 +2415,24 @@ export default function RateApproved() {
                               </>
                             )}
                           </button>
+                          {/* Enter Final Price Button - Only show in Approved Rates tab */}
+                          {activeTab === 'completed' && (
+                            <button
+                              onClick={() => {
+                                setFinalPriceModalAmount(0); // Reset final price amount
+                                setFinalPriceModalMessage(rate.remarks || ''); // Initialize message
+                                setFinalPriceModal({ visible: true, rate });
+                              }}
+                              disabled={actionLoading[rate.rateNum]}
+                              className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum]
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                : 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg hover:from-purple-600 hover:to-indigo-700 hover:shadow-xl'
+                                }`}
+                            >
+                              <DollarSign size={12} />
+                              <span>Enter Final Price</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => handleNegotiateBid(rate)}
                             className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700 hover:shadow-xl"
@@ -3054,9 +3113,7 @@ export default function RateApproved() {
                     <div className="flex items-center gap-2 mb-3">
                       <DollarSign className="text-blue-600" size={18} />
                       <label className="text-sm font-semibold text-gray-700">
-                        {approvalModal.rate?.totalrates 
-                          ? 'Total Rate Amount'
-                          : 'Original Rate Amount'}
+                        Original Rate Amount
                       </label>
                     </div>
                     <div className="relative">
@@ -3065,7 +3122,7 @@ export default function RateApproved() {
                         type="number"
                         readOnly
                         className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-lg text-lg font-semibold bg-gray-50 text-gray-700"
-                        value={approvalModal.rate?.totalrates || approvalModal.rate?.rate || 0}
+                        value={approvalModal.rate?.originalRate || 0}
                       />
                     </div>
                   </div>
@@ -3114,7 +3171,7 @@ export default function RateApproved() {
                         type="text"
                         readOnly
                         className="w-full pl-8 pr-4 py-3 border-2 border-purple-300 rounded-lg text-lg font-bold bg-purple-50 text-purple-700"
-                        value={((Number(approvalModal.rate?.totalrates || approvalModal.rate?.rate || 0)) + (Number(marginAmount || 0))).toFixed(2)}
+                        value={((Number(approvalModal.rate?.originalRate || 0)) + (Number(marginAmount || 0))).toFixed(2)}
                       />
                     </div>
                   </div>
@@ -3124,9 +3181,7 @@ export default function RateApproved() {
                   <div className="flex items-center gap-2 mb-3">
                     <DollarSign className="text-green-600" size={18} />
                     <label className="text-sm font-semibold text-gray-700">
-                      {approvalModal.rate?.totalrates 
-                        ? 'Total Rate Amount'
-                        : 'Original Rate Amount'}
+                      Original Rate Amount
                     </label>
                   </div>
                   <div className="relative">
@@ -3135,32 +3190,34 @@ export default function RateApproved() {
                       type="number"
                       readOnly
                       className="w-full pl-8 pr-4 py-3 border-2 border-blue-300 rounded-lg text-lg font-semibold bg-gray-50 text-gray-700"
-                      value={approvalModal.rate?.totalrates || approvalModal.rate?.rate || ''}
+                      value={approvalModal.rate?.originalRate || ''}
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                     <Clock size={12} />
-                    Auto-approval uses the {approvalModal.rate?.totalrates ? 'total' : 'original'} bid rate
+                    Auto-approval uses the original bid rate
                   </p>
                 </div>
               )}
 
-              {/* Message Display Section */}
-              {approvalModal.rate.remarks && (
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    <label className="text-sm font-semibold text-gray-700">Message</label>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-gray-200">
-                    <p className="text-sm text-gray-800 leading-relaxed">
-                      {approvalModal.rate.remarks || 'No message provided'}
-                    </p>
-                  </div>
+              {/* Message Section - Editable */}
+              <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <label className="text-sm font-semibold text-gray-700">Message</label>
                 </div>
-              )}
+                <div className="bg-white rounded-lg border border-gray-200">
+                  <textarea
+                    value={editableMessage}
+                    onChange={(e) => setEditableMessage(e.target.value)}
+                    rows={3}
+                    className="w-full p-3 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-800 leading-relaxed resize-none"
+                    placeholder="Enter message or notes..."
+                  />
+                </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-4">
@@ -3168,6 +3225,9 @@ export default function RateApproved() {
                   onClick={() => {
                     setApprovalModal({ visible: false, type: null, rate: null });
                     setMarginAmount(0); // Reset margin when modal closes
+                    setEditableMessage(''); // Reset editable message
+                    setFinalPriceMode(false); // Reset final price mode
+                    setFinalPriceAmount(0); // Reset final price
                   }}
                   className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all duration-200 hover:border-gray-400"
                 >
@@ -3176,7 +3236,8 @@ export default function RateApproved() {
                 <button
                   onClick={async () => {
                     if (approvalModal.type === 'manual') {
-                      const baseRate = Number(approvalModal.rate?.totalrates || approvalModal.rate?.rate || 0);
+                      // Regular margin mode
+                      const baseRate = Number(approvalModal.rate?.originalRate || 0);
                       const margin = Number(marginAmount || 0);
                       const total = baseRate + margin;
                       
@@ -3192,18 +3253,22 @@ export default function RateApproved() {
                         return;
                       }
                       
-                      await handleManualApprove(approvalModal.rate.rateNum, total);
+                      await handleManualApprove(approvalModal.rate.rateNum, total, editableMessage);
                       setMarginAmount(0); // Reset margin after submission
                     } else {
                       await handleAutoApprove(approvalModal.rate.rateNum);
                     }
                     setApprovalModal({ visible: false, type: null, rate: null });
                     setMarginAmount(0); // Reset margin when modal closes
+                    setEditableMessage(''); // Reset editable message
+                    setFinalPriceMode(false); // Reset final price mode
+                    setFinalPriceAmount(0); // Reset final price
                   }}
-                  className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${approvalModal.type === 'manual'
-                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
-                    : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
-                    }`}
+                  className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
+                    approvalModal.type === 'manual'
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
+                      : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
+                  }`}
                 >
                   {approvalModal.type === 'manual' ? 'Approve Bid' : 'Auto Approve'}
                 </button>
@@ -3390,6 +3455,223 @@ export default function RateApproved() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Final Price Modal */}
+      {finalPriceModal.visible && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/50 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <DollarSign className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Enter Final Price</h2>
+                    <p className="text-purple-100">Set final bid amount for {finalPriceModal.rate?.id}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setFinalPriceModal({ visible: false, rate: null });
+                    setFinalPriceModalAmount(0);
+                    setFinalPriceModalMessage('');
+                  }}
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Original Rate Display */}
+              <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <DollarSign className="text-blue-600" size={18} />
+                  <label className="text-sm font-semibold text-gray-700">
+                    Original Rate Amount
+                  </label>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                  <input
+                    type="number"
+                    readOnly
+                    className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-lg text-lg font-semibold bg-gray-50 text-gray-700"
+                    value={finalPriceModal.rate?.originalRate || 0}
+                  />
+                </div>
+              </div>
+
+              {/* Message Section - Editable */}
+              <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <label className="text-sm font-semibold text-gray-700">Message</label>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200">
+                  <textarea
+                    value={finalPriceModalMessage}
+                    onChange={(e) => setFinalPriceModalMessage(e.target.value)}
+                    rows={3}
+                    className="w-full p-3 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-800 leading-relaxed resize-none"
+                    placeholder="Enter message or notes..."
+                  />
+                </div>
+              </div>
+
+              {/* Final Price Input */}
+              <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <DollarSign className="text-purple-600" size={18} />
+                  <label className="text-sm font-semibold text-gray-700">
+                    Final Bid Amount *
+                  </label>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    step="0.01"
+                    className="w-full pl-8 pr-4 py-3 border-2 border-purple-300 rounded-lg text-lg font-semibold transition-all duration-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                    value={finalPriceModalAmount || ''}
+                    onChange={(e) => {
+                      const v = e.target.value === '' ? 0 : Number(e.target.value);
+                      setFinalPriceModalAmount(v);
+                    }}
+                    placeholder="Enter final bid amount"
+                  />
+                </div>
+                
+                {/* Show 10% calculation info */}
+                {finalPriceModalAmount > 0 && (
+                  <div className="mt-3 p-3 bg-white rounded-lg border border-purple-200">
+                    <div className="text-xs text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Original Rate Amount:</span>
+                        <span className="font-semibold">${(Number(finalPriceModal.rate?.originalRate || 0)).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>10% of Original Rate:</span>
+                        <span className="font-semibold">${(Number(finalPriceModal.rate?.originalRate || 0) * 0.1).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between border-t pt-1 mt-1">
+                        <span>Max Amount (Original + 10%):</span>
+                        <span className="font-semibold">${(Number(finalPriceModal.rate?.originalRate || 0) * 1.1).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between mt-2 pt-2 border-t">
+                        <span>Your Final Price:</span>
+                        <span className={`font-bold ${
+                          finalPriceModalAmount <= (Number(finalPriceModal.rate?.originalRate || 0) * 1.1)
+                            ? 'text-orange-600'
+                            : 'text-green-600'
+                        }`}>
+                          ${finalPriceModalAmount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-center">
+                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                          finalPriceModalAmount <= (Number(finalPriceModal.rate?.originalRate || 0) * 1.1)
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          {finalPriceModalAmount <= (Number(finalPriceModal.rate?.originalRate || 0) * 1.1)
+                            ? 'Will be sent to Manager'
+                            : 'Will be submitted directly'
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setFinalPriceModal({ visible: false, rate: null });
+                    setFinalPriceModalAmount(0);
+                    setFinalPriceModalMessage('');
+                  }}
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all duration-200 hover:border-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    const baseRate = Number(finalPriceModal.rate?.originalRate || 0);
+                    const finalPrice = Number(finalPriceModalAmount || 0);
+                    
+                    if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
+                      alertify.error('Please enter a valid final price amount. Amount must be greater than 0.');
+                      return;
+                    }
+                    
+                    // Check if final price is within 10% of base rate
+                    const tenPercentOfBase = baseRate * 0.1;
+                    const maxAllowedAmount = baseRate + tenPercentOfBase;
+                    
+                    if (finalPrice <= maxAllowedAmount) {
+                      // Within 10% - show "Send to Manager" functionality
+                      alertify.confirm('Send to Manager', 
+                        `The final price ($${finalPrice.toLocaleString()}) is within 10% of the original rate amount ($${baseRate.toLocaleString()}). This will be sent to the manager for approval.`,
+                        function() {
+                          // Send to manager logic here
+                          alertify.success('Sent to manager for approval');
+                          setFinalPriceModal({ visible: false, rate: null });
+                          setFinalPriceModalAmount(0);
+                          setFinalPriceModalMessage('');
+                        },
+                        function() {
+                          // Cancel - do nothing
+                        }
+                      );
+                      return;
+                    } else {
+                      // Above 10% - proceed with normal submission
+                      await handleManualApprove(finalPriceModal.rate.rateNum, finalPrice, finalPriceModalMessage);
+                      setFinalPriceModal({ visible: false, rate: null });
+                      setFinalPriceModalAmount(0);
+                      setFinalPriceModalMessage('');
+                    }
+                  }}
+                  className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
+                    (() => {
+                      const baseRate = Number(finalPriceModal.rate?.originalRate || 0);
+                      const finalPrice = Number(finalPriceModalAmount || 0);
+                      const tenPercentOfBase = baseRate * 0.1;
+                      const maxAllowedAmount = baseRate + tenPercentOfBase;
+                      
+                      return finalPrice > 0 && finalPrice <= maxAllowedAmount
+                        ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 shadow-lg hover:shadow-xl'
+                        : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl';
+                    })()
+                  }`}
+                >
+                  {(() => {
+                    const baseRate = Number(finalPriceModal.rate?.originalRate || 0);
+                    const finalPrice = Number(finalPriceModalAmount || 0);
+                    const tenPercentOfBase = baseRate * 0.1;
+                    const maxAllowedAmount = baseRate + tenPercentOfBase;
+                    
+                    return finalPrice > 0 && finalPrice <= maxAllowedAmount
+                      ? 'Send to Manager'
+                      : 'Submit';
+                  })()}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
