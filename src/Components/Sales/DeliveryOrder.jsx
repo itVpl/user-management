@@ -851,7 +851,7 @@ export default function DeliveryOrder() {
         containerNo: src.shipper?.containerNo || '',
         containerType: src.shipper?.containerType || '',
         commodity: src.shipper?.pickUpLocations?.[0]?.commodity || src.shipper?.dropLocations?.[0]?.commodity || '',
-        selectedLoad: src.loadReference || '',
+        selectedLoad: '', // Keep blank for duplicate so user can select manually
         company: src.company || src.addDispature || src.customerName || '',
         loadType: src.loadType || 'OTR',
 
@@ -4476,6 +4476,7 @@ const handleUpdateOrder = async (e) => {
             </div>
           </div>
         </div>
+        
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -4935,7 +4936,7 @@ const handleUpdateOrder = async (e) => {
               <div className="bg-orange-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-orange-800 mb-4">Load Reference</h3>
                 <div className="grid grid-cols-1 gap-4">
-                  <div>
+                  <div className="relative">
                     <SearchableDropdown
                       value={formData.selectedLoad || ''}
                       onChange={handleLoadChange}
@@ -4948,12 +4949,24 @@ const handleUpdateOrder = async (e) => {
                       loading={loadingLoads || loadingSelectedLoad}
                       searchPlaceholder="Search loads..."
                     />
-                    {/* Debug info - remove this later */}
-                    {process.env.NODE_ENV === 'development' && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Loads: {loads.length} | Loading: {loadingLoads ? 'Yes' : 'No'} | Selected Load Data: {selectedLoadData ? 'Loaded' : 'None'}
-                      </div>
+                    {/* Unselect button - shows only when a load is selected */}
+                    {formData.selectedLoad && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            selectedLoad: ''
+                          }));
+                          setSelectedLoadData(null);
+                        }}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold transition-colors duration-200 z-10"
+                        title="Unselect Load"
+                      >
+                        ×
+                      </button>
                     )}
+                
 
                     {/* Selected Load Data Display - Hidden per user request */}
                     {false && selectedLoadData && (
