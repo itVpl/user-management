@@ -36,6 +36,7 @@ import HrCreateTask from "./Components/HRDashboard/HrCreateTask.jsx";
 import RateRequest from "./Components/CMT-Manager/RateRequest.jsx";
 import LeaveApproval from "./Components/HRDashboard/LeaveApproval.jsx";
 import RateApproved from "./Components/CMT/RateApproved.jsx";
+import ManagerPendingBids from "./Components/CMT/ManagerPendingBids.jsx";
 import Loads from "./Components/CMT/Loads.jsx";
 import CarrierApproval from "./Components/CMT/CarrierApproval.jsx";
 import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
@@ -111,7 +112,7 @@ function GlobalAssignmentNotification() {
       }
     };
 
-    // Initialize BroadcastChannel if available
+    // Initialize BroadcastChannel if available 
     if ("BroadcastChannel" in window) {
       try {
         broadcastChannel = new BroadcastChannel("rr_events");
@@ -404,6 +405,7 @@ function App() {
           <Route path="TruckerLDocuments" element={<TruckerLDocuments />} />
           <Route path="RateRequest" element={<RateRequest />} />
           <Route path="RateApproved" element={<RateApproved />} />
+          <Route path="ManagerRateApproval" element={<ManagerPendingBids />} />
           <Route path="Loads" element={<Loads />} />
           <Route path="CarrierApproval" element={<CarrierApproval />} />
           <Route path="HrCreateTask" element={<HrCreateTask />} />
