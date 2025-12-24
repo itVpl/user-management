@@ -636,7 +636,7 @@ export default function DeliveryOrder() {
             order.shipper?.deliveryLocations ||
             [];
 
-          const puW = puLocs[0]?.weight;
+          const puW = puLocs[0]?.weight;0
           const drW = drLocs[0]?.weight;
           // -----------------------------------------------------
 
