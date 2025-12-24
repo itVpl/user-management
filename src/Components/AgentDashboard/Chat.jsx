@@ -32,7 +32,8 @@ import {
   Settings,
   UserPlus,
   UserMinus,
-  LogOut
+  LogOut,
+  Eye
 } from "lucide-react";
 import { io } from "socket.io-client";
 import API_CONFIG from '../../config/api.js';
@@ -86,11 +87,18 @@ const ChatPage = () => {
   const [availableUsers, setAvailableUsers] = useState([]);
   const [showAddMembersModal, setShowAddMembersModal] = useState(false);
   const [showGroupInfoModal, setShowGroupInfoModal] = useState(false);
+  const [showSeenByModal, setShowSeenByModal] = useState(false);
+  const [seenByData, setSeenByData] = useState(null);
+  const [loadingSeenBy, setLoadingSeenBy] = useState(false);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const audioRef = useRef(null);
+  const groupTextareaRef = useRef(null);
+  const individualTextareaRef = useRef(null);
+  const groupMessageRefs = useRef({});
+  const markedAsSeenRef = useRef(new Set()); // Track which messages have been marked as seen
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -235,8 +243,20 @@ const ChatPage = () => {
       );
 
       const allMessages = res.data || [];
-      // Don't filter - show all messages between these two users
-      setMessages(allMessages);
+      // Process messages to add isMyMessage flag and ensure seenBy structure
+      const processedMessages = allMessages.map(msg => ({
+        ...msg,
+        isMyMessage: msg.senderEmpId === storedUser?.empId,
+        seenBy: msg.seenBy || null,
+        seenAt: msg.seenAt || null,
+        isSeen: msg.isSeen !== undefined ? msg.isSeen : (msg.seenBy ? true : false),
+        status: msg.status || (msg.isSeen ? 'seen' : (msg.seenBy ? 'seen' : 'sent'))
+      }));
+      
+      setMessages(processedMessages);
+
+      // Mark messages as seen when opening chat
+      markMessagesAsSeen(selectedEmpId);
 
       setTimeout(scrollToBottom, 100);
     } catch (err) {
@@ -325,8 +345,24 @@ const ChatPage = () => {
         { withCredentials: true }
       );
       if (res.data && res.data.success) {
-        setGroupMessages(res.data.messages || []);
-        setTimeout(scrollToBottom, 100);
+        // Process messages to add isMyMessage flag and ensure seenBy structure
+        const processedMessages = (res.data.messages || []).map(msg => ({
+          ...msg,
+          isMyMessage: msg.senderEmpId === storedUser?.empId,
+          seenBy: msg.seenBy || [],
+          seenCount: msg.seenCount || (msg.seenBy?.length || 0)
+        }));
+        setGroupMessages(processedMessages);
+        
+        // Mark visible messages as seen after a short delay
+        setTimeout(() => {
+          processedMessages.forEach(msg => {
+            if (!msg.isMyMessage && !isMessageSeenByMe(msg) && msg._id) {
+              markGroupMessageAsSeen(groupId, msg._id);
+            }
+          });
+          scrollToBottom();
+        }, 500);
       }
     } catch (err) {
       console.error("❌ Failed to fetch group messages", err);
@@ -364,17 +400,27 @@ const ChatPage = () => {
 
       if (response.data && response.data.success) {
         const newMessage = {
+          _id: response.data.message?._id || response.data.messageId || Date.now().toString(),
           senderEmpId: storedUser.empId,
           senderName: storedUser.employeeName,
           senderAliasName: storedUser.aliasName,
           message: messageToSend,
-          timestamp: new Date().toISOString(),
-          isMyMessage: true
+          timestamp: response.data.message?.timestamp || new Date().toISOString(),
+          isMyMessage: true,
+          seenBy: [],
+          seenCount: 0
         };
         setGroupMessages(prev => [...prev, newMessage]);
+        
+        // Refresh messages after a short delay to get proper server data with correct ID
+        // This ensures the message ID matches what the backend sends in socket events
+        setTimeout(async () => {
+          await fetchGroupMessages(selectedGroup._id);
+          setTimeout(scrollToBottom, 100);
+        }, 500);
+      } else {
+        setTimeout(scrollToBottom, 100);
       }
-
-      setTimeout(scrollToBottom, 100);
     } catch (err) {
       console.error("❌ Send group message failed:", err);
       // Restore input on error
@@ -635,13 +681,24 @@ const ChatPage = () => {
       // Add the new message to the messages array immediately
       if (response.data) {
         const newMessage = {
+          _id: response.data.message?._id || response.data.messageId || Date.now().toString(),
           senderEmpId: storedUser.empId,
           receiverEmpId: selectedUser.empId,
           message: messageToSend,
-          timestamp: new Date().toISOString(),
-          status: 'sent'
+          timestamp: response.data.message?.timestamp || new Date().toISOString(),
+          status: 'sent',
+          isMyMessage: true,
+          seenBy: null,
+          seenAt: null,
+          isSeen: false
         };
         setMessages(prev => [...prev, newMessage]);
+        
+        // Refresh messages after a short delay to get proper server data
+        setTimeout(async () => {
+          await fetchMessages(selectedUser.empId);
+          setTimeout(scrollToBottom, 100);
+        }, 500);
       }
 
       socketRef.current?.emit("newMessage", {
@@ -667,6 +724,51 @@ const ChatPage = () => {
       // Only send if not already sending and input is not empty
       if (!isSendingMessage && input.trim()) {
         sendMessage();
+      }
+    }
+  };
+
+  const autoResizeTextarea = (textarea) => {
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 400)}px`;
+    }
+  };
+
+  const handleInputChange = (e) => {
+    setInput(e.target.value);
+    // Auto-resize the active textarea
+    const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
+    autoResizeTextarea(textarea);
+  };
+
+  const handlePaste = (e) => {
+    // Get pasted text from clipboard
+    const pastedText = e.clipboardData.getData('text');
+    if (pastedText) {
+      e.preventDefault();
+      // Get the active textarea (group or individual)
+      const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
+      
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const currentValue = input;
+        
+        // Insert pasted text at cursor position
+        const newValue = currentValue.substring(0, start) + pastedText + currentValue.substring(end);
+        setInput(newValue);
+        
+        // Set cursor position after pasted text and auto-resize
+        setTimeout(() => {
+          const newCursorPos = start + pastedText.length;
+          textarea.setSelectionRange(newCursorPos, newCursorPos);
+          textarea.focus();
+          autoResizeTextarea(textarea);
+        }, 0);
+      } else {
+        // Fallback: append if textarea ref not available
+        setInput(prev => prev + pastedText);
       }
     }
   };
@@ -842,10 +944,14 @@ const ChatPage = () => {
     }
   };
 
-  const getMessageStatus = (status) => {
+  const getMessageStatus = (status, isSeen, seenBy) => {
+    if (isSeen && seenBy) {
+      return <CheckCheck size={14} className="text-blue-500" />;
+    }
     switch (status) {
       case 'sent': return <Clock size={14} className="text-gray-400" />;
       case 'delivered': return <Check size={14} className="text-gray-400" />;
+      case 'seen': return <CheckCheck size={14} className="text-blue-500" />;
       case 'read': return <CheckCheck size={14} className="text-blue-500" />;
       default: return <Clock size={14} className="text-gray-400" />;
     }
@@ -868,6 +974,186 @@ const ChatPage = () => {
         month: 'short', 
         day: 'numeric' 
       });
+    }
+  };
+
+  // Mark group message as seen
+  const markGroupMessageAsSeen = async (groupId, messageId) => {
+    if (!groupId || !messageId) return;
+    
+    // Check if already marked as seen to avoid duplicate calls
+    const seenKey = `${groupId}-${messageId}`;
+    if (markedAsSeenRef.current.has(seenKey)) {
+      return;
+    }
+    
+    // Check if message is sent by current user (don't mark own messages as seen)
+    const message = groupMessages.find(msg => msg._id === messageId);
+    if (message && (message.senderEmpId === storedUser?.empId || message.isMyMessage)) {
+      return;
+    }
+    
+    try {
+      const res = await axios.patch(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages/${messageId}/seen`,
+        {},
+        { withCredentials: true }
+      );
+      
+      if (res.data && res.data.success) {
+        markedAsSeenRef.current.add(seenKey);
+      }
+    } catch (err) {
+      console.error("❌ Failed to mark group message as seen:", err);
+      // Don't add to set if failed, so it can retry
+    }
+  };
+
+  // Check if message is seen by current user
+  const isMessageSeenByMe = (message) => {
+    if (!message || !storedUser?.empId) return false;
+    return message.seenBy?.some(s => s.empId === storedUser.empId || s.seenByEmpId === storedUser.empId);
+  };
+
+  // Update individual message seen status when socket event is received
+  const updateIndividualMessageSeenStatus = (messageIds, seenBy, seenAt) => {
+    if (!messageIds || !Array.isArray(messageIds) || !seenBy) return;
+    
+    setMessages(prevMessages => {
+      let updated = false;
+      const updatedMessages = prevMessages.map(msg => {
+        const msgId = String(msg._id || '');
+        const isInList = messageIds.some(id => String(id) === msgId);
+        
+        if (isInList && msg.isMyMessage) {
+          // Check if already seen
+          const alreadySeen = msg.isSeen || msg.seenBy;
+          
+          if (!alreadySeen) {
+            updated = true;
+            return {
+              ...msg,
+              seenBy: seenBy,
+              seenAt: seenAt || new Date().toISOString(),
+              isSeen: true,
+              status: 'seen'
+            };
+          }
+        }
+        return msg;
+      });
+      
+      if (updated) {
+        return updatedMessages;
+      }
+      return prevMessages;
+    });
+  };
+
+  // Update message seen status when socket event is received
+  const updateGroupMessageSeenStatus = (messageId, seenBy) => {
+    if (!messageId || !seenBy) return;
+    
+    setGroupMessages(prevMessages => {
+      let messageFound = false;
+      let updated = false;
+      
+      const updatedMessages = prevMessages.map(msg => {
+        // Match by _id (could be string or ObjectId)
+        const msgId = String(msg._id || '');
+        const targetId = String(messageId || '');
+        
+        if (msgId === targetId) {
+          messageFound = true;
+          // Ensure seenBy array exists
+          const currentSeenBy = msg.seenBy || [];
+          
+          // Check if this user already in seenBy array
+          const alreadySeen = currentSeenBy.some(
+            s => {
+              const sEmpId = s.empId || s.seenByEmpId || '';
+              const newEmpId = seenBy.empId || seenBy.seenByEmpId || '';
+              return sEmpId && newEmpId && String(sEmpId) === String(newEmpId);
+            }
+          );
+          
+          if (!alreadySeen) {
+            updated = true;
+            return {
+              ...msg,
+              seenBy: [...currentSeenBy, seenBy],
+              seenCount: (msg.seenCount || 0) + 1
+            };
+          }
+        }
+        return msg;
+      });
+      
+      // If message not found, refresh messages to get latest data
+      if (!messageFound && selectedGroup?._id) {
+        setTimeout(() => {
+          fetchGroupMessages(selectedGroup._id);
+        }, 100);
+      }
+      
+      // If message was updated, return new array to trigger re-render
+      if (updated) {
+        return updatedMessages;
+      }
+      return prevMessages;
+    });
+  };
+
+  // Fetch seen-by data for a message
+  const fetchSeenBy = async (messageId, isGroupMessage = false) => {
+    if (!messageId) return;
+    
+    setLoadingSeenBy(true);
+    try {
+      let endpoint;
+      if (isGroupMessage) {
+        endpoint = `${API_CONFIG.BASE_URL}/api/v1/chat/group/message/${messageId}/seen-by`;
+      } else {
+        endpoint = `${API_CONFIG.BASE_URL}/api/v1/chat/message/${messageId}/seen-by`;
+      }
+      
+      const res = await axios.get(endpoint, { withCredentials: true });
+      
+      if (res.data && res.data.success) {
+        setSeenByData({
+          messageId,
+          seenBy: res.data.seenBy || [],
+          message: res.data.message || ''
+        });
+        setShowSeenByModal(true);
+      } else {
+        // Fallback: use message data if API doesn't exist yet
+        const message = isGroupMessage 
+          ? groupMessages.find(m => m._id === messageId)
+          : messages.find(m => m._id === messageId);
+        
+        setSeenByData({
+          messageId,
+          seenBy: message?.seenBy || [],
+          message: message?.message || ''
+        });
+        setShowSeenByModal(true);
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch seen-by data:", err);
+      // Fallback: use message data if API doesn't exist
+      const message = isGroupMessage 
+        ? groupMessages.find(m => m._id === messageId)
+        : messages.find(m => m._id === messageId);
+      
+      setSeenByData({
+        messageId,
+        seenBy: message?.seenBy || [],
+        message: message?.message || ''
+      });
+      setShowSeenByModal(true);
+    } finally {
+      setLoadingSeenBy(false);
     }
   };
 
@@ -935,6 +1221,61 @@ const ChatPage = () => {
       fetchUnreadCounts();
     }
   }, [storedUser]);
+
+  // Auto-resize textarea when input changes or chat type switches
+  useEffect(() => {
+    const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
+    if (textarea) {
+      autoResizeTextarea(textarea);
+    }
+  }, [input, chatType]);
+
+  // Intersection Observer to mark group messages as seen when they come into view
+  useEffect(() => {
+    if (chatType !== 'group' || !selectedGroup?._id || groupMessages.length === 0) {
+      return;
+    }
+
+    const observers = [];
+    const groupId = selectedGroup._id;
+
+    // Create intersection observer for each message
+    groupMessages.forEach(message => {
+      const element = groupMessageRefs.current[message._id];
+      if (!element) return;
+
+      // Skip if message is sent by current user or already marked as seen
+      if (message.senderEmpId === storedUser?.empId || message.isMyMessage || isMessageSeenByMe(message)) {
+        return;
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              // Message is visible, mark as seen
+              markGroupMessageAsSeen(groupId, message._id);
+              // Stop observing once seen
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        {
+          threshold: 0.5 // Message is considered seen when 50% is visible
+        }
+      );
+
+      observer.observe(element);
+      observers.push({ observer, element });
+    });
+
+    // Cleanup
+    return () => {
+      observers.forEach(({ observer, element }) => {
+        observer.unobserve(element);
+      });
+    };
+  }, [groupMessages, selectedGroup, chatType, storedUser]);
 
   // Merge unread data with chat list
   const mergeUnreadData = (chatList, unreadData) => {
@@ -1046,6 +1387,18 @@ const ChatPage = () => {
 
     socketRef.current.on("newMessage", handleNewMessage);
 
+    // Handle individual message seen status updates
+    const handleMessageSeen = ({ senderEmpId, receiverEmpId, receiverName, receiverAliasName, messageIds, seenAt, seenCount }) => {
+      // Only update if it's for the currently selected user and messages are from current user
+      if (selectedUser?.empId === receiverEmpId && senderEmpId === storedUser?.empId && messageIds) {
+        updateIndividualMessageSeenStatus(messageIds, {
+          empId: receiverEmpId,
+          employeeName: receiverName,
+          aliasName: receiverAliasName
+        }, seenAt);
+      }
+    };
+
     const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message }) => {
       // Check if this message is for current selected group
       const isForSelectedGroup = selectedGroup?._id === groupId;
@@ -1082,14 +1435,26 @@ const ChatPage = () => {
       await fetchGroups();
     };
 
+    // Handle group message seen status updates
+    const handleGroupMessageSeen = ({ groupId, messageId, seenBy }) => {
+      // Only update if it's for the currently selected group
+      if (selectedGroup?._id === groupId && messageId && seenBy) {
+        updateGroupMessageSeenStatus(messageId, seenBy);
+      }
+    };
+
     socketRef.current.on("newGroupMessage", handleNewGroupMessage);
+    socketRef.current.on("groupMessageSeen", handleGroupMessageSeen);
+    socketRef.current.on("messageSeen", handleMessageSeen);
 
     return () => {
       socketRef.current.off("newMessage", handleNewMessage);
       socketRef.current.off("newGroupMessage", handleNewGroupMessage);
+      socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
+      socketRef.current.off("messageSeen", handleMessageSeen);
       socketRef.current.disconnect();
     };
-  }, [storedUser, selectedUser, selectedGroup]);
+  }, [storedUser, selectedUser, selectedGroup, groupMessages]);
 
   // Show skeleton loaders during initial load
   if (loading) {
@@ -1550,7 +1915,10 @@ const ChatPage = () => {
                             </span>
                           </div>
                         )}
-                        <div className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}>
+                        <div 
+                          ref={el => groupMessageRefs.current[msg._id] = el}
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}
+                        >
                           <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
                               <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0">
@@ -1620,9 +1988,44 @@ const ChatPage = () => {
                                     {formatTime(msg.timestamp)}
                                   </span>
                                   {isSentByMe && (
-                                    <CheckCheck size={12} className="text-blue-100" />
+                                    <button
+                                      onClick={() => msg._id && fetchSeenBy(msg._id, true)}
+                                      className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
+                                      title="Click to see who has seen this message"
+                                    >
+                                      <CheckCheck size={12} className="text-blue-100" />
+                                    </button>
                                   )}
                                 </div>
+                                {/* Show seen status for messages sent by current user */}
+                                {isSentByMe && (
+                                  <div className={`mt-2 flex flex-col gap-1 ${isSentByMe ? 'items-end' : 'items-start'}`}>
+                                    {msg.seenCount > 0 ? (
+                                      <div className="flex flex-col items-end gap-1">
+                                        <span className={`text-xs font-semibold ${isSentByMe ? 'text-blue-100' : 'text-gray-600'}`}>
+                                          Seen by {msg.seenCount} {msg.seenCount === 1 ? 'person' : 'people'}
+                                        </span>
+                                        {msg.seenBy && msg.seenBy.length > 0 && (
+                                          <div className={`text-xs ${isSentByMe ? 'text-blue-50' : 'text-gray-500'} flex flex-wrap gap-1 justify-end max-w-full`}>
+                                            {msg.seenBy.slice(0, 3).map((user, idx) => (
+                                              <span key={user.empId || user.seenByEmpId || idx} className="italic">
+                                                {user.aliasName || user.employeeName || user.name}
+                                                {idx < Math.min(msg.seenBy.length, 3) - 1 && ','}
+                                              </span>
+                                            ))}
+                                            {msg.seenBy.length > 3 && (
+                                              <span className="italic">+{msg.seenBy.length - 3} more</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className={`text-xs italic ${isSentByMe ? 'text-blue-50' : 'text-gray-500'}`}>
+                                        Sent
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1649,14 +2052,16 @@ const ChatPage = () => {
                       <Paperclip size={20} className="text-gray-500" />
                     </button>
                     <textarea
+                      ref={groupTextareaRef}
                       placeholder={uploadingFile || isSendingMessage ? (uploadingFile ? "Uploading..." : "Sending...") : "Type a message"}
                       value={input}
-                      onChange={(e) => setInput(e.target.value)}
+                      onChange={handleInputChange}
                       onKeyPress={handleKeyPress}
+                      onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50"
-                      style={{ minHeight: '20px', maxHeight: '100px' }}
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
+                      style={{ minHeight: '20px', maxHeight: '400px' }}
                     />
                     <button 
                       onClick={() => imageInputRef.current?.click()}
@@ -1952,9 +2357,28 @@ const ChatPage = () => {
                                   {formatTime(msg.timestamp)}
                                 </span>
                                 {isSentByMe && (
-                                  <span className="text-xs">
-                                    {getMessageStatus(msg.status)}
-                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => msg._id && fetchSeenBy(msg._id, false)}
+                                      className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
+                                      title={msg.isSeen && msg.seenBy ? `Seen by ${msg.seenBy.aliasName || msg.seenBy.employeeName}${msg.seenAt ? ` at ${formatTime(msg.seenAt)}` : ''}` : "Click to see who has seen this message"}
+                                    >
+                                      <span className="text-xs">
+                                        {getMessageStatus(msg.status, msg.isSeen, msg.seenBy)}
+                                      </span>
+                                    </button>
+                                    {/* Show seen status text */}
+                                    {msg.isSeen && msg.seenBy && (
+                                      <span className="text-xs text-gray-500 italic">
+                                        Seen by {msg.seenBy.aliasName || msg.seenBy.employeeName}
+                                        {msg.seenAt && (
+                                          <span className="text-gray-400 ml-1">
+                                            {formatTime(msg.seenAt)}
+                                          </span>
+                                        )}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1982,14 +2406,16 @@ const ChatPage = () => {
                       <Paperclip size={20} className="text-gray-500" />
                     </button>
                     <textarea
+                      ref={individualTextareaRef}
                       placeholder={uploadingFile || isSendingMessage ? (uploadingFile ? "Uploading..." : "Sending...") : "Type a message"}
                       value={input}
-                      onChange={(e) => setInput(e.target.value)}
+                      onChange={handleInputChange}
                       onKeyPress={handleKeyPress}
+                      onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50"
-                      style={{ minHeight: '20px', maxHeight: '100px' }}
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
+                      style={{ minHeight: '20px', maxHeight: '400px' }}
                     />
                     <button 
                       onClick={() => imageInputRef.current?.click()}
@@ -2074,6 +2500,62 @@ const ChatPage = () => {
           group={selectedGroup}
           storedUser={storedUser}
         />
+      )}
+
+      {/* Seen By Modal */}
+      {showSeenByModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-800">Seen By</h3>
+              <button
+                onClick={() => {
+                  setShowSeenByModal(false);
+                  setSeenByData(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingSeenBy ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              ) : seenByData && seenByData.seenBy && seenByData.seenBy.length > 0 ? (
+                <div className="space-y-3">
+                  {seenByData.seenBy.map((user, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold shadow-md">
+                        {user.employeeName?.charAt(0).toUpperCase() || user.name?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800">
+                          {user.employeeName || user.name || 'Unknown User'}
+                          {user.aliasName && `/${user.aliasName}`}
+                        </p>
+                        {user.seenAt && (
+                          <p className="text-xs text-gray-500">
+                            Seen {formatTime(user.seenAt)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Eye size={48} className="mx-auto mb-2 text-gray-400" />
+                  <p>No one has seen this message yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
