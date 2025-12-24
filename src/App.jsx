@@ -81,6 +81,7 @@ import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
 import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
 import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
 import FollowUpReport from "./Components/Sales/FollowUpReport.jsx";
+import PaymentNotificationPopup from "./Components/PaymentNotificationPopup.jsx";
 
 
 
@@ -263,6 +264,7 @@ const getUserData = () => {
 };
 
 function App() {
+  const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showTerms, setShowTerms] = useState(false);
@@ -343,6 +345,24 @@ function App() {
     <>
       {/* Global Components */}
       <GlobalAssignmentNotification />
+      
+      {/* Payment Notification Popup - Only shows for Finance employees */}
+      {/* Always render - component handles user check internally for all pages */}
+      <PaymentNotificationPopup
+        user={userData ? {
+          empId: userData.empId || userData.employeeId,
+          department: typeof userData.department === 'string' 
+            ? userData.department 
+            : userData.department?.name || '',
+        } : null}
+        onNotificationClick={(notification) => {
+          // Navigate to DO details page
+          navigate(`/DODetails`, { 
+            state: { doId: notification.doId } 
+          });
+        }}
+      />
+      
       <ToastContainer 
         position="top-right"
         autoClose={5000}
