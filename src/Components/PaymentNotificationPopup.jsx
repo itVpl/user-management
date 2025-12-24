@@ -1,13 +1,52 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { socketService } from '../utils/socket';
 import './PaymentNotificationPopup.css';
+
+const API_CONFIG = {
+  BASE_URL: "https://vpl-liveproject-1.onrender.com",
+};
 
 const PaymentNotificationPopup = ({ user, onNotificationClick }) => {
   const [notification, setNotification] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
   const navigate = useNavigate();
   const timeoutRef = useRef(null);
+  const broadcastChannelRef = useRef(null);
+  const pollingIntervalRef = useRef(null);
+  const lastNotificationIdRef = useRef(null);
+  const socketConnectedRef = useRef(false);
+
+  // Handle showing notification
+  const showNotification = useCallback((data) => {
+    console.log('📧 Payment notification received:', data);
+    
+    // Prevent duplicate notifications
+    if (data?.id && data.id === lastNotificationIdRef.current) {
+      return;
+    }
+    
+    if (data?.id) {
+      lastNotificationIdRef.current = data.id;
+    }
+    
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    setNotification(data);
+    setShowPopup(true);
+
+    // Auto-hide after 10 seconds
+    timeoutRef.current = setTimeout(() => {
+      setShowPopup(false);
+      setTimeout(() => {
+        setNotification(null);
+      }, 300); // Wait for fade-out animation
+    }, 10000);
+  }, []);
 
   useEffect(() => {
     // Get user data from prop or storage (for resilience across all pages)
@@ -56,44 +95,120 @@ const PaymentNotificationPopup = ({ user, onNotificationClick }) => {
       return;
     }
 
-    // Connect to Socket.io
-    socketService.connect(token, empId);
-
-    // Join Finance department room
-    socketService.joinFinanceDepartment();
-
-    // Listen for payment notifications
-    const handlePaymentNotification = (data) => {
-      console.log('📧 Payment notification received:', data);
-      
-      // Clear any existing timeout
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+    // ========== Setup BroadcastChannel (Cross-tab communication) ==========
+    let broadcastChannel;
+    if ('BroadcastChannel' in window) {
+      try {
+        broadcastChannel = new BroadcastChannel('payment_notifications');
+        broadcastChannelRef.current = broadcastChannel;
+        
+        broadcastChannel.addEventListener('message', (event) => {
+          const message = event?.data;
+          if (message?.type === 'PAYMENT_NOTIFICATION' && message?.notification) {
+            console.log('📢 Payment notification received via BroadcastChannel:', message.notification);
+            showNotification(message.notification);
+          }
+        });
+        
+        console.log('✅ BroadcastChannel initialized for payment notifications');
+      } catch (error) {
+        console.warn('⚠️ BroadcastChannel not supported:', error);
       }
+    }
+
+    // ========== Setup WebSocket Connection ==========
+    try {
+      socketService.connect(token, empId);
       
-      setNotification(data);
-      setShowPopup(true);
+      // Wait for socket connection before joining room
+      const checkConnection = setInterval(() => {
+        if (socketService.isConnected()) {
+          clearInterval(checkConnection);
+          socketConnectedRef.current = true;
+          socketService.joinFinanceDepartment();
+          console.log('✅ Socket connected and joined Finance department');
+        }
+      }, 500);
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        clearInterval(checkConnection);
+        if (!socketConnectedRef.current) {
+          console.warn('⚠️ Socket connection timeout, using polling fallback');
+        }
+      }, 5000);
 
-      // Auto-hide after 10 seconds
-      timeoutRef.current = setTimeout(() => {
-        setShowPopup(false);
-        setTimeout(() => {
-          setNotification(null);
-        }, 300); // Wait for fade-out animation
-      }, 10000);
-    };
+      // Listen for payment notifications via WebSocket
+      const handlePaymentNotification = (data) => {
+        console.log('📧 Payment notification received via WebSocket:', data);
+        socketConnectedRef.current = true;
+        showNotification(data);
+      };
 
-    socketService.onPaymentNotification(handlePaymentNotification);
+      socketService.onPaymentNotification(handlePaymentNotification);
 
-    // Cleanup on unmount
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      socketService.offPaymentNotification(handlePaymentNotification);
-      socketService.leaveFinanceDepartment();
-    };
-  }, [user]); // Re-run if user prop changes, but also reads from storage as fallback
+      // ========== Setup Polling Fallback ==========
+      const pollForNotifications = async () => {
+        try {
+          const response = await axios.get(
+            `${API_CONFIG.BASE_URL}/api/v1/accountant/payment-notifications?unreadOnly=true&limit=5`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 10000
+            }
+          );
+
+          if (response?.data?.success && response?.data?.data?.notifications) {
+            const notifications = response.data.data.notifications;
+            
+            // Show the most recent unread notification
+            if (notifications.length > 0) {
+              const latestNotification = notifications[0];
+              
+              // Only show if it's newer than the last one we showed
+              if (!lastNotificationIdRef.current || 
+                  latestNotification.id !== lastNotificationIdRef.current) {
+                showNotification(latestNotification);
+              }
+            }
+          }
+        } catch (error) {
+          // Silently fail - don't spam console with polling errors
+          if (error.response?.status !== 403 && error.response?.status !== 401) {
+            console.debug('Polling error (non-critical):', error.message);
+          }
+        }
+      };
+
+      // Start polling every 30 seconds as fallback
+      pollingIntervalRef.current = setInterval(pollForNotifications, 30000);
+      
+      // Initial poll after 5 seconds
+      setTimeout(pollForNotifications, 5000);
+
+      // Cleanup on unmount
+      return () => {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+        }
+        if (broadcastChannel) {
+          broadcastChannel.close();
+          broadcastChannelRef.current = null;
+        }
+        socketService.offPaymentNotification(handlePaymentNotification);
+        socketService.leaveFinanceDepartment();
+        clearInterval(checkConnection);
+      };
+    } catch (error) {
+      console.error('Error setting up payment notifications:', error);
+    }
+  }, [user, showNotification]); // Re-run if user prop changes, but also reads from storage as fallback
 
   const handleClose = () => {
     // Clear auto-dismiss timeout if exists
