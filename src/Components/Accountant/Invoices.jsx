@@ -696,6 +696,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   });
   const [bulkPaymentLoading, setBulkPaymentLoading] = useState(false);
 
+  // Short Pay modal state
+  const [shortPayModalOpen, setShortPayModalOpen] = useState(false);
+  const [shortPayData, setShortPayData] = useState(null);
+  const [shortPayForm, setShortPayForm] = useState({
+    paymentAmount: '',
+    paymentMethod: '',
+    paymentReference: '',
+    paymentNotes: '',
+    carrierPaymentProof: null
+  });
+  const [shortPayLoading, setShortPayLoading] = useState(false);
+
   // Logo source for PDF generation - using your actual logo
   const logoSrc = Logo;
 
@@ -1816,7 +1828,33 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const payload = resp?.data?.data || {};
       // ensure accountantUser populated even if only accepted API hits
       setAccountantUser((prev) => prev || payload.financeEmployee || null);
-      setAcceptedRows(payload.salesVerifiedDOs || []);
+      const salesVerifiedDOs = payload.salesVerifiedDOs || [];
+      
+      // Log paid DOs for debugging
+      const paidDOs = salesVerifiedDOs.filter(doItem => {
+        const billPaid = doItem?.paymentStatus?.status === 'paid';
+        const carrierPaid = doItem?.carrierPaymentStatus?.status === 'paid';
+        return billPaid || carrierPaid;
+      });
+      
+      if (paidDOs.length > 0) {
+        console.log(`📊 Found ${paidDOs.length} paid DO(s) out of ${salesVerifiedDOs.length} total:`, {
+          total: salesVerifiedDOs.length,
+          paid: paidDOs.length,
+          unpaid: salesVerifiedDOs.length - paidDOs.length,
+          paidDOs: paidDOs.map(doItem => ({
+            doId: doItem._id,
+            loadNo: doItem?.customers?.[0]?.loadNo || 'N/A',
+            billTo: doItem?.customers?.[0]?.billTo || doItem?.customerName || 'N/A',
+            billPaid: doItem?.paymentStatus?.status === 'paid',
+            carrierPaid: doItem?.carrierPaymentStatus?.status === 'paid',
+            carrierTotalPaid: doItem?.carrierPaymentStatus?.totalPaidAmount || 0,
+            carrierTotal: doItem?.carrier?.totalCarrierFees || 0
+          }))
+        });
+      }
+      
+      setAcceptedRows(salesVerifiedDOs);
       if (payload.pagination) {
         setAcceptedPagination(payload.pagination);
       } else {
@@ -2057,6 +2095,23 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setPaymentModalOpen(true);
   };
 
+  const openShortPayModal = (row) => {
+    setShortPayData(row);
+    const totals = computeTotals(row);
+    const carrierPaymentStatus = row?.carrierPaymentStatus || {};
+    const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
+    const remaining = totals.carrierTotal - totalPaid;
+    
+    setShortPayForm({
+      paymentAmount: '',
+      paymentMethod: '',
+      paymentReference: '',
+      paymentNotes: '',
+      carrierPaymentProof: null
+    });
+    setShortPayModalOpen(true);
+  };
+
   const handlePaymentSubmit = async () => {
     if (!paymentData) return;
 
@@ -2082,9 +2137,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       if (paymentForm.paymentNotes) {
         formData.append('paymentNotes', paymentForm.paymentNotes);
       }
-      formData.append('paymentProof', paymentForm.paymentProof);
+      // Use carrierPaymentProof as per API documentation
+      formData.append('carrierPaymentProof', paymentForm.paymentProof);
 
-      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/mark-as-paid`;
+      // Use mark-carrier-as-paid endpoint as per API documentation
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/mark-carrier-as-paid`;
       const resp = await axios.post(url, formData, {
         headers: {
           ...headers,
@@ -2093,18 +2150,97 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       });
 
       if (resp?.data?.success) {
-        setToast({ open: true, severity: "success", msg: "DO marked as paid successfully!" });
+        const isFullyPaid = resp?.data?.data?.carrierPaymentStatus?.status === 'paid';
+        const message = resp?.data?.message || (isFullyPaid ? "Carrier payment marked as paid successfully!" : "Payment recorded successfully!");
+        setToast({ open: true, severity: "success", msg: message });
         setPaymentModalOpen(false);
         // Refresh the data
         fetchAccepted();
       } else {
-        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark as paid" });
+        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark carrier as paid" });
       }
     } catch (error) {
       const errorMsg = error?.response?.data?.message || error?.message || "Failed to mark as paid";
       setToast({ open: true, severity: "error", msg: errorMsg });
     } finally {
       setPaymentLoading(false);
+    }
+  };
+
+  const handleShortPaySubmit = async () => {
+    if (!shortPayData) return;
+
+    // Validation
+    if (!shortPayForm.paymentAmount || parseFloat(shortPayForm.paymentAmount) <= 0) {
+      setToast({ open: true, severity: "error", msg: "Please enter a valid payment amount" });
+      return;
+    }
+    if (!shortPayForm.paymentMethod) {
+      setToast({ open: true, severity: "error", msg: "Please select a payment method" });
+      return;
+    }
+    if (!shortPayForm.carrierPaymentProof) {
+      setToast({ open: true, severity: "error", msg: "Please upload payment proof document" });
+      return;
+    }
+
+    const totals = computeTotals(shortPayData);
+    const carrierPaymentStatus = shortPayData?.carrierPaymentStatus || {};
+    const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
+    const remaining = totals.carrierTotal - totalPaid;
+    const paymentAmount = parseFloat(shortPayForm.paymentAmount);
+
+    // Allow small rounding differences (0.01 tolerance)
+    if (paymentAmount > remaining + 0.01) {
+      setToast({ 
+        open: true, 
+        severity: "error", 
+        msg: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds remaining amount ($${remaining.toFixed(2)})` 
+      });
+      return;
+    }
+
+    setShortPayLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('doId', shortPayData._id);
+      formData.append('accountantEmpId', empId);
+      formData.append('paymentAmount', paymentAmount);
+      formData.append('paymentMethod', shortPayForm.paymentMethod);
+      if (shortPayForm.paymentReference) {
+        formData.append('paymentReference', shortPayForm.paymentReference);
+      }
+      if (shortPayForm.paymentNotes) {
+        formData.append('paymentNotes', shortPayForm.paymentNotes);
+      }
+      formData.append('carrierPaymentProof', shortPayForm.carrierPaymentProof);
+
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/short-pay-carrier`;
+      const resp = await axios.post(url, formData, {
+        headers: {
+          ...headers,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (resp?.data?.success) {
+        const isFullyPaid = resp?.data?.data?.isFullyPaid;
+        if (isFullyPaid) {
+          setToast({ open: true, severity: "success", msg: "Carrier payment fully paid through short payments!" });
+        } else {
+          setToast({ open: true, severity: "success", msg: `Short payment of $${paymentAmount.toFixed(2)} recorded successfully!` });
+        }
+        setShortPayModalOpen(false);
+        // Refresh the data
+        fetchAccepted();
+      } else {
+        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to record short payment" });
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.message || error?.message || "Failed to record short payment";
+      setToast({ open: true, severity: "error", msg: errorMsg });
+    } finally {
+      setShortPayLoading(false);
     }
   };
 
@@ -2899,8 +3035,40 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 </div>
                 <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <FileText className="text-blue-600" size={20} />
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                      <CheckCircle className="text-green-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Paid</p>
+                      <p className="text-xl font-bold text-green-600">
+                        {acceptedRows.filter(r => {
+                          const carrierPaid = r?.carrierPaymentStatus?.status === 'paid';
+                          return carrierPaid;
+                        }).length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                      <Clock className="text-orange-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Unpaid/Partial</p>
+                      <p className="text-xl font-bold text-orange-600">
+                        {acceptedRows.filter(r => {
+                          const carrierPaid = r?.carrierPaymentStatus?.status === 'paid';
+                          return !carrierPaid;
+                        }).length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                      <FileText className="text-purple-600" size={20} />
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Filtered</p>
@@ -3019,8 +3187,42 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             || row?.salesApproval?.approvedBy?.empId
                             || "—";
                           const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
+                          // Check both paymentStatus (for bill payment) and carrierPaymentStatus (for carrier payment)
                           const isPaid = row?.paymentStatus?.status === 'paid';
+                          const carrierPaymentStatus = row?.carrierPaymentStatus || {};
+                          // More robust check for paid status - check status and also if fully paid through short payments
+                          const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+                          const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+                          const carrierTotal = parseFloat(totals.carrierTotal || 0);
+                          
+                          // Multiple checks for paid status:
+                          // 1. Status is explicitly 'paid'
+                          // 2. Total paid equals or exceeds carrier total (with tolerance)
+                          // 3. Check if remaining amount is 0 or negative
+                          const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+                          const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+                          const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+                          
+                          const carrierIsPaid = carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+                          const carrierIsPartiallyPaid = carrierStatus === 'pending' && carrierTotalPaid > 0 && carrierTotalPaid < carrierTotal - 0.01 && remainingAmount > 0.01;
+                          const carrierRemaining = Math.max(0, carrierTotal - carrierTotalPaid);
                           const isSelected = selectedDOs.has(row._id);
+                          
+                          // Debug logging for all DOs to understand data structure
+                          if (!carrierIsPaid && carrierTotal > 0) {
+                            console.log('🔍 DO Payment Status Check:', {
+                              doId: row._id?.substring(0, 10) + '...',
+                              loadNo: cust?.loadNo,
+                              carrierStatus: carrierStatus || 'undefined',
+                              carrierTotalPaid: carrierTotalPaid,
+                              carrierTotal: carrierTotal,
+                              remainingAmount: remainingAmount,
+                              isFullyPaidByAmount: isFullyPaidByAmount,
+                              isFullyPaidByRemaining: isFullyPaidByRemaining,
+                              carrierIsPaid: carrierIsPaid,
+                              carrierPaymentStatus: carrierPaymentStatus
+                            });
+                          }
                           return (
                             <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} ${isSelected ? 'bg-blue-50' : ''}`}>
                               <td className="py-2 px-3 text-center">
@@ -3075,20 +3277,51 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 </div>
                               </td>
                               <td className="py-2 px-3">
-                                <div className="flex items-center justify-center">
-                                  {isPaid ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  {carrierIsPaid ? (
                                     <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700">
                                       <CheckCircle size={14} />
                                       Paid
                                     </span>
+                                  ) : carrierIsPartiallyPaid ? (
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-orange-100 text-orange-700">
+                                        Partial: ${fmtMoney(carrierTotalPaid)}/${fmtMoney(totals.carrierTotal)}
+                                      </span>
+                                      <div className="flex gap-1">
+                                        <button
+                                          onClick={() => openShortPayModal(row)}
+                                          className="px-2 py-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-semibold rounded hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
+                                          title="Short Pay"
+                                        >
+                                          Short Pay
+                                        </button>
+                                        <button
+                                          onClick={() => openPaymentModal(row)}
+                                          className="px-2 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs font-semibold rounded hover:from-green-600 hover:to-green-700 transition-all shadow-sm"
+                                          title="Mark as Paid"
+                                        >
+                                          Pay
+                                        </button>
+                                      </div>
+                                    </div>
                                   ) : (
-                                    <button
-                                      onClick={() => openPaymentModal(row)}
-                                      className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                                      title="Mark as Paid"
-                                    >
-                                      Pay
-                                    </button>
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={() => openShortPayModal(row)}
+                                        className="px-3 py-1.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-semibold rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                                        title="Short Pay (Partial Payment)"
+                                      >
+                                        Short Pay
+                                      </button>
+                                      <button
+                                        onClick={() => openPaymentModal(row)}
+                                        className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                                        title="Mark as Paid"
+                                      >
+                                        Pay
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                               </td>
@@ -3999,6 +4232,161 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   </div>
                 )}
 
+                {/* Carrier Payment Information */}
+                {(() => {
+                  const carrierPaymentStatus = selected?.carrierPaymentStatus || {};
+                  const totals = computeTotals(selected);
+                  const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
+                  const remaining = totals.carrierTotal - totalPaid;
+                  const shortPayments = carrierPaymentStatus?.shortPayments || [];
+                  const isFullyPaid = carrierPaymentStatus?.status === 'paid';
+                  const isPartiallyPaid = carrierPaymentStatus?.status === 'pending' && totalPaid > 0;
+
+                  if (!isFullyPaid && !isPartiallyPaid && totalPaid === 0) {
+                    return null; // Don't show if no payments made
+                  }
+
+                  return (
+                    <div className={`bg-gradient-to-br rounded-2xl p-6 border ${
+                      isFullyPaid 
+                        ? 'from-green-50 to-emerald-50 border-green-200' 
+                        : 'from-orange-50 to-amber-50 border-orange-200'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <DollarSign className={isFullyPaid ? "text-green-600" : "text-orange-600"} size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Carrier Payment Information</h3>
+                        <span className={`ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
+                          isFullyPaid 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {isFullyPaid ? (
+                            <>
+                              <CheckCircle size={14} />
+                              Paid
+                            </>
+                          ) : (
+                            <>
+                              <Clock size={14} />
+                              Partial
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 mb-4">
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Total Carrier Fees</p>
+                            <p className="text-lg font-bold text-gray-800">${fmtMoney(totals.carrierTotal)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Total Paid</p>
+                            <p className={`text-lg font-bold ${isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                              ${fmtMoney(totalPaid)}
+                            </p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600 mb-1">Remaining Amount</p>
+                            <p className={`text-xl font-bold ${isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                              ${fmtMoney(remaining)}
+                            </p>
+                          </div>
+                        </div>
+                        {isFullyPaid && carrierPaymentStatus?.paidAt && (
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Fully Paid At</p>
+                            <p className="font-medium text-gray-800">
+                              {fmtDateTime(carrierPaymentStatus.paidAt)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Payment History */}
+                      {shortPayments && shortPayments.length > 0 && (
+                        <div className="bg-white rounded-xl p-4 border border-gray-200">
+                          <h4 className="text-md font-bold text-gray-800 mb-3">Payment History</h4>
+                          <div className="space-y-3">
+                            {shortPayments.map((payment, index) => (
+                              <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <p className="font-semibold text-gray-800">Payment #{index + 1}</p>
+                                    <p className="text-sm text-gray-600">
+                                      {fmtDateTime(payment.paidAt)}
+                                    </p>
+                                  </div>
+                                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm font-semibold">
+                                    ${fmtMoney(payment.amount)}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                  <div>
+                                    <p className="text-gray-600">Method</p>
+                                    <p className="font-medium text-gray-800 capitalize">
+                                      {payment.paymentMethod?.replace('_', ' ') || 'N/A'}
+                                    </p>
+                                  </div>
+                                  {payment.paymentReference && (
+                                    <div>
+                                      <p className="text-gray-600">Reference</p>
+                                      <p className="font-medium text-gray-800">{payment.paymentReference}</p>
+                                    </div>
+                                  )}
+                                  {payment.paidBy && (
+                                    <div className="col-span-2">
+                                      <p className="text-gray-600">Paid By</p>
+                                      <p className="font-medium text-gray-800">
+                                        {payment.paidBy?.employeeName || payment.paidBy?.empId || 'N/A'}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {payment.paymentNotes && (
+                                    <div className="col-span-2">
+                                      <p className="text-gray-600">Notes</p>
+                                      <p className="font-medium text-gray-800 bg-white p-2 rounded border border-gray-200">
+                                        {payment.paymentNotes}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {payment.paymentProof?.fileUrl && (
+                                    <div className="col-span-2">
+                                      <p className="text-gray-600 mb-1">Proof</p>
+                                      <a
+                                        href={payment.paymentProof.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                      >
+                                        {isImageUrl(payment.paymentProof.fileUrl) ? (
+                                          <>
+                                            <ImageIcon className="text-blue-600" style={{ fontSize: 20 }} />
+                                            <span className="text-sm">{payment.paymentProof.fileName || 'View Image'}</span>
+                                          </>
+                                        ) : isPdfUrl(payment.paymentProof.fileUrl) ? (
+                                          <>
+                                            <PictureAsPdfIcon className="text-red-600" style={{ fontSize: 20 }} />
+                                            <span className="text-sm">{payment.paymentProof.fileName || 'View PDF'}</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <DescriptionIcon className="text-gray-600" style={{ fontSize: 20 }} />
+                                            <span className="text-sm">{payment.paymentProof.fileName || 'View File'}</span>
+                                          </>
+                                        )}
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Uploaded Files */}
                 <Card variant="outlined">
                   <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#0ea5e9", 0.05) }}>
@@ -4592,6 +4980,379 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Short Pay Modal */}
+      {shortPayModalOpen && shortPayData && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShortPayModalOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <DollarSign size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Short Pay Carrier</h2>
+                      <p className="text-white/80 text-sm">DO ID: {shortPayData?._id ? shortId(shortPayData._id) : 'N/A'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShortPayModalOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                {(() => {
+                  const totals = computeTotals(shortPayData);
+                  const carrierPaymentStatus = shortPayData?.carrierPaymentStatus || {};
+                  const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
+                  const remaining = totals.carrierTotal - totalPaid;
+                  
+                  return (
+                    <div className="space-y-4">
+                      {/* Payment Summary */}
+                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Total Carrier Fees</p>
+                            <p className="text-lg font-bold text-gray-800">${fmtMoney(totals.carrierTotal)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Already Paid</p>
+                            <p className="text-lg font-bold text-green-600">${fmtMoney(totalPaid)}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600 mb-1">Remaining Amount</p>
+                            <p className="text-xl font-bold text-orange-600">${fmtMoney(remaining)}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payment Amount */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Amount <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-bold text-lg">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            max={remaining}
+                            value={shortPayForm.paymentAmount}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '' || (parseFloat(value) > 0 && parseFloat(value) <= remaining)) {
+                                setShortPayForm({ ...shortPayForm, paymentAmount: value });
+                              } else if (parseFloat(value) > remaining) {
+                                setToast({ open: true, severity: "error", msg: `Amount cannot exceed remaining balance of $${fmtMoney(remaining)}` });
+                              }
+                            }}
+                            placeholder="0.00"
+                            className={`w-full pl-10 pr-4 py-3 text-lg font-semibold border-2 rounded-xl transition-all ${
+                              shortPayForm.paymentAmount && parseFloat(shortPayForm.paymentAmount) > remaining
+                                ? 'border-red-400 bg-red-50 focus:ring-red-500 focus:border-red-500'
+                                : 'border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+                            } outline-none`}
+                            required
+                          />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <p className="text-xs text-gray-500">
+                            Maximum: <span className="font-semibold text-orange-600">${fmtMoney(remaining)}</span>
+                          </p>
+                          {shortPayForm.paymentAmount && parseFloat(shortPayForm.paymentAmount) > 0 && (
+                            <p className="text-xs text-gray-500">
+                              Remaining after payment: <span className="font-semibold text-gray-700">
+                                ${fmtMoney(remaining - parseFloat(shortPayForm.paymentAmount || 0))}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                        {/* Quick Fill Buttons */}
+                        {remaining > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: remaining.toFixed(2) })}
+                              className="px-3 py-1.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-300"
+                            >
+                              Pay Full (${fmtMoney(remaining)})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: (remaining / 2).toFixed(2) })}
+                              className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                            >
+                              Pay Half (${fmtMoney(remaining / 2)})
+                            </button>
+                            {remaining >= 100 && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: '100.00' })}
+                                  className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                                >
+                                  $100
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: '500.00' })}
+                                  className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                                >
+                                  $500
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Payment Method */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Method <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={shortPayForm.paymentMethod}
+                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentMethod: e.target.value })}
+                          className={`w-full px-4 py-3 border-2 rounded-xl transition-all ${
+                            shortPayForm.paymentMethod
+                              ? 'border-green-300 bg-green-50 focus:ring-green-500 focus:border-green-500'
+                              : 'border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+                          } outline-none font-medium`}
+                          required
+                        >
+                          <option value="">Select Payment Method</option>
+                          <option value="cash">💵 Cash</option>
+                          <option value="check">📝 Check</option>
+                          <option value="bank_transfer">🏦 Bank Transfer</option>
+                          <option value="online">💻 Online Payment</option>
+                          <option value="other">📄 Other</option>
+                        </select>
+                        {shortPayForm.paymentMethod && (
+                          <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                            <CheckCircle size={12} />
+                            Payment method selected
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Payment Reference */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Reference <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={shortPayForm.paymentReference}
+                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentReference: e.target.value })}
+                          placeholder="e.g., TXN123456, Check #789, Wire Transfer ID"
+                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white hover:border-gray-400"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Helpful for tracking and reconciliation</p>
+                      </div>
+
+                      {/* Payment Notes */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Notes <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+                        </label>
+                        <textarea
+                          value={shortPayForm.paymentNotes}
+                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentNotes: e.target.value })}
+                          placeholder="Add any additional notes about this payment (e.g., reason for partial payment, special instructions, etc.)"
+                          rows={4}
+                          maxLength={500}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none resize-none transition-all bg-white hover:border-gray-400"
+                        />
+                        <div className="flex justify-between items-center mt-1">
+                          <p className="text-xs text-gray-500">Optional notes for internal records</p>
+                          <p className={`text-xs ${shortPayForm.paymentNotes?.length > 450 ? 'text-orange-600' : 'text-gray-400'}`}>
+                            {shortPayForm.paymentNotes?.length || 0}/500
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Payment Proof Upload */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Proof <span className="text-red-500">*</span>
+                        </label>
+                        <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
+                          shortPayForm.carrierPaymentProof
+                            ? 'border-green-400 bg-green-50'
+                            : 'border-gray-300 bg-gray-50 hover:border-orange-400 hover:bg-orange-50'
+                        }`}>
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                if (file.size > 10 * 1024 * 1024) {
+                                  setToast({ open: true, severity: "error", msg: "File size must be less than 10MB" });
+                                  return;
+                                }
+                                setShortPayForm({ ...shortPayForm, carrierPaymentProof: file });
+                              }
+                            }}
+                            className="hidden"
+                            id="short-pay-proof-upload"
+                            required
+                          />
+                          <label
+                            htmlFor="short-pay-proof-upload"
+                            className="cursor-pointer flex flex-col items-center justify-center min-h-[120px]"
+                          >
+                            {shortPayForm.carrierPaymentProof ? (
+                              <div className="text-center w-full">
+                                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
+                                  <CheckCircle size={32} className="text-green-600" />
+                                </div>
+                                <p className="text-sm font-semibold text-gray-800 mb-1">{shortPayForm.carrierPaymentProof.name}</p>
+                                <p className="text-xs text-gray-600 mb-3">
+                                  {(shortPayForm.carrierPaymentProof.size / 1024).toFixed(2)} KB
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShortPayForm({ ...shortPayForm, carrierPaymentProof: null });
+                                    document.getElementById('short-pay-proof-upload').value = '';
+                                  }}
+                                  className="px-4 py-2 text-sm font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors border border-red-300"
+                                >
+                                  Remove File
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-200 rounded-full mb-3">
+                                  <AttachFileIcon className="text-gray-500" style={{ fontSize: 32 }} />
+                                </div>
+                                <p className="text-sm font-semibold text-gray-700 mb-1">Click to upload payment proof</p>
+                                <p className="text-xs text-gray-500 mb-2">PDF, JPG, PNG files supported</p>
+                                <p className="text-xs text-gray-400">Maximum file size: 10MB</p>
+                              </div>
+                            )}
+                          </label>
+                        </div>
+                        {!shortPayForm.carrierPaymentProof && (
+                          <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                            <Clock size={12} />
+                            Payment proof is required to complete the transaction
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Submit Button */}
+                      <div className="pt-6 border-t border-gray-200">
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => setShortPayModalOpen(false)}
+                            className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors border-2 border-gray-300"
+                            disabled={shortPayLoading}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleShortPaySubmit}
+                            disabled={(() => {
+                              const amount = parseFloat(shortPayForm.paymentAmount || 0);
+                              const isAmountValid = amount > 0 && amount <= remaining + 0.01; // Allow small rounding differences
+                              return shortPayLoading || 
+                                     !shortPayForm.paymentAmount || 
+                                     !shortPayForm.paymentMethod || 
+                                     !shortPayForm.carrierPaymentProof || 
+                                     !isAmountValid;
+                            })()}
+                            className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+                            title={(() => {
+                              if (shortPayLoading) return "Processing payment...";
+                              if (!shortPayForm.paymentAmount) return "Please enter payment amount";
+                              if (!shortPayForm.paymentMethod) return "Please select payment method";
+                              if (!shortPayForm.carrierPaymentProof) return "Please upload payment proof";
+                              const amount = parseFloat(shortPayForm.paymentAmount || 0);
+                              if (amount <= 0) return "Payment amount must be greater than 0";
+                              if (amount > remaining + 0.01) return `Amount cannot exceed remaining balance of $${fmtMoney(remaining)}`;
+                              return "Click to record short payment";
+                            })()}
+                          >
+                            {shortPayLoading ? (
+                              <span className="flex items-center justify-center gap-2">
+                                <RefreshCw size={18} className="animate-spin" />
+                                Processing...
+                              </span>
+                            ) : (
+                              <span className="flex items-center justify-center gap-2">
+                                <DollarSign size={18} />
+                                Record Short Payment
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                        {/* Validation Messages */}
+                        {(() => {
+                          const amount = parseFloat(shortPayForm.paymentAmount || 0);
+                          const isAmountValid = amount > 0 && amount <= remaining + 0.01;
+                          const missingFields = [];
+                          
+                          if (!shortPayForm.paymentAmount) missingFields.push("Payment Amount");
+                          if (!shortPayForm.paymentMethod) missingFields.push("Payment Method");
+                          if (!shortPayForm.carrierPaymentProof) missingFields.push("Payment Proof");
+                          if (amount <= 0 && shortPayForm.paymentAmount) missingFields.push("Valid Payment Amount (> 0)");
+                          if (amount > remaining + 0.01) missingFields.push(`Amount within limit (max $${fmtMoney(remaining)})`);
+
+                          if (missingFields.length > 0 && shortPayForm.paymentAmount) {
+                            return (
+                              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-xs text-red-800 font-semibold mb-1">⚠️ Please complete the following:</p>
+                                <ul className="text-xs text-red-700 list-disc list-inside space-y-0.5">
+                                  {missingFields.map((field, idx) => (
+                                    <li key={idx}>{field}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          }
+                          
+                          if (shortPayForm.paymentAmount && isAmountValid && shortPayForm.paymentMethod && shortPayForm.carrierPaymentProof) {
+                            return (
+                              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <p className="text-xs text-green-800 font-medium">
+                                  ✅ Ready to submit! You're about to record a payment of <span className="font-bold">${fmtMoney(amount)}</span>. 
+                                  After this payment, <span className="font-bold">${fmtMoney(Math.max(0, remaining - amount))}</span> will remain.
+                                </p>
+                              </div>
+                            );
+                          }
+                          
+                          return null;
+                        })()}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
