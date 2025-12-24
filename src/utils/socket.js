@@ -8,8 +8,14 @@ class SocketService {
   }
 
   connect(token, empId) {
-    if (this.socket?.connected) {
-      return; // Already connected
+    // If already connected with same token, don't reconnect
+    if (this.socket?.connected && this.token === token) {
+      return;
+    }
+
+    // Disconnect existing socket if token changed
+    if (this.socket && this.token !== token) {
+      this.disconnect();
     }
 
     this.token = token;
@@ -20,7 +26,9 @@ class SocketService {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: Infinity,
+      timeout: 20000,
       withCredentials: true
     });
 
@@ -33,12 +41,28 @@ class SocketService {
       }
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('❌ Socket disconnected from server');
+    this.socket.on('disconnect', (reason) => {
+      console.log('❌ Socket disconnected from server:', reason);
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+      console.error('Socket connection error:', error.message);
+    });
+
+    this.socket.on('reconnect', (attemptNumber) => {
+      console.log(`✅ Socket reconnected after ${attemptNumber} attempts`);
+      // Re-join with employee ID after reconnection
+      if (empId) {
+        this.socket?.emit('join', empId);
+      }
+    });
+
+    this.socket.on('reconnect_attempt', (attemptNumber) => {
+      console.log(`🔄 Socket reconnection attempt ${attemptNumber}`);
+    });
+
+    this.socket.on('reconnect_failed', () => {
+      console.warn('⚠️ Socket reconnection failed, will keep trying');
     });
   }
 

@@ -2112,6 +2112,23 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setShortPayModalOpen(true);
   };
 
+  // Helper function to emit payment notification via BroadcastChannel
+  const emitPaymentNotification = (notificationData) => {
+    try {
+      if ('BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('payment_notifications');
+        channel.postMessage({
+          type: 'PAYMENT_NOTIFICATION',
+          notification: notificationData
+        });
+        channel.close();
+        console.log('📢 Payment notification broadcasted:', notificationData);
+      }
+    } catch (error) {
+      console.warn('Failed to broadcast payment notification:', error);
+    }
+  };
+
   const handlePaymentSubmit = async () => {
     if (!paymentData) return;
 
@@ -2154,6 +2171,25 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         const message = resp?.data?.message || (isFullyPaid ? "Carrier payment marked as paid successfully!" : "Payment recorded successfully!");
         setToast({ open: true, severity: "success", msg: message });
         setPaymentModalOpen(false);
+        
+        // Emit notification via BroadcastChannel for cross-tab communication
+        const notificationData = {
+          id: `payment_${paymentData._id}_${Date.now()}`,
+          type: 'carrier_payment',
+          doId: paymentData._id,
+          loadNo: paymentData.loadNo || paymentData.loadNumber || 'N/A',
+          paymentAmount: resp?.data?.data?.carrierPaymentStatus?.totalPaidAmount || paymentData.carrierTotal || '0.00',
+          paymentMethod: paymentForm.paymentMethod,
+          paymentReference: paymentForm.paymentReference || null,
+          markedBy: {
+            empId: empId,
+            employeeName: sessionStorage.getItem('employeeName') || localStorage.getItem('employeeName') || 'Finance Employee'
+          },
+          createdAt: new Date().toISOString(),
+          carrierName: paymentData.carrierName || paymentData.carrier?.name || null
+        };
+        emitPaymentNotification(notificationData);
+        
         // Refresh the data
         fetchAccepted();
       } else {
@@ -2225,12 +2261,39 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
       if (resp?.data?.success) {
         const isFullyPaid = resp?.data?.data?.isFullyPaid;
+        const responseData = resp?.data?.data || {};
+        const carrierPaymentStatus = responseData.carrierPaymentStatus || {};
+        
         if (isFullyPaid) {
           setToast({ open: true, severity: "success", msg: "Carrier payment fully paid through short payments!" });
         } else {
           setToast({ open: true, severity: "success", msg: `Short payment of $${paymentAmount.toFixed(2)} recorded successfully!` });
         }
         setShortPayModalOpen(false);
+        
+        // Emit notification via BroadcastChannel for cross-tab communication
+        const totals = computeTotals(shortPayData);
+        const notificationData = {
+          id: `short_payment_${shortPayData._id}_${Date.now()}`,
+          type: isFullyPaid ? 'short_payment_completed' : 'short_payment',
+          doId: shortPayData._id,
+          loadNo: shortPayData.loadNo || shortPayData.loadNumber || 'N/A',
+          paymentAmount: paymentAmount.toFixed(2),
+          paymentMethod: shortPayForm.paymentMethod,
+          paymentReference: shortPayForm.paymentReference || null,
+          markedBy: {
+            empId: empId,
+            employeeName: sessionStorage.getItem('employeeName') || localStorage.getItem('employeeName') || 'Finance Employee'
+          },
+          createdAt: new Date().toISOString(),
+          carrierName: shortPayData.carrierName || shortPayData.carrier?.name || null,
+          totalCarrierFees: totals.carrierTotal?.toFixed(2) || '0.00',
+          totalPaid: carrierPaymentStatus.totalPaidAmount?.toFixed(2) || paymentAmount.toFixed(2),
+          remainingAmount: (totals.carrierTotal - (carrierPaymentStatus.totalPaidAmount || paymentAmount))?.toFixed(2) || '0.00',
+          numberOfShortPayments: carrierPaymentStatus.shortPayments?.length || 1
+        };
+        emitPaymentNotification(notificationData);
+        
         // Refresh the data
         fetchAccepted();
       } else {
