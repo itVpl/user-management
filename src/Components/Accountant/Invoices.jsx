@@ -44,6 +44,7 @@ import {
   Tabs,
   Tab,
   Checkbox,
+  Autocomplete,
 } from "@mui/material";
 import { createTheme, ThemeProvider, alpha } from "@mui/material/styles";
 import {
@@ -618,6 +619,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   });
   const [processedPage, setProcessedPage] = useState(1);
   const [processedSearch, setProcessedSearch] = useState("");
+  const [processedCarrierFilter, setProcessedCarrierFilter] = useState("");
+  const [processedStatusFilter, setProcessedStatusFilter] = useState("all"); // "all" | "approved"
 
   // === TAB 2: Approved By Sales ===
   const [acceptedLoading, setAcceptedLoading] = useState(false);
@@ -631,6 +634,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   });
   const [acceptedPage, setAcceptedPage] = useState(1);
   const [acceptedSearch, setAcceptedSearch] = useState("");
+  const [acceptedCarrierFilter, setAcceptedCarrierFilter] = useState("");
+  const [acceptedPaymentFilter, setAcceptedPaymentFilter] = useState("all"); // "all" | "paid" | "unpaid"
 
   // === TAB 3: Rejected by Sales ===
   const [rejectedLoading, setRejectedLoading] = useState(false);
@@ -1432,7 +1437,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         : null;
 
       // 2) table/list me aksar doNum me loadNo aa jata hai
-      const fromDoNum = (order?.doNum || '').trim();
+      const fromDoNum = (order?.doNum || '').trim();    
 
       // 3) legacy/other fields
       const fromOrder =
@@ -2422,37 +2427,87 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       return status === 'approved';
     });
     
-    // Second filter: Apply search if provided
-    if (!processedSearch.trim()) return filtered;
-    const q = processedSearch.toLowerCase();
-    return filtered.filter((r) => {
-      const cust = r?.customers?.[0] || {};
-      return (
-        (cust?.loadNo || "").toLowerCase().includes(q) ||
-        (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
-        (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
-        (r?.shipper?.name || "").toLowerCase().includes(q) ||
-        (r?._id || "").toLowerCase().includes(q)
-      );
-    });
-  }, [processedRows, processedSearch]);
+    // Carrier filter
+    if (processedCarrierFilter) {
+      filtered = filtered.filter((r) => {
+        const carrierName = (r?.carrier?.carrierName || "").toLowerCase();
+        return carrierName === processedCarrierFilter.toLowerCase();
+      });
+    }
+    
+    // Search filter
+    if (processedSearch.trim()) {
+      const q = processedSearch.toLowerCase();
+      filtered = filtered.filter((r) => {
+        const cust = r?.customers?.[0] || {};
+        return (
+          (cust?.loadNo || "").toLowerCase().includes(q) ||
+          (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
+          (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
+          (r?.shipper?.name || "").toLowerCase().includes(q) ||
+          (r?._id || "").toLowerCase().includes(q)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [processedRows, processedSearch, processedCarrierFilter]);
 
   // filters (tab 2 - Approved By Sales)
   const acceptedFiltered = useMemo(() => {
-    if (!acceptedSearch.trim()) return acceptedRows;
-    const q = acceptedSearch.toLowerCase();
-    return acceptedRows.filter((r) => {
-      const cust = r?.customers?.[0] || {};
-      return (
-        (cust?.loadNo || "").toLowerCase().includes(q) ||
-        (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
-        (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
-        (r?.shipper?.name || "").toLowerCase().includes(q) ||
-        (r?._id || "").toLowerCase().includes(q) ||
-        (r?.loadReference?.shipmentNumber || "").toLowerCase().includes(q)
-      );
-    });
-  }, [acceptedRows, acceptedSearch]);
+    let filtered = acceptedRows;
+    
+    // Payment filter (paid/unpaid)
+    if (acceptedPaymentFilter === "paid") {
+      filtered = filtered.filter((r) => {
+        const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+        return carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+      });
+    } else if (acceptedPaymentFilter === "unpaid") {
+      filtered = filtered.filter((r) => {
+        const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+        return !(carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining);
+      });
+    }
+    
+    // Carrier filter
+    if (acceptedCarrierFilter) {
+      filtered = filtered.filter((r) => {
+        const carrierName = (r?.carrier?.carrierName || "").toLowerCase();
+        return carrierName === acceptedCarrierFilter.toLowerCase();
+      });
+    }
+    
+    // Search filter
+    if (acceptedSearch.trim()) {
+      const q = acceptedSearch.toLowerCase();
+      filtered = filtered.filter((r) => {
+        const cust = r?.customers?.[0] || {};
+        return (
+          (cust?.loadNo || "").toLowerCase().includes(q) ||
+          (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
+          (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
+          (r?.shipper?.name || "").toLowerCase().includes(q) ||
+          (r?._id || "").toLowerCase().includes(q) ||
+          (r?.loadReference?.shipmentNumber || "").toLowerCase().includes(q)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [acceptedRows, acceptedSearch, acceptedCarrierFilter, acceptedPaymentFilter]);
 
   // filters (tab 2)
   const rejectedFiltered = useMemo(() => {
@@ -2530,6 +2585,107 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     if (status === 'rejected') return 'bg-red-100 text-red-700';
     if (status === 'pending') return 'bg-yellow-100 text-yellow-700';
     return 'bg-blue-100 text-blue-700';
+  };
+
+  // Get unique carriers from data
+  const getUniqueCarriers = (rows) => {
+    const carriers = new Set();
+    rows.forEach((r) => {
+      const carrierName = r?.carrier?.carrierName;
+      if (carrierName && carrierName.trim()) {
+        carriers.add(carrierName);
+      }
+    });
+    return Array.from(carriers).sort();
+  };
+
+  // Export to CSV function
+  const exportToCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      setToast({ open: true, severity: "error", msg: "No data to export" });
+      return;
+    }
+
+    // Define headers based on tab
+    let headers = [];
+    let rows = [];
+
+    if (activeTab === 1) {
+      // Accountant Approved tab
+      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Status", "Approved By", "Approved At"];
+      rows = data.map((row) => {
+        const cust = row?.customers?.[0] || {};
+        const totals = computeTotals(row);
+        const apprBy = row?.accountantApproval?.approvedBy?.employeeName 
+          || row?.accountantApproval?.resubmittedBy?.employeeName 
+          || row?.accountantApproval?.assignedTo?.employeeName
+          || row?.accountantApproval?.approvedBy?.empId 
+          || row?.accountantApproval?.resubmittedBy?.empId
+          || row?.accountantApproval?.assignedTo?.empId
+          || "—";
+        const apprAt = row?.accountantApproval?.approvedAt || row?.updatedAt;
+        return [
+          row?._id || "",
+          cust?.loadNo || "",
+          cust?.billTo || row?.customerName || "",
+          row?.carrier?.carrierName || "",
+          `$${fmtMoney(totals.billTotal)}`,
+          `$${fmtMoney(totals.carrierTotal)}`,
+          row?.accountantApproval?.status || "pending",
+          apprBy,
+          fmtDateTime(apprAt)
+        ];
+      });
+    } else if (activeTab === 2) {
+      // Approved By Sales tab
+      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Payment Status", "Approved By", "Approved At"];
+      rows = data.map((row) => {
+        const cust = row?.customers?.[0] || {};
+        const totals = computeTotals(row);
+        const apprBy = row?.salesApproval?.approvedBy?.employeeName 
+          || row?.salesApproval?.approvedBy?.empId
+          || "—";
+        const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
+        const carrierPaymentStatus = row?.carrierPaymentStatus || {};
+        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+        const carrierTotal = parseFloat(totals.carrierTotal || 0);
+        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+        const carrierIsPaid = carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+        return [
+          row?._id || "",
+          cust?.loadNo || "",
+          cust?.billTo || row?.customerName || "",
+          row?.carrier?.carrierName || "",
+          `$${fmtMoney(totals.billTotal)}`,
+          `$${fmtMoney(totals.carrierTotal)}`,
+          carrierIsPaid ? "Paid" : "Unpaid/Partial",
+          apprBy,
+          fmtDateTime(apprAt)
+        ];
+      });
+    }
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setToast({ open: true, severity: "success", msg: "Data exported successfully!" });
   };
 
   return (
@@ -2808,7 +2964,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             {/* Search and Stats */}
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-6">
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <button
+                  onClick={() => {
+                    setProcessedCarrierFilter("");
+                    setProcessedSearch("");
+                  }}
+                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
+                    processedStatusFilter === "all" ? "ring-2 ring-green-500" : "hover:shadow-2xl"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
                       <CheckCircle className="text-green-600" size={20} />
@@ -2818,18 +2982,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <p className="text-xl font-bold text-gray-800">{processedRows.length}</p>
                     </div>
                   </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <FileText className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Filtered</p>
-                      <p className="text-xl font-bold text-blue-600">{processedFiltered.length}</p>
-                    </div>
-                  </div>
-                </div>
+                </button>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
@@ -2850,6 +3003,59 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </button>
                   )}
                 </div>
+                <Autocomplete
+                  value={processedCarrierFilter || null}
+                  onChange={(event, newValue) => {
+                    setProcessedCarrierFilter(newValue || "");
+                  }}
+                  options={["", ...getUniqueCarriers(processedRows)]}
+                  getOptionLabel={(option) => option === "" ? "All Carriers" : option}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Search carrier..."
+                      size="small"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+                            {params.InputProps.startAdornment}
+                          </>
+                        ),
+                      }}
+                      sx={{
+                        width: 220,
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: '8px',
+                          backgroundColor: 'white',
+                        },
+                        '& .MuiOutlinedInput-input': {
+                          padding: '8px 14px',
+                        }
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} sx={{ py: 1 }}>
+                      {option === "" ? "All Carriers" : option}
+                    </Box>
+                  )}
+                  sx={{ 
+                    width: 220,
+                    '& .MuiAutocomplete-paper': {
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => exportToCSV(processedFiltered, `accountant-approved-${new Date().toISOString().split('T')[0]}.csv`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
+                >
+                  <Download size={18} />
+                  <span>Export CSV</span>
+                </button>
                 <button
                   onClick={() => fetchProcessed(processedPage)}
                   disabled={processedLoading}
@@ -3022,7 +3228,16 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             {/* Search and Stats */}
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-6">
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <button
+                  onClick={() => {
+                    setAcceptedPaymentFilter("all");
+                    setAcceptedCarrierFilter("");
+                    setAcceptedSearch("");
+                  }}
+                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
+                    acceptedPaymentFilter === "all" ? "ring-2 ring-blue-500" : "hover:shadow-2xl"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                       <CheckCircle className="text-blue-600" size={20} />
@@ -3032,8 +3247,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <p className="text-xl font-bold text-gray-800">{acceptedRows.length}</p>
                     </div>
                   </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                </button>
+                <button
+                  onClick={() => {
+                    setAcceptedPaymentFilter("paid");
+                    setAcceptedCarrierFilter("");
+                    setAcceptedSearch("");
+                  }}
+                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
+                    acceptedPaymentFilter === "paid" ? "ring-2 ring-green-500" : "hover:shadow-2xl"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
                       <CheckCircle className="text-green-600" size={20} />
@@ -3042,14 +3266,29 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <p className="text-sm text-gray-600">Paid</p>
                       <p className="text-xl font-bold text-green-600">
                         {acceptedRows.filter(r => {
-                          const carrierPaid = r?.carrierPaymentStatus?.status === 'paid';
-                          return carrierPaid;
+                          const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+                          const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+                          const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+                          const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+                          const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+                          const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+                          const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+                          return carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
                         }).length}
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                </button>
+                <button
+                  onClick={() => {
+                    setAcceptedPaymentFilter("unpaid");
+                    setAcceptedCarrierFilter("");
+                    setAcceptedSearch("");
+                  }}
+                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
+                    acceptedPaymentFilter === "unpaid" ? "ring-2 ring-orange-500" : "hover:shadow-2xl"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
                       <Clock className="text-orange-600" size={20} />
@@ -3058,24 +3297,19 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <p className="text-sm text-gray-600">Unpaid/Partial</p>
                       <p className="text-xl font-bold text-orange-600">
                         {acceptedRows.filter(r => {
-                          const carrierPaid = r?.carrierPaymentStatus?.status === 'paid';
-                          return !carrierPaid;
+                          const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+                          const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+                          const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+                          const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+                          const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+                          const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+                          const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+                          return !(carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining);
                         }).length}
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                      <FileText className="text-purple-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Filtered</p>
-                      <p className="text-xl font-bold text-blue-600">{acceptedFiltered.length}</p>
-                    </div>
-                  </div>
-                </div>
+                </button>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
@@ -3096,6 +3330,59 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </button>
                   )}
                 </div>
+                <Autocomplete
+                  value={acceptedCarrierFilter || null}
+                  onChange={(event, newValue) => {
+                    setAcceptedCarrierFilter(newValue || "");
+                  }}
+                  options={["", ...getUniqueCarriers(acceptedRows)]}
+                  getOptionLabel={(option) => option === "" ? "All Carriers" : option}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Search carrier..."
+                      size="small"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+                            {params.InputProps.startAdornment}
+                          </>
+                        ),
+                      }}
+                      sx={{
+                        width: 220,
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: '8px',
+                          backgroundColor: 'white',
+                        },
+                        '& .MuiOutlinedInput-input': {
+                          padding: '8px 14px',
+                        }
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} sx={{ py: 1 }}>
+                      {option === "" ? "All Carriers" : option}
+                    </Box>
+                  )}
+                  sx={{ 
+                    width: 220,
+                    '& .MuiAutocomplete-paper': {
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => exportToCSV(acceptedFiltered, `approved-by-sales-${new Date().toISOString().split('T')[0]}.csv`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
+                >
+                  <Download size={18} />
+                  <span>Export CSV</span>
+                </button>
                 <button
                   onClick={() => {
                     if (selectedDOs.size === 0) {
