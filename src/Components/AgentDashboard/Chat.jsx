@@ -33,7 +33,10 @@ import {
   UserPlus,
   UserMinus,
   LogOut,
-  Eye
+  Eye,
+  Play,
+  Pause,
+  Download
 } from "lucide-react";
 import { io } from "socket.io-client";
 import API_CONFIG from '../../config/api.js';
@@ -45,6 +48,209 @@ const formatEmployeeName = (user) => {
     return `${user.employeeName}/${user.aliasName}`;
   }
   return user.employeeName || user.aliasName || '';
+};
+
+// Audio Player Component
+const AudioPlayer = ({ src, isMyMessage, fileName, messageId }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const audioRef = useRef(null);
+
+  const handlePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch(err => {
+          console.error('Audio play failed:', err);
+          // iOS Safari requires user interaction
+          alert('Please click play again to listen to the audio.');
+        });
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleSeek = (e) => {
+    if (audioRef.current && duration > 0) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      audioRef.current.currentTime = percent * duration;
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!messageId && !src) return;
+    
+    setIsDownloading(true);
+    try {
+      // Determine download URL
+      // If src is an S3 URL (starts with http/https), use it directly
+      // Otherwise, use the download endpoint
+      let downloadUrl = src;
+      
+      if (!src || (!src.startsWith('http://') && !src.startsWith('https://'))) {
+        // Use download endpoint for local files
+        downloadUrl = `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`;
+      }
+      
+      // Fetch the audio file
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        credentials: 'include', // Include cookies for authentication
+      });
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      // Get the blob
+      const blob = await response.blob();
+      
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract file extension from fileName or use default
+      const fileExtension = fileName?.split('.').pop()?.toLowerCase() || 'mp3';
+      const downloadFileName = fileName || `audio-${messageId || Date.now()}.${fileExtension}`;
+      
+      link.download = downloadFileName;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading audio:', error);
+      alert('Failed to download audio. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Determine the correct audio URL for playback
+  // If src is an S3 URL (starts with http/https), use it directly
+  // Otherwise, use the download endpoint for local files
+  const getAudioSrc = () => {
+    if (!src) {
+      return messageId ? `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}` : '';
+    }
+    
+    // If src is already a full URL (S3 or download endpoint), use it
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      return src;
+    }
+    
+    // If src is a local path, use download endpoint
+    if (messageId) {
+      return `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`;
+    }
+    
+    return src;
+  };
+
+  return (
+    <div className={`audio-message-container p-3 rounded-lg ${
+      isMyMessage 
+        ? 'bg-blue-500 text-white' 
+        : 'bg-gray-100 text-gray-800'
+    }`}>
+      <audio
+        ref={audioRef}
+        src={getAudioSrc()}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={() => setIsPlaying(false)}
+        preload="metadata"
+      />
+      
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handlePlayPause}
+          className={`p-2 rounded-full transition-colors flex-shrink-0 ${
+            isMyMessage 
+              ? 'bg-white/20 hover:bg-white/30 text-white' 
+              : 'bg-blue-500 hover:bg-blue-600 text-white'
+          }`}
+          title={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+        </button>
+        
+        <div className="flex-1 min-w-0">
+          <div 
+            className={`h-2 rounded-full cursor-pointer mb-1 ${
+              isMyMessage ? 'bg-white/30' : 'bg-gray-300'
+            }`}
+            onClick={handleSeek}
+          >
+            <div
+              className={`h-full rounded-full transition-all ${
+                isMyMessage ? 'bg-white' : 'bg-blue-500'
+              }`}
+              style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+            />
+          </div>
+          <div className={`flex justify-between text-xs ${
+            isMyMessage ? 'text-white/80' : 'text-gray-600'
+          }`}>
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+          {fileName && (
+            <div className={`text-xs mt-1 truncate flex items-center gap-1 ${
+              isMyMessage ? 'text-white/90' : 'text-gray-500'
+            }`}>
+              <span>🎵</span>
+              <span className="truncate">{fileName}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Download button */}
+        <button
+          onClick={handleDownload}
+          disabled={isDownloading}
+          className={`p-2 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+            isMyMessage
+              ? 'bg-white/20 hover:bg-white/30 text-white'
+              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+          }`}
+          title={isDownloading ? 'Downloading...' : 'Download audio'}
+        >
+          {isDownloading ? (
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Download size={16} />
+          )}
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const ChatPage = () => {
@@ -90,10 +296,18 @@ const ChatPage = () => {
   const [showSeenByModal, setShowSeenByModal] = useState(false);
   const [seenByData, setSeenByData] = useState(null);
   const [loadingSeenBy, setLoadingSeenBy] = useState(false);
+  // Mention/Tag states
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [taggedUsers, setTaggedUsers] = useState([]); // Array of { empId, employeeName, aliasName }
+  const mentionDropdownRef = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
+  const audioInputRef = useRef(null);
   const audioRef = useRef(null);
   const groupTextareaRef = useRef(null);
   const individualTextareaRef = useRef(null);
@@ -372,6 +586,169 @@ const ChatPage = () => {
     }
   };
 
+  // Get group members for mentions
+  const getGroupMembers = () => {
+    if (!selectedGroup) {
+      console.log('⚠️ No selected group');
+      return [];
+    }
+    
+    // Check if members exist
+    if (!selectedGroup.members || !Array.isArray(selectedGroup.members)) {
+      console.log('⚠️ Group members not available:', selectedGroup);
+      return [];
+    }
+    
+    // Filter out current user from mentions
+    const members = selectedGroup.members.filter(member => {
+      // Ensure member has required fields
+      if (!member || !member.empId) return false;
+      return member.empId !== storedUser?.empId;
+    });
+    
+    console.log('✅ Group members for mentions:', members.length, members);
+    return members;
+  };
+
+  // Filter members based on mention query
+  const getFilteredMembers = () => {
+    const members = getGroupMembers();
+    if (!mentionQuery.trim()) return members;
+    const query = mentionQuery.toLowerCase();
+    return members.filter(member => {
+      const name = (member.employeeName || '').toLowerCase();
+      const alias = (member.aliasName || '').toLowerCase();
+      const empId = (member.empId || '').toLowerCase();
+      return name.includes(query) || alias.includes(query) || empId.includes(query);
+    });
+  };
+
+  // Handle input change for mentions
+  const handleGroupInputChange = (e) => {
+    const value = e.target.value;
+    setInput(value);
+    
+    // Auto-resize textarea
+    autoResizeTextarea(e.target);
+    
+    // Check for @ symbol
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = value.substring(0, cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      // Check if there's a space after @ (meaning mention is complete)
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        // Show mention dropdown
+        const query = textAfterAt.toLowerCase();
+        setMentionQuery(query);
+        setShowMentionDropdown(true);
+        setSelectedMentionIndex(0);
+        
+        // Calculate dropdown position - use setTimeout to ensure DOM is updated
+        setTimeout(() => {
+          const textarea = e.target;
+          const container = textarea.closest('.flex-1.relative');
+          
+          if (container) {
+            const containerRect = container.getBoundingClientRect();
+            const textareaRect = textarea.getBoundingClientRect();
+            
+            // Position relative to the input container (absolute positioning)
+            setMentionPosition({
+              top: textareaRect.bottom - containerRect.top + 5, // 5px below the input
+              left: 10 // Align with left padding of container
+            });
+          } else {
+            // Fallback: position below textarea
+            const rect = textarea.getBoundingClientRect();
+            setMentionPosition({
+              top: rect.height + 5,
+              left: 10
+            });
+          }
+        }, 0);
+        return;
+      }
+    }
+    
+    // Hide dropdown if @ is not active
+    setShowMentionDropdown(false);
+    setMentionQuery('');
+  };
+
+  // Insert mention into input
+  const insertMention = (member) => {
+    const textarea = groupTextareaRef.current;
+    if (!textarea) return;
+    
+    const cursorPosition = textarea.selectionStart;
+    const textBeforeCursor = input.substring(0, cursorPosition);
+    const textAfterCursor = input.substring(cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      const beforeAt = input.substring(0, lastAtIndex);
+      const afterAt = textAfterCursor;
+      const mentionText = `@${member.employeeName || member.aliasName || member.empId} `;
+      
+      const newText = beforeAt + mentionText + afterAt;
+      setInput(newText);
+      
+      // Add to tagged users if not already added
+      if (!taggedUsers.find(u => u.empId === member.empId)) {
+        setTaggedUsers(prev => [...prev, {
+          empId: member.empId,
+          employeeName: member.employeeName,
+          aliasName: member.aliasName
+        }]);
+      }
+      
+      // Hide dropdown and reset
+      setShowMentionDropdown(false);
+      setMentionQuery('');
+      
+      // Set cursor position after mention
+      setTimeout(() => {
+        const newPosition = beforeAt.length + mentionText.length;
+        textarea.setSelectionRange(newPosition, newPosition);
+        textarea.focus();
+      }, 0);
+    }
+  };
+
+  // Handle keyboard navigation in mention dropdown
+  const handleGroupInputKeyDown = (e) => {
+    if (showMentionDropdown) {
+      const filteredMembers = getFilteredMembers();
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => 
+          prev < filteredMembers.length - 1 ? prev + 1 : prev
+        );
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => prev > 0 ? prev - 1 : 0);
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        if (filteredMembers[selectedMentionIndex]) {
+          insertMention(filteredMembers[selectedMentionIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        setShowMentionDropdown(false);
+        setMentionQuery('');
+      }
+    }
+    
+    // Handle Enter to send message (only if not selecting mention)
+    if (e.key === 'Enter' && !e.shiftKey && !showMentionDropdown) {
+      e.preventDefault();
+      sendGroupMessage();
+    }
+  };
+
   const sendGroupMessage = async () => {
     if (!input.trim() || !selectedGroup || isSendingMessage) return;
     
@@ -379,13 +756,21 @@ const ChatPage = () => {
     setIsSendingMessage(true);
     const messageToSend = input.trim();
     
-    // Clear input immediately to prevent duplicate sends
+    // Clear input and tagged users immediately to prevent duplicate sends
     setInput("");
+    const usersToTag = [...taggedUsers];
+    setTaggedUsers([]);
+    setShowMentionDropdown(false);
     
     try {
       const formData = new FormData();
       formData.append('groupId', selectedGroup._id);
       formData.append('message', messageToSend);
+      
+      // Add tagged user IDs
+      if (usersToTag.length > 0) {
+        formData.append('taggedUserIds', JSON.stringify(usersToTag.map(u => u.empId)));
+      }
 
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/send`,
@@ -408,7 +793,8 @@ const ChatPage = () => {
           timestamp: response.data.message?.timestamp || new Date().toISOString(),
           isMyMessage: true,
           seenBy: [],
-          seenCount: 0
+          seenCount: 0,
+          taggedUsers: usersToTag // Include tagged users in message
         };
         setGroupMessages(prev => [...prev, newMessage]);
         
@@ -425,6 +811,7 @@ const ChatPage = () => {
       console.error("❌ Send group message failed:", err);
       // Restore input on error
       setInput(messageToSend);
+      setTaggedUsers(usersToTag);
     } finally {
       setIsSendingMessage(false);
     }
@@ -433,13 +820,29 @@ const ChatPage = () => {
   const handleGroupFileUpload = async (file) => {
     if (!file || !selectedGroup) return;
     
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+    
     try {
       setUploadingFile(true);
       
       const formData = new FormData();
       formData.append('file', file);
       formData.append('groupId', selectedGroup._id);
-      formData.append('message', `Sent a file: ${file.name}`);
+      
+      // Set appropriate message based on file type
+      const isAudio = isAudioFile(file);
+      const isImage = file.type.startsWith('image/');
+      const messageText = isAudio 
+        ? `Sent an audio: ${file.name}` 
+        : isImage 
+        ? `Sent an image: ${file.name}` 
+        : `Sent a file: ${file.name}`;
+      
+      formData.append('message', messageText);
       
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/send`,
@@ -453,9 +856,29 @@ const ChatPage = () => {
       );
 
       if (response.data && response.data.success) {
-        // Refresh group messages
-        await fetchGroupMessages(selectedGroup._id);
-        setTimeout(scrollToBottom, 100);
+        // Add message to UI immediately with proper ID
+        const newFileMessage = {
+          _id: response.data?.message?._id || response.data?.messageId || Date.now().toString(),
+          senderEmpId: storedUser.empId,
+          senderName: storedUser.employeeName,
+          senderAliasName: storedUser.aliasName,
+          message: messageText,
+          audio: response.data?.message?.audio || response.data?.audio || null,
+          imageUrl: response.data?.message?.image || response.data?.image || null,
+          fileUrl: response.data?.message?.file || response.data?.file || null,
+          timestamp: new Date().toISOString(),
+          isMyMessage: true,
+          seenBy: [],
+          seenCount: 0
+        };
+        
+        setGroupMessages(prev => [...prev, newFileMessage]);
+        
+        // Refresh group messages to get proper server data
+        setTimeout(async () => {
+          await fetchGroupMessages(selectedGroup._id);
+          setTimeout(scrollToBottom, 100);
+        }, 1500);
       }
     } catch (error) {
       console.error('❌ Group file upload failed:', error);
@@ -719,6 +1142,13 @@ const ChatPage = () => {
   };
 
   const handleKeyPress = (e) => {
+    // Use group-specific handler for group chats
+    if (chatType === 'group' && selectedGroup) {
+      handleGroupInputKeyDown(e);
+      return;
+    }
+    
+    // Original individual chat handler
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       // Only send if not already sending and input is not empty
@@ -736,6 +1166,13 @@ const ChatPage = () => {
   };
 
   const handleInputChange = (e) => {
+    // Use group-specific handler for group chats
+    if (chatType === 'group' && selectedGroup) {
+      handleGroupInputChange(e);
+      return;
+    }
+    
+    // Original individual chat handler
     setInput(e.target.value);
     // Auto-resize the active textarea
     const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
@@ -773,8 +1210,21 @@ const ChatPage = () => {
     }
   };
 
+  // Helper function to detect audio files
+  const isAudioFile = (file) => {
+    const audioFormats = ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac'];
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    return audioFormats.includes(fileExt || '') || file.type.startsWith('audio/');
+  };
+
   const handleFileUpload = async (file) => {
     if (!file || !selectedUser) return;
+    
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
     
     try {
       setUploadingFile(true);
@@ -782,7 +1232,15 @@ const ChatPage = () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('receiverEmpId', selectedUser.empId);
-      formData.append('message', `Sent a file: ${file.name}`);
+      
+      // Set appropriate message based on file type
+      if (isAudioFile(file)) {
+        formData.append('message', `Sent an audio: ${file.name}`);
+      } else if (file.type.startsWith('image/')) {
+        formData.append('message', `Sent an image: ${file.name}`);
+      } else {
+        formData.append('message', `Sent a file: ${file.name}`);
+      }
       
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
@@ -795,16 +1253,28 @@ const ChatPage = () => {
         }
       );
 
+      // Determine message type and content
+      const isAudio = isAudioFile(file);
+      const isImage = file.type.startsWith('image/');
+      const messageText = isAudio 
+        ? `Sent an audio: ${file.name}` 
+        : isImage 
+        ? `Sent an image: ${file.name}` 
+        : `Sent a file: ${file.name}`;
+      
       // Add file message to UI immediately with proper ID
       const newFileMessage = {
         _id: response.data?.messageId || response.data?.id || response.data?.message?._id || Date.now().toString(),
         senderEmpId: storedUser.empId,
         receiverEmpId: selectedUser.empId,
-        message: `Sent a file: ${file.name}`,
+        message: messageText,
+        audio: response.data?.message?.audio || response.data?.audio || null,
+        imageUrl: response.data?.message?.image || response.data?.image || null,
+        fileUrl: response.data?.message?.file || response.data?.file || null,
         timestamp: new Date().toISOString(),
         status: 'sent',
         fileName: file.name,
-        fileType: file.type.startsWith('image/') ? 'image' : 'document'
+        fileType: isAudio ? 'audio' : isImage ? 'image' : 'document'
       };
       
       setMessages(prev => [...prev, newFileMessage]);
@@ -818,7 +1288,10 @@ const ChatPage = () => {
       socketRef.current?.emit("newMessage", {
         senderEmpId: storedUser.empId,
         receiverEmpId: selectedUser.empId,
-        message: `Sent a file: ${file.name}`,
+        message: messageText,
+        audio: response.data?.message?.audio || response.data?.audio || null,
+        image: response.data?.message?.image || response.data?.image || null,
+        file: response.data?.message?.file || response.data?.file || null,
         senderName: storedUser.employeeName
       });
       
@@ -1317,6 +1790,35 @@ const ChatPage = () => {
     }
   }, [selectedUser]);
 
+  // Close mention dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        mentionDropdownRef.current &&
+        !mentionDropdownRef.current.contains(event.target) &&
+        groupTextareaRef.current &&
+        !groupTextareaRef.current.contains(event.target)
+      ) {
+        setShowMentionDropdown(false);
+        setMentionQuery('');
+      }
+    };
+
+    if (showMentionDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showMentionDropdown]);
+
+  // Reset tagged users and mention state when group changes
+  useEffect(() => {
+    setTaggedUsers([]);
+    setShowMentionDropdown(false);
+    setMentionQuery('');
+  }, [selectedGroup?._id]);
+
   useEffect(() => {
     if (!storedUser?.empId) return;
 
@@ -1333,7 +1835,7 @@ const ChatPage = () => {
       console.error("❌ Socket connection error:", err);
     });
 
-    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName }) => {
+    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file }) => {
 
       // Check if this message is for current user (as receiver)
       const isForMe = receiverEmpId === storedUser.empId;
@@ -1342,15 +1844,25 @@ const ChatPage = () => {
       // Check if this message is to current selected user
       const isToSelectedUser = receiverEmpId === selectedUser?.empId;
 
+      // Determine notification message based on content type
+      let notificationMessage = message || "Sent you a message";
+      if (audio) {
+        notificationMessage = "Sent you an audio message 🎵";
+      } else if (image) {
+        notificationMessage = "Sent you an image 📷";
+      } else if (file) {
+        notificationMessage = "Sent you a file 📎";
+      }
+
       // Show notification if message is for current user and not from current selected user
 
       if (isForMe && !isFromSelectedUser) {
 
         // Try browser notification first
-        showNotification("New Message", message || "Sent you a message", senderName || "Someone");
+        showNotification("New Message", notificationMessage, senderName || "Someone");
         
         // Also show in-app notification as backup
-        displayInAppNotification("New Message", message || "Sent you a message", senderName || "Someone");
+        displayInAppNotification("New Message", notificationMessage, senderName || "Someone");
       } else {
 
       }
@@ -1399,15 +1911,25 @@ const ChatPage = () => {
       }
     };
 
-    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message }) => {
+    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message, audio, image, file }) => {
       // Check if this message is for current selected group
       const isForSelectedGroup = selectedGroup?._id === groupId;
       const isFromMe = senderEmpId === storedUser.empId;
 
+      // Determine notification message based on content type
+      let notificationMessage = message || "Sent a message";
+      if (audio) {
+        notificationMessage = "Sent an audio message 🎵";
+      } else if (image) {
+        notificationMessage = "Sent an image 📷";
+      } else if (file) {
+        notificationMessage = "Sent a file 📎";
+      }
+
       // Show notification if message is not from me and not for selected group
       if (!isFromMe && !isForSelectedGroup) {
-        showNotification("New Group Message", message || "Sent a message", `${senderName || "Someone"} in ${groupName || "Group"}`);
-        displayInAppNotification("New Group Message", message || "Sent a message", `${senderName || "Someone"} in ${groupName || "Group"}`);
+        showNotification("New Group Message", notificationMessage, `${senderName || "Someone"} in ${groupName || "Group"}`);
+        displayInAppNotification("New Group Message", notificationMessage, `${senderName || "Someone"} in ${groupName || "Group"}`);
         
         // Update unread count for the group
         setNewGroupMessagesMap(prev => {
@@ -1446,6 +1968,16 @@ const ChatPage = () => {
     socketRef.current.on("newGroupMessage", handleNewGroupMessage);
     socketRef.current.on("groupMessageSeen", handleGroupMessageSeen);
     socketRef.current.on("messageSeen", handleMessageSeen);
+
+    // Cleanup
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off("newMessage", handleNewMessage);
+        socketRef.current.off("newGroupMessage", handleNewGroupMessage);
+        socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
+        socketRef.current.off("messageSeen", handleMessageSeen);
+      }
+    };
 
     return () => {
       socketRef.current.off("newMessage", handleNewMessage);
@@ -1653,7 +2185,9 @@ const ChatPage = () => {
                             { withCredentials: true }
                           );
                           if (res.data && res.data.success) {
-                            setSelectedGroup(res.data.group);
+                            const groupData = res.data.group;
+                            console.log('✅ Group selected:', groupData.groupName, 'Members:', groupData.members?.length || 0, groupData.members);
+                            setSelectedGroup(groupData);
                             setChatType('group');
                             setSelectedUser(null);
                             await fetchGroupMessages(group._id);
@@ -1938,8 +2472,20 @@ const ChatPage = () => {
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
-                                {/* Show images */}
-                                {msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && msg._id && (
+                                {/* Show audio messages FIRST */}
+                                {(msg.audio || (msg.message && msg.message.includes('Sent an audio:'))) && msg._id && (
+                                  <div className="mb-2">
+                                    <AudioPlayer
+                                      src={msg.audio || `${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                      isMyMessage={isSentByMe}
+                                      fileName={msg.message?.replace('Sent an audio: ', '') || 'Audio message'}
+                                      messageId={msg._id}
+                                    />
+                                  </div>
+                                )}
+                                
+                                {/* Show images - exclude audio messages */}
+                                {!msg.audio && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:') && msg._id && (
                                   (() => {
                                     const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
                                     const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
@@ -1957,9 +2503,9 @@ const ChatPage = () => {
                                       );
                                     } else {
                                       return (
-                                        <div className="mb-2 p-3 bg-gray-100 rounded-lg border border-gray-200">
+                                        <div className={`mb-2 p-3 rounded-lg border ${isSentByMe ? 'bg-white/20 border-white/30' : 'bg-gray-100 border-gray-200'}`}>
                                           <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 ${isSentByMe ? 'bg-blue-400' : 'bg-blue-500'} rounded-lg flex items-center justify-center`}>
+                                            <div className={`w-10 h-10 ${isSentByMe ? 'bg-white/30' : 'bg-blue-500'} rounded-lg flex items-center justify-center`}>
                                               <Paperclip size={20} className="text-white" />
                                             </div>
                                             <div className="flex-1">
@@ -1980,8 +2526,65 @@ const ChatPage = () => {
                                     }
                                   })()
                                 )}
-                                {!(msg.message && msg.message.includes('Sent an image:') || msg.message && msg.message.includes('Sent a file:')) && (
-                                  <p className={`text-sm leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>{msg.message}</p>
+                                {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
+                                  <div className={`text-sm leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>
+                                    {(() => {
+                                      // Highlight mentions in message
+                                      const message = msg.message || '';
+                                      const parts = [];
+                                      const mentionRegex = /@(\w+[\w\s]*?)(?=\s|$|@|,|\.|!|\?)/g;
+                                      let lastIndex = 0;
+                                      let match;
+                                      
+                                      while ((match = mentionRegex.exec(message)) !== null) {
+                                        // Add text before mention
+                                        if (match.index > lastIndex) {
+                                          parts.push(message.substring(lastIndex, match.index));
+                                        }
+                                        
+                                        // Check if this mention matches a tagged user
+                                        const mentionedName = match[1];
+                                        const isTagged = msg.taggedUsers?.some(u => 
+                                          u.employeeName === mentionedName || 
+                                          u.aliasName === mentionedName ||
+                                          u.empId === mentionedName
+                                        ) || false;
+                                        
+                                        // Add highlighted mention
+                                        parts.push(
+                                          <span 
+                                            key={match.index}
+                                            className={`font-semibold ${isSentByMe ? 'text-yellow-200 bg-blue-700 px-1 rounded' : isTagged ? 'text-blue-600 bg-blue-100 px-1 rounded' : 'text-blue-500'}`}
+                                          >
+                                            @{mentionedName}
+                                          </span>
+                                        );
+                                        
+                                        lastIndex = match.index + match[0].length;
+                                      }
+                                      
+                                      // Add remaining text
+                                      if (lastIndex < message.length) {
+                                        parts.push(message.substring(lastIndex));
+                                      }
+                                      
+                                      return parts.length > 0 ? parts : message;
+                                    })()}
+                                  </div>
+                                )}
+                                
+                                {/* Show tagged users indicator */}
+                                {msg.taggedUsers && msg.taggedUsers.length > 0 && (
+                                  <div className={`mt-2 flex flex-wrap gap-1 ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
+                                    {msg.taggedUsers.map((user, idx) => (
+                                      <span 
+                                        key={user.empId || idx}
+                                        className={`text-xs px-2 py-1 rounded-full ${isSentByMe ? 'bg-blue-400 text-white' : 'bg-blue-100 text-blue-700'}`}
+                                      >
+                                        @{user.aliasName || user.employeeName || user.empId}
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
                                 <div className={`flex items-center justify-end mt-2 gap-1`}>
                                   <span className={`text-xs ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>
@@ -2053,16 +2656,73 @@ const ChatPage = () => {
                     </button>
                     <textarea
                       ref={groupTextareaRef}
-                      placeholder={uploadingFile || isSendingMessage ? (uploadingFile ? "Uploading..." : "Sending...") : "Type a message"}
+                      placeholder={uploadingFile || isSendingMessage ? (uploadingFile ? "Uploading..." : "Sending...") : "Type a message (use @ to tag someone)"}
                       value={input}
                       onChange={handleInputChange}
-                      onKeyPress={handleKeyPress}
+                      onKeyDown={handleKeyPress}
                       onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
                       className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
                       style={{ minHeight: '20px', maxHeight: '400px' }}
                     />
+                    
+                    {/* Mention Dropdown */}
+                    {showMentionDropdown && selectedGroup && (
+                      <div
+                        ref={mentionDropdownRef}
+                        className="absolute z-[9999] bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto mt-1"
+                        style={{
+                          top: `${mentionPosition.top}px`,
+                          left: `${mentionPosition.left}px`,
+                          minWidth: '250px',
+                          maxWidth: '300px'
+                        }}
+                      >
+                        {(() => {
+                          const filteredMembers = getFilteredMembers();
+                          const allMembers = getGroupMembers();
+                          
+                          if (filteredMembers.length === 0) {
+                            return (
+                              <div className="px-4 py-3 text-sm text-gray-500">
+                                {allMembers.length === 0 
+                                  ? `No members available (Group has ${selectedGroup.members?.length || 0} members)` 
+                                  : `No members match "${mentionQuery}"`}
+                              </div>
+                            );
+                          }
+                          
+                          return filteredMembers.map((member, idx) => (
+                            <button
+                              key={member.empId}
+                              onClick={() => insertMention(member)}
+                              className={`w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-3 transition-colors ${
+                                idx === selectedMentionIndex ? 'bg-blue-100' : ''
+                              }`}
+                              onMouseEnter={() => setSelectedMentionIndex(idx)}
+                            >
+                              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                                {member.employeeName?.charAt(0).toUpperCase() || member.empId?.charAt(0).toUpperCase() || 'U'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-gray-800 truncate">
+                                  {member.employeeName || member.empId}
+                                </div>
+                                {member.aliasName && (
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {member.aliasName}
+                                  </div>
+                                )}
+                                <div className="text-xs text-gray-400 truncate">
+                                  {member.empId}
+                                </div>
+                              </div>
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                    )}
                     <button 
                       onClick={() => imageInputRef.current?.click()}
                       disabled={uploadingFile || isSendingMessage}
@@ -2070,6 +2730,14 @@ const ChatPage = () => {
                       title="Send image"
                     >
                       <Image size={20} className="text-gray-500" />
+                    </button>
+                    <button 
+                      onClick={() => audioInputRef.current?.click()}
+                      disabled={uploadingFile || isSendingMessage}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Send audio"
+                    >
+                      <Mic size={20} className="text-gray-500" />
                     </button>
                     {input.trim() ? (
                       <button
@@ -2103,6 +2771,19 @@ const ChatPage = () => {
                       const file = e.target.files[0];
                       if (file) {
                         handleGroupImageUpload(file);
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        handleGroupFileUpload(file);
                       }
                       e.target.value = '';
                     }}
@@ -2217,6 +2898,18 @@ const ChatPage = () => {
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
+                                {/* Show audio messages FIRST */}
+                                {(msg.audio || (msg.message && msg.message.includes('Sent an audio:'))) && msg._id && (
+                                  <div className="mb-2">
+                                    <AudioPlayer
+                                      src={msg.audio || `${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                      isMyMessage={isSentByMe}
+                                      fileName={msg.message?.replace('Sent an audio: ', '') || 'Audio message'}
+                                      messageId={msg._id}
+                                    />
+                                  </div>
+                                )}
+                                
                                 {msg.imageUrl && (
                                   <div className="mb-2">
                                     <img 
@@ -2228,8 +2921,8 @@ const ChatPage = () => {
                                     <p className="text-xs text-gray-500 mt-1">{msg.fileName}</p>
                                   </div>
                                 )}
-                                {/* Show images using message ID if no imageUrl */}
-                                {!msg.imageUrl && msg.message && msg.message.includes('Sent a file:') && msg._id && (
+                                {/* Show images using message ID if no imageUrl - exclude audio messages */}
+                                {!msg.imageUrl && !msg.audio && msg.message && msg.message.includes('Sent a file:') && !msg.message.includes('Sent an audio:') && msg._id && (
                                   (() => {
                                     const fileName = msg.message.replace('Sent a file: ', '');
                                     const file = files.find(f => f.originalName === fileName || f.fileName === fileName);
@@ -2249,8 +2942,9 @@ const ChatPage = () => {
                                     return null;
                                   })()
                                 )}
+                                
                                 {/* Show images for any file message with _id */}
-                                {!msg.imageUrl && msg._id && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && (
+                                {!msg.imageUrl && !msg.audio && msg._id && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:') && (
                                   (() => {
                                     const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
                                     // Check if it's an image based on file extension
@@ -2318,8 +3012,9 @@ const ChatPage = () => {
                                     </div>
                                   </div>
                                 )}
+                                
                                 {/* Show files from API if no fileUrl in message */}
-                                {!msg.fileUrl && !msg.imageUrl && msg.message && msg.message.includes('Sent a file:') && (
+                                {!msg.fileUrl && !msg.imageUrl && !msg.audio && msg.message && msg.message.includes('Sent a file:') && !msg.message.includes('Sent an audio:') && (
                                   <div className="mb-2 p-3 bg-gray-100 rounded-lg border border-gray-200">
                                     <div className="flex items-center gap-3">
                                       <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
@@ -2350,7 +3045,9 @@ const ChatPage = () => {
                                     </div>
                                   </div>
                                 )}
-                                <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                                {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
+                                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                                )}
                               </div>
                               <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
                                 <span className="text-xs text-gray-400">
@@ -2425,6 +3122,14 @@ const ChatPage = () => {
                     >
                       <Image size={20} className="text-gray-500" />
                     </button>
+                    <button 
+                      onClick={() => audioInputRef.current?.click()}
+                      disabled={uploadingFile || isSendingMessage}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Send audio"
+                    >
+                      <Mic size={20} className="text-gray-500" />
+                    </button>
                     {input.trim() && (
                       <button
                         onClick={sendMessage}
@@ -2448,6 +3153,19 @@ const ChatPage = () => {
                     className="hidden"
                     accept="image/*"
                     onChange={handleImageInputChange}
+                  />
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        handleFileUpload(file);
+                      }
+                      e.target.value = '';
+                    }}
                   />
                 </div>
               </div>
