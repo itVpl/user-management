@@ -104,3 +104,15 @@ body::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
 }
+
+/* Notification Toast Animation */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

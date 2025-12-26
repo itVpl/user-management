@@ -94,6 +94,7 @@ import globalNegotiationService from "./services/globalNegotiationService";
 import SocketTest from "./Components/SocketTest";
 import globalNegotiationSocketService from "./services/globalNegotiationSocketFixed";
 import NegotiationTestButton from "./Components/NegotiationTestButton";
+import NotificationHandler from "./Components/NotificationHandler";
 // import GlobalNegotiationNotifications from "./components/GlobalNegotiationNotifications";
 // import NegotiationSocketTester from "./components/NegotiationSocketTester";
 
@@ -503,6 +504,7 @@ function App() {
         {/* Global Components */}
         <GlobalAssignmentNotification />
         <GlobalNegotiationNotification />
+        <NotificationHandler />
         <ChatMessagePopup />
         {/* {import.meta.env.DEV && <TestChatPopup />} */}
         {/* {import.meta.env.DEV && <ChatSystemStatus />} */}
