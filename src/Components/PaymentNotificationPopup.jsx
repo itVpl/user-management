@@ -3,10 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { socketService } from '../utils/socket';
 import './PaymentNotificationPopup.css';
-
-const API_CONFIG = {
-  BASE_URL: "https://vpl-liveproject-1.onrender.com",
-};
+import API_CONFIG from '../config/api';
 
 const PaymentNotificationPopup = ({ user, onNotificationClick }) => {
   const [notification, setNotification] = useState(null);
@@ -183,8 +180,8 @@ const PaymentNotificationPopup = ({ user, onNotificationClick }) => {
         }
       };
 
-      // Start polling every 30 seconds as fallback
-      pollingIntervalRef.current = setInterval(pollForNotifications, 30000);
+      // Start polling every 60 seconds as fallback (reduced frequency to prevent 429 errors)
+      pollingIntervalRef.current = setInterval(pollForNotifications, 60000);
       
       // Initial poll after 5 seconds
       setTimeout(pollForNotifications, 5000);

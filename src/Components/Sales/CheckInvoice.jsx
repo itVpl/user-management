@@ -42,9 +42,7 @@ import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 
 /* ================= Config ================ */
-const API_CONFIG = {
-  BASE_URL: "https://vpl-liveproject-1.onrender.com",
-};
+import API_CONFIG from '../../config/api';
 
 /* ================= Utils ================= */
 const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");

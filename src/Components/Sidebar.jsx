@@ -34,6 +34,9 @@ import {
 } from "../assets/image";
 import logo from "../assets/LogoFinal.png";
 import LogoutConfirmationModal from "./LogoutConfirmationModal";
+import { useUnreadCount } from "../contexts/UnreadCountContext";
+import sharedSocketService from "../services/sharedSocketService";
+import API_CONFIG from "../config/api";
 
 const menuItems = [
   { name: "Dashboard", icon: DashboardImage, whiteIcon: WhiteDashboard, path: "/dashboard" },
@@ -115,6 +118,9 @@ const Sidebar = () => {
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { getTotalUnreadCount, hasUnreadMessages } = useUnreadCount();
+  const totalUnreadCount = getTotalUnreadCount();
+  const hasUnread = hasUnreadMessages();
   const [activeBgColor, setActiveBgColor] = useState(() => {
     try {
       const saved = localStorage.getItem("themePrefs");
@@ -133,8 +139,12 @@ const Sidebar = () => {
 
   const handleLogout = async () => {
     try {
+      // Disconnect shared socket before logout
+      console.log('🧹 Sidebar: Disconnecting shared socket on logout');
+      sharedSocketService.disconnect();
+
       await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/logout",
+        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/logout`,
         {},
         { withCredentials: true }
       );
@@ -171,7 +181,7 @@ const Sidebar = () => {
         const allowedModuleIds = user?.allowedModules?.map(String) || [];
         console.log("👤 User allowed modules:", allowedModuleIds);
 
-        const res = await fetch("https://vpl-liveproject-1.onrender.com/api/v1/module", {
+        const res = await fetch(`${API_CONFIG.BASE_URL}/api/v1/module`, {
           credentials: "include",
         });
 
@@ -303,14 +313,32 @@ const Sidebar = () => {
                   >
                     {({ isActive }) => (
                       <>
-                        <img
-                          src={isActive ? item.whiteIcon || item.icon : item.icon}
-                          alt={item.name}
-                          className="w-5 h-5"
-                        />
+                        <div className="relative">
+                          <img
+                            src={isActive ? item.whiteIcon || item.icon : item.icon}
+                            alt={item.name}
+                            className="w-5 h-5"
+                          />
+                          {/* Red dot badge for Chat when there are unread messages */}
+                          {item.name === "Chat" && hasUnread && (
+                            <span
+                              className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"
+                              style={{
+                                boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
+                              }}
+                              title={`${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`}
+                            />
+                          )}
+                        </div>
                         <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
                           {item.name}
                         </span>
+                        {/* Show count badge next to Chat name if expanded and has unread */}
+                        {item.name === "Chat" && hasUnread && isExpanded && totalUnreadCount > 0 && (
+                          <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                            {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                          </span>
+                        )}
                       </>
                     )}
                   </NavLink>

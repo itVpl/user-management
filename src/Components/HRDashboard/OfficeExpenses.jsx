@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 
 
+import API_CONFIG from '../../config/api';
+
 // API Service
 const expenseAPI = {
-  baseURL: "https://vpl-liveproject-1.onrender.com/api/v1/expenses",
+  baseURL: `${API_CONFIG.BASE_URL}/api/v1/expenses`,
 
 
   // Helper function to get auth headers

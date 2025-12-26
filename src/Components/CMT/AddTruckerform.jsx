@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
+import API_CONFIG from "../../config/api";
 import {
   FileText,
   Upload,
@@ -631,7 +632,7 @@ React.useEffect(() => {
 
     try {
       const res = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/cmt/add-trucker",
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/cmt/add-trucker`,
         truckerData,
         {
           headers: { "Content-Type": "multipart/form-data" },

@@ -348,7 +348,7 @@ const Topbar = () => {
     try {
       setBreakLoading(true);
       const res = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/break/start",
+        `${API_CONFIG.BASE_URL}/api/v1/break/start`,
         {},
         { withCredentials: true }
       );
@@ -382,7 +382,7 @@ const Topbar = () => {
     try {
       setBreakLoading(true);
       const res = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/break/end",
+        `${API_CONFIG.BASE_URL}/api/v1/break/end`,
         {},
         { withCredentials: true }
       );

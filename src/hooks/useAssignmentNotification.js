@@ -370,8 +370,8 @@ export const useAssignmentNotification = (empId, enabled = true) => {
     // Check immediately on mount
     checkForNewAssignments();
 
-    // Then check every 10 seconds
-    intervalRef.current = setInterval(checkForNewAssignments, 10000);
+    // Then check every 30 seconds (reduced from 10s to prevent 429 errors)
+    intervalRef.current = setInterval(checkForNewAssignments, 30000);
 
     return () => {
       if (intervalRef.current) {

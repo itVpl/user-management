@@ -44,12 +44,12 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
       clearInterval(pollingIntervalRef.current);
     }
     
-    // Poll every 2 seconds for real-time updates
+    // Poll every 5 seconds for real-time updates (reduced from 2s to prevent 429 errors)
     pollingIntervalRef.current = setInterval(() => {
       if (isOpen && loadId) {
         fetchChatMessages(false, true); // Silent background fetch
       }
-    }, 2000);
+    }, 5000);
   }, [isOpen, loadId]);
 
   // Stop polling when modal closes

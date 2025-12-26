@@ -416,7 +416,7 @@ export default function ConsignmentTracker() {
   // Initial + 10s interval fetch
   useEffect(() => {
     fetchConsignments();
-    const interval = setInterval(fetchConsignments, 10000); // every 10s
+    const interval = setInterval(fetchConsignments, 30000); // every 30s (reduced from 10s to prevent 429 errors)
     return () => clearInterval(interval);
   }, [searchTerm]);
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import API_CONFIG from '../../config/api';
 
-// Base URL for API (Placeholder - MUST be updated by the user)
-const BASE_URL = 'https://api.your-logistics-app.com';
+// Base URL for API
+const BASE_URL = API_CONFIG.BASE_URL;
 
 // --- Custom Hook for Debouncing Search Input ---
 const useDebounce = (value, delay) => {
@@ -328,7 +329,7 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const GET_TRUCKERS_URL = 'https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/truckers';
+  const GET_TRUCKERS_URL = `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`;
 
   // --- Fetch Truckers Data ---
   const fetchTruckers = useCallback(async () => {
@@ -444,7 +445,7 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
       });
 
       // API URL
-      const POST_API_URL = 'https://vpl-liveproject-1.onrender.com/api/v1/driver/cmt/add';
+      const POST_API_URL = `${API_CONFIG.BASE_URL}/api/v1/driver/cmt/add`;
 
       // Retry mechanism
       const maxRetries = 3;
@@ -909,7 +910,7 @@ const AddTruckerDriver = () => {
         throw new Error('Authentication token not found. Please login again.');
       }
 
-      const API_URL = `https://vpl-liveproject-1.onrender.com/api/v1/driver/cmt/my-drivers?empId=${userData.empId}`;
+      const API_URL = `${API_CONFIG.BASE_URL}/api/v1/driver/cmt/my-drivers?empId=${userData.empId}`;
 
       const response = await fetch(API_URL, {
         method: 'GET',

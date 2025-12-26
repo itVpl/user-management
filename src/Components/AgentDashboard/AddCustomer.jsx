@@ -60,7 +60,7 @@ export default function AddCustomerForm() {
 
     try {
       const res = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/employee/add",
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/employee/add`,
         form,
         {
           headers: {

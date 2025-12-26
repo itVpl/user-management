@@ -4,6 +4,8 @@ import VideoBg from '../../../assets/BackgroundVideo.mp4';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import TermsAndConditions from '../../../Components/TermsAndConditions';
+import API_CONFIG from '../../../config/api';
+import sharedSocketService from '../../../services/sharedSocketService';
 
 // Simple inline icons (no extra libs)
 const Eye = (props) => (
@@ -56,7 +58,7 @@ function Login({ setIsAuthenticated }) {
 
     try {
       const res = await axios.post(
-        'https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/login',
+        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/login`,
         { empId: empId.trim(), password },
         { withCredentials: true }
       );
@@ -83,6 +85,11 @@ function Login({ setIsAuthenticated }) {
           setShowTerms(true);
         } else {
           // Terms already accepted, proceed to dashboard
+          // Initialize socket connection immediately after login
+          if (user.empId) {
+            console.log('🚀 Login.jsx: Initializing socket connection for user:', user.empId);
+            sharedSocketService.initialize(user.empId);
+          }
           setIsAuthenticated?.(true);
           navigate('/dashboard');
         }
@@ -120,6 +127,19 @@ function Login({ setIsAuthenticated }) {
   // Handle terms acceptance
   const handleTermsAccepted = (termsData) => {
     setShowTerms(false);
+    // Initialize socket connection immediately after terms acceptance
+    const userString = sessionStorage.getItem('user') || localStorage.getItem('user');
+    if (userString) {
+      try {
+        const user = JSON.parse(userString);
+        if (user?.empId) {
+          console.log('🚀 Login.jsx: Initializing socket connection after terms acceptance for user:', user.empId);
+          sharedSocketService.initialize(user.empId);
+        }
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
     setIsAuthenticated?.(true);
     navigate('/dashboard');
   };

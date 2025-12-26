@@ -177,8 +177,8 @@ class GlobalNegotiationService {
     });
   }
 
-  // Start global polling
-  startPolling(intervalMs = 20000) { // 20 seconds default
+  // Start global polling - increased default interval to prevent 429 errors
+  startPolling(intervalMs = 60000) { // 60 seconds default (was 20s)
     if (this.isPolling) {
       console.log('🔄 Global negotiation polling already running');
       return;

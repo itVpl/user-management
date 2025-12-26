@@ -1,7 +1,10 @@
 // API Configuration
 const API_CONFIG = {
-  // Base URL for all API calls
-  BASE_URL: 'https://vpl-liveproject-1.onrender.com',
+  // Base URL for all API calls - Use environment variable or fallback
+  // VITE_API_BASE_URL includes /api/v1, so we remove it to get base URL
+  BASE_URL: import.meta.env.VITE_API_BASE_URL 
+    ? import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '') 
+    : 'https://vpl-liveproject-1.onrender.com',
   
   // Common headers
   DEFAULT_HEADERS: {

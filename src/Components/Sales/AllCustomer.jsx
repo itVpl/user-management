@@ -29,7 +29,7 @@ const AllCustomer = () => {
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/shippers');
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers`);
       if (response.data && response.data.success) {
         // Sort by createdAt descending (newest first)
         const sortedData = response.data.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
