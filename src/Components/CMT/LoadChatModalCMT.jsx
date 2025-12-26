@@ -17,15 +17,15 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
     }
   }, [messages]);
 
-  const fetchChatMessages = useCallback(async () => {
+  const fetchChatMessages = useCallback(async (isSilent = false) => {
     if (!loadId) return;
 
-    setLoading(true);
+    if (!isSilent) setLoading(true);
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       if (!token) {
         alert('Authentication required.');
-        setLoading(false);
+        if (!isSilent) setLoading(false);
         return;
       }
 
@@ -53,7 +53,7 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
       console.error('Error fetching messages:', error);
       setMessages([]);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [loadId, currentUserEmpId]);
 
@@ -62,7 +62,7 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
       fetchChatMessages();
       
       // Set up polling for new messages every 3 seconds
-      const interval = setInterval(fetchChatMessages, 3000);
+      const interval = setInterval(() => fetchChatMessages(true), 3000);
       return () => clearInterval(interval);
     } else {
       setMessages([]);

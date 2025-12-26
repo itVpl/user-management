@@ -5,6 +5,8 @@ import { Search } from "lucide-react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import API_CONFIG from "./config/api.js";
+import { useEnhancedNotifications } from "./hooks/useEnhancedNotifications";
+import LoadChatModalCMT from "./Components/CMT/LoadChatModalCMT";
 
 const BREAK_DURATION = 60 * 60; // 60 mins in seconds
 
@@ -28,6 +30,22 @@ const Topbar = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [breakLoading, setBreakLoading] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
+
+  // Notification State
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const { 
+    unreadCount, 
+    notifications, 
+    clearNotification, 
+    clearAllNotifications 
+  } = useEnhancedNotifications();
+
+  const [chatModalState, setChatModalState] = useState({
+    isOpen: false,
+    loadId: null,
+    receiverEmpId: null,
+    receiverName: null
+  });
   
   // User department and checklist data
   const [userDepartment, setUserDepartment] = useState(null);
@@ -66,6 +84,39 @@ const Topbar = () => {
     };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  // Listen for notification events
+  useEffect(() => {
+    const handleOpenChat = (e) => {
+      if (e.detail) {
+        setChatModalState({
+          isOpen: true,
+          loadId: e.detail.loadId,
+          receiverEmpId: null,
+          receiverName: e.detail.senderName
+        });
+      }
+    };
+
+    const handleOpenNegotiation = (e) => {
+      if (e.detail) {
+        setChatModalState({
+          isOpen: true,
+          loadId: e.detail.loadId,
+          receiverEmpId: 'shipper',
+          receiverName: 'Shipper'
+        });
+      }
+    };
+
+    window.addEventListener('OPEN_LOAD_CHAT', handleOpenChat);
+    window.addEventListener('OPEN_NEGOTIATION', handleOpenNegotiation);
+
+    return () => {
+      window.removeEventListener('OPEN_LOAD_CHAT', handleOpenChat);
+      window.removeEventListener('OPEN_NEGOTIATION', handleOpenNegotiation);
+    };
   }, []);
 
 
@@ -605,27 +656,98 @@ const Topbar = () => {
 
         {/* Notification */}
         <div className="relative group">
-          <img
-            src={Notification}
-            alt="Notifications"
-            className="w-6 h-6 cursor-pointer group-hover:scale-110 transition-transform duration-200"
-          />
-          <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+          <div className="relative" onClick={() => setNotificationOpen(!notificationOpen)}>
+             <img
+               src={Notification}
+               alt="Notifications"
+               className="w-6 h-6 cursor-pointer group-hover:scale-110 transition-transform duration-200"
+             />
+             {unreadCount > 0 && (
+               <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center animate-pulse">
+                 {unreadCount > 99 ? '99+' : unreadCount}
+               </span>
+             )}
+          </div>
+          
+          {notificationOpen && (
+            <div className="absolute right-0 top-12 w-80 bg-white rounded-lg shadow-xl py-2 z-50 animate-fade-in border border-gray-100 max-h-[80vh] overflow-y-auto">
+               <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                 <h3 className="font-semibold text-gray-700">Notifications</h3>
+                 {notifications.length > 0 && (
+                   <button 
+                     onClick={clearAllNotifications}
+                     className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                   >
+                     Clear All
+                   </button>
+                 )}
+               </div>
+               
+               {notifications.length === 0 ? (
+                 <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                   No new notifications
+                 </div>
+               ) : (
+                 notifications.map((notif, idx) => (
+                    <div 
+                        key={`${notif.type}-${notif._id}-${idx}`}
+                        className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors"
+                        onClick={() => {
+                           if (notif.type === 'chat') {
+                             setChatModalState({
+                                isOpen: true,
+                                loadId: notif.loadId,
+                                receiverEmpId: notif.sender?.empId,
+                                receiverName: notif.sender?.employeeName
+                             });
+                           } else if (notif.type === 'negotiation') {
+                             setChatModalState({
+                                isOpen: true,
+                                loadId: notif.loadId,
+                                receiverEmpId: 'shipper',
+                                receiverName: 'Shipper'
+                             });
+                           }
+                           setNotificationOpen(false);
+                           clearNotification(notif._id, notif.type);
+                        }}
+                    >
+                         <div className="flex justify-between items-start mb-1">
+                            <div className="flex items-center gap-2">
+                              {notif.type === 'chat' ? (
+                                <span className="text-blue-500 text-xs">💬</span>
+                              ) : (
+                                <span className="text-green-500 text-xs">💰</span>
+                              )}
+                              <span className="font-medium text-blue-600 text-sm">
+                                Load #{notif.loadId}
+                                {notif.type === 'negotiation' && ` - $${notif.rate?.toLocaleString()}`}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-400">
+                              {new Date(notif.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </span>
+                         </div>
+                         <p className="text-sm text-gray-800 font-medium truncate">
+                           {notif.sender?.employeeName || 'User'}
+                           {notif.type === 'negotiation' && ' (Negotiation)'}
+                         </p>
+                         <p className="text-xs text-gray-500 line-clamp-2">{notif.message}</p>
+                      </div>
+                   ))
+                )}
+             </div>
+          )}
         </div>
 
         {/* Profile Dropdown */}
         <div className="relative" id="profile-dropdown">
-          <div
-            className="w-14 h-14 rounded-full border-2 border-gray-300 overflow-hidden hover:scale-105 transition-transform duration-200 cursor-pointer"
+          <img
+            src={ProfileIcon}
+            alt="Profile"
+            className="w-8 h-8 rounded-full border border-gray-300 cursor-pointer hover:shadow-md transition-shadow"
             onClick={() => setProfileOpen(!profileOpen)}
-          >
-            <img
-              src={ProfileIcon}
-              alt="User"
-              className="w-full h-full object-cover"
-            />
-          </div>
-
+          />
           {profileOpen && (
             <div className="absolute right-0 top-16 w-40 bg-white shadow-lg rounded-lg py-2 z-50 animate-fade-in">
               <button
@@ -642,6 +764,17 @@ const Topbar = () => {
           )}
         </div>
       </div>
+
+      {/* Global Load Chat Modal */}
+      {chatModalState.isOpen && (
+        <LoadChatModalCMT
+          isOpen={chatModalState.isOpen}
+          onClose={() => setChatModalState(prev => ({ ...prev, isOpen: false }))}
+          loadId={chatModalState.loadId}
+          receiverEmpId={chatModalState.receiverEmpId}
+          receiverName={chatModalState.receiverName}
+        />
+      )}
     </div>
   );
 };

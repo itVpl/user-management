@@ -81,6 +81,20 @@ import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.js
 import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
 import FollowUpReport from "./Components/Sales/FollowUpReport.jsx";
 
+// Chat Message System Imports
+import { ChatMessageProvider } from "./contexts/ChatMessageContext";
+import ChatMessagePopup from "./components/ChatMessagePopup/ChatMessagePopup";
+import TestChatPopup from "./components/TestChatPopup";
+import ErrorBoundary from "./components/ErrorBoundary";
+import ChatSystemStatus from "./components/ChatSystemStatus";
+import { fetchLoadAddresses } from "./utils/loadUtils";
+import globalNegotiationService from "./services/globalNegotiationService";
+import SocketTest from "./components/SocketTest";
+import globalNegotiationSocketService from "./services/globalNegotiationSocketFixed";
+import NegotiationTestButton from "./components/NegotiationTestButton";
+// import GlobalNegotiationNotifications from "./components/GlobalNegotiationNotifications";
+// import NegotiationSocketTester from "./components/NegotiationSocketTester";
+
 
 
 // Global Notification Component
@@ -238,6 +252,148 @@ function GlobalAssignmentNotification() {
   return null;
 }
 
+// Global Negotiation Notification Component
+function GlobalNegotiationNotification() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Initialize global negotiation socket service
+    const initializeGlobalSocket = () => {
+      const userInfo = globalNegotiationSocketService.getCurrentUser();
+      if (userInfo) {
+        console.log('🚀 Initializing global negotiation socket service...');
+        globalNegotiationSocketService.initialize();
+        globalNegotiationSocketService.requestNotificationPermission();
+        
+        // Auto-join assigned bids for CMT users
+        setTimeout(() => {
+          globalNegotiationSocketService.autoJoinAssignedBids();
+        }, 2000);
+      }
+    };
+
+    // Listen for custom negotiation events
+    const handleNegotiationEvent = async (event) => {
+      const { bidId, loadId, rate, message, senderName, originAddress, destinationAddress, pickupLocation, dropLocation } = event.detail;
+      
+      console.log('🎯 Global negotiation notification received:', event.detail);
+      
+      // Fetch load addresses dynamically if not provided
+      let finalOriginAddress = pickupLocation || originAddress;
+      let finalDestinationAddress = dropLocation || destinationAddress;
+      
+      if (!finalOriginAddress || !finalDestinationAddress) {
+        try {
+          console.log('🔍 Fetching load addresses for:', { loadId, bidId });
+          const loadDetails = await fetchLoadAddresses(loadId, bidId);
+          
+          if (loadDetails) {
+            finalOriginAddress = finalOriginAddress || loadDetails.originAddress;
+            finalDestinationAddress = finalDestinationAddress || loadDetails.destinationAddress;
+            console.log('✅ Fetched load addresses:', loadDetails);
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to fetch load addresses:', error);
+        }
+      }
+      
+      toast.info(
+        ({ closeToast }) => (
+          <div className="space-y-2 p-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💰</span>
+              <div className="font-semibold text-gray-800">New Negotiation Message</div>
+            </div>
+            <div className="text-sm text-gray-600">
+              <strong>Load:</strong> {loadId || bidId}
+            </div>
+            <div className="text-sm text-gray-600">
+              <strong>From:</strong> {senderName || 'Shipper'}
+            </div>
+            {finalOriginAddress && (
+              <div className="text-sm text-gray-600">
+                <strong>Pickup:</strong> {finalOriginAddress}
+              </div>
+            )}
+            {finalDestinationAddress && (
+              <div className="text-sm text-gray-600">
+                <strong>Drop:</strong> {finalDestinationAddress}
+              </div>
+            )}
+            {rate && (
+              <div className="text-sm font-medium text-green-600">
+                <strong>Rate:</strong> ${rate.toLocaleString()}
+              </div>
+            )}
+            <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
+              {message?.substring(0, 60)}{message?.length > 60 ? '...' : ''}
+            </div>
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={() => {
+                  closeToast?.();
+                  navigate("/RateApproved", { 
+                    state: { 
+                      openNegotiationModal: true,
+                      bidId: bidId,
+                      loadId: loadId 
+                    } 
+                  });
+                }}
+                className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors duration-200"
+              >
+                View Negotiation
+              </button>
+            </div>
+          </div>
+        ),
+        { 
+          autoClose: 10000,
+          closeButton: true,
+          position: "top-right"
+        }
+      );
+    };
+
+    // Listen for modal open events
+    const handleOpenNegotiationModal = (event) => {
+      const { bidId, loadId } = event.detail;
+      navigate("/RateApproved", { 
+        state: { 
+          openNegotiationModal: true,
+          bidId: bidId,
+          loadId: loadId 
+        } 
+      });
+    };
+
+    // Initialize socket service
+    initializeGlobalSocket();
+
+    // Add event listeners
+    window.addEventListener('NEGOTIATION_MESSAGE_RECEIVED', handleNegotiationEvent);
+    window.addEventListener('OPEN_NEGOTIATION_MODAL', handleOpenNegotiationModal);
+
+    // Start global polling service when component mounts
+    const userInfo = globalNegotiationService.getCurrentUser();
+    if (userInfo) {
+      console.log('🚀 Starting global negotiation polling service...');
+      globalNegotiationService.startPolling(20000); // Poll every 20 seconds
+    }
+
+    return () => {
+      window.removeEventListener('NEGOTIATION_MESSAGE_RECEIVED', handleNegotiationEvent);
+      window.removeEventListener('OPEN_NEGOTIATION_MODAL', handleOpenNegotiationModal);
+      // Stop polling when component unmounts
+      globalNegotiationService.stopPolling();
+      // Disconnect global socket service
+      globalNegotiationSocketService.disconnect();
+    };
+  }, [navigate]);
+
+  return null;
+}
+
 // Utility function to get authentication token
 const getAuthToken = () => {
   return (
@@ -339,10 +495,18 @@ function App() {
   }
 
   return (
-    <>
-      {/* Global Components */}
-      <GlobalAssignmentNotification />
-      <ToastContainer 
+    <ErrorBoundary>
+      <ChatMessageProvider>
+        {/* Global Components */}
+        <GlobalAssignmentNotification />
+        <GlobalNegotiationNotification />
+        <ChatMessagePopup />
+        {import.meta.env.DEV && <TestChatPopup />}
+        {import.meta.env.DEV && <ChatSystemStatus />}
+        {import.meta.env.DEV && <SocketTest />}
+        {import.meta.env.DEV && <NegotiationTestButton />}
+        {/* {import.meta.env.DEV && <NegotiationSocketTester />} */}
+        <ToastContainer 
         position="top-right"
         autoClose={5000}
         hideProgressBar={false}
@@ -465,7 +629,8 @@ function App() {
           user={userData} 
         />
       )}
-    </>
+    </ChatMessageProvider>
+    </ErrorBoundary>
   );
 }
 

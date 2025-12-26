@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, MessageCircle } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, MessageCircle, RefreshCw } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import PendingBids from './PendingBids.jsx';
-import LoadChatModal from './LoadChatModal.jsx';
+import LoadChatModalCMT from './LoadChatModalCMT.jsx';
+
 const alphaOnly = /^[A-Za-z\s]+$/;            // alphabets + space
 const alphaNum = /^[A-Za-z0-9\s-]+$/;        // letters, numbers, space, dash
 // Sanitizers
@@ -79,6 +80,8 @@ export default function RateApproved() {
   const [negotiationHistory, setNegotiationHistory] = useState([]);
   const [negotiationHistoryLoading, setNegotiationHistoryLoading] = useState(false);
   const [chatContainerRef, setChatContainerRef] = useState(null);
+  const prevHistoryLengthRef = useRef(0);
+  const lastProcessedMessageIdRef = useRef(null);
 
   // Chat Modal State
   const [chatModal, setChatModal] = useState({
@@ -1414,9 +1417,9 @@ export default function RateApproved() {
   };
 
   // Fetch negotiation history
-  const fetchNegotiationHistory = async (bidId) => {
+  const fetchNegotiationHistory = useCallback(async (bidId, isSilent = false, senderName = 'Shipper') => {
     try {
-      setNegotiationHistoryLoading(true);
+      if (!isSilent) setNegotiationHistoryLoading(true);
       const response = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/bid/${bidId}/internal-negotiation-thread`,
         {
@@ -1428,16 +1431,67 @@ export default function RateApproved() {
       if (response.data && response.data.success) {
         const history = response.data.data?.internalNegotiation?.history || [];
         setNegotiationHistory(history);
+
+        // Check for new messages to alert
+        if (history.length > 0) {
+          const lastMsg = history[history.length - 1];
+          
+          if (lastProcessedMessageIdRef.current) {
+             const lastId = lastProcessedMessageIdRef.current;
+             const lastIndex = history.findIndex(m => m._id === lastId);
+             
+             if (lastIndex !== -1 && lastIndex < history.length - 1) {
+                const newMessages = history.slice(lastIndex + 1);
+                newMessages.forEach(msg => {
+                   if (msg.by !== 'inhouse') {
+                      alertify.set('notifier','position', 'top-right');
+                      alertify.success(`${senderName}: ${msg.message}`);
+                   }
+                });
+             }
+          } else {
+            // Initial load or reset, just set the ref without alerting
+            lastProcessedMessageIdRef.current = lastMsg._id;
+          }
+          // Update ref to latest always if we have history
+          lastProcessedMessageIdRef.current = lastMsg._id;
+        }
       } else {
-        setNegotiationHistory([]);
+        if (!isSilent) setNegotiationHistory([]);
       }
     } catch (error) {
       console.error('Error fetching negotiation history:', error);
-      setNegotiationHistory([]);
+      if (!isSilent) setNegotiationHistory([]);
     } finally {
-      setNegotiationHistoryLoading(false);
+      if (!isSilent) setNegotiationHistoryLoading(false);
     }
-  };
+  }, []);
+
+  // Poll for negotiation history
+  useEffect(() => {
+    let intervalId;
+    if (negotiateBidModal.visible && negotiateBidModal.rate?.rateNum) {
+      intervalId = setInterval(() => {
+        fetchNegotiationHistory(negotiateBidModal.rate.rateNum, true, negotiateBidModal.rate?.shipperName || 'Shipper');
+      }, 2000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [negotiateBidModal.visible, negotiateBidModal.rate, fetchNegotiationHistory]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (chatContainerRef && negotiationHistory.length > 0) {
+      // Only scroll if length increased (new message) or on initial load
+      if (negotiationHistory.length > prevHistoryLengthRef.current) {
+        chatContainerRef.scrollTop = chatContainerRef.scrollHeight;
+      }
+      prevHistoryLengthRef.current = negotiationHistory.length;
+    } else if (negotiationHistory.length === 0) {
+      prevHistoryLengthRef.current = 0;
+    }
+  }, [negotiationHistory, chatContainerRef, negotiateBidModal.visible]);
 
   // Handle negotiate bid
   const handleNegotiateBid = async (rate) => {
@@ -1452,8 +1506,11 @@ export default function RateApproved() {
       
       setNegotiateErrors({ inhouseCounterRate: '', message: '' });
       
+      // Reset last processed message ref
+      lastProcessedMessageIdRef.current = null;
+
       // Fetch negotiation history
-      await fetchNegotiationHistory(rate.rateNum);
+      await fetchNegotiationHistory(rate.rateNum, false, rate.shipperName || 'Shipper');
     } catch (error) {
       console.error('Error opening negotiate bid modal:', error);
       alertify.error('Error opening negotiate form. Please try again.');
@@ -1870,19 +1927,34 @@ export default function RateApproved() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-base font-semibold">Negotiation - {negotiateBidModal.rate?.id || 'N/A'}</h2>
+                <h2 className="text-base font-semibold flex items-center gap-2">
+                  Negotiation - {negotiateBidModal.rate?.id || 'N/A'}
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                </h2>
                 <p className="text-xs text-green-100">{negotiateBidModal.rate?.origin} → {negotiateBidModal.rate?.destination}</p>
               </div>
             </div>
-            <button
-              onClick={() => {
-                setNegotiateBidModal({ visible: false, rate: null });
-                setNegotiationHistory([]);
-              }}
-              className="text-white hover:text-gray-200 text-xl font-bold w-7 h-7 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors"
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchNegotiationHistory(negotiateBidModal.rate.rateNum, false, negotiateBidModal.rate?.shipperName || 'Shipper')}
+                className="text-white hover:text-gray-200 p-1 rounded-full hover:bg-white/10 transition-colors"
+                title="Refresh messages"
+              >
+                <RefreshCw size={18} />
+              </button>
+              <button
+                onClick={() => {
+                  setNegotiateBidModal({ visible: false, rate: null });
+                  setNegotiationHistory([]);
+                }}
+                className="text-white hover:text-gray-200 text-xl font-bold w-7 h-7 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors"
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {/* Chat Messages Area */}
@@ -4311,13 +4383,15 @@ export default function RateApproved() {
       )}
 
       {/* Chat Modal */}
-      <LoadChatModal
+      <LoadChatModalCMT
         isOpen={chatModal.visible}
         onClose={() => setChatModal({ visible: false, loadId: null, receiverEmpId: null, receiverName: null })}
         loadId={chatModal.loadId}
         receiverEmpId={chatModal.receiverEmpId}
         receiverName={chatModal.receiverName}
       />
+      
+
     </div>
   );
 }
