@@ -85,15 +85,15 @@ import PaymentNotificationPopup from "./Components/PaymentNotificationPopup.jsx"
 
 // Chat Message System Imports
 import { ChatMessageProvider } from "./contexts/ChatMessageContext";
-import ChatMessagePopup from "./components/ChatMessagePopup/ChatMessagePopup";
-import TestChatPopup from "./components/TestChatPopup";
-import ErrorBoundary from "./components/ErrorBoundary";
-import ChatSystemStatus from "./components/ChatSystemStatus";
+import ChatMessagePopup from "./Components/ChatMessagePopup/ChatMessagePopup";
+import TestChatPopup from "./Components/TestChatPopup";
+import ErrorBoundary from "./Components/ErrorBoundary";
+import ChatSystemStatus from "./Components/ChatSystemStatus";
 import { fetchLoadAddresses } from "./utils/loadUtils";
 import globalNegotiationService from "./services/globalNegotiationService";
-import SocketTest from "./components/SocketTest";
+import SocketTest from "./Components/SocketTest";
 import globalNegotiationSocketService from "./services/globalNegotiationSocketFixed";
-import NegotiationTestButton from "./components/NegotiationTestButton";
+import NegotiationTestButton from "./Components/NegotiationTestButton";
 // import GlobalNegotiationNotifications from "./components/GlobalNegotiationNotifications";
 // import NegotiationSocketTester from "./components/NegotiationSocketTester";
 
