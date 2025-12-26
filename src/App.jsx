@@ -504,16 +504,12 @@ function App() {
         <GlobalAssignmentNotification />
         <GlobalNegotiationNotification />
         <ChatMessagePopup />
-        {import.meta.env.DEV && <TestChatPopup />}
-        {import.meta.env.DEV && <ChatSystemStatus />}
-        {import.meta.env.DEV && <SocketTest />}
-        {import.meta.env.DEV && <NegotiationTestButton />}
+        {/* {import.meta.env.DEV && <TestChatPopup />} */}
+        {/* {import.meta.env.DEV && <ChatSystemStatus />} */}
+        {/* {import.meta.env.DEV && <SocketTest />} */}
+        {/* {import.meta.env.DEV && <NegotiationTestButton />} */}
         {/* {import.meta.env.DEV && <NegotiationSocketTester />} */}
-        <ToastContainer 
-    <>
-      {/* Global Components */}
-      <GlobalAssignmentNotification />
-      
+
       {/* Payment Notification Popup - Only shows for Finance employees */}
       {/* Always render - component handles user check internally for all pages */}
       <PaymentNotificationPopup
