@@ -508,7 +508,7 @@ function App() {
         {/* {import.meta.env.DEV && <ChatSystemStatus />} */}
         {/* {import.meta.env.DEV && <SocketTest />} */}
         {/* {import.meta.env.DEV && <NegotiationTestButton />} */}
-        {/* {import.meta.env.DEV && <NegotiationSocketTester />} */}
+        {/* {import.meta.env.DEV && <NegotiationSocketTgfhfgdhfghfgester />} */}
 
       {/* Payment Notification Popup - Only shows for Finance employees */}
       {/* Always render - component handles user check internally for all pages */}
