@@ -85,15 +85,15 @@ import PaymentNotificationPopup from "./Components/PaymentNotificationPopup.jsx"
 
 // Chat Message System Imports
 import { ChatMessageProvider } from "./contexts/ChatMessageContext";
-import ChatMessagePopup from "./components/ChatMessagePopup/ChatMessagePopup";
-import TestChatPopup from "./components/TestChatPopup";
-import ErrorBoundary from "./components/ErrorBoundary";
-import ChatSystemStatus from "./components/ChatSystemStatus";
+import ChatMessagePopup from "./Components/ChatMessagePopup/ChatMessagePopup";
+import TestChatPopup from "./Components/TestChatPopup";
+import ErrorBoundary from "./Components/ErrorBoundary";
+import ChatSystemStatus from "./Components/ChatSystemStatus";
 import { fetchLoadAddresses } from "./utils/loadUtils";
 import globalNegotiationService from "./services/globalNegotiationService";
-import SocketTest from "./components/SocketTest";
+import SocketTest from "./Components/SocketTest";
 import globalNegotiationSocketService from "./services/globalNegotiationSocketFixed";
-import NegotiationTestButton from "./components/NegotiationTestButton";
+import NegotiationTestButton from "./Components/NegotiationTestButton";
 // import GlobalNegotiationNotifications from "./components/GlobalNegotiationNotifications";
 // import NegotiationSocketTester from "./components/NegotiationSocketTester";
 
@@ -504,16 +504,12 @@ function App() {
         <GlobalAssignmentNotification />
         <GlobalNegotiationNotification />
         <ChatMessagePopup />
-        {import.meta.env.DEV && <TestChatPopup />}
-        {import.meta.env.DEV && <ChatSystemStatus />}
-        {import.meta.env.DEV && <SocketTest />}
-        {import.meta.env.DEV && <NegotiationTestButton />}
-        {/* {import.meta.env.DEV && <NegotiationSocketTester />} */}
-        <ToastContainer 
-    <>
-      {/* Global Components */}
-      <GlobalAssignmentNotification />
-      
+        {/* {import.meta.env.DEV && <TestChatPopup />} */}
+        {/* {import.meta.env.DEV && <ChatSystemStatus />} */}
+        {/* {import.meta.env.DEV && <SocketTest />} */}
+        {/* {import.meta.env.DEV && <NegotiationTestButton />} */}
+        {/* {import.meta.env.DEV && <NegotiationSocketTgfhfgdhfghfgester />} */}
+
       {/* Payment Notification Popup - Only shows for Finance employees */}
       {/* Always render - component handles user check internally for all pages */}
       <PaymentNotificationPopup
