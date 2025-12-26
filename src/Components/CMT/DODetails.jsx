@@ -1307,7 +1307,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
       setFwLoading(true);
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/forward-to-accountant`;
-      const payload = { doId: String(doMongoId), cmtEmpId: String(cmtEmpId), remarks: (remarks || '').trim() || 'Forwarded by CMT' };
+      const payload = { doId: String(doMongoId), cmtEmpId: String(cmtEmpId), accountantEmpId: 'VPL039', remarks: (remarks || '').trim() || 'Forwarded by CMT' };
 
       const res = await axios.post(url, payload, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

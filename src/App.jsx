@@ -36,6 +36,7 @@ import HrCreateTask from "./Components/HRDashboard/HrCreateTask.jsx";
 import RateRequest from "./Components/CMT-Manager/RateRequest.jsx";
 import LeaveApproval from "./Components/HRDashboard/LeaveApproval.jsx";
 import RateApproved from "./Components/CMT/RateApproved.jsx";
+import ManagerPendingBids from "./Components/CMT/ManagerPendingBids.jsx";
 import Loads from "./Components/CMT/Loads.jsx";
 import CarrierApproval from "./Components/CMT/CarrierApproval.jsx";
 import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
@@ -80,6 +81,7 @@ import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
 import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
 import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
 import FollowUpReport from "./Components/Sales/FollowUpReport.jsx";
+import PaymentNotificationPopup from "./Components/PaymentNotificationPopup.jsx";
 
 // Chat Message System Imports
 import { ChatMessageProvider } from "./contexts/ChatMessageContext";
@@ -125,7 +127,7 @@ function GlobalAssignmentNotification() {
       }
     };
 
-    // Initialize BroadcastChannel if available
+    // Initialize BroadcastChannel if available 
     if ("BroadcastChannel" in window) {
       try {
         broadcastChannel = new BroadcastChannel("rr_events");
@@ -418,6 +420,7 @@ const getUserData = () => {
 };
 
 function App() {
+  const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showTerms, setShowTerms] = useState(false);
@@ -507,6 +510,28 @@ function App() {
         {import.meta.env.DEV && <NegotiationTestButton />}
         {/* {import.meta.env.DEV && <NegotiationSocketTester />} */}
         <ToastContainer 
+    <>
+      {/* Global Components */}
+      <GlobalAssignmentNotification />
+      
+      {/* Payment Notification Popup - Only shows for Finance employees */}
+      {/* Always render - component handles user check internally for all pages */}
+      <PaymentNotificationPopup
+        user={userData ? {
+          empId: userData.empId || userData.employeeId,
+          department: typeof userData.department === 'string' 
+            ? userData.department 
+            : userData.department?.name || '',
+        } : null}
+        onNotificationClick={(notification) => {
+          // Navigate to DO details page
+          navigate(`/DODetails`, { 
+            state: { doId: notification.doId } 
+          });
+        }}
+      />
+      
+      <ToastContainer 
         position="top-right"
         autoClose={5000}
         hideProgressBar={false}
@@ -568,6 +593,7 @@ function App() {
           <Route path="TruckerLDocuments" element={<TruckerLDocuments />} />
           <Route path="RateRequest" element={<RateRequest />} />
           <Route path="RateApproved" element={<RateApproved />} />
+          <Route path="ManagerRateApproval" element={<ManagerPendingBids />} />
           <Route path="Loads" element={<Loads />} />
           <Route path="CarrierApproval" element={<CarrierApproval />} />
           <Route path="HrCreateTask" element={<HrCreateTask />} />

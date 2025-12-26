@@ -43,6 +43,8 @@ import {
   Radio,
   Tabs,
   Tab,
+  Checkbox,
+  Autocomplete,
 } from "@mui/material";
 import { createTheme, ThemeProvider, alpha } from "@mui/material/styles";
 import {
@@ -617,6 +619,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   });
   const [processedPage, setProcessedPage] = useState(1);
   const [processedSearch, setProcessedSearch] = useState("");
+  const [processedCarrierFilter, setProcessedCarrierFilter] = useState("");
+  const [processedStatusFilter, setProcessedStatusFilter] = useState("all"); // "all" | "approved"
 
   // === TAB 2: Approved By Sales ===
   const [acceptedLoading, setAcceptedLoading] = useState(false);
@@ -630,6 +634,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   });
   const [acceptedPage, setAcceptedPage] = useState(1);
   const [acceptedSearch, setAcceptedSearch] = useState("");
+  const [acceptedCarrierFilter, setAcceptedCarrierFilter] = useState("");
+  const [acceptedPaymentFilter, setAcceptedPaymentFilter] = useState("all"); // "all" | "paid" | "unpaid"
 
   // === TAB 3: Rejected by Sales ===
   const [rejectedLoading, setRejectedLoading] = useState(false);
@@ -682,6 +688,30 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     paymentProof: null
   });
   const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // Bulk payment state
+  const [bulkPaymentModalOpen, setBulkPaymentModalOpen] = useState(false);
+  const [selectedDOs, setSelectedDOs] = useState(new Set());
+  const [bulkPaymentDOIds, setBulkPaymentDOIds] = useState([]); // Store DO IDs when modal opens
+  const [bulkPaymentForm, setBulkPaymentForm] = useState({
+    paymentMethod: '',
+    paymentReference: '',
+    paymentNotes: '',
+    paymentProof: null
+  });
+  const [bulkPaymentLoading, setBulkPaymentLoading] = useState(false);
+
+  // Short Pay modal state
+  const [shortPayModalOpen, setShortPayModalOpen] = useState(false);
+  const [shortPayData, setShortPayData] = useState(null);
+  const [shortPayForm, setShortPayForm] = useState({
+    paymentAmount: '',
+    paymentMethod: '',
+    paymentReference: '',
+    paymentNotes: '',
+    carrierPaymentProof: null
+  });
+  const [shortPayLoading, setShortPayLoading] = useState(false);
 
   // Logo source for PDF generation - using your actual logo
   const logoSrc = Logo;
@@ -1407,7 +1437,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         : null;
 
       // 2) table/list me aksar doNum me loadNo aa jata hai
-      const fromDoNum = (order?.doNum || '').trim();
+      const fromDoNum = (order?.doNum || '').trim();    
 
       // 3) legacy/other fields
       const fromOrder =
@@ -1803,7 +1833,33 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const payload = resp?.data?.data || {};
       // ensure accountantUser populated even if only accepted API hits
       setAccountantUser((prev) => prev || payload.financeEmployee || null);
-      setAcceptedRows(payload.salesVerifiedDOs || []);
+      const salesVerifiedDOs = payload.salesVerifiedDOs || [];
+      
+      // Log paid DOs for debugging
+      const paidDOs = salesVerifiedDOs.filter(doItem => {
+        const billPaid = doItem?.paymentStatus?.status === 'paid';
+        const carrierPaid = doItem?.carrierPaymentStatus?.status === 'paid';
+        return billPaid || carrierPaid;
+      });
+      
+      if (paidDOs.length > 0) {
+        console.log(`📊 Found ${paidDOs.length} paid DO(s) out of ${salesVerifiedDOs.length} total:`, {
+          total: salesVerifiedDOs.length,
+          paid: paidDOs.length,
+          unpaid: salesVerifiedDOs.length - paidDOs.length,
+          paidDOs: paidDOs.map(doItem => ({
+            doId: doItem._id,
+            loadNo: doItem?.customers?.[0]?.loadNo || 'N/A',
+            billTo: doItem?.customers?.[0]?.billTo || doItem?.customerName || 'N/A',
+            billPaid: doItem?.paymentStatus?.status === 'paid',
+            carrierPaid: doItem?.carrierPaymentStatus?.status === 'paid',
+            carrierTotalPaid: doItem?.carrierPaymentStatus?.totalPaidAmount || 0,
+            carrierTotal: doItem?.carrier?.totalCarrierFees || 0
+          }))
+        });
+      }
+      
+      setAcceptedRows(salesVerifiedDOs);
       if (payload.pagination) {
         setAcceptedPagination(payload.pagination);
       } else {
@@ -2044,6 +2100,40 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setPaymentModalOpen(true);
   };
 
+  const openShortPayModal = (row) => {
+    setShortPayData(row);
+    const totals = computeTotals(row);
+    const carrierPaymentStatus = row?.carrierPaymentStatus || {};
+    const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
+    const remaining = totals.carrierTotal - totalPaid;
+    
+    setShortPayForm({
+      paymentAmount: '',
+      paymentMethod: '',
+      paymentReference: '',
+      paymentNotes: '',
+      carrierPaymentProof: null
+    });
+    setShortPayModalOpen(true);
+  };
+
+  // Helper function to emit payment notification via BroadcastChannel
+  const emitPaymentNotification = (notificationData) => {
+    try {
+      if ('BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('payment_notifications');
+        channel.postMessage({
+          type: 'PAYMENT_NOTIFICATION',
+          notification: notificationData
+        });
+        channel.close();
+        console.log('📢 Payment notification broadcasted:', notificationData);
+      }
+    } catch (error) {
+      console.warn('Failed to broadcast payment notification:', error);
+    }
+  };
+
   const handlePaymentSubmit = async () => {
     if (!paymentData) return;
 
@@ -2069,9 +2159,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       if (paymentForm.paymentNotes) {
         formData.append('paymentNotes', paymentForm.paymentNotes);
       }
-      formData.append('paymentProof', paymentForm.paymentProof);
+      // Use carrierPaymentProof as per API documentation
+      formData.append('carrierPaymentProof', paymentForm.paymentProof);
 
-      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/mark-as-paid`;
+      // Use mark-carrier-as-paid endpoint as per API documentation
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/mark-carrier-as-paid`;
       const resp = await axios.post(url, formData, {
         headers: {
           ...headers,
@@ -2080,18 +2172,232 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       });
 
       if (resp?.data?.success) {
-        setToast({ open: true, severity: "success", msg: "DO marked as paid successfully!" });
+        const isFullyPaid = resp?.data?.data?.carrierPaymentStatus?.status === 'paid';
+        const message = resp?.data?.message || (isFullyPaid ? "Carrier payment marked as paid successfully!" : "Payment recorded successfully!");
+        setToast({ open: true, severity: "success", msg: message });
         setPaymentModalOpen(false);
+        
+        // Emit notification via BroadcastChannel for cross-tab communication
+        const notificationData = {
+          id: `payment_${paymentData._id}_${Date.now()}`,
+          type: 'carrier_payment',
+          doId: paymentData._id,
+          loadNo: paymentData.loadNo || paymentData.loadNumber || 'N/A',
+          paymentAmount: resp?.data?.data?.carrierPaymentStatus?.totalPaidAmount || paymentData.carrierTotal || '0.00',
+          paymentMethod: paymentForm.paymentMethod,
+          paymentReference: paymentForm.paymentReference || null,
+          markedBy: {
+            empId: empId,
+            employeeName: sessionStorage.getItem('employeeName') || localStorage.getItem('employeeName') || 'Finance Employee'
+          },
+          createdAt: new Date().toISOString(),
+          carrierName: paymentData.carrierName || paymentData.carrier?.name || null
+        };
+        emitPaymentNotification(notificationData);
+        
         // Refresh the data
         fetchAccepted();
       } else {
-        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark as paid" });
+        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark carrier as paid" });
       }
     } catch (error) {
       const errorMsg = error?.response?.data?.message || error?.message || "Failed to mark as paid";
       setToast({ open: true, severity: "error", msg: errorMsg });
     } finally {
       setPaymentLoading(false);
+    }
+  };
+
+  const handleShortPaySubmit = async () => {
+    if (!shortPayData) return;
+
+    // Validation
+    if (!shortPayForm.paymentAmount || parseFloat(shortPayForm.paymentAmount) <= 0) {
+      setToast({ open: true, severity: "error", msg: "Please enter a valid payment amount" });
+      return;
+    }
+    if (!shortPayForm.paymentMethod) {
+      setToast({ open: true, severity: "error", msg: "Please select a payment method" });
+      return;
+    }
+    if (!shortPayForm.carrierPaymentProof) {
+      setToast({ open: true, severity: "error", msg: "Please upload payment proof document" });
+      return;
+    }
+
+    const totals = computeTotals(shortPayData);
+    const carrierPaymentStatus = shortPayData?.carrierPaymentStatus || {};
+    const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
+    const remaining = totals.carrierTotal - totalPaid;
+    const paymentAmount = parseFloat(shortPayForm.paymentAmount);
+
+    // Allow small rounding differences (0.01 tolerance)
+    if (paymentAmount > remaining + 0.01) {
+      setToast({ 
+        open: true, 
+        severity: "error", 
+        msg: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds remaining amount ($${remaining.toFixed(2)})` 
+      });
+      return;
+    }
+
+    setShortPayLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('doId', shortPayData._id);
+      formData.append('accountantEmpId', empId);
+      formData.append('paymentAmount', paymentAmount);
+      formData.append('paymentMethod', shortPayForm.paymentMethod);
+      if (shortPayForm.paymentReference) {
+        formData.append('paymentReference', shortPayForm.paymentReference);
+      }
+      if (shortPayForm.paymentNotes) {
+        formData.append('paymentNotes', shortPayForm.paymentNotes);
+      }
+      formData.append('carrierPaymentProof', shortPayForm.carrierPaymentProof);
+
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/short-pay-carrier`;
+      const resp = await axios.post(url, formData, {
+        headers: {
+          ...headers,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (resp?.data?.success) {
+        const isFullyPaid = resp?.data?.data?.isFullyPaid;
+        const responseData = resp?.data?.data || {};
+        const carrierPaymentStatus = responseData.carrierPaymentStatus || {};
+        
+        if (isFullyPaid) {
+          setToast({ open: true, severity: "success", msg: "Carrier payment fully paid through short payments!" });
+        } else {
+          setToast({ open: true, severity: "success", msg: `Short payment of $${paymentAmount.toFixed(2)} recorded successfully!` });
+        }
+        setShortPayModalOpen(false);
+        
+        // Emit notification via BroadcastChannel for cross-tab communication
+        const totals = computeTotals(shortPayData);
+        const notificationData = {
+          id: `short_payment_${shortPayData._id}_${Date.now()}`,
+          type: isFullyPaid ? 'short_payment_completed' : 'short_payment',
+          doId: shortPayData._id,
+          loadNo: shortPayData.loadNo || shortPayData.loadNumber || 'N/A',
+          paymentAmount: paymentAmount.toFixed(2),
+          paymentMethod: shortPayForm.paymentMethod,
+          paymentReference: shortPayForm.paymentReference || null,
+          markedBy: {
+            empId: empId,
+            employeeName: sessionStorage.getItem('employeeName') || localStorage.getItem('employeeName') || 'Finance Employee'
+          },
+          createdAt: new Date().toISOString(),
+          carrierName: shortPayData.carrierName || shortPayData.carrier?.name || null,
+          totalCarrierFees: totals.carrierTotal?.toFixed(2) || '0.00',
+          totalPaid: carrierPaymentStatus.totalPaidAmount?.toFixed(2) || paymentAmount.toFixed(2),
+          remainingAmount: (totals.carrierTotal - (carrierPaymentStatus.totalPaidAmount || paymentAmount))?.toFixed(2) || '0.00',
+          numberOfShortPayments: carrierPaymentStatus.shortPayments?.length || 1
+        };
+        emitPaymentNotification(notificationData);
+        
+        // Refresh the data
+        fetchAccepted();
+      } else {
+        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to record short payment" });
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.message || error?.message || "Failed to record short payment";
+      setToast({ open: true, severity: "error", msg: errorMsg });
+    } finally {
+      setShortPayLoading(false);
+    }
+  };
+
+  const handleBulkPaymentSubmit = async () => {
+    // Use the stored DO IDs from when modal was opened, or fallback to current selectedDOs
+    const doIdsToProcess = bulkPaymentDOIds.length > 0 ? bulkPaymentDOIds : Array.from(selectedDOs);
+    
+    if (doIdsToProcess.length === 0) {
+      setToast({ open: true, severity: "error", msg: "Please select at least one DO to mark as paid" });
+      return;
+    }
+
+    // Validation
+    if (!bulkPaymentForm.paymentMethod) {
+      setToast({ open: true, severity: "error", msg: "Please select a payment method" });
+      return;
+    }
+    if (!bulkPaymentForm.paymentProof) {
+      setToast({ open: true, severity: "error", msg: "Please upload payment proof document" });
+      return;
+    }
+
+    setBulkPaymentLoading(true);
+    try {
+      const formData = new FormData();
+      // Ensure we have valid DO IDs
+      const validDoIds = doIdsToProcess.filter(id => id && typeof id === 'string' && id.trim() !== '');
+      
+      if (validDoIds.length === 0) {
+        setToast({ open: true, severity: "error", msg: "No valid DO IDs found. Please select DOs again." });
+        setBulkPaymentLoading(false);
+        return;
+      }
+      
+      formData.append('doIds', JSON.stringify(validDoIds));
+      formData.append('accountantEmpId', empId);
+      formData.append('paymentMethod', bulkPaymentForm.paymentMethod);
+      if (bulkPaymentForm.paymentReference) {
+        formData.append('paymentReference', bulkPaymentForm.paymentReference);
+      }
+      if (bulkPaymentForm.paymentNotes) {
+        formData.append('paymentNotes', bulkPaymentForm.paymentNotes);
+      }
+      formData.append('paymentProof', bulkPaymentForm.paymentProof);
+
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/bulk-mark-as-paid`;
+      const resp = await axios.post(url, formData, {
+        headers: {
+          ...headers,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (resp?.data?.success) {
+        const data = resp?.data?.data || {};
+        const successfullyMarked = data.successfullyMarked || 0;
+        const alreadyPaid = data.alreadyPaid || 0;
+        const invalidStatus = data.invalidStatus || 0;
+        
+        let message = `Successfully marked ${successfullyMarked} DO(s) as paid`;
+        if (alreadyPaid > 0) {
+          message += `. ${alreadyPaid} DO(s) were already paid`;
+        }
+        if (invalidStatus > 0) {
+          message += `. ${invalidStatus} DO(s) had invalid status`;
+        }
+        
+        setToast({ open: true, severity: "success", msg: message });
+        setBulkPaymentModalOpen(false);
+        setSelectedDOs(new Set());
+        setBulkPaymentDOIds([]);
+        setBulkPaymentForm({
+          paymentMethod: '',
+          paymentReference: '',
+          paymentNotes: '',
+          paymentProof: null
+        });
+        // Refresh the data
+        fetchAccepted(acceptedPage);
+      } else {
+        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark DOs as paid" });
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.message || error?.message || "Failed to mark DOs as paid";
+      setToast({ open: true, severity: "error", msg: errorMsg });
+      console.error('Bulk payment error:', error);
+      console.error('DO IDs being sent:', doIdsToProcess);
+    } finally {
+      setBulkPaymentLoading(false);
     }
   };
 
@@ -2123,6 +2429,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acceptedPage]);
 
+  // Clean up selected DOs when acceptedRows change (remove selections for DOs that are now paid or no longer exist)
+  useEffect(() => {
+    if (acceptedRows.length > 0) {
+      const validDOIds = new Set(acceptedRows
+        .filter(r => r?.paymentStatus?.status !== 'paid')
+        .map(r => r._id));
+      setSelectedDOs(prev => new Set([...Array.from(prev)].filter(id => validDOIds.has(id))));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acceptedRows]);
+
   useEffect(() => {
     fetchRejected(rejectedPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2131,7 +2448,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // tab change pe processed search reset
   useEffect(() => {
     if (activeTab === 1) setProcessedSearch("");
-    if (activeTab === 2) setAcceptedSearch("");
+    if (activeTab === 2) {
+      setAcceptedSearch("");
+      setSelectedDOs(new Set()); // Clear selections when switching to this tab
+    }
     if (activeTab === 3) setRejectedSearch("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -2170,37 +2490,87 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       return status === 'approved';
     });
     
-    // Second filter: Apply search if provided
-    if (!processedSearch.trim()) return filtered;
-    const q = processedSearch.toLowerCase();
-    return filtered.filter((r) => {
-      const cust = r?.customers?.[0] || {};
-      return (
-        (cust?.loadNo || "").toLowerCase().includes(q) ||
-        (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
-        (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
-        (r?.shipper?.name || "").toLowerCase().includes(q) ||
-        (r?._id || "").toLowerCase().includes(q)
-      );
-    });
-  }, [processedRows, processedSearch]);
+    // Carrier filter
+    if (processedCarrierFilter) {
+      filtered = filtered.filter((r) => {
+        const carrierName = (r?.carrier?.carrierName || "").toLowerCase();
+        return carrierName === processedCarrierFilter.toLowerCase();
+      });
+    }
+    
+    // Search filter
+    if (processedSearch.trim()) {
+      const q = processedSearch.toLowerCase();
+      filtered = filtered.filter((r) => {
+        const cust = r?.customers?.[0] || {};
+        return (
+          (cust?.loadNo || "").toLowerCase().includes(q) ||
+          (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
+          (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
+          (r?.shipper?.name || "").toLowerCase().includes(q) ||
+          (r?._id || "").toLowerCase().includes(q)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [processedRows, processedSearch, processedCarrierFilter]);
 
   // filters (tab 2 - Approved By Sales)
   const acceptedFiltered = useMemo(() => {
-    if (!acceptedSearch.trim()) return acceptedRows;
-    const q = acceptedSearch.toLowerCase();
-    return acceptedRows.filter((r) => {
-      const cust = r?.customers?.[0] || {};
-      return (
-        (cust?.loadNo || "").toLowerCase().includes(q) ||
-        (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
-        (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
-        (r?.shipper?.name || "").toLowerCase().includes(q) ||
-        (r?._id || "").toLowerCase().includes(q) ||
-        (r?.loadReference?.shipmentNumber || "").toLowerCase().includes(q)
-      );
-    });
-  }, [acceptedRows, acceptedSearch]);
+    let filtered = acceptedRows;
+    
+    // Payment filter (paid/unpaid)
+    if (acceptedPaymentFilter === "paid") {
+      filtered = filtered.filter((r) => {
+        const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+        return carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+      });
+    } else if (acceptedPaymentFilter === "unpaid") {
+      filtered = filtered.filter((r) => {
+        const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+        return !(carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining);
+      });
+    }
+    
+    // Carrier filter
+    if (acceptedCarrierFilter) {
+      filtered = filtered.filter((r) => {
+        const carrierName = (r?.carrier?.carrierName || "").toLowerCase();
+        return carrierName === acceptedCarrierFilter.toLowerCase();
+      });
+    }
+    
+    // Search filter
+    if (acceptedSearch.trim()) {
+      const q = acceptedSearch.toLowerCase();
+      filtered = filtered.filter((r) => {
+        const cust = r?.customers?.[0] || {};
+        return (
+          (cust?.loadNo || "").toLowerCase().includes(q) ||
+          (cust?.billTo || r?.customerName || "").toLowerCase().includes(q) ||
+          (r?.carrier?.carrierName || "").toLowerCase().includes(q) ||
+          (r?.shipper?.name || "").toLowerCase().includes(q) ||
+          (r?._id || "").toLowerCase().includes(q) ||
+          (r?.loadReference?.shipmentNumber || "").toLowerCase().includes(q)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [acceptedRows, acceptedSearch, acceptedCarrierFilter, acceptedPaymentFilter]);
 
   // filters (tab 2)
   const rejectedFiltered = useMemo(() => {
@@ -2278,6 +2648,107 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     if (status === 'rejected') return 'bg-red-100 text-red-700';
     if (status === 'pending') return 'bg-yellow-100 text-yellow-700';
     return 'bg-blue-100 text-blue-700';
+  };
+
+  // Get unique carriers from data
+  const getUniqueCarriers = (rows) => {
+    const carriers = new Set();
+    rows.forEach((r) => {
+      const carrierName = r?.carrier?.carrierName;
+      if (carrierName && carrierName.trim()) {
+        carriers.add(carrierName);
+      }
+    });
+    return Array.from(carriers).sort();
+  };
+
+  // Export to CSV function
+  const exportToCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      setToast({ open: true, severity: "error", msg: "No data to export" });
+      return;
+    }
+
+    // Define headers based on tab
+    let headers = [];
+    let rows = [];
+
+    if (activeTab === 1) {
+      // Accountant Approved tab
+      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Status", "Approved By", "Approved At"];
+      rows = data.map((row) => {
+        const cust = row?.customers?.[0] || {};
+        const totals = computeTotals(row);
+        const apprBy = row?.accountantApproval?.approvedBy?.employeeName 
+          || row?.accountantApproval?.resubmittedBy?.employeeName 
+          || row?.accountantApproval?.assignedTo?.employeeName
+          || row?.accountantApproval?.approvedBy?.empId 
+          || row?.accountantApproval?.resubmittedBy?.empId
+          || row?.accountantApproval?.assignedTo?.empId
+          || "—";
+        const apprAt = row?.accountantApproval?.approvedAt || row?.updatedAt;
+        return [
+          row?._id || "",
+          cust?.loadNo || "",
+          cust?.billTo || row?.customerName || "",
+          row?.carrier?.carrierName || "",
+          `$${fmtMoney(totals.billTotal)}`,
+          `$${fmtMoney(totals.carrierTotal)}`,
+          row?.accountantApproval?.status || "pending",
+          apprBy,
+          fmtDateTime(apprAt)
+        ];
+      });
+    } else if (activeTab === 2) {
+      // Approved By Sales tab
+      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Payment Status", "Approved By", "Approved At"];
+      rows = data.map((row) => {
+        const cust = row?.customers?.[0] || {};
+        const totals = computeTotals(row);
+        const apprBy = row?.salesApproval?.approvedBy?.employeeName 
+          || row?.salesApproval?.approvedBy?.empId
+          || "—";
+        const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
+        const carrierPaymentStatus = row?.carrierPaymentStatus || {};
+        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+        const carrierTotal = parseFloat(totals.carrierTotal || 0);
+        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+        const carrierIsPaid = carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+        return [
+          row?._id || "",
+          cust?.loadNo || "",
+          cust?.billTo || row?.customerName || "",
+          row?.carrier?.carrierName || "",
+          `$${fmtMoney(totals.billTotal)}`,
+          `$${fmtMoney(totals.carrierTotal)}`,
+          carrierIsPaid ? "Paid" : "Unpaid/Partial",
+          apprBy,
+          fmtDateTime(apprAt)
+        ];
+      });
+    }
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setToast({ open: true, severity: "success", msg: "Data exported successfully!" });
   };
 
   return (
@@ -2556,7 +3027,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             {/* Search and Stats */}
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-6">
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <button
+                  onClick={() => {
+                    setProcessedCarrierFilter("");
+                    setProcessedSearch("");
+                  }}
+                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
+                    processedStatusFilter === "all" ? "ring-2 ring-green-500" : "hover:shadow-2xl"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
                       <CheckCircle className="text-green-600" size={20} />
@@ -2566,18 +3045,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <p className="text-xl font-bold text-gray-800">{processedRows.length}</p>
                     </div>
                   </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <FileText className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Filtered</p>
-                      <p className="text-xl font-bold text-blue-600">{processedFiltered.length}</p>
-                    </div>
-                  </div>
-                </div>
+                </button>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
@@ -2598,6 +3066,59 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </button>
                   )}
                 </div>
+                <Autocomplete
+                  value={processedCarrierFilter || null}
+                  onChange={(event, newValue) => {
+                    setProcessedCarrierFilter(newValue || "");
+                  }}
+                  options={["", ...getUniqueCarriers(processedRows)]}
+                  getOptionLabel={(option) => option === "" ? "All Carriers" : option}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Search carrier..."
+                      size="small"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+                            {params.InputProps.startAdornment}
+                          </>
+                        ),
+                      }}
+                      sx={{
+                        width: 220,
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: '8px',
+                          backgroundColor: 'white',
+                        },
+                        '& .MuiOutlinedInput-input': {
+                          padding: '8px 14px',
+                        }
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} sx={{ py: 1 }}>
+                      {option === "" ? "All Carriers" : option}
+                    </Box>
+                  )}
+                  sx={{ 
+                    width: 220,
+                    '& .MuiAutocomplete-paper': {
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => exportToCSV(processedFiltered, `accountant-approved-${new Date().toISOString().split('T')[0]}.csv`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
+                >
+                  <Download size={18} />
+                  <span>Export CSV</span>
+                </button>
                 <button
                   onClick={() => fetchProcessed(processedPage)}
                   disabled={processedLoading}
@@ -2770,7 +3291,16 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             {/* Search and Stats */}
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-6">
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <button
+                  onClick={() => {
+                    setAcceptedPaymentFilter("all");
+                    setAcceptedCarrierFilter("");
+                    setAcceptedSearch("");
+                  }}
+                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
+                    acceptedPaymentFilter === "all" ? "ring-2 ring-blue-500" : "hover:shadow-2xl"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                       <CheckCircle className="text-blue-600" size={20} />
@@ -2780,18 +3310,69 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <p className="text-xl font-bold text-gray-800">{acceptedRows.length}</p>
                     </div>
                   </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                </button>
+                <button
+                  onClick={() => {
+                    setAcceptedPaymentFilter("paid");
+                    setAcceptedCarrierFilter("");
+                    setAcceptedSearch("");
+                  }}
+                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
+                    acceptedPaymentFilter === "paid" ? "ring-2 ring-green-500" : "hover:shadow-2xl"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <FileText className="text-blue-600" size={20} />
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                      <CheckCircle className="text-green-600" size={20} />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Filtered</p>
-                      <p className="text-xl font-bold text-blue-600">{acceptedFiltered.length}</p>
+                      <p className="text-sm text-gray-600">Paid</p>
+                      <p className="text-xl font-bold text-green-600">
+                        {acceptedRows.filter(r => {
+                          const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+                          const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+                          const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+                          const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+                          const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+                          const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+                          const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+                          return carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+                        }).length}
+                      </p>
                     </div>
                   </div>
-                </div>
+                </button>
+                <button
+                  onClick={() => {
+                    setAcceptedPaymentFilter("unpaid");
+                    setAcceptedCarrierFilter("");
+                    setAcceptedSearch("");
+                  }}
+                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
+                    acceptedPaymentFilter === "unpaid" ? "ring-2 ring-orange-500" : "hover:shadow-2xl"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                      <Clock className="text-orange-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Unpaid/Partial</p>
+                      <p className="text-xl font-bold text-orange-600">
+                        {acceptedRows.filter(r => {
+                          const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+                          const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+                          const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+                          const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+                          const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+                          const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+                          const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+                          return !(carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining);
+                        }).length}
+                      </p>
+                    </div>
+                  </div>
+                </button>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
@@ -2812,6 +3393,79 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </button>
                   )}
                 </div>
+                <Autocomplete
+                  value={acceptedCarrierFilter || null}
+                  onChange={(event, newValue) => {
+                    setAcceptedCarrierFilter(newValue || "");
+                  }}
+                  options={["", ...getUniqueCarriers(acceptedRows)]}
+                  getOptionLabel={(option) => option === "" ? "All Carriers" : option}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Search carrier..."
+                      size="small"
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+                            {params.InputProps.startAdornment}
+                          </>
+                        ),
+                      }}
+                      sx={{
+                        width: 220,
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: '8px',
+                          backgroundColor: 'white',
+                        },
+                        '& .MuiOutlinedInput-input': {
+                          padding: '8px 14px',
+                        }
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} sx={{ py: 1 }}>
+                      {option === "" ? "All Carriers" : option}
+                    </Box>
+                  )}
+                  sx={{ 
+                    width: 220,
+                    '& .MuiAutocomplete-paper': {
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => exportToCSV(acceptedFiltered, `approved-by-sales-${new Date().toISOString().split('T')[0]}.csv`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
+                >
+                  <Download size={18} />
+                  <span>Export CSV</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedDOs.size === 0) {
+                      setToast({ open: true, severity: "error", msg: "Please select at least one DO to mark as paid" });
+                      return;
+                    }
+                    // Store the selected DO IDs when opening modal
+                    setBulkPaymentDOIds(Array.from(selectedDOs));
+                    setBulkPaymentModalOpen(true);
+                  }}
+                  disabled={acceptedLoading || selectedDOs.size === 0}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 shadow-lg ${
+                    acceptedLoading || selectedDOs.size === 0
+                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60'
+                      : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 hover:shadow-xl'
+                  }`}
+                >
+                  <DollarSign size={18} />
+                  <span>Bulk Pay ({selectedDOs.size})</span>
+                </button>
                 <button
                   onClick={() => fetchAccepted(acceptedPage)}
                   disabled={acceptedLoading}
@@ -2847,6 +3501,22 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     <table className="w-full">
                       <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                         <tr>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-12">
+                            <Checkbox
+                              checked={acceptedFiltered.length > 0 && acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').every(r => selectedDOs.has(r._id))}
+                              indeterminate={acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').some(r => selectedDOs.has(r._id)) && !acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').every(r => selectedDOs.has(r._id))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const unpaidDOs = acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').map(r => r._id);
+                                  setSelectedDOs(new Set([...selectedDOs, ...unpaidDOs]));
+                                } else {
+                                  const unpaidDOIds = acceptedFiltered.filter(r => r?.paymentStatus?.status !== 'paid').map(r => r._id);
+                                  setSelectedDOs(new Set([...Array.from(selectedDOs)].filter(id => !unpaidDOIds.includes(id))));
+                                }
+                              }}
+                              size="small"
+                            />
+                          </th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
@@ -2867,9 +3537,60 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             || row?.salesApproval?.approvedBy?.empId
                             || "—";
                           const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
+                          // Check both paymentStatus (for bill payment) and carrierPaymentStatus (for carrier payment)
                           const isPaid = row?.paymentStatus?.status === 'paid';
+                          const carrierPaymentStatus = row?.carrierPaymentStatus || {};
+                          // More robust check for paid status - check status and also if fully paid through short payments
+                          const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+                          const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+                          const carrierTotal = parseFloat(totals.carrierTotal || 0);
+                          
+                          // Multiple checks for paid status:
+                          // 1. Status is explicitly 'paid'
+                          // 2. Total paid equals or exceeds carrier total (with tolerance)
+                          // 3. Check if remaining amount is 0 or negative
+                          const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+                          const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+                          const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+                          
+                          const carrierIsPaid = carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+                          const carrierIsPartiallyPaid = carrierStatus === 'pending' && carrierTotalPaid > 0 && carrierTotalPaid < carrierTotal - 0.01 && remainingAmount > 0.01;
+                          const carrierRemaining = Math.max(0, carrierTotal - carrierTotalPaid);
+                          const isSelected = selectedDOs.has(row._id);
+                          
+                          // Debug logging for all DOs to understand data structure
+                          if (!carrierIsPaid && carrierTotal > 0) {
+                            console.log('🔍 DO Payment Status Check:', {
+                              doId: row._id?.substring(0, 10) + '...',
+                              loadNo: cust?.loadNo,
+                              carrierStatus: carrierStatus || 'undefined',
+                              carrierTotalPaid: carrierTotalPaid,
+                              carrierTotal: carrierTotal,
+                              remainingAmount: remainingAmount,
+                              isFullyPaidByAmount: isFullyPaidByAmount,
+                              isFullyPaidByRemaining: isFullyPaidByRemaining,
+                              carrierIsPaid: carrierIsPaid,
+                              carrierPaymentStatus: carrierPaymentStatus
+                            });
+                          }
                           return (
-                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} ${isSelected ? 'bg-blue-50' : ''}`}>
+                              <td className="py-2 px-3 text-center">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    const newSelected = new Set(selectedDOs);
+                                    if (e.target.checked) {
+                                      newSelected.add(row._id);
+                                    } else {
+                                      newSelected.delete(row._id);
+                                    }
+                                    setSelectedDOs(newSelected);
+                                  }}
+                                  disabled={isPaid}
+                                  size="small"
+                                />
+                              </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
                               </td>
@@ -2906,20 +3627,51 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 </div>
                               </td>
                               <td className="py-2 px-3">
-                                <div className="flex items-center justify-center">
-                                  {isPaid ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  {carrierIsPaid ? (
                                     <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700">
                                       <CheckCircle size={14} />
                                       Paid
                                     </span>
+                                  ) : carrierIsPartiallyPaid ? (
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-orange-100 text-orange-700">
+                                        Partial: ${fmtMoney(carrierTotalPaid)}/${fmtMoney(totals.carrierTotal)}
+                                      </span>
+                                      <div className="flex gap-1">
+                                        <button
+                                          onClick={() => openShortPayModal(row)}
+                                          className="px-2 py-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-semibold rounded hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
+                                          title="Short Pay"
+                                        >
+                                          Short Pay
+                                        </button>
+                                        <button
+                                          onClick={() => openPaymentModal(row)}
+                                          className="px-2 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs font-semibold rounded hover:from-green-600 hover:to-green-700 transition-all shadow-sm"
+                                          title="Mark as Paid"
+                                        >
+                                          Pay
+                                        </button>
+                                      </div>
+                                    </div>
                                   ) : (
-                                    <button
-                                      onClick={() => openPaymentModal(row)}
-                                      className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                                      title="Mark as Paid"
-                                    >
-                                      Pay
-                                    </button>
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={() => openShortPayModal(row)}
+                                        className="px-3 py-1.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-semibold rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                                        title="Short Pay (Partial Payment)"
+                                      >
+                                        Short Pay
+                                      </button>
+                                      <button
+                                        onClick={() => openPaymentModal(row)}
+                                        className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                                        title="Mark as Paid"
+                                      >
+                                        Pay
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                               </td>
@@ -3830,6 +4582,161 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   </div>
                 )}
 
+                {/* Carrier Payment Information */}
+                {(() => {
+                  const carrierPaymentStatus = selected?.carrierPaymentStatus || {};
+                  const totals = computeTotals(selected);
+                  const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
+                  const remaining = totals.carrierTotal - totalPaid;
+                  const shortPayments = carrierPaymentStatus?.shortPayments || [];
+                  const isFullyPaid = carrierPaymentStatus?.status === 'paid';
+                  const isPartiallyPaid = carrierPaymentStatus?.status === 'pending' && totalPaid > 0;
+
+                  if (!isFullyPaid && !isPartiallyPaid && totalPaid === 0) {
+                    return null; // Don't show if no payments made
+                  }
+
+                  return (
+                    <div className={`bg-gradient-to-br rounded-2xl p-6 border ${
+                      isFullyPaid 
+                        ? 'from-green-50 to-emerald-50 border-green-200' 
+                        : 'from-orange-50 to-amber-50 border-orange-200'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <DollarSign className={isFullyPaid ? "text-green-600" : "text-orange-600"} size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">Carrier Payment Information</h3>
+                        <span className={`ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
+                          isFullyPaid 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {isFullyPaid ? (
+                            <>
+                              <CheckCircle size={14} />
+                              Paid
+                            </>
+                          ) : (
+                            <>
+                              <Clock size={14} />
+                              Partial
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 mb-4">
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Total Carrier Fees</p>
+                            <p className="text-lg font-bold text-gray-800">${fmtMoney(totals.carrierTotal)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Total Paid</p>
+                            <p className={`text-lg font-bold ${isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                              ${fmtMoney(totalPaid)}
+                            </p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600 mb-1">Remaining Amount</p>
+                            <p className={`text-xl font-bold ${isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                              ${fmtMoney(remaining)}
+                            </p>
+                          </div>
+                        </div>
+                        {isFullyPaid && carrierPaymentStatus?.paidAt && (
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Fully Paid At</p>
+                            <p className="font-medium text-gray-800">
+                              {fmtDateTime(carrierPaymentStatus.paidAt)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Payment History */}
+                      {shortPayments && shortPayments.length > 0 && (
+                        <div className="bg-white rounded-xl p-4 border border-gray-200">
+                          <h4 className="text-md font-bold text-gray-800 mb-3">Payment History</h4>
+                          <div className="space-y-3">
+                            {shortPayments.map((payment, index) => (
+                              <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <p className="font-semibold text-gray-800">Payment #{index + 1}</p>
+                                    <p className="text-sm text-gray-600">
+                                      {fmtDateTime(payment.paidAt)}
+                                    </p>
+                                  </div>
+                                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm font-semibold">
+                                    ${fmtMoney(payment.amount)}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                  <div>
+                                    <p className="text-gray-600">Method</p>
+                                    <p className="font-medium text-gray-800 capitalize">
+                                      {payment.paymentMethod?.replace('_', ' ') || 'N/A'}
+                                    </p>
+                                  </div>
+                                  {payment.paymentReference && (
+                                    <div>
+                                      <p className="text-gray-600">Reference</p>
+                                      <p className="font-medium text-gray-800">{payment.paymentReference}</p>
+                                    </div>
+                                  )}
+                                  {payment.paidBy && (
+                                    <div className="col-span-2">
+                                      <p className="text-gray-600">Paid By</p>
+                                      <p className="font-medium text-gray-800">
+                                        {payment.paidBy?.employeeName || payment.paidBy?.empId || 'N/A'}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {payment.paymentNotes && (
+                                    <div className="col-span-2">
+                                      <p className="text-gray-600">Notes</p>
+                                      <p className="font-medium text-gray-800 bg-white p-2 rounded border border-gray-200">
+                                        {payment.paymentNotes}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {payment.paymentProof?.fileUrl && (
+                                    <div className="col-span-2">
+                                      <p className="text-gray-600 mb-1">Proof</p>
+                                      <a
+                                        href={payment.paymentProof.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                      >
+                                        {isImageUrl(payment.paymentProof.fileUrl) ? (
+                                          <>
+                                            <ImageIcon className="text-blue-600" style={{ fontSize: 20 }} />
+                                            <span className="text-sm">{payment.paymentProof.fileName || 'View Image'}</span>
+                                          </>
+                                        ) : isPdfUrl(payment.paymentProof.fileUrl) ? (
+                                          <>
+                                            <PictureAsPdfIcon className="text-red-600" style={{ fontSize: 20 }} />
+                                            <span className="text-sm">{payment.paymentProof.fileName || 'View PDF'}</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <DescriptionIcon className="text-gray-600" style={{ fontSize: 20 }} />
+                                            <span className="text-sm">{payment.paymentProof.fileName || 'View File'}</span>
+                                          </>
+                                        )}
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Uploaded Files */}
                 <Card variant="outlined">
                   <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#0ea5e9", 0.05) }}>
@@ -4242,6 +5149,560 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Bulk Payment Modal */}
+      {bulkPaymentModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setBulkPaymentModalOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <DollarSign size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Bulk Mark as Paid</h2>
+                      <p className="text-white/80 text-sm">{bulkPaymentDOIds.length || selectedDOs.size} DO(s) selected</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setBulkPaymentModalOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                <div className="space-y-4">
+                  {/* Selected DOs Info */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <p className="text-sm font-semibold text-blue-800 mb-2">Selected DOs:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(bulkPaymentDOIds.length > 0 ? bulkPaymentDOIds : Array.from(selectedDOs)).slice(0, 10).map((doId) => (
+                        <span key={doId} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded font-mono">
+                          {shortId(doId)}
+                        </span>
+                      ))}
+                      {(bulkPaymentDOIds.length || selectedDOs.size) > 10 && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                          +{(bulkPaymentDOIds.length || selectedDOs.size) - 10} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Payment Method */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Method <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={bulkPaymentForm.paymentMethod}
+                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentMethod: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                      required
+                    >
+                      <option value="">Select Payment Method</option>
+                      <option value="cash">Cash</option>
+                      <option value="check">Check</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="online">Online</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  {/* Payment Reference */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Reference (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={bulkPaymentForm.paymentReference}
+                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentReference: e.target.value })}
+                      placeholder="Transaction ID, Check Number, etc."
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Payment Notes */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Notes (Optional)
+                    </label>
+                    <textarea
+                      value={bulkPaymentForm.paymentNotes}
+                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentNotes: e.target.value })}
+                      placeholder="Additional notes about the payment"
+                      rows={3}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                    />
+                  </div>
+
+                  {/* Payment Proof Upload */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Payment Proof <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            if (file.size > 10 * 1024 * 1024) {
+                              setToast({ open: true, severity: "error", msg: "File size must be less than 10MB" });
+                              return;
+                            }
+                            setBulkPaymentForm({ ...bulkPaymentForm, paymentProof: file });
+                          }
+                        }}
+                        className="hidden"
+                        id="bulk-payment-proof-upload"
+                        required
+                      />
+                      <label
+                        htmlFor="bulk-payment-proof-upload"
+                        className="cursor-pointer flex flex-col items-center justify-center"
+                      >
+                        {bulkPaymentForm.paymentProof ? (
+                          <div className="text-center">
+                            <CheckCircle size={32} className="text-green-500 mx-auto mb-2" />
+                            <p className="text-sm font-medium text-gray-700">{bulkPaymentForm.paymentProof.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(bulkPaymentForm.paymentProof.size / 1024).toFixed(2)} KB
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBulkPaymentForm({ ...bulkPaymentForm, paymentProof: null });
+                                document.getElementById('bulk-payment-proof-upload').value = '';
+                              }}
+                              className="mt-2 text-sm text-red-500 hover:text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <AttachFileIcon className="text-gray-400 mb-2" style={{ fontSize: 40 }} />
+                            <p className="text-sm font-medium text-gray-700">Click to upload payment proof</p>
+                            <p className="text-xs text-gray-500 mt-1">PDF, JPG, PNG (Max 10MB)</p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => setBulkPaymentModalOpen(false)}
+                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                      disabled={bulkPaymentLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleBulkPaymentSubmit}
+                      disabled={bulkPaymentLoading || !bulkPaymentForm.paymentMethod || !bulkPaymentForm.paymentProof}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                    >
+                      {bulkPaymentLoading ? "Processing..." : `Mark ${bulkPaymentDOIds.length || selectedDOs.size} DO(s) as Paid`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Short Pay Modal */}
+      {shortPayModalOpen && shortPayData && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShortPayModalOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <DollarSign size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Short Pay Carrier</h2>
+                      <p className="text-white/80 text-sm">DO ID: {shortPayData?._id ? shortId(shortPayData._id) : 'N/A'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShortPayModalOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                {(() => {
+                  const totals = computeTotals(shortPayData);
+                  const carrierPaymentStatus = shortPayData?.carrierPaymentStatus || {};
+                  const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
+                  const remaining = totals.carrierTotal - totalPaid;
+                  
+                  return (
+                    <div className="space-y-4">
+                      {/* Payment Summary */}
+                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Total Carrier Fees</p>
+                            <p className="text-lg font-bold text-gray-800">${fmtMoney(totals.carrierTotal)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Already Paid</p>
+                            <p className="text-lg font-bold text-green-600">${fmtMoney(totalPaid)}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600 mb-1">Remaining Amount</p>
+                            <p className="text-xl font-bold text-orange-600">${fmtMoney(remaining)}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payment Amount */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Amount <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-bold text-lg">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            max={remaining}
+                            value={shortPayForm.paymentAmount}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '' || (parseFloat(value) > 0 && parseFloat(value) <= remaining)) {
+                                setShortPayForm({ ...shortPayForm, paymentAmount: value });
+                              } else if (parseFloat(value) > remaining) {
+                                setToast({ open: true, severity: "error", msg: `Amount cannot exceed remaining balance of $${fmtMoney(remaining)}` });
+                              }
+                            }}
+                            placeholder="0.00"
+                            className={`w-full pl-10 pr-4 py-3 text-lg font-semibold border-2 rounded-xl transition-all ${
+                              shortPayForm.paymentAmount && parseFloat(shortPayForm.paymentAmount) > remaining
+                                ? 'border-red-400 bg-red-50 focus:ring-red-500 focus:border-red-500'
+                                : 'border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+                            } outline-none`}
+                            required
+                          />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <p className="text-xs text-gray-500">
+                            Maximum: <span className="font-semibold text-orange-600">${fmtMoney(remaining)}</span>
+                          </p>
+                          {shortPayForm.paymentAmount && parseFloat(shortPayForm.paymentAmount) > 0 && (
+                            <p className="text-xs text-gray-500">
+                              Remaining after payment: <span className="font-semibold text-gray-700">
+                                ${fmtMoney(remaining - parseFloat(shortPayForm.paymentAmount || 0))}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                        {/* Quick Fill Buttons */}
+                        {remaining > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: remaining.toFixed(2) })}
+                              className="px-3 py-1.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-300"
+                            >
+                              Pay Full (${fmtMoney(remaining)})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: (remaining / 2).toFixed(2) })}
+                              className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                            >
+                              Pay Half (${fmtMoney(remaining / 2)})
+                            </button>
+                            {remaining >= 100 && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: '100.00' })}
+                                  className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                                >
+                                  $100
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: '500.00' })}
+                                  className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                                >
+                                  $500
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Payment Method */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Method <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={shortPayForm.paymentMethod}
+                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentMethod: e.target.value })}
+                          className={`w-full px-4 py-3 border-2 rounded-xl transition-all ${
+                            shortPayForm.paymentMethod
+                              ? 'border-green-300 bg-green-50 focus:ring-green-500 focus:border-green-500'
+                              : 'border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+                          } outline-none font-medium`}
+                          required
+                        >
+                          <option value="">Select Payment Method</option>
+                          <option value="cash">💵 Cash</option>
+                          <option value="check">📝 Check</option>
+                          <option value="bank_transfer">🏦 Bank Transfer</option>
+                          <option value="online">💻 Online Payment</option>
+                          <option value="other">📄 Other</option>
+                        </select>
+                        {shortPayForm.paymentMethod && (
+                          <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                            <CheckCircle size={12} />
+                            Payment method selected
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Payment Reference */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Reference <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={shortPayForm.paymentReference}
+                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentReference: e.target.value })}
+                          placeholder="e.g., TXN123456, Check #789, Wire Transfer ID"
+                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white hover:border-gray-400"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Helpful for tracking and reconciliation</p>
+                      </div>
+
+                      {/* Payment Notes */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Notes <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+                        </label>
+                        <textarea
+                          value={shortPayForm.paymentNotes}
+                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentNotes: e.target.value })}
+                          placeholder="Add any additional notes about this payment (e.g., reason for partial payment, special instructions, etc.)"
+                          rows={4}
+                          maxLength={500}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none resize-none transition-all bg-white hover:border-gray-400"
+                        />
+                        <div className="flex justify-between items-center mt-1">
+                          <p className="text-xs text-gray-500">Optional notes for internal records</p>
+                          <p className={`text-xs ${shortPayForm.paymentNotes?.length > 450 ? 'text-orange-600' : 'text-gray-400'}`}>
+                            {shortPayForm.paymentNotes?.length || 0}/500
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Payment Proof Upload */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Payment Proof <span className="text-red-500">*</span>
+                        </label>
+                        <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
+                          shortPayForm.carrierPaymentProof
+                            ? 'border-green-400 bg-green-50'
+                            : 'border-gray-300 bg-gray-50 hover:border-orange-400 hover:bg-orange-50'
+                        }`}>
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                if (file.size > 10 * 1024 * 1024) {
+                                  setToast({ open: true, severity: "error", msg: "File size must be less than 10MB" });
+                                  return;
+                                }
+                                setShortPayForm({ ...shortPayForm, carrierPaymentProof: file });
+                              }
+                            }}
+                            className="hidden"
+                            id="short-pay-proof-upload"
+                            required
+                          />
+                          <label
+                            htmlFor="short-pay-proof-upload"
+                            className="cursor-pointer flex flex-col items-center justify-center min-h-[120px]"
+                          >
+                            {shortPayForm.carrierPaymentProof ? (
+                              <div className="text-center w-full">
+                                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
+                                  <CheckCircle size={32} className="text-green-600" />
+                                </div>
+                                <p className="text-sm font-semibold text-gray-800 mb-1">{shortPayForm.carrierPaymentProof.name}</p>
+                                <p className="text-xs text-gray-600 mb-3">
+                                  {(shortPayForm.carrierPaymentProof.size / 1024).toFixed(2)} KB
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShortPayForm({ ...shortPayForm, carrierPaymentProof: null });
+                                    document.getElementById('short-pay-proof-upload').value = '';
+                                  }}
+                                  className="px-4 py-2 text-sm font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors border border-red-300"
+                                >
+                                  Remove File
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-200 rounded-full mb-3">
+                                  <AttachFileIcon className="text-gray-500" style={{ fontSize: 32 }} />
+                                </div>
+                                <p className="text-sm font-semibold text-gray-700 mb-1">Click to upload payment proof</p>
+                                <p className="text-xs text-gray-500 mb-2">PDF, JPG, PNG files supported</p>
+                                <p className="text-xs text-gray-400">Maximum file size: 10MB</p>
+                              </div>
+                            )}
+                          </label>
+                        </div>
+                        {!shortPayForm.carrierPaymentProof && (
+                          <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                            <Clock size={12} />
+                            Payment proof is required to complete the transaction
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Submit Button */}
+                      <div className="pt-6 border-t border-gray-200">
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => setShortPayModalOpen(false)}
+                            className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors border-2 border-gray-300"
+                            disabled={shortPayLoading}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleShortPaySubmit}
+                            disabled={(() => {
+                              const amount = parseFloat(shortPayForm.paymentAmount || 0);
+                              const isAmountValid = amount > 0 && amount <= remaining + 0.01; // Allow small rounding differences
+                              return shortPayLoading || 
+                                     !shortPayForm.paymentAmount || 
+                                     !shortPayForm.paymentMethod || 
+                                     !shortPayForm.carrierPaymentProof || 
+                                     !isAmountValid;
+                            })()}
+                            className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+                            title={(() => {
+                              if (shortPayLoading) return "Processing payment...";
+                              if (!shortPayForm.paymentAmount) return "Please enter payment amount";
+                              if (!shortPayForm.paymentMethod) return "Please select payment method";
+                              if (!shortPayForm.carrierPaymentProof) return "Please upload payment proof";
+                              const amount = parseFloat(shortPayForm.paymentAmount || 0);
+                              if (amount <= 0) return "Payment amount must be greater than 0";
+                              if (amount > remaining + 0.01) return `Amount cannot exceed remaining balance of $${fmtMoney(remaining)}`;
+                              return "Click to record short payment";
+                            })()}
+                          >
+                            {shortPayLoading ? (
+                              <span className="flex items-center justify-center gap-2">
+                                <RefreshCw size={18} className="animate-spin" />
+                                Processing...
+                              </span>
+                            ) : (
+                              <span className="flex items-center justify-center gap-2">
+                                <DollarSign size={18} />
+                                Record Short Payment
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                        {/* Validation Messages */}
+                        {(() => {
+                          const amount = parseFloat(shortPayForm.paymentAmount || 0);
+                          const isAmountValid = amount > 0 && amount <= remaining + 0.01;
+                          const missingFields = [];
+                          
+                          if (!shortPayForm.paymentAmount) missingFields.push("Payment Amount");
+                          if (!shortPayForm.paymentMethod) missingFields.push("Payment Method");
+                          if (!shortPayForm.carrierPaymentProof) missingFields.push("Payment Proof");
+                          if (amount <= 0 && shortPayForm.paymentAmount) missingFields.push("Valid Payment Amount (> 0)");
+                          if (amount > remaining + 0.01) missingFields.push(`Amount within limit (max $${fmtMoney(remaining)})`);
+
+                          if (missingFields.length > 0 && shortPayForm.paymentAmount) {
+                            return (
+                              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-xs text-red-800 font-semibold mb-1">⚠️ Please complete the following:</p>
+                                <ul className="text-xs text-red-700 list-disc list-inside space-y-0.5">
+                                  {missingFields.map((field, idx) => (
+                                    <li key={idx}>{field}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          }
+                          
+                          if (shortPayForm.paymentAmount && isAmountValid && shortPayForm.paymentMethod && shortPayForm.carrierPaymentProof) {
+                            return (
+                              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <p className="text-xs text-green-800 font-medium">
+                                  ✅ Ready to submit! You're about to record a payment of <span className="font-bold">${fmtMoney(amount)}</span>. 
+                                  After this payment, <span className="font-bold">${fmtMoney(Math.max(0, remaining - amount))}</span> will remain.
+                                </p>
+                              </div>
+                            );
+                          }
+                          
+                          return null;
+                        })()}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

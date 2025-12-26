@@ -32,7 +32,11 @@ import {
   Settings,
   UserPlus,
   UserMinus,
-  LogOut
+  LogOut,
+  Eye,
+  Play,
+  Pause,
+  Download
 } from "lucide-react";
 import { io } from "socket.io-client";
 import API_CONFIG from '../../config/api.js';
@@ -44,6 +48,209 @@ const formatEmployeeName = (user) => {
     return `${user.employeeName}/${user.aliasName}`;
   }
   return user.employeeName || user.aliasName || '';
+};
+
+// Audio Player Component
+const AudioPlayer = ({ src, isMyMessage, fileName, messageId }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const audioRef = useRef(null);
+
+  const handlePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch(err => {
+          console.error('Audio play failed:', err);
+          // iOS Safari requires user interaction
+          alert('Please click play again to listen to the audio.');
+        });
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleSeek = (e) => {
+    if (audioRef.current && duration > 0) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      audioRef.current.currentTime = percent * duration;
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!messageId && !src) return;
+    
+    setIsDownloading(true);
+    try {
+      // Determine download URL
+      // If src is an S3 URL (starts with http/https), use it directly
+      // Otherwise, use the download endpoint
+      let downloadUrl = src;
+      
+      if (!src || (!src.startsWith('http://') && !src.startsWith('https://'))) {
+        // Use download endpoint for local files
+        downloadUrl = `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`;
+      }
+      
+      // Fetch the audio file
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        credentials: 'include', // Include cookies for authentication
+      });
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      // Get the blob
+      const blob = await response.blob();
+      
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract file extension from fileName or use default
+      const fileExtension = fileName?.split('.').pop()?.toLowerCase() || 'mp3';
+      const downloadFileName = fileName || `audio-${messageId || Date.now()}.${fileExtension}`;
+      
+      link.download = downloadFileName;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading audio:', error);
+      alert('Failed to download audio. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Determine the correct audio URL for playback
+  // If src is an S3 URL (starts with http/https), use it directly
+  // Otherwise, use the download endpoint for local files
+  const getAudioSrc = () => {
+    if (!src) {
+      return messageId ? `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}` : '';
+    }
+    
+    // If src is already a full URL (S3 or download endpoint), use it
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      return src;
+    }
+    
+    // If src is a local path, use download endpoint
+    if (messageId) {
+      return `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`;
+    }
+    
+    return src;
+  };
+
+  return (
+    <div className={`audio-message-container p-3 rounded-lg ${
+      isMyMessage 
+        ? 'bg-blue-500 text-white' 
+        : 'bg-gray-100 text-gray-800'
+    }`}>
+      <audio
+        ref={audioRef}
+        src={getAudioSrc()}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={() => setIsPlaying(false)}
+        preload="metadata"
+      />
+      
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handlePlayPause}
+          className={`p-2 rounded-full transition-colors flex-shrink-0 ${
+            isMyMessage 
+              ? 'bg-white/20 hover:bg-white/30 text-white' 
+              : 'bg-blue-500 hover:bg-blue-600 text-white'
+          }`}
+          title={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+        </button>
+        
+        <div className="flex-1 min-w-0">
+          <div 
+            className={`h-2 rounded-full cursor-pointer mb-1 ${
+              isMyMessage ? 'bg-white/30' : 'bg-gray-300'
+            }`}
+            onClick={handleSeek}
+          >
+            <div
+              className={`h-full rounded-full transition-all ${
+                isMyMessage ? 'bg-white' : 'bg-blue-500'
+              }`}
+              style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+            />
+          </div>
+          <div className={`flex justify-between text-xs ${
+            isMyMessage ? 'text-white/80' : 'text-gray-600'
+          }`}>
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+          {fileName && (
+            <div className={`text-xs mt-1 truncate flex items-center gap-1 ${
+              isMyMessage ? 'text-white/90' : 'text-gray-500'
+            }`}>
+              <span>🎵</span>
+              <span className="truncate">{fileName}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Download button */}
+        <button
+          onClick={handleDownload}
+          disabled={isDownloading}
+          className={`p-2 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+            isMyMessage
+              ? 'bg-white/20 hover:bg-white/30 text-white'
+              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+          }`}
+          title={isDownloading ? 'Downloading...' : 'Download audio'}
+        >
+          {isDownloading ? (
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Download size={16} />
+          )}
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const ChatPage = () => {
@@ -86,11 +293,26 @@ const ChatPage = () => {
   const [availableUsers, setAvailableUsers] = useState([]);
   const [showAddMembersModal, setShowAddMembersModal] = useState(false);
   const [showGroupInfoModal, setShowGroupInfoModal] = useState(false);
+  const [showSeenByModal, setShowSeenByModal] = useState(false);
+  const [seenByData, setSeenByData] = useState(null);
+  const [loadingSeenBy, setLoadingSeenBy] = useState(false);
+  // Mention/Tag states
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [taggedUsers, setTaggedUsers] = useState([]); // Array of { empId, employeeName, aliasName }
+  const mentionDropdownRef = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
+  const audioInputRef = useRef(null);
   const audioRef = useRef(null);
+  const groupTextareaRef = useRef(null);
+  const individualTextareaRef = useRef(null);
+  const groupMessageRefs = useRef({});
+  const markedAsSeenRef = useRef(new Set()); // Track which messages have been marked as seen
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -235,8 +457,20 @@ const ChatPage = () => {
       );
 
       const allMessages = res.data || [];
-      // Don't filter - show all messages between these two users
-      setMessages(allMessages);
+      // Process messages to add isMyMessage flag and ensure seenBy structure
+      const processedMessages = allMessages.map(msg => ({
+        ...msg,
+        isMyMessage: msg.senderEmpId === storedUser?.empId,
+        seenBy: msg.seenBy || null,
+        seenAt: msg.seenAt || null,
+        isSeen: msg.isSeen !== undefined ? msg.isSeen : (msg.seenBy ? true : false),
+        status: msg.status || (msg.isSeen ? 'seen' : (msg.seenBy ? 'seen' : 'sent'))
+      }));
+      
+      setMessages(processedMessages);
+
+      // Mark messages as seen when opening chat
+      markMessagesAsSeen(selectedEmpId);
 
       setTimeout(scrollToBottom, 100);
     } catch (err) {
@@ -325,14 +559,193 @@ const ChatPage = () => {
         { withCredentials: true }
       );
       if (res.data && res.data.success) {
-        setGroupMessages(res.data.messages || []);
-        setTimeout(scrollToBottom, 100);
+        // Process messages to add isMyMessage flag and ensure seenBy structure
+        const processedMessages = (res.data.messages || []).map(msg => ({
+          ...msg,
+          isMyMessage: msg.senderEmpId === storedUser?.empId,
+          seenBy: msg.seenBy || [],
+          seenCount: msg.seenCount || (msg.seenBy?.length || 0)
+        }));
+        setGroupMessages(processedMessages);
+        
+        // Mark visible messages as seen after a short delay
+        setTimeout(() => {
+          processedMessages.forEach(msg => {
+            if (!msg.isMyMessage && !isMessageSeenByMe(msg) && msg._id) {
+              markGroupMessageAsSeen(groupId, msg._id);
+            }
+          });
+          scrollToBottom();
+        }, 500);
       }
     } catch (err) {
       console.error("❌ Failed to fetch group messages", err);
       setGroupMessages([]);
     } finally {
       setLoadingGroupMessages(false);
+    }
+  };
+
+  // Get group members for mentions
+  const getGroupMembers = () => {
+    if (!selectedGroup) {
+      console.log('⚠️ No selected group');
+      return [];
+    }
+    
+    // Check if members exist
+    if (!selectedGroup.members || !Array.isArray(selectedGroup.members)) {
+      console.log('⚠️ Group members not available:', selectedGroup);
+      return [];
+    }
+    
+    // Filter out current user from mentions
+    const members = selectedGroup.members.filter(member => {
+      // Ensure member has required fields
+      if (!member || !member.empId) return false;
+      return member.empId !== storedUser?.empId;
+    });
+    
+    console.log('✅ Group members for mentions:', members.length, members);
+    return members;
+  };
+
+  // Filter members based on mention query
+  const getFilteredMembers = () => {
+    const members = getGroupMembers();
+    if (!mentionQuery.trim()) return members;
+    const query = mentionQuery.toLowerCase();
+    return members.filter(member => {
+      const name = (member.employeeName || '').toLowerCase();
+      const alias = (member.aliasName || '').toLowerCase();
+      const empId = (member.empId || '').toLowerCase();
+      return name.includes(query) || alias.includes(query) || empId.includes(query);
+    });
+  };
+
+  // Handle input change for mentions
+  const handleGroupInputChange = (e) => {
+    const value = e.target.value;
+    setInput(value);
+    
+    // Auto-resize textarea
+    autoResizeTextarea(e.target);
+    
+    // Check for @ symbol
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = value.substring(0, cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      // Check if there's a space after @ (meaning mention is complete)
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        // Show mention dropdown
+        const query = textAfterAt.toLowerCase();
+        setMentionQuery(query);
+        setShowMentionDropdown(true);
+        setSelectedMentionIndex(0);
+        
+        // Calculate dropdown position - use setTimeout to ensure DOM is updated
+        setTimeout(() => {
+          const textarea = e.target;
+          const container = textarea.closest('.flex-1.relative');
+          
+          if (container) {
+            const containerRect = container.getBoundingClientRect();
+            const textareaRect = textarea.getBoundingClientRect();
+            
+            // Position relative to the input container (absolute positioning)
+            setMentionPosition({
+              top: textareaRect.bottom - containerRect.top + 5, // 5px below the input
+              left: 10 // Align with left padding of container
+            });
+          } else {
+            // Fallback: position below textarea
+            const rect = textarea.getBoundingClientRect();
+            setMentionPosition({
+              top: rect.height + 5,
+              left: 10
+            });
+          }
+        }, 0);
+        return;
+      }
+    }
+    
+    // Hide dropdown if @ is not active
+    setShowMentionDropdown(false);
+    setMentionQuery('');
+  };
+
+  // Insert mention into input
+  const insertMention = (member) => {
+    const textarea = groupTextareaRef.current;
+    if (!textarea) return;
+    
+    const cursorPosition = textarea.selectionStart;
+    const textBeforeCursor = input.substring(0, cursorPosition);
+    const textAfterCursor = input.substring(cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      const beforeAt = input.substring(0, lastAtIndex);
+      const afterAt = textAfterCursor;
+      const mentionText = `@${member.employeeName || member.aliasName || member.empId} `;
+      
+      const newText = beforeAt + mentionText + afterAt;
+      setInput(newText);
+      
+      // Add to tagged users if not already added
+      if (!taggedUsers.find(u => u.empId === member.empId)) {
+        setTaggedUsers(prev => [...prev, {
+          empId: member.empId,
+          employeeName: member.employeeName,
+          aliasName: member.aliasName
+        }]);
+      }
+      
+      // Hide dropdown and reset
+      setShowMentionDropdown(false);
+      setMentionQuery('');
+      
+      // Set cursor position after mention
+      setTimeout(() => {
+        const newPosition = beforeAt.length + mentionText.length;
+        textarea.setSelectionRange(newPosition, newPosition);
+        textarea.focus();
+      }, 0);
+    }
+  };
+
+  // Handle keyboard navigation in mention dropdown
+  const handleGroupInputKeyDown = (e) => {
+    if (showMentionDropdown) {
+      const filteredMembers = getFilteredMembers();
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => 
+          prev < filteredMembers.length - 1 ? prev + 1 : prev
+        );
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => prev > 0 ? prev - 1 : 0);
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        if (filteredMembers[selectedMentionIndex]) {
+          insertMention(filteredMembers[selectedMentionIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        setShowMentionDropdown(false);
+        setMentionQuery('');
+      }
+    }
+    
+    // Handle Enter to send message (only if not selecting mention)
+    if (e.key === 'Enter' && !e.shiftKey && !showMentionDropdown) {
+      e.preventDefault();
+      sendGroupMessage();
     }
   };
 
@@ -343,13 +756,21 @@ const ChatPage = () => {
     setIsSendingMessage(true);
     const messageToSend = input.trim();
     
-    // Clear input immediately to prevent duplicate sends
+    // Clear input and tagged users immediately to prevent duplicate sends
     setInput("");
+    const usersToTag = [...taggedUsers];
+    setTaggedUsers([]);
+    setShowMentionDropdown(false);
     
     try {
       const formData = new FormData();
       formData.append('groupId', selectedGroup._id);
       formData.append('message', messageToSend);
+      
+      // Add tagged user IDs
+      if (usersToTag.length > 0) {
+        formData.append('taggedUserIds', JSON.stringify(usersToTag.map(u => u.empId)));
+      }
 
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/send`,
@@ -364,21 +785,33 @@ const ChatPage = () => {
 
       if (response.data && response.data.success) {
         const newMessage = {
+          _id: response.data.message?._id || response.data.messageId || Date.now().toString(),
           senderEmpId: storedUser.empId,
           senderName: storedUser.employeeName,
           senderAliasName: storedUser.aliasName,
           message: messageToSend,
-          timestamp: new Date().toISOString(),
-          isMyMessage: true
+          timestamp: response.data.message?.timestamp || new Date().toISOString(),
+          isMyMessage: true,
+          seenBy: [],
+          seenCount: 0,
+          taggedUsers: usersToTag // Include tagged users in message
         };
         setGroupMessages(prev => [...prev, newMessage]);
+        
+        // Refresh messages after a short delay to get proper server data with correct ID
+        // This ensures the message ID matches what the backend sends in socket events
+        setTimeout(async () => {
+          await fetchGroupMessages(selectedGroup._id);
+          setTimeout(scrollToBottom, 100);
+        }, 500);
+      } else {
+        setTimeout(scrollToBottom, 100);
       }
-
-      setTimeout(scrollToBottom, 100);
     } catch (err) {
       console.error("❌ Send group message failed:", err);
       // Restore input on error
       setInput(messageToSend);
+      setTaggedUsers(usersToTag);
     } finally {
       setIsSendingMessage(false);
     }
@@ -387,13 +820,29 @@ const ChatPage = () => {
   const handleGroupFileUpload = async (file) => {
     if (!file || !selectedGroup) return;
     
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+    
     try {
       setUploadingFile(true);
       
       const formData = new FormData();
       formData.append('file', file);
       formData.append('groupId', selectedGroup._id);
-      formData.append('message', `Sent a file: ${file.name}`);
+      
+      // Set appropriate message based on file type
+      const isAudio = isAudioFile(file);
+      const isImage = file.type.startsWith('image/');
+      const messageText = isAudio 
+        ? `Sent an audio: ${file.name}` 
+        : isImage 
+        ? `Sent an image: ${file.name}` 
+        : `Sent a file: ${file.name}`;
+      
+      formData.append('message', messageText);
       
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/send`,
@@ -407,9 +856,29 @@ const ChatPage = () => {
       );
 
       if (response.data && response.data.success) {
-        // Refresh group messages
-        await fetchGroupMessages(selectedGroup._id);
-        setTimeout(scrollToBottom, 100);
+        // Add message to UI immediately with proper ID
+        const newFileMessage = {
+          _id: response.data?.message?._id || response.data?.messageId || Date.now().toString(),
+          senderEmpId: storedUser.empId,
+          senderName: storedUser.employeeName,
+          senderAliasName: storedUser.aliasName,
+          message: messageText,
+          audio: response.data?.message?.audio || response.data?.audio || null,
+          imageUrl: response.data?.message?.image || response.data?.image || null,
+          fileUrl: response.data?.message?.file || response.data?.file || null,
+          timestamp: new Date().toISOString(),
+          isMyMessage: true,
+          seenBy: [],
+          seenCount: 0
+        };
+        
+        setGroupMessages(prev => [...prev, newFileMessage]);
+        
+        // Refresh group messages to get proper server data
+        setTimeout(async () => {
+          await fetchGroupMessages(selectedGroup._id);
+          setTimeout(scrollToBottom, 100);
+        }, 1500);
       }
     } catch (error) {
       console.error('❌ Group file upload failed:', error);
@@ -635,13 +1104,24 @@ const ChatPage = () => {
       // Add the new message to the messages array immediately
       if (response.data) {
         const newMessage = {
+          _id: response.data.message?._id || response.data.messageId || Date.now().toString(),
           senderEmpId: storedUser.empId,
           receiverEmpId: selectedUser.empId,
           message: messageToSend,
-          timestamp: new Date().toISOString(),
-          status: 'sent'
+          timestamp: response.data.message?.timestamp || new Date().toISOString(),
+          status: 'sent',
+          isMyMessage: true,
+          seenBy: null,
+          seenAt: null,
+          isSeen: false
         };
         setMessages(prev => [...prev, newMessage]);
+        
+        // Refresh messages after a short delay to get proper server data
+        setTimeout(async () => {
+          await fetchMessages(selectedUser.empId);
+          setTimeout(scrollToBottom, 100);
+        }, 500);
       }
 
       socketRef.current?.emit("newMessage", {
@@ -662,6 +1142,13 @@ const ChatPage = () => {
   };
 
   const handleKeyPress = (e) => {
+    // Use group-specific handler for group chats
+    if (chatType === 'group' && selectedGroup) {
+      handleGroupInputKeyDown(e);
+      return;
+    }
+    
+    // Original individual chat handler
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       // Only send if not already sending and input is not empty
@@ -671,8 +1158,73 @@ const ChatPage = () => {
     }
   };
 
+  const autoResizeTextarea = (textarea) => {
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 400)}px`;
+    }
+  };
+
+  const handleInputChange = (e) => {
+    // Use group-specific handler for group chats
+    if (chatType === 'group' && selectedGroup) {
+      handleGroupInputChange(e);
+      return;
+    }
+    
+    // Original individual chat handler
+    setInput(e.target.value);
+    // Auto-resize the active textarea
+    const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
+    autoResizeTextarea(textarea);
+  };
+
+  const handlePaste = (e) => {
+    // Get pasted text from clipboard
+    const pastedText = e.clipboardData.getData('text');
+    if (pastedText) {
+      e.preventDefault();
+      // Get the active textarea (group or individual)
+      const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
+      
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const currentValue = input;
+        
+        // Insert pasted text at cursor position
+        const newValue = currentValue.substring(0, start) + pastedText + currentValue.substring(end);
+        setInput(newValue);
+        
+        // Set cursor position after pasted text and auto-resize
+        setTimeout(() => {
+          const newCursorPos = start + pastedText.length;
+          textarea.setSelectionRange(newCursorPos, newCursorPos);
+          textarea.focus();
+          autoResizeTextarea(textarea);
+        }, 0);
+      } else {
+        // Fallback: append if textarea ref not available
+        setInput(prev => prev + pastedText);
+      }
+    }
+  };
+
+  // Helper function to detect audio files
+  const isAudioFile = (file) => {
+    const audioFormats = ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac'];
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    return audioFormats.includes(fileExt || '') || file.type.startsWith('audio/');
+  };
+
   const handleFileUpload = async (file) => {
     if (!file || !selectedUser) return;
+    
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
     
     try {
       setUploadingFile(true);
@@ -680,7 +1232,15 @@ const ChatPage = () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('receiverEmpId', selectedUser.empId);
-      formData.append('message', `Sent a file: ${file.name}`);
+      
+      // Set appropriate message based on file type
+      if (isAudioFile(file)) {
+        formData.append('message', `Sent an audio: ${file.name}`);
+      } else if (file.type.startsWith('image/')) {
+        formData.append('message', `Sent an image: ${file.name}`);
+      } else {
+        formData.append('message', `Sent a file: ${file.name}`);
+      }
       
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
@@ -693,16 +1253,28 @@ const ChatPage = () => {
         }
       );
 
+      // Determine message type and content
+      const isAudio = isAudioFile(file);
+      const isImage = file.type.startsWith('image/');
+      const messageText = isAudio 
+        ? `Sent an audio: ${file.name}` 
+        : isImage 
+        ? `Sent an image: ${file.name}` 
+        : `Sent a file: ${file.name}`;
+      
       // Add file message to UI immediately with proper ID
       const newFileMessage = {
         _id: response.data?.messageId || response.data?.id || response.data?.message?._id || Date.now().toString(),
         senderEmpId: storedUser.empId,
         receiverEmpId: selectedUser.empId,
-        message: `Sent a file: ${file.name}`,
+        message: messageText,
+        audio: response.data?.message?.audio || response.data?.audio || null,
+        imageUrl: response.data?.message?.image || response.data?.image || null,
+        fileUrl: response.data?.message?.file || response.data?.file || null,
         timestamp: new Date().toISOString(),
         status: 'sent',
         fileName: file.name,
-        fileType: file.type.startsWith('image/') ? 'image' : 'document'
+        fileType: isAudio ? 'audio' : isImage ? 'image' : 'document'
       };
       
       setMessages(prev => [...prev, newFileMessage]);
@@ -716,7 +1288,10 @@ const ChatPage = () => {
       socketRef.current?.emit("newMessage", {
         senderEmpId: storedUser.empId,
         receiverEmpId: selectedUser.empId,
-        message: `Sent a file: ${file.name}`,
+        message: messageText,
+        audio: response.data?.message?.audio || response.data?.audio || null,
+        image: response.data?.message?.image || response.data?.image || null,
+        file: response.data?.message?.file || response.data?.file || null,
         senderName: storedUser.employeeName
       });
       
@@ -842,10 +1417,14 @@ const ChatPage = () => {
     }
   };
 
-  const getMessageStatus = (status) => {
+  const getMessageStatus = (status, isSeen, seenBy) => {
+    if (isSeen && seenBy) {
+      return <CheckCheck size={14} className="text-blue-500" />;
+    }
     switch (status) {
       case 'sent': return <Clock size={14} className="text-gray-400" />;
       case 'delivered': return <Check size={14} className="text-gray-400" />;
+      case 'seen': return <CheckCheck size={14} className="text-blue-500" />;
       case 'read': return <CheckCheck size={14} className="text-blue-500" />;
       default: return <Clock size={14} className="text-gray-400" />;
     }
@@ -868,6 +1447,186 @@ const ChatPage = () => {
         month: 'short', 
         day: 'numeric' 
       });
+    }
+  };
+
+  // Mark group message as seen
+  const markGroupMessageAsSeen = async (groupId, messageId) => {
+    if (!groupId || !messageId) return;
+    
+    // Check if already marked as seen to avoid duplicate calls
+    const seenKey = `${groupId}-${messageId}`;
+    if (markedAsSeenRef.current.has(seenKey)) {
+      return;
+    }
+    
+    // Check if message is sent by current user (don't mark own messages as seen)
+    const message = groupMessages.find(msg => msg._id === messageId);
+    if (message && (message.senderEmpId === storedUser?.empId || message.isMyMessage)) {
+      return;
+    }
+    
+    try {
+      const res = await axios.patch(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages/${messageId}/seen`,
+        {},
+        { withCredentials: true }
+      );
+      
+      if (res.data && res.data.success) {
+        markedAsSeenRef.current.add(seenKey);
+      }
+    } catch (err) {
+      console.error("❌ Failed to mark group message as seen:", err);
+      // Don't add to set if failed, so it can retry
+    }
+  };
+
+  // Check if message is seen by current user
+  const isMessageSeenByMe = (message) => {
+    if (!message || !storedUser?.empId) return false;
+    return message.seenBy?.some(s => s.empId === storedUser.empId || s.seenByEmpId === storedUser.empId);
+  };
+
+  // Update individual message seen status when socket event is received
+  const updateIndividualMessageSeenStatus = (messageIds, seenBy, seenAt) => {
+    if (!messageIds || !Array.isArray(messageIds) || !seenBy) return;
+    
+    setMessages(prevMessages => {
+      let updated = false;
+      const updatedMessages = prevMessages.map(msg => {
+        const msgId = String(msg._id || '');
+        const isInList = messageIds.some(id => String(id) === msgId);
+        
+        if (isInList && msg.isMyMessage) {
+          // Check if already seen
+          const alreadySeen = msg.isSeen || msg.seenBy;
+          
+          if (!alreadySeen) {
+            updated = true;
+            return {
+              ...msg,
+              seenBy: seenBy,
+              seenAt: seenAt || new Date().toISOString(),
+              isSeen: true,
+              status: 'seen'
+            };
+          }
+        }
+        return msg;
+      });
+      
+      if (updated) {
+        return updatedMessages;
+      }
+      return prevMessages;
+    });
+  };
+
+  // Update message seen status when socket event is received
+  const updateGroupMessageSeenStatus = (messageId, seenBy) => {
+    if (!messageId || !seenBy) return;
+    
+    setGroupMessages(prevMessages => {
+      let messageFound = false;
+      let updated = false;
+      
+      const updatedMessages = prevMessages.map(msg => {
+        // Match by _id (could be string or ObjectId)
+        const msgId = String(msg._id || '');
+        const targetId = String(messageId || '');
+        
+        if (msgId === targetId) {
+          messageFound = true;
+          // Ensure seenBy array exists
+          const currentSeenBy = msg.seenBy || [];
+          
+          // Check if this user already in seenBy array
+          const alreadySeen = currentSeenBy.some(
+            s => {
+              const sEmpId = s.empId || s.seenByEmpId || '';
+              const newEmpId = seenBy.empId || seenBy.seenByEmpId || '';
+              return sEmpId && newEmpId && String(sEmpId) === String(newEmpId);
+            }
+          );
+          
+          if (!alreadySeen) {
+            updated = true;
+            return {
+              ...msg,
+              seenBy: [...currentSeenBy, seenBy],
+              seenCount: (msg.seenCount || 0) + 1
+            };
+          }
+        }
+        return msg;
+      });
+      
+      // If message not found, refresh messages to get latest data
+      if (!messageFound && selectedGroup?._id) {
+        setTimeout(() => {
+          fetchGroupMessages(selectedGroup._id);
+        }, 100);
+      }
+      
+      // If message was updated, return new array to trigger re-render
+      if (updated) {
+        return updatedMessages;
+      }
+      return prevMessages;
+    });
+  };
+
+  // Fetch seen-by data for a message
+  const fetchSeenBy = async (messageId, isGroupMessage = false) => {
+    if (!messageId) return;
+    
+    setLoadingSeenBy(true);
+    try {
+      let endpoint;
+      if (isGroupMessage) {
+        endpoint = `${API_CONFIG.BASE_URL}/api/v1/chat/group/message/${messageId}/seen-by`;
+      } else {
+        endpoint = `${API_CONFIG.BASE_URL}/api/v1/chat/message/${messageId}/seen-by`;
+      }
+      
+      const res = await axios.get(endpoint, { withCredentials: true });
+      
+      if (res.data && res.data.success) {
+        setSeenByData({
+          messageId,
+          seenBy: res.data.seenBy || [],
+          message: res.data.message || ''
+        });
+        setShowSeenByModal(true);
+      } else {
+        // Fallback: use message data if API doesn't exist yet
+        const message = isGroupMessage 
+          ? groupMessages.find(m => m._id === messageId)
+          : messages.find(m => m._id === messageId);
+        
+        setSeenByData({
+          messageId,
+          seenBy: message?.seenBy || [],
+          message: message?.message || ''
+        });
+        setShowSeenByModal(true);
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch seen-by data:", err);
+      // Fallback: use message data if API doesn't exist
+      const message = isGroupMessage 
+        ? groupMessages.find(m => m._id === messageId)
+        : messages.find(m => m._id === messageId);
+      
+      setSeenByData({
+        messageId,
+        seenBy: message?.seenBy || [],
+        message: message?.message || ''
+      });
+      setShowSeenByModal(true);
+    } finally {
+      setLoadingSeenBy(false);
     }
   };
 
@@ -936,6 +1695,61 @@ const ChatPage = () => {
     }
   }, [storedUser]);
 
+  // Auto-resize textarea when input changes or chat type switches
+  useEffect(() => {
+    const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
+    if (textarea) {
+      autoResizeTextarea(textarea);
+    }
+  }, [input, chatType]);
+
+  // Intersection Observer to mark group messages as seen when they come into view
+  useEffect(() => {
+    if (chatType !== 'group' || !selectedGroup?._id || groupMessages.length === 0) {
+      return;
+    }
+
+    const observers = [];
+    const groupId = selectedGroup._id;
+
+    // Create intersection observer for each message
+    groupMessages.forEach(message => {
+      const element = groupMessageRefs.current[message._id];
+      if (!element) return;
+
+      // Skip if message is sent by current user or already marked as seen
+      if (message.senderEmpId === storedUser?.empId || message.isMyMessage || isMessageSeenByMe(message)) {
+        return;
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              // Message is visible, mark as seen
+              markGroupMessageAsSeen(groupId, message._id);
+              // Stop observing once seen
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        {
+          threshold: 0.5 // Message is considered seen when 50% is visible
+        }
+      );
+
+      observer.observe(element);
+      observers.push({ observer, element });
+    });
+
+    // Cleanup
+    return () => {
+      observers.forEach(({ observer, element }) => {
+        observer.unobserve(element);
+      });
+    };
+  }, [groupMessages, selectedGroup, chatType, storedUser]);
+
   // Merge unread data with chat list
   const mergeUnreadData = (chatList, unreadData) => {
     return chatList.map(user => {
@@ -976,6 +1790,35 @@ const ChatPage = () => {
     }
   }, [selectedUser]);
 
+  // Close mention dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        mentionDropdownRef.current &&
+        !mentionDropdownRef.current.contains(event.target) &&
+        groupTextareaRef.current &&
+        !groupTextareaRef.current.contains(event.target)
+      ) {
+        setShowMentionDropdown(false);
+        setMentionQuery('');
+      }
+    };
+
+    if (showMentionDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showMentionDropdown]);
+
+  // Reset tagged users and mention state when group changes
+  useEffect(() => {
+    setTaggedUsers([]);
+    setShowMentionDropdown(false);
+    setMentionQuery('');
+  }, [selectedGroup?._id]);
+
   useEffect(() => {
     if (!storedUser?.empId) return;
 
@@ -992,7 +1835,7 @@ const ChatPage = () => {
       console.error("❌ Socket connection error:", err);
     });
 
-    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName }) => {
+    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file }) => {
 
       // Check if this message is for current user (as receiver)
       const isForMe = receiverEmpId === storedUser.empId;
@@ -1001,15 +1844,25 @@ const ChatPage = () => {
       // Check if this message is to current selected user
       const isToSelectedUser = receiverEmpId === selectedUser?.empId;
 
+      // Determine notification message based on content type
+      let notificationMessage = message || "Sent you a message";
+      if (audio) {
+        notificationMessage = "Sent you an audio message 🎵";
+      } else if (image) {
+        notificationMessage = "Sent you an image 📷";
+      } else if (file) {
+        notificationMessage = "Sent you a file 📎";
+      }
+
       // Show notification if message is for current user and not from current selected user
 
       if (isForMe && !isFromSelectedUser) {
 
         // Try browser notification first
-        showNotification("New Message", message || "Sent you a message", senderName || "Someone");
+        showNotification("New Message", notificationMessage, senderName || "Someone");
         
         // Also show in-app notification as backup
-        displayInAppNotification("New Message", message || "Sent you a message", senderName || "Someone");
+        displayInAppNotification("New Message", notificationMessage, senderName || "Someone");
       } else {
 
       }
@@ -1046,15 +1899,37 @@ const ChatPage = () => {
 
     socketRef.current.on("newMessage", handleNewMessage);
 
-    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message }) => {
+    // Handle individual message seen status updates
+    const handleMessageSeen = ({ senderEmpId, receiverEmpId, receiverName, receiverAliasName, messageIds, seenAt, seenCount }) => {
+      // Only update if it's for the currently selected user and messages are from current user
+      if (selectedUser?.empId === receiverEmpId && senderEmpId === storedUser?.empId && messageIds) {
+        updateIndividualMessageSeenStatus(messageIds, {
+          empId: receiverEmpId,
+          employeeName: receiverName,
+          aliasName: receiverAliasName
+        }, seenAt);
+      }
+    };
+
+    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message, audio, image, file }) => {
       // Check if this message is for current selected group
       const isForSelectedGroup = selectedGroup?._id === groupId;
       const isFromMe = senderEmpId === storedUser.empId;
 
+      // Determine notification message based on content type
+      let notificationMessage = message || "Sent a message";
+      if (audio) {
+        notificationMessage = "Sent an audio message 🎵";
+      } else if (image) {
+        notificationMessage = "Sent an image 📷";
+      } else if (file) {
+        notificationMessage = "Sent a file 📎";
+      }
+
       // Show notification if message is not from me and not for selected group
       if (!isFromMe && !isForSelectedGroup) {
-        showNotification("New Group Message", message || "Sent a message", `${senderName || "Someone"} in ${groupName || "Group"}`);
-        displayInAppNotification("New Group Message", message || "Sent a message", `${senderName || "Someone"} in ${groupName || "Group"}`);
+        showNotification("New Group Message", notificationMessage, `${senderName || "Someone"} in ${groupName || "Group"}`);
+        displayInAppNotification("New Group Message", notificationMessage, `${senderName || "Someone"} in ${groupName || "Group"}`);
         
         // Update unread count for the group
         setNewGroupMessagesMap(prev => {
@@ -1082,14 +1957,36 @@ const ChatPage = () => {
       await fetchGroups();
     };
 
+    // Handle group message seen status updates
+    const handleGroupMessageSeen = ({ groupId, messageId, seenBy }) => {
+      // Only update if it's for the currently selected group
+      if (selectedGroup?._id === groupId && messageId && seenBy) {
+        updateGroupMessageSeenStatus(messageId, seenBy);
+      }
+    };
+
     socketRef.current.on("newGroupMessage", handleNewGroupMessage);
+    socketRef.current.on("groupMessageSeen", handleGroupMessageSeen);
+    socketRef.current.on("messageSeen", handleMessageSeen);
+
+    // Cleanup
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off("newMessage", handleNewMessage);
+        socketRef.current.off("newGroupMessage", handleNewGroupMessage);
+        socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
+        socketRef.current.off("messageSeen", handleMessageSeen);
+      }
+    };
 
     return () => {
       socketRef.current.off("newMessage", handleNewMessage);
       socketRef.current.off("newGroupMessage", handleNewGroupMessage);
+      socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
+      socketRef.current.off("messageSeen", handleMessageSeen);
       socketRef.current.disconnect();
     };
-  }, [storedUser, selectedUser, selectedGroup]);
+  }, [storedUser, selectedUser, selectedGroup, groupMessages]);
 
   // Show skeleton loaders during initial load
   if (loading) {
@@ -1288,7 +2185,9 @@ const ChatPage = () => {
                             { withCredentials: true }
                           );
                           if (res.data && res.data.success) {
-                            setSelectedGroup(res.data.group);
+                            const groupData = res.data.group;
+                            console.log('✅ Group selected:', groupData.groupName, 'Members:', groupData.members?.length || 0, groupData.members);
+                            setSelectedGroup(groupData);
                             setChatType('group');
                             setSelectedUser(null);
                             await fetchGroupMessages(group._id);
@@ -1550,7 +2449,10 @@ const ChatPage = () => {
                             </span>
                           </div>
                         )}
-                        <div className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}>
+                        <div 
+                          ref={el => groupMessageRefs.current[msg._id] = el}
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}
+                        >
                           <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
                               <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0">
@@ -1570,8 +2472,20 @@ const ChatPage = () => {
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
-                                {/* Show images */}
-                                {msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && msg._id && (
+                                {/* Show audio messages FIRST */}
+                                {(msg.audio || (msg.message && msg.message.includes('Sent an audio:'))) && msg._id && (
+                                  <div className="mb-2">
+                                    <AudioPlayer
+                                      src={msg.audio || `${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                      isMyMessage={isSentByMe}
+                                      fileName={msg.message?.replace('Sent an audio: ', '') || 'Audio message'}
+                                      messageId={msg._id}
+                                    />
+                                  </div>
+                                )}
+                                
+                                {/* Show images - exclude audio messages */}
+                                {!msg.audio && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:') && msg._id && (
                                   (() => {
                                     const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
                                     const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
@@ -1589,9 +2503,9 @@ const ChatPage = () => {
                                       );
                                     } else {
                                       return (
-                                        <div className="mb-2 p-3 bg-gray-100 rounded-lg border border-gray-200">
+                                        <div className={`mb-2 p-3 rounded-lg border ${isSentByMe ? 'bg-white/20 border-white/30' : 'bg-gray-100 border-gray-200'}`}>
                                           <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 ${isSentByMe ? 'bg-blue-400' : 'bg-blue-500'} rounded-lg flex items-center justify-center`}>
+                                            <div className={`w-10 h-10 ${isSentByMe ? 'bg-white/30' : 'bg-blue-500'} rounded-lg flex items-center justify-center`}>
                                               <Paperclip size={20} className="text-white" />
                                             </div>
                                             <div className="flex-1">
@@ -1612,17 +2526,109 @@ const ChatPage = () => {
                                     }
                                   })()
                                 )}
-                                {!(msg.message && msg.message.includes('Sent an image:') || msg.message && msg.message.includes('Sent a file:')) && (
-                                  <p className={`text-sm leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>{msg.message}</p>
+                                {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
+                                  <div className={`text-sm leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>
+                                    {(() => {
+                                      // Highlight mentions in message
+                                      const message = msg.message || '';
+                                      const parts = [];
+                                      const mentionRegex = /@(\w+[\w\s]*?)(?=\s|$|@|,|\.|!|\?)/g;
+                                      let lastIndex = 0;
+                                      let match;
+                                      
+                                      while ((match = mentionRegex.exec(message)) !== null) {
+                                        // Add text before mention
+                                        if (match.index > lastIndex) {
+                                          parts.push(message.substring(lastIndex, match.index));
+                                        }
+                                        
+                                        // Check if this mention matches a tagged user
+                                        const mentionedName = match[1];
+                                        const isTagged = msg.taggedUsers?.some(u => 
+                                          u.employeeName === mentionedName || 
+                                          u.aliasName === mentionedName ||
+                                          u.empId === mentionedName
+                                        ) || false;
+                                        
+                                        // Add highlighted mention
+                                        parts.push(
+                                          <span 
+                                            key={match.index}
+                                            className={`font-semibold ${isSentByMe ? 'text-yellow-200 bg-blue-700 px-1 rounded' : isTagged ? 'text-blue-600 bg-blue-100 px-1 rounded' : 'text-blue-500'}`}
+                                          >
+                                            @{mentionedName}
+                                          </span>
+                                        );
+                                        
+                                        lastIndex = match.index + match[0].length;
+                                      }
+                                      
+                                      // Add remaining text
+                                      if (lastIndex < message.length) {
+                                        parts.push(message.substring(lastIndex));
+                                      }
+                                      
+                                      return parts.length > 0 ? parts : message;
+                                    })()}
+                                  </div>
+                                )}
+                                
+                                {/* Show tagged users indicator */}
+                                {msg.taggedUsers && msg.taggedUsers.length > 0 && (
+                                  <div className={`mt-2 flex flex-wrap gap-1 ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
+                                    {msg.taggedUsers.map((user, idx) => (
+                                      <span 
+                                        key={user.empId || idx}
+                                        className={`text-xs px-2 py-1 rounded-full ${isSentByMe ? 'bg-blue-400 text-white' : 'bg-blue-100 text-blue-700'}`}
+                                      >
+                                        @{user.aliasName || user.employeeName || user.empId}
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
                                 <div className={`flex items-center justify-end mt-2 gap-1`}>
                                   <span className={`text-xs ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>
                                     {formatTime(msg.timestamp)}
                                   </span>
                                   {isSentByMe && (
-                                    <CheckCheck size={12} className="text-blue-100" />
+                                    <button
+                                      onClick={() => msg._id && fetchSeenBy(msg._id, true)}
+                                      className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
+                                      title="Click to see who has seen this message"
+                                    >
+                                      <CheckCheck size={12} className="text-blue-100" />
+                                    </button>
                                   )}
                                 </div>
+                                {/* Show seen status for messages sent by current user */}
+                                {isSentByMe && (
+                                  <div className={`mt-2 flex flex-col gap-1 ${isSentByMe ? 'items-end' : 'items-start'}`}>
+                                    {msg.seenCount > 0 ? (
+                                      <div className="flex flex-col items-end gap-1">
+                                        <span className={`text-xs font-semibold ${isSentByMe ? 'text-blue-100' : 'text-gray-600'}`}>
+                                          Seen by {msg.seenCount} {msg.seenCount === 1 ? 'person' : 'people'}
+                                        </span>
+                                        {msg.seenBy && msg.seenBy.length > 0 && (
+                                          <div className={`text-xs ${isSentByMe ? 'text-blue-50' : 'text-gray-500'} flex flex-wrap gap-1 justify-end max-w-full`}>
+                                            {msg.seenBy.slice(0, 3).map((user, idx) => (
+                                              <span key={user.empId || user.seenByEmpId || idx} className="italic">
+                                                {user.aliasName || user.employeeName || user.name}
+                                                {idx < Math.min(msg.seenBy.length, 3) - 1 && ','}
+                                              </span>
+                                            ))}
+                                            {msg.seenBy.length > 3 && (
+                                              <span className="italic">+{msg.seenBy.length - 3} more</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className={`text-xs italic ${isSentByMe ? 'text-blue-50' : 'text-gray-500'}`}>
+                                        Sent
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1649,15 +2655,74 @@ const ChatPage = () => {
                       <Paperclip size={20} className="text-gray-500" />
                     </button>
                     <textarea
-                      placeholder={uploadingFile || isSendingMessage ? (uploadingFile ? "Uploading..." : "Sending...") : "Type a message"}
+                      ref={groupTextareaRef}
+                      placeholder={uploadingFile || isSendingMessage ? (uploadingFile ? "Uploading..." : "Sending...") : "Type a message (use @ to tag someone)"}
                       value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyPress={handleKeyPress}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyPress}
+                      onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50"
-                      style={{ minHeight: '20px', maxHeight: '100px' }}
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
+                      style={{ minHeight: '20px', maxHeight: '400px' }}
                     />
+                    
+                    {/* Mention Dropdown */}
+                    {showMentionDropdown && selectedGroup && (
+                      <div
+                        ref={mentionDropdownRef}
+                        className="absolute z-[9999] bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto mt-1"
+                        style={{
+                          top: `${mentionPosition.top}px`,
+                          left: `${mentionPosition.left}px`,
+                          minWidth: '250px',
+                          maxWidth: '300px'
+                        }}
+                      >
+                        {(() => {
+                          const filteredMembers = getFilteredMembers();
+                          const allMembers = getGroupMembers();
+                          
+                          if (filteredMembers.length === 0) {
+                            return (
+                              <div className="px-4 py-3 text-sm text-gray-500">
+                                {allMembers.length === 0 
+                                  ? `No members available (Group has ${selectedGroup.members?.length || 0} members)` 
+                                  : `No members match "${mentionQuery}"`}
+                              </div>
+                            );
+                          }
+                          
+                          return filteredMembers.map((member, idx) => (
+                            <button
+                              key={member.empId}
+                              onClick={() => insertMention(member)}
+                              className={`w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-3 transition-colors ${
+                                idx === selectedMentionIndex ? 'bg-blue-100' : ''
+                              }`}
+                              onMouseEnter={() => setSelectedMentionIndex(idx)}
+                            >
+                              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                                {member.employeeName?.charAt(0).toUpperCase() || member.empId?.charAt(0).toUpperCase() || 'U'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-gray-800 truncate">
+                                  {member.employeeName || member.empId}
+                                </div>
+                                {member.aliasName && (
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {member.aliasName}
+                                  </div>
+                                )}
+                                <div className="text-xs text-gray-400 truncate">
+                                  {member.empId}
+                                </div>
+                              </div>
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                    )}
                     <button 
                       onClick={() => imageInputRef.current?.click()}
                       disabled={uploadingFile || isSendingMessage}
@@ -1665,6 +2730,14 @@ const ChatPage = () => {
                       title="Send image"
                     >
                       <Image size={20} className="text-gray-500" />
+                    </button>
+                    <button 
+                      onClick={() => audioInputRef.current?.click()}
+                      disabled={uploadingFile || isSendingMessage}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Send audio"
+                    >
+                      <Mic size={20} className="text-gray-500" />
                     </button>
                     {input.trim() ? (
                       <button
@@ -1698,6 +2771,19 @@ const ChatPage = () => {
                       const file = e.target.files[0];
                       if (file) {
                         handleGroupImageUpload(file);
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        handleGroupFileUpload(file);
                       }
                       e.target.value = '';
                     }}
@@ -1812,6 +2898,18 @@ const ChatPage = () => {
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
+                                {/* Show audio messages FIRST */}
+                                {(msg.audio || (msg.message && msg.message.includes('Sent an audio:'))) && msg._id && (
+                                  <div className="mb-2">
+                                    <AudioPlayer
+                                      src={msg.audio || `${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                      isMyMessage={isSentByMe}
+                                      fileName={msg.message?.replace('Sent an audio: ', '') || 'Audio message'}
+                                      messageId={msg._id}
+                                    />
+                                  </div>
+                                )}
+                                
                                 {msg.imageUrl && (
                                   <div className="mb-2">
                                     <img 
@@ -1823,8 +2921,8 @@ const ChatPage = () => {
                                     <p className="text-xs text-gray-500 mt-1">{msg.fileName}</p>
                                   </div>
                                 )}
-                                {/* Show images using message ID if no imageUrl */}
-                                {!msg.imageUrl && msg.message && msg.message.includes('Sent a file:') && msg._id && (
+                                {/* Show images using message ID if no imageUrl - exclude audio messages */}
+                                {!msg.imageUrl && !msg.audio && msg.message && msg.message.includes('Sent a file:') && !msg.message.includes('Sent an audio:') && msg._id && (
                                   (() => {
                                     const fileName = msg.message.replace('Sent a file: ', '');
                                     const file = files.find(f => f.originalName === fileName || f.fileName === fileName);
@@ -1844,8 +2942,9 @@ const ChatPage = () => {
                                     return null;
                                   })()
                                 )}
+                                
                                 {/* Show images for any file message with _id */}
-                                {!msg.imageUrl && msg._id && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && (
+                                {!msg.imageUrl && !msg.audio && msg._id && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:') && (
                                   (() => {
                                     const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
                                     // Check if it's an image based on file extension
@@ -1913,8 +3012,9 @@ const ChatPage = () => {
                                     </div>
                                   </div>
                                 )}
+                                
                                 {/* Show files from API if no fileUrl in message */}
-                                {!msg.fileUrl && !msg.imageUrl && msg.message && msg.message.includes('Sent a file:') && (
+                                {!msg.fileUrl && !msg.imageUrl && !msg.audio && msg.message && msg.message.includes('Sent a file:') && !msg.message.includes('Sent an audio:') && (
                                   <div className="mb-2 p-3 bg-gray-100 rounded-lg border border-gray-200">
                                     <div className="flex items-center gap-3">
                                       <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
@@ -1945,16 +3045,37 @@ const ChatPage = () => {
                                     </div>
                                   </div>
                                 )}
-                                <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                                {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
+                                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                                )}
                               </div>
                               <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
                                 <span className="text-xs text-gray-400">
                                   {formatTime(msg.timestamp)}
                                 </span>
                                 {isSentByMe && (
-                                  <span className="text-xs">
-                                    {getMessageStatus(msg.status)}
-                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => msg._id && fetchSeenBy(msg._id, false)}
+                                      className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
+                                      title={msg.isSeen && msg.seenBy ? `Seen by ${msg.seenBy.aliasName || msg.seenBy.employeeName}${msg.seenAt ? ` at ${formatTime(msg.seenAt)}` : ''}` : "Click to see who has seen this message"}
+                                    >
+                                      <span className="text-xs">
+                                        {getMessageStatus(msg.status, msg.isSeen, msg.seenBy)}
+                                      </span>
+                                    </button>
+                                    {/* Show seen status text */}
+                                    {msg.isSeen && msg.seenBy && (
+                                      <span className="text-xs text-gray-500 italic">
+                                        Seen by {msg.seenBy.aliasName || msg.seenBy.employeeName}
+                                        {msg.seenAt && (
+                                          <span className="text-gray-400 ml-1">
+                                            {formatTime(msg.seenAt)}
+                                          </span>
+                                        )}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1982,14 +3103,16 @@ const ChatPage = () => {
                       <Paperclip size={20} className="text-gray-500" />
                     </button>
                     <textarea
+                      ref={individualTextareaRef}
                       placeholder={uploadingFile || isSendingMessage ? (uploadingFile ? "Uploading..." : "Sending...") : "Type a message"}
                       value={input}
-                      onChange={(e) => setInput(e.target.value)}
+                      onChange={handleInputChange}
                       onKeyPress={handleKeyPress}
+                      onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50"
-                      style={{ minHeight: '20px', maxHeight: '100px' }}
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
+                      style={{ minHeight: '20px', maxHeight: '400px' }}
                     />
                     <button 
                       onClick={() => imageInputRef.current?.click()}
@@ -1998,6 +3121,14 @@ const ChatPage = () => {
                       title="Send image"
                     >
                       <Image size={20} className="text-gray-500" />
+                    </button>
+                    <button 
+                      onClick={() => audioInputRef.current?.click()}
+                      disabled={uploadingFile || isSendingMessage}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Send audio"
+                    >
+                      <Mic size={20} className="text-gray-500" />
                     </button>
                     {input.trim() && (
                       <button
@@ -2022,6 +3153,19 @@ const ChatPage = () => {
                     className="hidden"
                     accept="image/*"
                     onChange={handleImageInputChange}
+                  />
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        handleFileUpload(file);
+                      }
+                      e.target.value = '';
+                    }}
                   />
                 </div>
               </div>
@@ -2074,6 +3218,62 @@ const ChatPage = () => {
           group={selectedGroup}
           storedUser={storedUser}
         />
+      )}
+
+      {/* Seen By Modal */}
+      {showSeenByModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-800">Seen By</h3>
+              <button
+                onClick={() => {
+                  setShowSeenByModal(false);
+                  setSeenByData(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingSeenBy ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              ) : seenByData && seenByData.seenBy && seenByData.seenBy.length > 0 ? (
+                <div className="space-y-3">
+                  {seenByData.seenBy.map((user, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold shadow-md">
+                        {user.employeeName?.charAt(0).toUpperCase() || user.name?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800">
+                          {user.employeeName || user.name || 'Unknown User'}
+                          {user.aliasName && `/${user.aliasName}`}
+                        </p>
+                        {user.seenAt && (
+                          <p className="text-xs text-gray-500">
+                            Seen {formatTime(user.seenAt)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Eye size={48} className="mx-auto mb-2 text-gray-400" />
+                  <p>No one has seen this message yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
