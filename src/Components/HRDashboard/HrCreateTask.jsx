@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { FaCalendarAlt, FaArrowLeft } from "react-icons/fa";
 import axios from "axios";
+import API_CONFIG from "../../config/api";
 
 export default function HrCreateTask() {
   const [showForm, setShowForm] = useState(false);
@@ -20,7 +21,7 @@ export default function HrCreateTask() {
   const fetchTasks = async () => {
     try {
       const res = await axios.get(
-        "https://vpl-liveproject-1.onrender.com/api/v1/dailytask/my",
+        `${API_CONFIG.BASE_URL}/api/v1/dailytask/my`,
         { withCredentials: true }
       );
       setTasks(res.data.tasks || []);
@@ -53,7 +54,7 @@ export default function HrCreateTask() {
 
     try {
       await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/dailytask/assign",
+        `${API_CONFIG.BASE_URL}/api/v1/dailytask/assign`,
         formData,
         { withCredentials: true }
       );

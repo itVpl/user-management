@@ -61,8 +61,9 @@ import {
 } from "@mui/icons-material";
 
 // ========= Config =========
+import API_CONFIG_IMPORT from "../../config/api";
 const API_CONFIG = {
-  BASE_URL: "https://vpl-liveproject-1.onrender.com",
+  BASE_URL: API_CONFIG_IMPORT.BASE_URL,
 };
 const BRAND = "#16A34A"; // Tailwind green-600 type
 const theme = createTheme({

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import API_CONFIG from "../../config/api";
 
 
 const LoadBoard = () => {
@@ -34,7 +35,7 @@ const LoadBoard = () => {
         const fetchLoads = async () => {
             setLoading(true);
             try {
-                const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/load/available");
+                const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/available`);
                 setAvailableLoads(res.data.loads || []);
             } catch (err) {
                 setAvailableLoads([]);
@@ -103,7 +104,7 @@ const LoadBoard = () => {
             };
         }
         try {
-            await axios.post("https://vpl-liveproject-1.onrender.com/api/v1/load/create", payload);
+            await axios.post(`${API_CONFIG.BASE_URL}/api/v1/load/create`, payload);
             alert("Load created successfully!");
             setShowModal(false);
         } catch (err) {

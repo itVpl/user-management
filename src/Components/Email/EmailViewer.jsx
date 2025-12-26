@@ -16,6 +16,7 @@ import {
   OpenInNew as OpenInNewIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
+import API_CONFIG from '../../config/api';
 
 const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply }) => {
   if (!selectedEmail) return null;
@@ -268,7 +269,7 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply }
                     // If downloadUrl is relative, make it absolute
                     const fullUrl = downloadUrl.startsWith('http') 
                       ? downloadUrl 
-                      : `https://vpl-liveproject-1.onrender.com${downloadUrl}`;
+                      : `${API_CONFIG.BASE_URL}${downloadUrl}`;
                     window.open(fullUrl, '_blank');
                   }
                 };
@@ -298,7 +299,7 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply }
                   >
                     {isImage && previewUrl ? (
                       <img 
-                        src={previewUrl.startsWith('http') ? previewUrl : `https://vpl-liveproject-1.onrender.com${previewUrl}`}
+                        src={previewUrl.startsWith('http') ? previewUrl : `${API_CONFIG.BASE_URL}${previewUrl}`}
                         alt={filename}
                         style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4 }}
                       />

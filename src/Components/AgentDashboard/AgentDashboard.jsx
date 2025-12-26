@@ -3,6 +3,7 @@ import axios from 'axios';
 import { MoreHorizontal, Phone, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Award, Truck, DollarSign, Target } from 'lucide-react';
 import UpcomingBirthdays from '../UpcomingBirthdays';
 import DailyFollowNotification from '../DailyFollowNotification';
+import API_CONFIG from '../../config/api';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -78,7 +79,7 @@ const Dashboard = () => {
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
-          'https://vpl-liveproject-1.onrender.com/api/v1/attendance/my/present-count-current-month',
+          `${API_CONFIG.BASE_URL}/api/v1/attendance/my/present-count-current-month`,
           { 
             withCredentials: true,
             headers: { Authorization: `Bearer ${token}` }
@@ -133,7 +134,7 @@ const Dashboard = () => {
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
-          'https://vpl-liveproject-1.onrender.com/api/v1/analytics/8x8/call-records/filter',
+          `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8/call-records/filter`,
           {
             params: { callerName: alias, calleeName: alias, from, to },
             withCredentials: true,
@@ -182,7 +183,7 @@ const Dashboard = () => {
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
-          'https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/cmt/today-count',
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/cmt/today-count`,
           { 
             withCredentials: true,
             headers: { Authorization: `Bearer ${token}` }
@@ -223,7 +224,7 @@ const Dashboard = () => {
 
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
-          `https://vpl-liveproject-1.onrender.com/api/v1/do/do/employee/${empId}`,
+          `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`,
           { 
             withCredentials: true,
             headers: { Authorization: `Bearer ${token}` }
@@ -266,7 +267,7 @@ const Dashboard = () => {
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
-          'https://vpl-liveproject-1.onrender.com/api/v1/load-approval/pending',
+          `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending`,
           { 
             withCredentials: true,
             headers: { Authorization: `Bearer ${token}` }

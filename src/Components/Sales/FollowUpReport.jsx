@@ -202,7 +202,7 @@ export default function FollowUpReport() {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
       // Use the new API endpoint
-      let apiUrl = 'https://vpl-liveproject-1.onrender.com/api/v1/sales-followup/all-simple';
+      let apiUrl = `${API_CONFIG.BASE_URL}/api/v1/sales-followup/all-simple`;
       
       const response = await axios.get(apiUrl, {
         timeout: 10000,
@@ -490,7 +490,7 @@ export default function FollowUpReport() {
       setLoadingOrderId(orderId); // Show loading indicator
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const res = await axios.get(
-        `https://vpl-liveproject-1.onrender.com/api/v1/sales-followup/${orderId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/sales-followup/${orderId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -525,7 +525,7 @@ export default function FollowUpReport() {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
       const response = await axios.put(
-        `https://vpl-liveproject-1.onrender.com/api/v1/sales-followup/${orderId}/status`,
+        `${API_CONFIG.BASE_URL}/api/v1/sales-followup/${orderId}/status`,
         { status: newStatus },
         {
           headers: {

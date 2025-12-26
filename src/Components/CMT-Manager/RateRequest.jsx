@@ -810,7 +810,7 @@ useEffect(() => {
   }, [isTruckerDropdownOpen]);
 
 
-  // 15s polling for running timers (Rate tab)
+  // 30s polling for running timers (Rate tab) - reduced frequency to prevent 429 errors
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
@@ -818,7 +818,7 @@ useEffect(() => {
       const src = completedRequests.length ? completedRequests : rateRequests;
       const running = src.filter((ld) => timerStartMap[ld.loadId] && !timerStopMap[ld.loadId]);
       if (running.length) checkFirstBidsForLoads(running);
-    }, 15000);
+    }, 30000); // Increased from 15s to 30s
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };

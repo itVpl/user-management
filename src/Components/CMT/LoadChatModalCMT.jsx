@@ -61,8 +61,8 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
     if (isOpen && loadId) {
       fetchChatMessages();
       
-      // Set up polling for new messages every 3 seconds
-      const interval = setInterval(() => fetchChatMessages(true), 3000);
+      // Set up polling for new messages every 5 seconds (reduced from 3s to prevent 429 errors)
+      const interval = setInterval(() => fetchChatMessages(true), 5000);
       return () => clearInterval(interval);
     } else {
       setMessages([]);
@@ -396,4 +396,4 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
   );
 };
 
-export default LoadChatModalCMT;
+export default LoadChatModalCMT;  

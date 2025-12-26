@@ -38,8 +38,8 @@ import {
   Pause,
   Download
 } from "lucide-react";
-import { io } from "socket.io-client";
 import API_CONFIG from '../../config/api.js';
+import sharedSocketService from '../../services/sharedSocketService';
 import LogoFinal from '../../assets/LogoFinal.png';
 
 // Helper function to format employee name with alias
@@ -1165,6 +1165,10 @@ const ChatPage = () => {
           );
           if (groupRes.data && groupRes.data.success) {
             setSelectedGroup(groupRes.data.group);
+            // Notify NotificationHandler about chat selection change
+            window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+              detail: { selectedEmpId: null, selectedGroupId: groupRes.data.group._id }
+            }));
           }
         }
         return true;
@@ -1191,6 +1195,10 @@ const ChatPage = () => {
           );
           if (groupRes.data && groupRes.data.success) {
             setSelectedGroup(groupRes.data.group);
+            // Notify NotificationHandler about chat selection change
+            window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+              detail: { selectedEmpId: null, selectedGroupId: groupRes.data.group._id }
+            }));
           }
         }
         return true;
@@ -1214,6 +1222,10 @@ const ChatPage = () => {
           setSelectedGroup(null);
           setChatType('individual');
           setGroupMessages([]);
+          // Notify NotificationHandler about chat selection change
+          window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+            detail: { selectedEmpId: null, selectedGroupId: null }
+          }));
         }
         return true;
       }
@@ -1235,6 +1247,10 @@ const ChatPage = () => {
           setSelectedGroup(null);
           setChatType('individual');
           setGroupMessages([]);
+          // Notify NotificationHandler about chat selection change
+          window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+            detail: { selectedEmpId: null, selectedGroupId: null }
+          }));
         }
         return true;
       }
@@ -2061,26 +2077,28 @@ const ChatPage = () => {
   useEffect(() => {
     if (!storedUser?.empId) return;
 
-    socketRef.current = io(`${API_CONFIG.BASE_URL}`, {
-      withCredentials: true,
-      transports: ['websocket', 'polling']
-    });
+    console.log('🚀 Chat.jsx: Using SHARED socket service (reduces server load!)');
+    
+    // Get shared socket instance
+    const socket = sharedSocketService.getSocket();
+    
+    if (!socket) {
+      console.warn('⚠️ Chat.jsx: Shared socket not initialized yet. Waiting...');
+      // Wait for socket to be initialized
+      const checkSocket = setInterval(() => {
+        const s = sharedSocketService.getSocket();
+        if (s) {
+          clearInterval(checkSocket);
+          socketRef.current = s;
+          setupSocketListeners(s);
+        }
+      }, 100);
+      
+      return () => clearInterval(checkSocket);
+    }
 
-    socketRef.current.on("connect", () => {
-
-      socketRef.current.emit("join", storedUser.empId);
-    });
-
-    // Handle socket reconnection - re-emit join event
-    socketRef.current.on("reconnect", () => {
-      console.log("🔄 Socket reconnected, rejoining...");
-      socketRef.current.emit("join", storedUser.empId);
-    });
-
-    socketRef.current.on("connect_error", (err) => {
-      console.error("❌ Socket connection error:", err);
-    });
-
+    socketRef.current = socket;
+    
     // Handle user online status - using correct event names from backend
     const handleUserOnline = (empId) => {
       if (empId && empId !== storedUser.empId) {
@@ -2097,10 +2115,6 @@ const ChatPage = () => {
         });
       }
     };
-
-    // Listen for online/offline events - using correct event names from backend
-    socketRef.current.on("user_online", handleUserOnline);
-    socketRef.current.on("user_offline", handleUserOffline);
 
     const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file }) => {
       // Mark sender as online when they send a message
@@ -2166,8 +2180,6 @@ const ChatPage = () => {
       // Update chat list to show new message count
       await fetchChatList();
     };
-
-    socketRef.current.on("newMessage", handleNewMessage);
 
     // Handle individual message seen status updates
     const handleMessageSeen = ({ senderEmpId, receiverEmpId, receiverName, receiverAliasName, messageIds, seenAt, seenCount }) => {
@@ -2247,13 +2259,18 @@ const ChatPage = () => {
       }
     };
 
-    socketRef.current.on("newGroupMessage", handleNewGroupMessage);
-    socketRef.current.on("groupMessageSeen", handleGroupMessageSeen);
-    socketRef.current.on("messageSeen", handleMessageSeen);
+    // Set up all socket listeners
+    socket.on("user_online", handleUserOnline);
+    socket.on("user_offline", handleUserOffline);
+    socket.on("newMessage", handleNewMessage);
+    socket.on("newGroupMessage", handleNewGroupMessage);
+    socket.on("groupMessageSeen", handleGroupMessageSeen);
+    socket.on("messageSeen", handleMessageSeen);
 
-    // Cleanup
+    // Cleanup - Remove listeners but DON'T disconnect (shared socket stays connected)
     return () => {
       if (socketRef.current) {
+        console.log('🧹 Chat.jsx: Removing socket listeners (socket stays connected)');
         socketRef.current.off("newMessage", handleNewMessage);
         socketRef.current.off("newGroupMessage", handleNewGroupMessage);
         socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
@@ -2261,16 +2278,6 @@ const ChatPage = () => {
         socketRef.current.off("user_online", handleUserOnline);
         socketRef.current.off("user_offline", handleUserOffline);
       }
-    };
-
-    return () => {
-      socketRef.current.off("newMessage", handleNewMessage);
-      socketRef.current.off("newGroupMessage", handleNewGroupMessage);
-      socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
-      socketRef.current.off("messageSeen", handleMessageSeen);
-      socketRef.current.off("user_online", handleUserOnline);
-      socketRef.current.off("user_offline", handleUserOffline);
-      socketRef.current.disconnect();
     };
   }, [storedUser, selectedUser, selectedGroup, groupMessages]);
 
@@ -2524,6 +2531,15 @@ const ChatPage = () => {
                       setChatType('individual');
                       fetchMessages(fullUser.empId);
                       setSearchTerm("");
+                      
+                      // Notify NotificationHandler about chat selection change
+                      window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                        detail: { selectedEmpId: fullUser.empId, selectedGroupId: null }
+                      }));
+                      
+                      // Mark messages as seen and clear unread count
+                      await markMessagesAsSeen(user.empId);
+                      clearUnreadCount(user.empId);
                     } catch (err) {
                       console.error("❌ Failed to load full user profile", err);
                     }
@@ -2537,9 +2553,22 @@ const ChatPage = () => {
                     {onlineUsers.has(user.empId) && (
                       <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
                     )}
+                    {/* Red dot indicator for unread messages */}
+                    {newMessagesMap[user.empId] && (
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white z-10 animate-pulse"></div>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 truncate">{formatEmployeeName(user)}</p>
+                    <div className="flex items-center justify-between">
+                      <p className={`font-semibold truncate ${newMessagesMap[user.empId] ? 'text-gray-900 font-bold' : 'text-gray-800'}`}>
+                        {formatEmployeeName(user)}
+                      </p>
+                      {newMessagesMap[user.empId] && (
+                        <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-semibold min-w-[20px] text-center">
+                          {newMessagesMap[user.empId]}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -2579,6 +2608,10 @@ const ChatPage = () => {
                             setChatType('group');
                             setSelectedUser(null);
                             await fetchGroupMessages(group._id);
+                            // Notify NotificationHandler about chat selection change
+                            window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                              detail: { selectedEmpId: null, selectedGroupId: groupData._id }
+                            }));
                             // Clear unread count when selecting the group
                             setNewGroupMessagesMap(prev => {
                               const copy = { ...prev };
@@ -2653,6 +2686,10 @@ const ChatPage = () => {
                           setSelectedGroup(null);
                           setChatType('individual');
                           fetchMessages(fullUser.empId);
+                          // Notify NotificationHandler about chat selection change
+                          window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                            detail: { selectedEmpId: fullUser.empId, selectedGroupId: null }
+                          }));
                           
                           // Mark messages as seen on server and clear unread count
                           await markMessagesAsSeen(user.empId);

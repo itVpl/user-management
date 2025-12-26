@@ -1384,7 +1384,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       }
 
       // Fetch drivers by compName
-      const url = `https://vpl-liveproject-1.onrender.com/api/v1/cmt-reports/drivers-by-company?compName=${encodeURIComponent(
+      const url = `${API_CONFIG.BASE_URL}/api/v1/cmt-reports/drivers-by-company?compName=${encodeURIComponent(
         compName
       )}`;
       
@@ -1454,7 +1454,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       if (!token) return alertify.error('Authentication required');
 
       setAssignLoading(true);
-      const url = `https://vpl-liveproject-1.onrender.com/api/v1/do/load/${encodeURIComponent(loadId)}/assign-driver`;
+      const url = `${API_CONFIG.BASE_URL}/api/v1/do/load/${encodeURIComponent(loadId)}/assign-driver`;
       
       // Prepare payload - only driverId and vehicleNumber as per API spec
       const payload = { 

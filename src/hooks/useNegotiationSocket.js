@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
+import API_CONFIG from '../config/api';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 
-                   import.meta.env.VITE_SOCKET_URL || 
-                   'https://vpl-liveproject-1.onrender.com';
+// Use API_CONFIG.BASE_URL (uses VITE_API_BASE_URL from .env)
+const SOCKET_URL = API_CONFIG.BASE_URL;
 
 export const useNegotiationSocket = (user, bidId) => {
   const socketRef = useRef(null);

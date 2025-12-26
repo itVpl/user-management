@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
+import API_CONFIG from '../config/api';
 
 const SocketTest = () => {
   const [status, setStatus] = useState('Not connected');
@@ -14,7 +15,7 @@ const SocketTest = () => {
         console.log('✅ socket.io-client is working');
         
         // Test connection (but don't actually connect)
-        const testSocket = io('https://vpl-liveproject-1.onrender.com', {
+        const testSocket = io(API_CONFIG.BASE_URL, {
           autoConnect: false // Don't auto-connect for test
         });
         

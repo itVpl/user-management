@@ -1,4 +1,5 @@
 import io from 'socket.io-client';
+import API_CONFIG from '../config/api';
 
 class GlobalNegotiationSocketService {
   constructor() {
@@ -25,9 +26,8 @@ class GlobalNegotiationSocketService {
 
     this.currentUser = user;
 
-    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 
-                       import.meta.env.VITE_SOCKET_URL || 
-                       'https://vpl-liveproject-1.onrender.com';
+    // Use API_CONFIG.BASE_URL (uses VITE_API_BASE_URL from .env)
+    const SOCKET_URL = API_CONFIG.BASE_URL;
 
     try {
       this.socket = io(SOCKET_URL, {
@@ -188,7 +188,7 @@ class GlobalNegotiationSocketService {
 
       // Fetch assigned loads for CMT users
       const response = await fetch(
-        `https://vpl-liveproject-1.onrender.com/api/v1/bid/cmt-assigned-loads/${user.empId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/bid/cmt-assigned-loads/${user.empId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,

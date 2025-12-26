@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import API_CONFIG from "../../config/api";
 
 const ManageModule = () => {
   const [modules, setModules] = useState([]);
@@ -13,7 +14,7 @@ const ManageModule = () => {
       sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
 
     axios
-      .get("https://vpl-liveproject-1.onrender.com/api/v1/module", {
+      .get(`${API_CONFIG.BASE_URL}/api/v1/module`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -32,8 +33,8 @@ const ManageModule = () => {
       sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
 
     const url = currentStatus
-      ? `https://vpl-liveproject-1.onrender.com/api/v1/module/deactivate/${moduleId}`
-      : `https://vpl-liveproject-1.onrender.com/api/v1/module/activate/${moduleId}`;
+      ? `${API_CONFIG.BASE_URL}/api/v1/module/deactivate/${moduleId}`
+      : `${API_CONFIG.BASE_URL}/api/v1/module/activate/${moduleId}`;
 
 
   //  
