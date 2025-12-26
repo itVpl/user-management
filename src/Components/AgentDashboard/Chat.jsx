@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { io } from "socket.io-client";
 import API_CONFIG from '../../config/api.js';
+import LogoFinal from '../../assets/LogoFinal.png';
 
 // Helper function to format employee name with alias
 const formatEmployeeName = (user) => {
@@ -302,9 +303,23 @@ const ChatPage = () => {
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [taggedUsers, setTaggedUsers] = useState([]); // Array of { empId, employeeName, aliasName }
+  // Online status tracking
+  const [onlineUsers, setOnlineUsers] = useState(new Set()); // Set of empIds that are online
+  // Pagination states for lazy loading
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [hasMoreGroupMessages, setHasMoreGroupMessages] = useState(true);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [loadingOlderGroupMessages, setLoadingOlderGroupMessages] = useState(false);
+  const [messagesPage, setMessagesPage] = useState(0);
+  const [groupMessagesPage, setGroupMessagesPage] = useState(0);
+  const INITIAL_MESSAGES_COUNT = 10; // Load 10 messages initially when opening chat
+  const MESSAGES_PER_PAGE = 30; // Load 30 messages at a time when scrolling up
+  
   const mentionDropdownRef = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null); // Ref for individual messages container
+  const groupMessagesContainerRef = useRef(null); // Ref for group messages container
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const audioInputRef = useRef(null);
@@ -320,9 +335,6 @@ const ChatPage = () => {
 
   // Show notification
   const showNotification = (title, body, senderName) => {
-
-
-
     // Check if Notification API is supported
     if (typeof Notification === 'undefined') {
       console.error("❌ Notification API not supported in this browser");
@@ -332,23 +344,22 @@ const ChatPage = () => {
     if (Notification.permission === "granted") {
       try {
         const notification = new Notification(title, {
-          body: `${senderName}: ${body}`,
-          icon: "/vite.svg",
-          badge: "/vite.svg",
+          body: body, // Body already contains the message, title has the sender name
+          icon: LogoFinal,
+          badge: LogoFinal,
           requireInteraction: true, // Keep notification until user interacts
           silent: false // Play sound
         });
 
         // Add click handler
         notification.onclick = () => {
-
           window.focus();
           notification.close();
         };
         
         // Add close handler
         notification.onclose = () => {
-
+          // Notification closed
         };
         
         // Auto close after 5 seconds
@@ -359,11 +370,9 @@ const ChatPage = () => {
       } catch (error) {
         console.error("❌ Failed to create notification:", error);
       }
-    } else {
-
-      // Try to request permission again
+    } else if (Notification.permission === "default") {
+      // Try to request permission
       Notification.requestPermission().then(permission => {
-
         if (permission === "granted") {
           showNotification(title, body, senderName); // Retry
         }
@@ -436,7 +445,7 @@ const ChatPage = () => {
 
   // Show in-app notification
   const displayInAppNotification = (title, body, senderName) => {
-
+    console.log("🔔 Showing in-app notification:", { title, body, senderName });
     setInAppNotificationData({ title, body, senderName });
     setShowInAppNotification(true);
     
@@ -447,18 +456,100 @@ const ChatPage = () => {
     }, 5000);
   };
 
-  const fetchMessages = async (selectedEmpId) => {
+  const fetchMessages = async (selectedEmpId, loadOlder = false) => {
     if (!storedUser?.empId || !selectedEmpId) return;
     try {
-      setLoadingMessages(true);
+      if (loadOlder) {
+        setLoadingOlderMessages(true);
+      } else {
+        setLoadingMessages(true);
+        setMessagesPage(0);
+        setHasMoreMessages(true);
+      }
+
+      // Calculate pagination parameters
+      // For initial load, use INITIAL_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
+      const skip = loadOlder ? messagesPage * MESSAGES_PER_PAGE : 0;
+      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_MESSAGES_COUNT;
+      
       const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/with/${selectedEmpId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/with/${selectedEmpId}?limit=${limit}&skip=${skip}`,
         { withCredentials: true }
       );
 
-      const allMessages = res.data || [];
+      // Handle new API response structure: { messages: [], otherUser: { ... } }
+      let fetchedMessages = [];
+      let otherUserData = null;
+      
+      if (res.data) {
+        if (Array.isArray(res.data)) {
+          // Legacy format: array of messages
+          fetchedMessages = res.data;
+        } else if (res.data.messages && Array.isArray(res.data.messages)) {
+          // New format: object with messages and otherUser
+          fetchedMessages = res.data.messages;
+          otherUserData = res.data.otherUser;
+          
+          // Update online status from otherUser
+          if (otherUserData && otherUserData.empId && otherUserData.online !== undefined) {
+            if (otherUserData.online) {
+              setOnlineUsers(prev => new Set([...prev, otherUserData.empId]));
+            } else {
+              setOnlineUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(otherUserData.empId);
+                return newSet;
+              });
+            }
+          }
+        } else {
+          fetchedMessages = res.data;
+        }
+      }
+      
+      // Handle pagination - API may or may not support it
+      let messagesToProcess = fetchedMessages;
+      
+      if (loadOlder) {
+        // Loading older messages
+        // If API returned all messages (doesn't support pagination), filter to get only older ones
+        if (messages.length > 0 && fetchedMessages.length > messages.length) {
+          // API returned all messages, find the oldest message we have and get messages before it
+          const oldestMessageId = messages[0]._id;
+          const oldestMessageIndex = fetchedMessages.findIndex(msg => msg._id === oldestMessageId);
+          
+          if (oldestMessageIndex > 0) {
+            // Get messages before the oldest one we have
+            const olderMessages = fetchedMessages.slice(0, oldestMessageIndex);
+            // Take only the last MESSAGES_PER_PAGE older messages
+            messagesToProcess = olderMessages.slice(-MESSAGES_PER_PAGE);
+            setHasMoreMessages(olderMessages.length > MESSAGES_PER_PAGE);
+          } else {
+            // No older messages found
+            messagesToProcess = [];
+            setHasMoreMessages(false);
+          }
+        } else {
+          // API supports pagination or returned exactly what we need
+          if (fetchedMessages.length < MESSAGES_PER_PAGE) {
+            setHasMoreMessages(false);
+          } else {
+            setHasMoreMessages(true);
+          }
+        }
+      } else {
+        // Initial load - take only the last INITIAL_MESSAGES_COUNT messages (10 messages)
+        if (fetchedMessages.length > INITIAL_MESSAGES_COUNT) {
+          messagesToProcess = fetchedMessages.slice(-INITIAL_MESSAGES_COUNT);
+          setHasMoreMessages(true);
+        } else {
+          messagesToProcess = fetchedMessages;
+          setHasMoreMessages(fetchedMessages.length >= INITIAL_MESSAGES_COUNT);
+        }
+      }
+
       // Process messages to add isMyMessage flag and ensure seenBy structure
-      const processedMessages = allMessages.map(msg => ({
+      const processedMessages = messagesToProcess.map(msg => ({
         ...msg,
         isMyMessage: msg.senderEmpId === storedUser?.empId,
         seenBy: msg.seenBy || null,
@@ -466,18 +557,34 @@ const ChatPage = () => {
         isSeen: msg.isSeen !== undefined ? msg.isSeen : (msg.seenBy ? true : false),
         status: msg.status || (msg.isSeen ? 'seen' : (msg.seenBy ? 'seen' : 'sent'))
       }));
-      
-      setMessages(processedMessages);
 
-      // Mark messages as seen when opening chat
-      markMessagesAsSeen(selectedEmpId);
+      if (loadOlder) {
+        // Prepend older messages to the beginning
+        setMessages(prev => [...processedMessages, ...prev]);
+        setMessagesPage(prev => prev + 1);
+      } else {
+        // Initial load - replace all messages
+        setMessages(processedMessages);
+        setMessagesPage(1);
+      }
 
-      setTimeout(scrollToBottom, 100);
+      // Mark messages as seen when opening chat (only on initial load)
+      if (!loadOlder) {
+        markMessagesAsSeen(selectedEmpId);
+        setTimeout(scrollToBottom, 100);
+      }
     } catch (err) {
       console.error("❌ Failed to load messages:", err);
-      setMessages([]);
+      if (!loadOlder) {
+        setMessages([]);
+      }
+      setHasMoreMessages(false);
     } finally {
-      setLoadingMessages(false);
+      if (loadOlder) {
+        setLoadingOlderMessages(false);
+      } else {
+        setLoadingMessages(false);
+      }
     }
   };
 
@@ -489,6 +596,16 @@ const ChatPage = () => {
         { withCredentials: true }
       );
       const list = res.data || [];
+      
+      // Initialize online status from API response
+      const onlineEmpIds = list
+        .filter(chat => chat.online === true)
+        .map(chat => chat.empId)
+        .filter(empId => empId && empId !== storedUser?.empId);
+      
+      if (onlineEmpIds.length > 0) {
+        setOnlineUsers(new Set(onlineEmpIds));
+      }
       
       // Fetch server-side unread counts first
       await fetchUnreadCounts();
@@ -550,39 +667,113 @@ const ChatPage = () => {
     }
   };
 
-  const fetchGroupMessages = async (groupId) => {
+  const fetchGroupMessages = async (groupId, loadOlder = false) => {
     if (!groupId) return;
     try {
-      setLoadingGroupMessages(true);
+      if (loadOlder) {
+        setLoadingOlderGroupMessages(true);
+      } else {
+        setLoadingGroupMessages(true);
+        setGroupMessagesPage(0);
+        setHasMoreGroupMessages(true);
+      }
+
+      // Calculate pagination parameters
+      // For initial load, use INITIAL_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
+      const skip = loadOlder ? groupMessagesPage * MESSAGES_PER_PAGE : 0;
+      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_MESSAGES_COUNT;
+      
       const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=${limit}&skip=${skip}`,
         { withCredentials: true }
       );
+      
       if (res.data && res.data.success) {
+        const fetchedMessages = res.data.messages || [];
+        
+        // Handle pagination - API may or may not support it
+        let messagesToProcess = fetchedMessages;
+        
+        if (loadOlder) {
+          // Loading older messages
+          // If API returned all messages (doesn't support pagination), filter to get only older ones
+          if (groupMessages.length > 0 && fetchedMessages.length > groupMessages.length) {
+            // API returned all messages, find the oldest message we have and get messages before it
+            const oldestMessageId = groupMessages[0]._id;
+            const oldestMessageIndex = fetchedMessages.findIndex(msg => msg._id === oldestMessageId);
+            
+            if (oldestMessageIndex > 0) {
+              // Get messages before the oldest one we have
+              const olderMessages = fetchedMessages.slice(0, oldestMessageIndex);
+              // Take only the last MESSAGES_PER_PAGE older messages
+              messagesToProcess = olderMessages.slice(-MESSAGES_PER_PAGE);
+              setHasMoreGroupMessages(olderMessages.length > MESSAGES_PER_PAGE);
+            } else {
+              // No older messages found
+              messagesToProcess = [];
+              setHasMoreGroupMessages(false);
+            }
+          } else {
+            // API supports pagination or returned exactly what we need
+            if (fetchedMessages.length < MESSAGES_PER_PAGE) {
+              setHasMoreGroupMessages(false);
+            } else {
+              setHasMoreGroupMessages(true);
+            }
+          }
+        } else {
+          // Initial load - take only the last INITIAL_MESSAGES_COUNT messages (10 messages)
+          if (fetchedMessages.length > INITIAL_MESSAGES_COUNT) {
+            messagesToProcess = fetchedMessages.slice(-INITIAL_MESSAGES_COUNT);
+            setHasMoreGroupMessages(true);
+          } else {
+            messagesToProcess = fetchedMessages;
+            setHasMoreGroupMessages(fetchedMessages.length >= INITIAL_MESSAGES_COUNT);
+          }
+        }
+
         // Process messages to add isMyMessage flag and ensure seenBy structure
-        const processedMessages = (res.data.messages || []).map(msg => ({
+        const processedMessages = messagesToProcess.map(msg => ({
           ...msg,
           isMyMessage: msg.senderEmpId === storedUser?.empId,
           seenBy: msg.seenBy || [],
           seenCount: msg.seenCount || (msg.seenBy?.length || 0)
         }));
-        setGroupMessages(processedMessages);
+
+        if (loadOlder) {
+          // Prepend older messages to the beginning
+          setGroupMessages(prev => [...processedMessages, ...prev]);
+          setGroupMessagesPage(prev => prev + 1);
+        } else {
+          // Initial load - replace all messages
+          setGroupMessages(processedMessages);
+          setGroupMessagesPage(1);
+        }
         
-        // Mark visible messages as seen after a short delay
-        setTimeout(() => {
-          processedMessages.forEach(msg => {
-            if (!msg.isMyMessage && !isMessageSeenByMe(msg) && msg._id) {
-              markGroupMessageAsSeen(groupId, msg._id);
-            }
-          });
-          scrollToBottom();
-        }, 500);
+        // Mark visible messages as seen after a short delay (only on initial load)
+        if (!loadOlder) {
+          setTimeout(() => {
+            processedMessages.forEach(msg => {
+              if (!msg.isMyMessage && !isMessageSeenByMe(msg) && msg._id) {
+                markGroupMessageAsSeen(groupId, msg._id);
+              }
+            });
+            scrollToBottom();
+          }, 500);
+        }
       }
     } catch (err) {
       console.error("❌ Failed to fetch group messages", err);
-      setGroupMessages([]);
+      if (!loadOlder) {
+        setGroupMessages([]);
+      }
+      setHasMoreGroupMessages(false);
     } finally {
-      setLoadingGroupMessages(false);
+      if (loadOlder) {
+        setLoadingOlderGroupMessages(false);
+      } else {
+        setLoadingGroupMessages(false);
+      }
     }
   };
 
@@ -761,6 +952,27 @@ const ChatPage = () => {
     const usersToTag = [...taggedUsers];
     setTaggedUsers([]);
     setShowMentionDropdown(false);
+
+    // Create temporary ID for optimistic update
+    const tempId = `temp-group-${Date.now()}-${Math.random()}`;
+    
+    // Optimistically add message to UI immediately
+    const optimisticMessage = {
+      _id: tempId,
+      senderEmpId: storedUser.empId,
+      senderName: storedUser.employeeName,
+      senderAliasName: storedUser.aliasName,
+      message: messageToSend,
+      timestamp: new Date().toISOString(),
+      isMyMessage: true,
+      seenBy: [],
+      seenCount: 0,
+      taggedUsers: usersToTag,
+      isOptimistic: true // Flag to identify optimistic messages
+    };
+    
+    setGroupMessages(prev => [...prev, optimisticMessage]);
+    setTimeout(scrollToBottom, 50);
     
     try {
       const formData = new FormData();
@@ -784,19 +996,20 @@ const ChatPage = () => {
       );
 
       if (response.data && response.data.success) {
-        const newMessage = {
-          _id: response.data.message?._id || response.data.messageId || Date.now().toString(),
-          senderEmpId: storedUser.empId,
-          senderName: storedUser.employeeName,
-          senderAliasName: storedUser.aliasName,
-          message: messageToSend,
-          timestamp: response.data.message?.timestamp || new Date().toISOString(),
-          isMyMessage: true,
-          seenBy: [],
-          seenCount: 0,
-          taggedUsers: usersToTag // Include tagged users in message
-        };
-        setGroupMessages(prev => [...prev, newMessage]);
+        // Update the optimistic message with real server data
+        const realMessageId = response.data.message?._id || response.data.messageId;
+        const realTimestamp = response.data.message?.timestamp || new Date().toISOString();
+        
+        setGroupMessages(prev => prev.map(msg => 
+          msg._id === tempId 
+            ? {
+                ...msg,
+                _id: realMessageId,
+                timestamp: realTimestamp,
+                isOptimistic: false
+              }
+            : msg
+        ));
         
         // Refresh messages after a short delay to get proper server data with correct ID
         // This ensures the message ID matches what the backend sends in socket events
@@ -809,9 +1022,12 @@ const ChatPage = () => {
       }
     } catch (err) {
       console.error("❌ Send group message failed:", err);
+      // Remove optimistic message on error
+      setGroupMessages(prev => prev.filter(msg => msg._id !== tempId));
       // Restore input on error
       setInput(messageToSend);
       setTaggedUsers(usersToTag);
+      alert('Failed to send message. Please try again.');
     } finally {
       setIsSendingMessage(false);
     }
@@ -1089,7 +1305,36 @@ const ChatPage = () => {
     
     // Clear input immediately to prevent duplicate sends
     setInput("");
+
+    // Create temporary ID for optimistic update
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
     
+    // Optimistically add message to UI immediately
+    const optimisticMessage = {
+      _id: tempId,
+      senderEmpId: storedUser.empId,
+      receiverEmpId: selectedUser.empId,
+      message: messageToSend,
+      timestamp: new Date().toISOString(),
+      status: 'sent',
+      isMyMessage: true,
+      seenBy: null,
+      seenAt: null,
+      isSeen: false,
+      isOptimistic: true // Flag to identify optimistic messages
+    };
+    
+    setMessages(prev => [...prev, optimisticMessage]);
+    setTimeout(scrollToBottom, 50);
+
+    // Emit socket event immediately
+    socketRef.current?.emit("newMessage", {
+      senderEmpId: storedUser.empId,
+      receiverEmpId: selectedUser.empId,
+      message: messageToSend,
+      senderName: storedUser.employeeName
+    });
+
     try {
       const payload = {
         receiverEmpId: selectedUser.empId,
@@ -1101,21 +1346,21 @@ const ChatPage = () => {
         { withCredentials: true }
       );
 
-      // Add the new message to the messages array immediately
+      // Update the optimistic message with real server data
       if (response.data) {
-        const newMessage = {
-          _id: response.data.message?._id || response.data.messageId || Date.now().toString(),
-          senderEmpId: storedUser.empId,
-          receiverEmpId: selectedUser.empId,
-          message: messageToSend,
-          timestamp: response.data.message?.timestamp || new Date().toISOString(),
-          status: 'sent',
-          isMyMessage: true,
-          seenBy: null,
-          seenAt: null,
-          isSeen: false
-        };
-        setMessages(prev => [...prev, newMessage]);
+        const realMessageId = response.data.message?._id || response.data.messageId;
+        const realTimestamp = response.data.message?.timestamp || new Date().toISOString();
+        
+        setMessages(prev => prev.map(msg => 
+          msg._id === tempId 
+            ? {
+                ...msg,
+                _id: realMessageId,
+                timestamp: realTimestamp,
+                isOptimistic: false
+              }
+            : msg
+        ));
         
         // Refresh messages after a short delay to get proper server data
         setTimeout(async () => {
@@ -1123,19 +1368,13 @@ const ChatPage = () => {
           setTimeout(scrollToBottom, 100);
         }, 500);
       }
-
-      socketRef.current?.emit("newMessage", {
-        senderEmpId: storedUser.empId,
-        receiverEmpId: selectedUser.empId,
-        message: messageToSend,
-        senderName: storedUser.employeeName
-      });
-
-      setTimeout(scrollToBottom, 100);
     } catch (err) {
       console.error("❌ Send message failed:", err);
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(msg => msg._id !== tempId));
       // Restore input on error
       setInput(messageToSend);
+      alert('Failed to send message. Please try again.');
     } finally {
       setIsSendingMessage(false);
     }
@@ -1422,11 +1661,11 @@ const ChatPage = () => {
       return <CheckCheck size={14} className="text-blue-500" />;
     }
     switch (status) {
-      case 'sent': return <Clock size={14} className="text-gray-400" />;
+      case 'sent': return <Check size={14} className="text-gray-400" />; // Single tick for sent messages in individual chat
       case 'delivered': return <Check size={14} className="text-gray-400" />;
       case 'seen': return <CheckCheck size={14} className="text-blue-500" />;
       case 'read': return <CheckCheck size={14} className="text-blue-500" />;
-      default: return <Clock size={14} className="text-gray-400" />;
+      default: return <Check size={14} className="text-gray-400" />; // Single tick as default for individual chat
     }
   };
 
@@ -1824,6 +2063,7 @@ const ChatPage = () => {
 
     socketRef.current = io(`${API_CONFIG.BASE_URL}`, {
       withCredentials: true,
+      transports: ['websocket', 'polling']
     });
 
     socketRef.current.on("connect", () => {
@@ -1831,11 +2071,42 @@ const ChatPage = () => {
       socketRef.current.emit("join", storedUser.empId);
     });
 
+    // Handle socket reconnection - re-emit join event
+    socketRef.current.on("reconnect", () => {
+      console.log("🔄 Socket reconnected, rejoining...");
+      socketRef.current.emit("join", storedUser.empId);
+    });
+
     socketRef.current.on("connect_error", (err) => {
       console.error("❌ Socket connection error:", err);
     });
 
+    // Handle user online status - using correct event names from backend
+    const handleUserOnline = (empId) => {
+      if (empId && empId !== storedUser.empId) {
+        setOnlineUsers(prev => new Set([...prev, empId]));
+      }
+    };
+
+    const handleUserOffline = (empId) => {
+      if (empId && empId !== storedUser.empId) {
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(empId);
+          return newSet;
+        });
+      }
+    };
+
+    // Listen for online/offline events - using correct event names from backend
+    socketRef.current.on("user_online", handleUserOnline);
+    socketRef.current.on("user_offline", handleUserOffline);
+
     const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file }) => {
+      // Mark sender as online when they send a message
+      if (senderEmpId && senderEmpId !== storedUser.empId) {
+        setOnlineUsers(prev => new Set([...prev, senderEmpId]));
+      }
 
       // Check if this message is for current user (as receiver)
       const isForMe = receiverEmpId === storedUser.empId;
@@ -1855,16 +2126,15 @@ const ChatPage = () => {
       }
 
       // Show notification if message is for current user and not from current selected user
-
-      if (isForMe && !isFromSelectedUser) {
-
-        // Try browser notification first
-        showNotification("New Message", notificationMessage, senderName || "Someone");
+      // Also show if no chat is currently selected (user is not viewing any chat)
+      if (isForMe && (!selectedUser || !isFromSelectedUser)) {
+        const senderDisplayName = senderName || "Someone";
         
-        // Also show in-app notification as backup
-        displayInAppNotification("New Message", notificationMessage, senderName || "Someone");
-      } else {
-
+        // Always show in-app notification
+        displayInAppNotification(`New Message from ${senderDisplayName}`, notificationMessage, senderDisplayName);
+        
+        // Try browser notification (will only show if permission granted)
+        showNotification(`New Message from ${senderDisplayName}`, notificationMessage, senderDisplayName);
       }
 
       // Update last message time for sorting
@@ -1912,6 +2182,11 @@ const ChatPage = () => {
     };
 
     const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message, audio, image, file }) => {
+      // Mark sender as online when they send a message
+      if (senderEmpId && senderEmpId !== storedUser.empId) {
+        setOnlineUsers(prev => new Set([...prev, senderEmpId]));
+      }
+
       // Check if this message is for current selected group
       const isForSelectedGroup = selectedGroup?._id === groupId;
       const isFromMe = senderEmpId === storedUser.empId;
@@ -1926,10 +2201,17 @@ const ChatPage = () => {
         notificationMessage = "Sent a file 📎";
       }
 
-      // Show notification if message is not from me and not for selected group
-      if (!isFromMe && !isForSelectedGroup) {
-        showNotification("New Group Message", notificationMessage, `${senderName || "Someone"} in ${groupName || "Group"}`);
-        displayInAppNotification("New Group Message", notificationMessage, `${senderName || "Someone"} in ${groupName || "Group"}`);
+      // Show notification if message is not from me and (not for selected group OR no group is selected)
+      // This ensures notifications show even when user is not viewing the group or viewing a different group
+      if (!isFromMe && (!selectedGroup || !isForSelectedGroup)) {
+        const senderDisplayName = senderName || "Someone";
+        const groupDisplayName = groupName || "Group";
+        
+        // Always show in-app notification
+        displayInAppNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
+        
+        // Try browser notification (will only show if permission granted)
+        showNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
         
         // Update unread count for the group
         setNewGroupMessagesMap(prev => {
@@ -1976,6 +2258,8 @@ const ChatPage = () => {
         socketRef.current.off("newGroupMessage", handleNewGroupMessage);
         socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
         socketRef.current.off("messageSeen", handleMessageSeen);
+        socketRef.current.off("user_online", handleUserOnline);
+        socketRef.current.off("user_offline", handleUserOffline);
       }
     };
 
@@ -1984,9 +2268,96 @@ const ChatPage = () => {
       socketRef.current.off("newGroupMessage", handleNewGroupMessage);
       socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
       socketRef.current.off("messageSeen", handleMessageSeen);
+      socketRef.current.off("user_online", handleUserOnline);
+      socketRef.current.off("user_offline", handleUserOffline);
       socketRef.current.disconnect();
     };
   }, [storedUser, selectedUser, selectedGroup, groupMessages]);
+
+  // Handle scroll to load older messages for individual chat
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || !selectedUser?.empId || chatType !== 'individual') return;
+
+    let isLoading = false; // Prevent multiple simultaneous loads
+
+    const handleScroll = () => {
+      // Check if user scrolled near the top (within 200px)
+      if (container.scrollTop < 200 && hasMoreMessages && !loadingOlderMessages && !isLoading) {
+        isLoading = true;
+        // Store current scroll position and first message element
+        const previousScrollHeight = container.scrollHeight;
+        const firstMessage = container.querySelector('[data-message-id]');
+        const firstMessageId = firstMessage?.getAttribute('data-message-id');
+        
+        // Load older messages
+        fetchMessages(selectedUser.empId, true).then(() => {
+          // Restore scroll position after new messages are loaded
+          setTimeout(() => {
+            const newScrollHeight = container.scrollHeight;
+            const scrollDiff = newScrollHeight - previousScrollHeight;
+            container.scrollTop = scrollDiff;
+            isLoading = false;
+          }, 100);
+        }).catch(() => {
+          isLoading = false;
+        });
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      isLoading = false;
+    };
+  }, [selectedUser?.empId, hasMoreMessages, loadingOlderMessages, chatType]);
+
+  // Handle scroll to load older messages for group chat
+  useEffect(() => {
+    const container = groupMessagesContainerRef.current;
+    if (!container || !selectedGroup?._id || chatType !== 'group') return;
+
+    let isLoading = false; // Prevent multiple simultaneous loads
+
+    const handleScroll = () => {
+      // Check if user scrolled near the top (within 200px)
+      if (container.scrollTop < 200 && hasMoreGroupMessages && !loadingOlderGroupMessages && !isLoading) {
+        isLoading = true;
+        // Store current scroll position
+        const previousScrollHeight = container.scrollHeight;
+        
+        // Load older messages
+        fetchGroupMessages(selectedGroup._id, true).then(() => {
+          // Restore scroll position after new messages are loaded
+          setTimeout(() => {
+            const newScrollHeight = container.scrollHeight;
+            const scrollDiff = newScrollHeight - previousScrollHeight;
+            container.scrollTop = scrollDiff;
+            isLoading = false;
+          }, 100);
+        }).catch(() => {
+          isLoading = false;
+        });
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      isLoading = false;
+    };
+  }, [selectedGroup?._id, hasMoreGroupMessages, loadingOlderGroupMessages, chatType]);
+
+  // Reset pagination when switching chats
+  useEffect(() => {
+    setMessagesPage(0);
+    setHasMoreMessages(true);
+  }, [selectedUser]);
+
+  useEffect(() => {
+    setGroupMessagesPage(0);
+    setHasMoreGroupMessages(true);
+  }, [selectedGroup]);
 
   // Show skeleton loaders during initial load
   if (loading) {
@@ -2051,23 +2422,24 @@ const ChatPage = () => {
     <div className="h-[87vh] bg-gray-50 flex relative">
       {/* In-App Notification */}
       {showInAppNotification && inAppNotificationData && (
-        <div className="fixed top-4 right-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm transform transition-all duration-300 ease-in-out">
+        <div className="fixed top-4 right-4 z-[9999] bg-white border-2 border-blue-200 rounded-lg shadow-2xl p-4 max-w-sm transform transition-all duration-300 ease-in-out">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
               <Bell size={20} className="text-white" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h4 className="font-semibold text-gray-800">{inAppNotificationData.title}</h4>
-              <p className="text-sm text-gray-600 mt-1">{inAppNotificationData.senderName}: {inAppNotificationData.body}</p>
+              <p className="text-sm text-gray-600 mt-1 break-words">{inAppNotificationData.body}</p>
             </div>
             <button 
               onClick={() => {
                 setShowInAppNotification(false);
                 setInAppNotificationData(null);
               }}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-2"
+              title="Close"
             >
-              ×
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -2082,8 +2454,22 @@ const ChatPage = () => {
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
                 <User size={20} className="text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-800">Inhouse Chat</h1>
+              <div className="relative">
+                <h1 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  Inhouse Chat
+                  {/* Red dot indicator for new messages */}
+                  {(() => {
+                    const totalUnreadIndividual = Object.values(newMessagesMap).reduce((sum, count) => sum + count, 0);
+                    const totalUnreadGroup = Object.values(newGroupMessagesMap).reduce((sum, count) => sum + count, 0);
+                    const totalUnread = totalUnreadIndividual + totalUnreadGroup;
+                    return totalUnread > 0 ? (
+                      <span className="relative flex items-center justify-center">
+                        <span className="absolute w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                        <span className="relative w-2 h-2 bg-red-500 rounded-full"></span>
+                      </span>
+                    ) : null;
+                  })()}
+                </h1>
                 <p className="text-gray-500 text-sm">{chatList.length} chats, {groups.length} groups</p>
               </div>
             </div>
@@ -2148,7 +2534,9 @@ const ChatPage = () => {
                     <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                       {user.employeeName?.charAt(0).toUpperCase()}
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                    {onlineUsers.has(user.empId) && (
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-800 truncate">{formatEmployeeName(user)}</p>
@@ -2284,7 +2672,9 @@ const ChatPage = () => {
                         <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                           {user.employeeName?.charAt(0).toUpperCase()}
                         </div>
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                        {onlineUsers.has(user.empId) && (
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                        )}
                         {/* Red dot indicator for unread messages */}
                         {newMessagesMap[user.empId] && (
                           <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
@@ -2413,8 +2803,16 @@ const ChatPage = () => {
             </div>
 
             {/* Group Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
+            <div ref={groupMessagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-100">
               <div className="space-y-2">
+                {loadingOlderGroupMessages && (
+                  <div className="flex justify-center py-2">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading older messages...</span>
+                    </div>
+                  </div>
+                )}
                 {loadingGroupMessages ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <div className="flex flex-col items-center gap-4">
@@ -2801,14 +3199,17 @@ const ChatPage = () => {
                   <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                     {selectedUser.employeeName?.charAt(0).toUpperCase()}
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                  {onlineUsers.has(selectedUser.empId) && (
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                  )}
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-800">{formatEmployeeName(selectedUser)}</h2>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  {onlineUsers.has(selectedUser.empId) ? (
                     <p className="text-sm text-gray-500">Online</p>
-                  </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Offline</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -2838,8 +3239,16 @@ const ChatPage = () => {
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-100">
               <div className="space-y-2">
+                {loadingOlderMessages && (
+                  <div className="flex justify-center py-2">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading older messages...</span>
+                    </div>
+                  </div>
+                )}
                 {loadingMessages ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <div className="flex flex-col items-center gap-4">
