@@ -179,19 +179,29 @@ const autoAcceptingRef = useRef(new Set());
 
   const fetchRateRequests = async () => {
     try {
+      setIsFetching(true);
       const token = getAuthToken();
       if (!token) {
         toast.error('Please login to access this resource');
+        setIsFetching(false);
         return;
       }
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
+      console.log('Fetching pending approvals...');
       // Pending approvals
       const pendingRes = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending`,
         { headers }
       );
-      const pendingApprovals = pendingRes.data?.data?.approvals || [];
+      console.log('Pending Response:', pendingRes.data);
+      let pendingApprovals = [];
+      if (Array.isArray(pendingRes.data)) {
+        pendingApprovals = pendingRes.data;
+      } else {
+        pendingApprovals = pendingRes.data?.approvals || pendingRes.data?.data?.approvals || [];
+      }
+      console.log('Pending Approvals Count:', pendingApprovals.length);
 
       const transformedPending = pendingApprovals.map((approval) => {
         const loadId = approval?.loadId?._id || null;
@@ -300,11 +310,19 @@ const autoAcceptingRef = useRef(new Set());
       });
 
       // Approved loads for Rate tab - using new API endpoint
+      console.log('Fetching approved requests...');
       const approvedRes = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?status=approved`,
         { headers }
       );
-      const approvedApprovals = approvedRes.data?.data?.approvals || [];
+      console.log('Approved Response:', approvedRes.data);
+      let approvedApprovals = [];
+      if (Array.isArray(approvedRes.data)) {
+        approvedApprovals = approvedRes.data;
+      } else {
+        approvedApprovals = approvedRes.data?.approvals || approvedRes.data?.data?.approvals || [];
+      }
+      console.log('Approved Approvals Count:', approvedApprovals.length);
 
       const transformedApproved = approvedApprovals.map((approval) => {
         const loadId = approval?.loadId?._id || null;
@@ -706,10 +724,13 @@ const fetchLoadDetailsForChat = async (loadId) => {
     fetchTruckers();
   }, []);
 
-  // Fetch rate details when Rate Details tab is active
+  // Fetch data when tab changes
   useEffect(() => {
     if (activeTab === 'rateDetails') {
       fetchRateDetails();
+    } else if (activeTab === 'pending' || activeTab === 'rate') {
+      // Fetch rate requests data for pending and rate tabs
+      fetchRateRequests();
     }
   }, [activeTab]);
 

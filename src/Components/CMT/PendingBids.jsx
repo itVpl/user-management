@@ -66,7 +66,7 @@ export default function PendingBids() {
             vehicleType: bid.load?.vehicleType || 'N/A',
             pickupDate: bid.load?.pickupDate || 'N/A',
             deliveryDate: bid.load?.deliveryDate || 'N/A',
-            originalRate: bid.load?.rate || 0
+            originalRate: bid.load?.rate || bid.rate || 0
           },
           estimatedPickup: new Date(bid.estimatedPickupDate).toLocaleDateString(),
           estimatedDelivery: new Date(bid.estimatedDeliveryDate).toLocaleDateString(),
@@ -403,6 +403,7 @@ export default function PendingBids() {
                         onClick={() => {
                           console.log('Bid data:', bid); // Debug log
                           console.log('Bid rate:', bid.rate); // Debug log
+                          console.log('Load info original rate:', bid.loadInfo?.originalRate); // Debug log
                           setMarginAmount(0); // Reset margin when opening modal
                           setEditableMessage(bid.remarks || ''); // Initialize editable message
                           setApprovalError(''); // Reset any previous errors
@@ -506,7 +507,7 @@ export default function PendingBids() {
                   </div>
                   <div>
                     <p className="text-gray-500 font-medium">Original Rate</p>
-                    <p className="text-green-600 font-bold">${approvalModal.bid?.rate?.toLocaleString()}</p>
+                    <p className="text-green-600 font-bold">${(approvalModal.bid?.loadInfo?.originalRate || approvalModal.bid?.rate || 0).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -525,7 +526,7 @@ export default function PendingBids() {
                     type="number"
                     readOnly
                     className="w-full pl-8 pr-4 py-3 border-2 border-blue-300 rounded-lg text-lg font-semibold bg-gray-50 text-gray-700"
-                    value={approvalModal.bid?.rate || 0}
+                    value={approvalModal.bid?.loadInfo?.originalRate || approvalModal.bid?.rate || 0}
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
@@ -575,7 +576,7 @@ export default function PendingBids() {
                     readOnly
                     className="w-full pl-8 pr-4 py-3 border-2 border-purple-300 rounded-lg text-lg font-bold bg-purple-50 text-purple-700"
                     value={(() => {
-                      const baseRate = Number(approvalModal.bid?.rate || 0);
+                      const baseRate = Number(approvalModal.bid?.loadInfo?.originalRate || approvalModal.bid?.rate || 0);
                       const margin = Number(marginAmount || 0);
                       const total = baseRate + margin;
                       console.log('Total calculation:', { baseRate, margin, total }); // Debug log
@@ -584,7 +585,7 @@ export default function PendingBids() {
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  Base: ${Number(approvalModal.bid?.rate || 0).toFixed(2)} + Margin: ${Number(marginAmount || 0).toFixed(2)}
+                  Base: ${Number(approvalModal.bid?.loadInfo?.originalRate || approvalModal.bid?.rate || 0).toFixed(2)} + Margin: ${Number(marginAmount || 0).toFixed(2)}
                 </p>
               </div>
 
@@ -622,7 +623,7 @@ export default function PendingBids() {
                 </button>
                 <button
                   onClick={async () => {
-                    const baseRate = Number(approvalModal.bid?.rate || 0);
+                    const baseRate = Number(approvalModal.bid?.loadInfo?.originalRate || approvalModal.bid?.rate || 0);
                     const margin = Number(marginAmount || 0);
                     const total = baseRate + margin;
                     

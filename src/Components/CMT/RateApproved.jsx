@@ -189,9 +189,12 @@ export default function RateApproved() {
         headers: API_CONFIG.getAuthHeaders()
       });
 
-      if (response.data && response.data.success) {
+      if (response.data && (response.data.success || response.data.bids || response.data.data)) {
+        console.log('Completed Rates Response:', response.data);
+        const bidsData = response.data.bids || response.data.data?.bids || [];
+        
         // Transform API data to match our component structure
-        const transformedRates = response.data.bids.map(bid => ({
+        const transformedRates = bidsData.map(bid => ({
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
@@ -292,8 +295,10 @@ export default function RateApproved() {
         headers: API_CONFIG.getAuthHeaders()
       });
 
-      if (response.data && response.data.success) {
-        const transformedBids = response.data.bids.map(bid => ({
+      if (response.data && (response.data.success || response.data.bids || response.data.data)) {
+        console.log('Manager Approved Response:', response.data);
+        const bidsData = response.data.bids || response.data.data?.bids || [];
+        const transformedBids = bidsData.map(bid => ({
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
@@ -379,8 +384,15 @@ export default function RateApproved() {
         headers: API_CONFIG.getAuthHeaders()
       });
 
-      if (response.data && response.data.success) {
-        const transformedBids = response.data.bids.map(bid => ({
+      if (response.data && (Array.isArray(response.data) || response.data.success || response.data.bids || response.data.data)) {
+        console.log('Manager Rejected Response:', response.data);
+        let bidsData = [];
+        if (Array.isArray(response.data)) {
+          bidsData = response.data;
+        } else {
+          bidsData = response.data.bids || response.data.data?.bids || [];
+        }
+        const transformedBids = bidsData.map(bid => ({
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
@@ -3827,7 +3839,7 @@ export default function RateApproved() {
                         type="number"
                         readOnly
                         className="w-full pl-8 pr-4 py-3 border-2 border-gray-300 rounded-lg text-lg font-semibold bg-gray-50 text-gray-700"
-                        value={approvalModal.rate?.originalRate || 0}
+                        value={approvalModal.rate?.rate || 0}
                       />
                     </div>
                   </div>
@@ -3876,7 +3888,7 @@ export default function RateApproved() {
                         type="text"
                         readOnly
                         className="w-full pl-8 pr-4 py-3 border-2 border-purple-300 rounded-lg text-lg font-bold bg-purple-50 text-purple-700"
-                        value={((Number(approvalModal.rate?.originalRate || 0)) + (Number(marginAmount || 0))).toFixed(2)}
+                        value={((Number(approvalModal.rate?.rate || 0)) + (Number(marginAmount || 0))).toFixed(2)}
                       />
                     </div>
                   </div>
