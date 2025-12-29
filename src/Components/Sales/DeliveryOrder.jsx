@@ -163,7 +163,7 @@ export default function DeliveryOrder() {
     'Side Dump',
     'Hopper Bottom'
   ];
-  const sanitizeAlnum = (s = "") => s.replace(/[^A-Za-z0-9]/g, "");
+  const sanitizeAlnum = (s = "") => s.replace(/[^A-Za-z0-9-]/g, "");
   // money (>= 0, max 2 decimals)
   const isMoney2dp = (s = '') => {
     if (s === '' || s === null) return false;
@@ -314,7 +314,7 @@ export default function DeliveryOrder() {
 
   // Validators
 
-  const isAlnum = (s = '') => /^[A-Za-z0-9]+$/.test(s.trim());
+  const isAlnum = (s = '') => /^[A-Za-z0-9-]+$/.test(s.trim());
   const isNonNegInt = (s) => /^\d+$/.test(String(s)) && Number(s) >= 0;
 
   // US 5/9, India 6, Canada format
@@ -1116,7 +1116,10 @@ export default function DeliveryOrder() {
             // Auto-fill shipper information
             shipperName: loadData.shipper?.compName || prev.shipperName,
             shipperId: loadData.shipper?._id || prev.shipperId,
-            containerNo: loadData.containerNo || prev.containerNo,
+            // Auto-fill container no with BOL number (priority) or container no
+            containerNo: loadData.bolNumber || loadData.containerNo || prev.containerNo,
+            // Auto-fill shipment no
+            shipmentNo: loadData.shipmentNumber || prev.shipmentNo,
             containerType: loadData.vehicleType || prev.containerType,
             
             // Auto-fill carrier information
@@ -1201,12 +1204,19 @@ export default function DeliveryOrder() {
               billTo: loadData.shipper?.compName || prev.customers[0]?.billTo || '',
               // Keep dispatcher empty; user must select manually
               dispatcherName: prev.customers[0]?.dispatcherName || '',
-              // Keep work order no empty; user must enter manually
-              workOrderNo: prev.customers[0]?.workOrderNo || '',
+              // Auto-fill work order no with shipment number
+              workOrderNo: loadData.shipmentNumber || prev.customers[0]?.workOrderNo || '',
               lineHaul: loadData.rateDetails?.lineHaul || prev.customers[0]?.lineHaul || '',
               fsc: loadData.rateDetails?.fsc || prev.customers[0]?.fsc || '',
               other: loadData.rateDetails?.other?.reduce((sum, charge) => sum + (charge.total || 0), 0) || prev.customers[0]?.other || '',
-              totalAmount: loadData.rate || prev.customers[0]?.totalAmount || 0
+              totalAmount: loadData.rate || prev.customers[0]?.totalAmount || 0,
+              // Map chargeRows for customer charges popup
+              chargeRows: loadData.rateDetails?.other?.map(c => ({
+                name: c.name || '',
+                quantity: c.quantity || 1,
+                amount: c.amount || c.amt || 0,
+                total: c.total || 0
+              })) || prev.customers[0]?.chargeRows || []
             }],
             
             // Auto-fill BOL information
@@ -1250,27 +1260,72 @@ export default function DeliveryOrder() {
                     (prev.remarks ? `=== ADDITIONAL REMARKS ===\n${prev.remarks}` : '')
           }));
 
-          // If acceptedBid has rates array, populate charges (but don't open calculator automatically)
+          // Calculate carrier charges
+          let mappedCharges = [{ name: '', quantity: '', amt: '', total: 0 }];
+          let totalRatesValue = '';
+          
           if (loadData.acceptedBid?.rates && Array.isArray(loadData.acceptedBid.rates) && loadData.acceptedBid.rates.length > 0) {
-            // Map the rates to the format expected by Charges Calculator
-            const mappedCharges = loadData.acceptedBid.rates.map(rate => ({
+             mappedCharges = loadData.acceptedBid.rates.map(rate => ({
               name: rate.name || '',
               quantity: rate.quantity || '',
-              amt: rate.amount || rate.amt || '', // Support both 'amount' and 'amt'
+              amt: rate.amount || rate.amt || '', 
               total: rate.total || 0
             }));
-            
-            // Set carrier charges (calculator will open only when user clicks on Carrier Fees field)
-            setCarrierCharges(mappedCharges);
-            
-            // Set totalRates (will be displayed in carrierFees field)
-            const totalRatesValue = loadData.acceptedBid?.totalrates || loadData.acceptedBid?.totalRates || '';
-            setFormData(prev => ({
+            totalRatesValue = loadData.acceptedBid?.totalrates || loadData.acceptedBid?.totalRates || '';
+          } else if (loadData.rate) {
+            // Fallback: Use main load rate as a single Flat Rate
+            mappedCharges = [{
+                name: 'Flat Rate',
+                quantity: 1,
+                amt: loadData.rate,
+                total: loadData.rate
+            }];
+            totalRatesValue = String(loadData.rate);
+          }
+          
+          // Update state if we have valid charges
+          if (totalRatesValue) {
+             setCarrierCharges(mappedCharges);
+             setFormData(prev => ({
               ...prev,
-              totalRates: totalRatesValue
+              totalRates: totalRatesValue,
+              carrierFees: `$${Number(totalRatesValue).toFixed(2)}`
             }));
+          }
 
-
+          // Auto-fill attachment from acceptedBid
+          if (loadData.acceptedBid?.attachment || loadData.acceptedBid?.acceptanceAttachment1) {
+            const fileUrl = loadData.acceptedBid.attachment || loadData.acceptedBid.acceptanceAttachment1;
+            // Extract filename or use default
+            let fileName = fileUrl.split('/').pop();
+            if (fileName.includes('?')) fileName = fileName.split('?')[0]; // Remove query params if any
+            if (!fileName) fileName = 'attachment.pdf';
+            
+            try {
+              // Fetch the file to create a File object for the form
+              const fileRes = await fetch(fileUrl);
+              if (!fileRes.ok) throw new Error('Network response was not ok');
+              const blob = await fileRes.blob();
+              
+              const file = new File([blob], fileName, { type: blob.type });
+              
+              setFormData(prev => ({
+                ...prev,
+                docs: file
+              }));
+            } catch (err) {
+              console.error("Error auto-filling attachment (fetch failed, falling back to reference):", err);
+              // Fallback: If fetch fails (e.g. CORS), store a reference object
+              setFormData(prev => ({
+                ...prev,
+                docs: {
+                  name: fileName,
+                  isExisting: true,
+                  url: fileUrl,
+                  size: 0
+                }
+              }));
+            }
           }
           
           alertify.success('Load data loaded and form fields auto-filled!');
@@ -1288,6 +1343,55 @@ export default function DeliveryOrder() {
     } else {
       // Clear load data when no load is selected
       setSelectedLoadData(null);
+      setCarrierCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+      
+      setFormData(prev => ({
+        ...prev,
+        selectedLoad: '',
+        
+        // Reset shipper information (keep manual entries if any, or reset?)
+        // Better to reset to initial state for a fresh start, or keep what user might have typed manually before?
+        // User asked "mera data bhi ht jaye", so reset auto-filled fields.
+        shipperName: '',
+        shipperId: '',
+        containerNo: '',
+        shipmentNo: '',
+        containerType: '',
+        
+        // Reset carrier information
+        carrierName: '',
+        carrierId: '',
+        equipmentType: '',
+        totalRates: '',
+        carrierFees: '',
+        
+        // Reset pickup locations to default single empty entry
+        pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' }],
+        
+        // Reset drop locations to default single empty entry
+        dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', dropDate: '', remarks: '' }],
+        
+        // Reset customer information
+        customers: [{
+          billTo: '',
+          dispatcherName: '',
+          workOrderNo: '',
+          lineHaul: '',
+          fsc: '',
+          other: '',
+          totalAmount: 0,
+          chargeRows: []
+        }],
+        
+        // Reset BOLs
+        bols: [{ bolNo: '' }],
+        
+        // Reset remarks
+        remarks: '',
+        
+        // Reset attachment
+        docs: null
+      }));
     }
   };
 
@@ -1904,13 +2008,20 @@ export default function DeliveryOrder() {
         const fscAmount = lh * (fscPercent / 100); // FSC is percentage of Line Haul
         const oth = toNum2(c.other);
         
-        // Convert other (single value) to array format as required by API
-        const otherArray = oth > 0 ? [{
-          name: "Other Charges",
-          quantity: 1,
-          amount: oth,
-          total: oth
-        }] : [];
+        // Use detailed chargeRows if available, otherwise fallback to generic
+        const otherArray = (c.chargeRows && c.chargeRows.length > 0) 
+          ? c.chargeRows.map(r => ({
+              name: r.name,
+              quantity: parseInt(r.quantity) || 0,
+              amount: parseFloat(r.amount) || parseFloat(r.amt) || 0,
+              total: parseFloat(r.total) || 0
+            }))
+          : (oth > 0 ? [{
+              name: "Other Charges",
+              quantity: 1,
+              amount: oth,
+              total: oth
+            }] : []);
         
         return {
           billTo: c.billTo,
@@ -1928,13 +2039,13 @@ export default function DeliveryOrder() {
       const carrierData = {
         carrierName: formData.carrierName,
         equipmentType: formData.equipmentType,
-        carrierFees: (charges || []).map(ch => ({
+        carrierFees: (carrierCharges || []).map(ch => ({
           name: ch.name,
           quantity: parseInt(ch.quantity) || 0,
           amount: parseFloat(ch.amt) || 0,
           total: (parseInt(ch.quantity) || 0) * (parseFloat(ch.amt) || 0)
         })),
-        totalCarrierFees: (charges || []).reduce((s, ch) => s + (ch.total || 0), 0)
+        totalCarrierFees: (carrierCharges || []).reduce((s, ch) => s + (ch.total || 0), 0)
       };
 
       if ((formData.loadType || selectedLoadType) === 'OTR') {
@@ -1994,7 +2105,8 @@ export default function DeliveryOrder() {
       let response;
 
       // MULTIPART (file attached) — new API format
-      if (formData.docs) {
+      // Only use multipart if it's a real File object (has size > 0 usually, or is File instance)
+      if (formData.docs && !formData.docs.isExisting) {
         const fd = new FormData();
         fd.append('empId', empId);
         fd.append('loadType', formData.loadType || selectedLoadType);
@@ -2056,6 +2168,12 @@ export default function DeliveryOrder() {
         });
       } else {
         // plain JSON
+        // If we have an existing document (URL), we might want to pass it
+        // Check if formData.docs.isExisting is true, then pass the URL in supportingDocs
+        if (formData.docs && formData.docs.isExisting) {
+            submitData.supportingDocs = formData.docs.url;
+        }
+
         response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/do/do`, submitData, {
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
         });
@@ -2195,7 +2313,7 @@ const validateForm = (mode = formMode) => {
     if (!c.workOrderNo || c.workOrderNo.trim() === '') {
       rowErr.workOrderNo = 'Please enter the Work Order Number.';
     } else if (!isAlnum(c.workOrderNo)) {
-      rowErr.workOrderNo = 'Work Order Number must be alphanumeric.';
+      rowErr.workOrderNo = 'Work Order Number must be alphanumeric (hyphens allowed).';
     }
 
     // 4/5/6) Money-like fields: non-negative numbers
@@ -4953,13 +5071,7 @@ const handleUpdateOrder = async (e) => {
                     {formData.selectedLoad && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            selectedLoad: ''
-                          }));
-                          setSelectedLoadData(null);
-                        }}
+                        onClick={() => handleLoadChange('')}
                         className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold transition-colors duration-200 z-10"
                         title="Unselect Load"
                       >
@@ -6242,8 +6354,10 @@ const handleUpdateOrder = async (e) => {
                       <div className="flex items-center space-x-3">
                         {/* ...icon... */}
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{formData.docs.name}</p>
-                          <p className="text-xs text-gray-500">{(formData.docs.size / 1024 / 1024).toFixed(2)} MB</p>
+                          <p className="text-sm font-medium text-gray-900">{formData.docs.name || 'Attached Document'}</p>
+                          <p className="text-xs text-gray-500">
+                            {formData.docs.size ? `${(formData.docs.size / 1024 / 1024).toFixed(2)} MB` : (formData.docs.isExisting ? 'Linked from Load' : 'Unknown Size')}
+                          </p>
                         </div>
                       </div>
                       <button type="button" onClick={() => setFormData(prev => ({ ...prev, docs: null }))} className="text-red-500 hover:text-red-700 transition-colors">
@@ -6255,8 +6369,53 @@ const handleUpdateOrder = async (e) => {
                 </div>
               </div>
 
-
-
+              {/* Selected Load Documents Display */}
+              {selectedLoadData?.uploadedFiles && selectedLoadData.uploadedFiles.length > 0 && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mt-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="text-blue-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Selected Load Documents</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {selectedLoadData.uploadedFiles.map((file, index) => (
+                      <div key={index} className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <FileText className="text-blue-600" size={16} />
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800 truncate">{file.fileName || file.name || 'Document'}</div>
+                            <div className="text-xs text-gray-500">{file.fileType || 'Unknown Type'}</div>
+                          </div>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Calendar size={12} />
+                            <span>Uploaded: {file.uploadDate ? new Date(file.uploadDate).toLocaleDateString() : 'N/A'}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <a
+                              href={file.fileUrl || file.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex-1 bg-blue-500 text-white text-center py-2 px-3 rounded-lg hover:bg-blue-600 transition text-xs font-medium"
+                            >
+                              View File
+                            </a>
+                            <a
+                              href={file.fileUrl || file.url}
+                              download={file.fileName || 'document'}
+                              className="bg-green-500 text-white py-2 px-3 rounded-lg hover:bg-green-600 transition text-xs font-medium"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Form Actions */}
               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
