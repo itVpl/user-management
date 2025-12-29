@@ -1,4 +1,5 @@
 import io from 'socket.io-client';
+import API_CONFIG from '../config/api.js';
 
 class SocketService {
   constructor() {
@@ -15,7 +16,8 @@ class SocketService {
     const {
       url = import.meta.env.VITE_SOCKET_URL || 
            import.meta.env.REACT_APP_SOCKET_URL || 
-           'http://localhost:3001',
+           API_CONFIG.BASE_URL || 
+           'https://vpl-liveproject-1.onrender.com',
       auth = {},
       transports = ['websocket', 'polling']
     } = options;

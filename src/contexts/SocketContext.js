@@ -24,8 +24,16 @@ export const SocketProvider = ({ children, userId }) => {
 
     console.log('🚀 Initializing WebSocket connection for user:', userId);
 
-    // Get backend URL from environment or use default
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+    // Get backend URL from environment or use API config
+    // Import API_CONFIG dynamically to avoid circular dependencies
+    const getBackendUrl = () => {
+      if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
+      if (import.meta.env.VITE_API_BASE_URL) {
+        return import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
+      }
+      return 'https://vpl-liveproject-1.onrender.com';
+    };
+    const backendUrl = getBackendUrl();
     
     const socketInstance = io(backendUrl, {
       transports: ['websocket', 'polling'],
