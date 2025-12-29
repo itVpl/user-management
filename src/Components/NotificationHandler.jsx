@@ -305,10 +305,21 @@ const NotificationHandler = () => {
     }, 60000);
 
     const bodyText = getNotificationBody(notificationData);
-    const title = notificationData.title || 
-                  notificationData.senderName || 
-                  notificationData.senderAliasName || 
-                  'New Message';
+    
+    // Format title based on notification type
+    let title;
+    if (notificationData.type === 'group') {
+      // For group notifications: "GroupName: SenderName"
+      const groupName = notificationData.groupName || notificationData.title || 'Group';
+      const senderName = notificationData.senderName || notificationData.senderAliasName || 'Someone';
+      title = `${groupName}: ${senderName}`;
+    } else {
+      // For individual notifications: use sender name or title
+      title = notificationData.title || 
+              notificationData.senderName || 
+              notificationData.senderAliasName || 
+              'New Message';
+    }
 
     try {
       const notification = new Notification(title, {
@@ -396,6 +407,11 @@ const NotificationHandler = () => {
       console.log('📍 Current page:', currentPage);
       console.log('📦 Notification data:', notificationData);
       console.log('✅ This proves notifications work globally on ANY page!');
+      
+      // Debug: Log socket state
+      const currentSocket = sharedSocketService.getSocket();
+      console.log('📍 Socket ID:', currentSocket?.id);
+      console.log('📍 Socket connected:', currentSocket?.connected);
 
       // Validate notification data structure
       if (!notificationData || !notificationData.messageId) {

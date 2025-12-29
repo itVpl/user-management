@@ -415,42 +415,50 @@ const ChatPage = () => {
 
   // Clear unread count for a user
   const clearUnreadCount = (empId) => {
-
     setNewMessagesMap(prev => {
       const copy = { ...prev };
       delete copy[empId];
       return copy;
     });
+    
+    // Notify UnreadCountContext to update sidebar badge
+    window.dispatchEvent(new CustomEvent('clearUnreadCount', {
+      detail: {
+        type: 'individual',
+        empId: empId
+      }
+    }));
   };
 
-  // Mark messages as seen on server
+  // Mark individual chat messages as seen on server
+  // CRITICAL: Must call this when user opens/views a chat (per guide)
   const markMessagesAsSeen = async (senderEmpId) => {
     try {
-      // Try the endpoint from the guide first: /api/v1/chat/mark-seen/:empId (POST)
-      let res;
+      // Per guide: POST /api/v1/chat/mark-seen/:empId
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/mark-seen/${senderEmpId}`,
+        {},
+        { withCredentials: true }
+      );
+
+      if (res.data && res.data.success) {
+        console.log(`✅ Marked messages as seen for empId: ${senderEmpId}`);
+        // Backend will automatically emit chatListUpdated with unreadCount: 0
+        // No need to manually update - socket event will handle it (per guide)
+      }
+    } catch (err) {
+      console.error("❌ Failed to mark messages as seen:", err);
+      // Fallback to the existing endpoint if the new one doesn't work
       try {
-        res = await axios.post(
-          `${API_CONFIG.BASE_URL}/api/v1/chat/mark-seen/${senderEmpId}`,
-          {},
-          { withCredentials: true }
-        );
-      } catch (postError) {
-        // Fallback to the existing endpoint if the new one doesn't work
         console.log('⚠️ POST /mark-seen failed, trying PATCH /seen endpoint...');
-        res = await axios.patch(
+        await axios.patch(
           `${API_CONFIG.BASE_URL}/api/v1/chat/seen/${senderEmpId}`,
           {},
           { withCredentials: true }
         );
+      } catch (fallbackErr) {
+        console.error("❌ Fallback endpoint also failed:", fallbackErr);
       }
-
-      // Update local unread count
-      clearUnreadCount(senderEmpId);
-      
-      // Refresh unread counts from server
-      await fetchUnreadCounts();
-    } catch (err) {
-      console.error("❌ Failed to mark messages as seen:", err);
     }
   };
 
@@ -618,8 +626,8 @@ const ChatPage = () => {
         setOnlineUsers(new Set(onlineEmpIds));
       }
       
-      // Update unread counts from chat list API response if available
-      // The API may include unreadCount in each chat item (per the guide)
+      // Initialize unread counts from API response (per guide)
+      // Backend sends unreadCount in each chat item
       const unreadFromList = {};
       list.forEach(chat => {
         if (chat.empId && chat.unreadCount !== undefined && chat.unreadCount > 0) {
@@ -627,25 +635,11 @@ const ChatPage = () => {
         }
       });
       
-      // Fetch server-side unread counts for consistency
-      const serverUnreadCounts = await fetchUnreadCounts();
-      
-      // Merge unread counts: prefer server-side counts, fallback to list counts
-      const mergedUnreadMap = {
-        ...unreadFromList,
-        ...serverUnreadCounts // Server counts take precedence
-      };
-      
-      // Update state with merged unread counts
-      setNewMessagesMap(mergedUnreadMap);
+      // Update state with unread counts from API
+      setNewMessagesMap(unreadFromList);
       
       // Sort chat list with unread priority
-      const sortedList = sortChatListWithUnreadPriority(list, mergedUnreadMap);
-      
-      console.log("📊 Sorted chat list with unread priority:", sortedList.map(u => ({
-        name: u.employeeName,
-        unread: mergedUnreadMap[u.empId] || 0
-      })));
+      const sortedList = sortChatListWithUnreadPriority(list, unreadFromList);
       
       setChatList(sortedList);
     } catch (err) {
@@ -656,6 +650,48 @@ const ChatPage = () => {
   };
 
   // Group Chat Functions
+  // Calculate unread count for a group by checking which messages user has NOT read
+  const calculateGroupUnreadCount = async (groupId) => {
+    try {
+      // Fetch all messages for this group
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=1000&skip=0`,
+        { withCredentials: true }
+      );
+      
+      if (res.data && res.data.success) {
+        const messages = res.data.messages || [];
+        let unreadCount = 0;
+        
+        // Count only messages where current user has NOT read (not in seenBy)
+        messages.forEach(msg => {
+          // Skip messages sent by current user
+          if (msg.senderEmpId === storedUser?.empId) {
+            return;
+          }
+          
+          // Check if current user is in seenBy array
+          const isSeenByMe = msg.seenBy?.some(seen => {
+            const seenEmpId = seen.empId || seen.seenByEmpId;
+            return seenEmpId === storedUser?.empId;
+          });
+          
+          // If not seen by current user, count as unread
+          if (!isSeenByMe) {
+            unreadCount++;
+          }
+        });
+        
+        console.log(`📊 Calculated unread count for group ${groupId}: ${unreadCount}`);
+        return unreadCount;
+      }
+    } catch (err) {
+      console.error(`❌ Failed to calculate unread count for group ${groupId}:`, err);
+      return 0;
+    }
+    return 0;
+  };
+
   const fetchGroups = async () => {
     try {
       setLoadingGroups(true);
@@ -664,7 +700,34 @@ const ChatPage = () => {
         { withCredentials: true }
       );
       if (res.data && res.data.success) {
-        setGroups(res.data.groups || []);
+        const groupsList = res.data.groups || [];
+        
+        // Normalize _id to string for all groups (per guide)
+        const normalizedGroups = groupsList.map(g => ({
+          ...g,
+          _id: String(g._id)
+        }));
+        
+        setGroups(normalizedGroups);
+        
+        // Calculate unread counts by checking which messages user has read
+        // This ensures we only count messages user hasn't actually seen
+        const groupUnreadMap = {};
+        const unreadPromises = normalizedGroups.map(async (group) => {
+          const groupId = String(group._id);
+          const unreadCount = await calculateGroupUnreadCount(groupId);
+          if (unreadCount > 0) {
+            groupUnreadMap[groupId] = unreadCount;
+          }
+        });
+        
+        // Wait for all unread counts to be calculated
+        await Promise.all(unreadPromises);
+        
+        // Update state with calculated unread counts
+        setNewGroupMessagesMap(groupUnreadMap);
+        
+        console.log('📊 Group unread counts calculated:', groupUnreadMap);
       }
     } catch (err) {
       console.error("❌ Failed to fetch groups", err);
@@ -779,16 +842,47 @@ const ChatPage = () => {
           setGroupMessagesPage(1);
         }
         
-        // Mark visible messages as seen after a short delay (only on initial load)
+        // Mark ALL unread messages as seen when group is opened (only on initial load)
+        // This ensures all old messages are marked as seen, not just the ones currently loaded
         if (!loadOlder) {
+          // First, mark all currently loaded messages as seen
           setTimeout(() => {
             processedMessages.forEach(msg => {
               if (!msg.isMyMessage && !isMessageSeenByMe(msg) && msg._id) {
                 markGroupMessageAsSeen(groupId, msg._id);
               }
             });
+            
+            // Then, fetch ALL messages to mark remaining unread ones as seen
+            // This ensures we don't miss any old unread messages
+            axios.get(
+              `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=1000&skip=0`,
+              { withCredentials: true }
+            ).then(res => {
+              if (res.data && res.data.success) {
+                const allMessages = res.data.messages || [];
+                // Mark all unread messages as seen (batch process to avoid overwhelming the server)
+                const unreadMessages = allMessages.filter(msg => {
+                  const isMyMsg = msg.senderEmpId === storedUser?.empId;
+                  const alreadySeen = isMessageSeenByMe(msg);
+                  return !isMyMsg && !alreadySeen && msg._id;
+                });
+                
+                // Mark messages with staggered delays to avoid rate limiting
+                unreadMessages.forEach((msg, index) => {
+                  setTimeout(() => {
+                    markGroupMessageAsSeen(groupId, msg._id);
+                  }, index * 50); // Stagger API calls by 50ms to avoid overwhelming the server
+                });
+                
+                console.log(`✅ Marking ${unreadMessages.length} unread messages as seen for group ${groupId}`);
+              }
+            }).catch(err => {
+              console.error("❌ Failed to fetch all messages for marking as seen:", err);
+            });
+            
             scrollToBottom();
-          }, 500);
+          }, 1000); // Increased delay to ensure messages are rendered first
         }
       }
     } catch (err) {
@@ -1302,12 +1396,24 @@ const ChatPage = () => {
         res.data.unreadBySender.forEach((item) => {
           if (item.unreadCount > 0 && item.sender && item.sender.empId) {
             unread[item.sender.empId] = item.unreadCount;
-
+            
+            // Notify UnreadCountContext to update sidebar badge
+            window.dispatchEvent(new CustomEvent('setUnreadCount', {
+              detail: {
+                type: 'individual',
+                empId: item.sender.empId,
+                count: item.unreadCount
+              }
+            }));
           }
         });
       }
 
+      console.log('📊 Fetched unread counts:', unread);
+      console.log('📊 Unread counts by empId:', Object.keys(unread).map(empId => `${empId}: ${unread[empId]}`));
+      console.log('📊 Current newMessagesMap before update:', newMessagesMap);
       setNewMessagesMap(unread);
+      console.log('📊 Updated newMessagesMap:', unread);
       return unread; // Return the unread map for use in fetchChatList
     } catch (err) {
       console.error("❌ Failed to fetch unread counts", err);
@@ -1737,6 +1843,7 @@ const ChatPage = () => {
   };
 
   // Mark group message as seen
+  // CRITICAL: Must call this when user views messages in group chat (per guide)
   const markGroupMessageAsSeen = async (groupId, messageId) => {
     if (!groupId || !messageId) return;
     
@@ -1753,14 +1860,18 @@ const ChatPage = () => {
     }
     
     try {
-      const res = await axios.patch(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages/${messageId}/seen`,
+      // Per guide: POST /api/v1/chat/group/:groupId/message/:messageId/seen
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/message/${messageId}/seen`,
         {},
         { withCredentials: true }
       );
       
       if (res.data && res.data.success) {
         markedAsSeenRef.current.add(seenKey);
+        console.log(`✅ Marked group message as seen: groupId=${groupId}, messageId=${messageId}`);
+        // Backend will automatically emit groupListUpdated with updated unreadCount
+        // No need to manually update - socket event will handle it (per guide)
       }
     } catch (err) {
       console.error("❌ Failed to mark group message as seen:", err);
@@ -1945,6 +2056,8 @@ const ChatPage = () => {
         // Fetch chat list and groups after user is loaded
         fetchChatList();
         fetchGroups();
+        // DON'T fetch unread counts - only track NEW messages via socket events
+        // This ensures red dots only appear for messages received AFTER user views the chat
       })
       .catch((err) => {
         console.error("❌ Failed to load full stored user profile", err);
@@ -1974,12 +2087,16 @@ const ChatPage = () => {
     }
   }, [storedUser]);
 
-  // Fetch unread counts on initial load
-  useEffect(() => {
-    if (storedUser?.empId) {
-      fetchUnreadCounts();
-    }
-  }, [storedUser]);
+  // DON'T fetch unread counts on initial load - only track NEW messages via socket events
+  // This ensures we only show red dots for messages received AFTER user views the chat
+  // useEffect(() => {
+  //   if (storedUser?.empId) {
+  //     fetchUnreadCounts();
+  //   }
+  // }, [storedUser]);
+
+  // Note: Group unread counts are now handled by groupListUpdated socket event (per guide)
+  // No need for this listener - backend sends groupListUpdated with unreadCount
 
   // Auto-resize textarea when input changes or chat type switches
   useEffect(() => {
@@ -2193,12 +2310,10 @@ const ChatPage = () => {
 
         updateUnreadCount(senderEmpId, 1);
         
-        // Refresh server-side unread counts and re-sort chat list
+        // Re-sort chat list to move unread users to top (don't fetch unread counts from server)
         setTimeout(async () => {
-          await fetchUnreadCounts();
-          // Re-sort chat list to move unread users to top
           await fetchChatList();
-        }, 1000);
+        }, 500);
       }
 
       // If message is for current user OR involves current selected user, refresh messages
@@ -2255,26 +2370,24 @@ const ChatPage = () => {
         
         // Try browser notification (will only show if permission granted)
         showNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
-        
-        // Update unread count for the group
-        setNewGroupMessagesMap(prev => {
-          const newCount = (prev[groupId] || 0) + 1;
-          return {
-            ...prev,
-            [groupId]: newCount
-          };
-        });
       }
-
-      // If message is for selected group, refresh messages and clear unread count
+      
+      // If message is for selected group, refresh messages
       if (isForSelectedGroup) {
         await fetchGroupMessages(groupId);
         setTimeout(scrollToBottom, 100);
-        // Clear unread count when viewing the group
+      } else {
+        // If message is NOT for selected group, recalculate unread count
+        // Recalculate by checking which messages user has actually read (seenBy array)
+        const unreadCount = await calculateGroupUnreadCount(groupId);
         setNewGroupMessagesMap(prev => {
-          const copy = { ...prev };
-          delete copy[groupId];
-          return copy;
+          const updated = { ...prev };
+          if (unreadCount > 0) {
+            updated[groupId] = unreadCount;
+          } else {
+            delete updated[groupId];
+          }
+          return updated;
         });
       }
 
@@ -2292,7 +2405,10 @@ const ChatPage = () => {
 
     // Handle chat list updates from backend (for unread count changes)
     const handleChatListUpdated = (updatedChatItem) => {
+      console.log('📬📬📬 CHAT LIST UPDATED EVENT RECEIVED! 📬📬📬');
       console.log('📬 Chat list updated event received:', updatedChatItem);
+      console.log('📍 Socket ID:', socket?.id);
+      console.log('📍 Socket connected:', socket?.connected);
       
       if (!updatedChatItem || !updatedChatItem.empId) {
         console.warn('⚠️ Invalid chatListUpdated event data:', updatedChatItem);
@@ -2323,6 +2439,15 @@ const ChatPage = () => {
           delete updatedUnreadMap[empId];
         }
 
+        // Notify UnreadCountContext to update sidebar badge
+        window.dispatchEvent(new CustomEvent('setUnreadCount', {
+          detail: {
+            type: 'individual',
+            empId: empId,
+            count: unreadCount
+          }
+        }));
+
         // Update chat list with the new unread map
         setChatList(prevList => {
           const existingIndex = prevList.findIndex(chat => chat.empId === empId);
@@ -2348,7 +2473,8 @@ const ChatPage = () => {
               aliasName: aliasName || employeeName || 'Unknown',
               lastMessage: lastMessage || '',
               lastMessageTime: lastMessageTime || new Date().toISOString(),
-              online: online || false
+              online: online || false,
+              unreadCount: unreadCount || 0  // Store unreadCount in chat item (per guide)
             };
 
             const updatedList = [newChatItem, ...prevList];
@@ -2360,6 +2486,68 @@ const ChatPage = () => {
       });
     };
 
+    // Handle group list updates from backend (for unread count changes)
+    // Recalculate unread count by checking which messages user has read
+    const handleGroupListUpdated = async (updatedGroupItem) => {
+      console.log('📬 Group list updated event received:', updatedGroupItem);
+      
+      if (!updatedGroupItem || !updatedGroupItem._id) {
+        console.warn('⚠️ Invalid groupListUpdated event data:', updatedGroupItem);
+        return;
+      }
+
+      // Normalize groupId to string (per guide)
+      const groupId = String(updatedGroupItem._id);
+      const { groupName, lastMessage } = updatedGroupItem;
+
+      // Calculate actual unread count by checking which messages user has read
+      const actualUnreadCount = await calculateGroupUnreadCount(groupId);
+
+      // Update unread count based on actual calculation
+      setNewGroupMessagesMap(prev => {
+        const updated = { ...prev };
+        if (actualUnreadCount > 0) {
+          updated[groupId] = actualUnreadCount;
+        } else {
+          delete updated[groupId];
+        }
+
+        // Notify UnreadCountContext to update sidebar badge
+        window.dispatchEvent(new CustomEvent('setUnreadCount', {
+          detail: {
+            type: 'group',
+            groupId: groupId,
+            count: actualUnreadCount
+          }
+        }));
+
+        return updated;
+      });
+
+      // Update group in groups list
+      setGroups(prevGroups => {
+        const groupIndex = prevGroups.findIndex(g => String(g._id) === groupId);
+        if (groupIndex !== -1) {
+          // Update existing group
+          const updated = [...prevGroups];
+          updated[groupIndex] = {
+            ...updated[groupIndex],
+            ...(groupName !== undefined && { groupName }),
+            ...(lastMessage !== undefined && { lastMessage }),
+            unreadCount: actualUnreadCount  // Store calculated unreadCount
+          };
+          return updated;
+        } else {
+          // Group doesn't exist in list yet, add it
+          return [...prevGroups, {
+            ...updatedGroupItem,
+            _id: groupId,
+            unreadCount: actualUnreadCount
+          }];
+        }
+      });
+    };
+
     // Set up all socket listeners
     socket.on("user_online", handleUserOnline);
     socket.on("user_offline", handleUserOffline);
@@ -2368,6 +2556,15 @@ const ChatPage = () => {
     socket.on("groupMessageSeen", handleGroupMessageSeen);
     socket.on("messageSeen", handleMessageSeen);
     socket.on("chatListUpdated", handleChatListUpdated);
+    socket.on("groupListUpdated", handleGroupListUpdated);  // 🔥 Added per guide
+    
+    // Debug: Listen for ALL events to see what's coming from backend
+    socket.onAny((eventName, ...args) => {
+      console.log('🔔🔔🔔 Chat.jsx - Socket event received:', eventName, args);
+    });
+    
+    console.log('✅ Chat.jsx - All socket listeners set up');
+    console.log('📍 Listening for: user_online, user_offline, newMessage, newGroupMessage, groupMessageSeen, messageSeen, chatListUpdated, groupListUpdated');
 
     // Cleanup - Remove listeners but DON'T disconnect (shared socket stays connected)
     return () => {
@@ -2380,6 +2577,7 @@ const ChatPage = () => {
         socketRef.current.off("user_online", handleUserOnline);
         socketRef.current.off("user_offline", handleUserOffline);
         socketRef.current.off("chatListUpdated", handleChatListUpdated);
+        socketRef.current.off("groupListUpdated", handleGroupListUpdated);  // 🔥 Added per guide
       }
     };
   }, [storedUser, selectedUser, selectedGroup, groupMessages]);
@@ -2654,11 +2852,11 @@ const ChatPage = () => {
                       {user.employeeName?.charAt(0).toUpperCase()}
                     </div>
                     {onlineUsers.has(user.empId) && (
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white z-0"></div>
                     )}
-                    {/* Red dot indicator for unread messages */}
+                    {/* Red dot indicator for unread messages - positioned at top-right */}
                     {newMessagesMap[user.empId] && (
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white z-10 animate-pulse"></div>
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white z-20 shadow-lg"></div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -2706,7 +2904,6 @@ const ChatPage = () => {
                           );
                           if (res.data && res.data.success) {
                             const groupData = res.data.group;
-                            console.log('✅ Group selected:', groupData.groupName, 'Members:', groupData.members?.length || 0, groupData.members);
                             setSelectedGroup(groupData);
                             setChatType('group');
                             setSelectedUser(null);
@@ -2715,12 +2912,31 @@ const ChatPage = () => {
                             window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
                               detail: { selectedEmpId: null, selectedGroupId: groupData._id }
                             }));
-                            // Clear unread count when selecting the group
-                            setNewGroupMessagesMap(prev => {
-                              const copy = { ...prev };
-                              delete copy[group._id];
-                              return copy;
-                            });
+                            
+                            // After messages are loaded and marked as seen, recalculate unread count
+                            // This ensures red dot disappears after user views the group
+                            // Wait for messages to be marked as seen (happens in fetchGroupMessages)
+                            setTimeout(async () => {
+                              const unreadCount = await calculateGroupUnreadCount(group._id);
+                              setNewGroupMessagesMap(prev => {
+                                const updated = { ...prev };
+                                if (unreadCount > 0) {
+                                  updated[group._id] = unreadCount;
+                                } else {
+                                  delete updated[group._id];
+                                }
+                                return updated;
+                              });
+                              
+                              // Notify UnreadCountContext to update sidebar badge
+                              window.dispatchEvent(new CustomEvent('setUnreadCount', {
+                                detail: {
+                                  type: 'group',
+                                  groupId: group._id,
+                                  count: unreadCount
+                                }
+                              }));
+                            }, 2000); // Wait for messages to be marked as seen
                           }
                         } catch (err) {
                           console.error("❌ Failed to load group", err);
@@ -2737,14 +2953,21 @@ const ChatPage = () => {
                           <Users size={20} />
                         </div>
                         {/* Red dot indicator for unread group messages */}
-                        {newGroupMessagesMap[group._id] && (
-                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
+                        {newGroupMessagesMap[group._id] > 0 && (
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white z-20 shadow-lg"></div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`font-semibold truncate ${selectedGroup?._id === group._id && chatType === 'group' ? 'text-blue-600' : 'text-gray-800'}`}>
-                          {group.groupName}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className={`font-semibold truncate ${newGroupMessagesMap[group._id] > 0 ? 'text-gray-900 font-bold' : selectedGroup?._id === group._id && chatType === 'group' ? 'text-blue-600' : 'text-gray-800'}`}>
+                            {group.groupName}
+                          </p>
+                          {newGroupMessagesMap[group._id] > 0 && (
+                            <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-semibold min-w-[20px] text-center ml-2">
+                              {newGroupMessagesMap[group._id]}
+                            </div>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-400 truncate">
                           {group.lastMessage?.message || "No messages yet"}
                         </p>
@@ -2775,7 +2998,14 @@ const ChatPage = () => {
               ) : chatList.length > 0 ? (
                 <div className="p-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3 py-2">Recent Chats</p>
-                  {chatList.map((user) => (
+                  {chatList.map((user) => {
+                    // Debug: Log unread count for each user
+                    const unreadCount = newMessagesMap[user.empId];
+                    console.log(`🔍 Rendering chat: "${user.employeeName || user.aliasName}" (empId: ${user.empId}), unreadCount: ${unreadCount || 0}, newMessagesMap keys:`, Object.keys(newMessagesMap));
+                    if (unreadCount) {
+                      console.log(`🔴 Chat "${user.employeeName || user.aliasName}" (${user.empId}) has ${unreadCount} unread messages`);
+                    }
+                    return (
                     <div
                       key={user.empId}
                       onClick={async () => {
@@ -2813,30 +3043,45 @@ const ChatPage = () => {
                           {user.employeeName?.charAt(0).toUpperCase()}
                         </div>
                         {onlineUsers.has(user.empId) && (
-                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white z-0"></div>
                         )}
-                        {/* Red dot indicator for unread messages */}
-                        {newMessagesMap[user.empId] && (
-                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
-                        )}
+                        {/* Red dot indicator for unread messages - positioned at top-right */}
+                        {(() => {
+                          const unreadCount = newMessagesMap[user.empId];
+                          const hasUnread = unreadCount > 0;
+                          if (hasUnread) {
+                            console.log(`✅ Showing red dot for ${user.employeeName} (${user.empId}) - count: ${unreadCount}`);
+                          }
+                          return hasUnread ? (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white z-20 shadow-lg"></div>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <p className={`font-semibold truncate ${newMessagesMap[user.empId] ? 'text-gray-900 font-bold' : 'text-gray-800'}`}>
                             {formatEmployeeName(user)}
                           </p>
-                          {newMessagesMap[user.empId] && (
-                            <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-semibold min-w-[20px] text-center">
-                              {newMessagesMap[user.empId]}
-                            </div>
-                          )}
+                          {(() => {
+                            const unreadCount = newMessagesMap[user.empId];
+                            const hasUnread = unreadCount > 0;
+                            if (hasUnread) {
+                              console.log(`✅ Showing badge for ${user.employeeName} (${user.empId}) - count: ${unreadCount}`);
+                            }
+                            return hasUnread ? (
+                              <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-semibold min-w-[20px] text-center ml-2">
+                                {unreadCount}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                         <p className="text-xs text-gray-400 truncate">
                           {user.lastMessage || "No messages yet"}
                         </p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : null}
 
