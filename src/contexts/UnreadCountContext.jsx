@@ -14,7 +14,7 @@ export const UnreadCountProvider = ({ children }) => {
   // Track unread counts: { groupId: count } for group chats
   const [groupUnreadCounts, setGroupUnreadCounts] = useState({});
 
-  // Listen for unread count updates from NotificationHandler
+  // Listen for unread count updates from NotificationHandler and Chat
   useEffect(() => {
     const handleIncrementUnread = (event) => {
       const { type, empId, groupId, count } = event.detail;
@@ -32,10 +32,58 @@ export const UnreadCountProvider = ({ children }) => {
       }
     };
 
+    const handleClearUnread = (event) => {
+      const { type, empId, groupId } = event.detail;
+      
+      if (type === 'individual' && empId) {
+        setUnreadCounts(prev => {
+          const newCounts = { ...prev };
+          delete newCounts[empId];
+          return newCounts;
+        });
+      } else if (type === 'group' && groupId) {
+        setGroupUnreadCounts(prev => {
+          const newCounts = { ...prev };
+          delete newCounts[groupId];
+          return newCounts;
+        });
+      }
+    };
+
+    const handleSetUnreadCount = (event) => {
+      const { type, empId, groupId, count } = event.detail;
+      
+      if (type === 'individual' && empId !== undefined) {
+        setUnreadCounts(prev => {
+          if (count > 0) {
+            return { ...prev, [empId]: count };
+          } else {
+            const newCounts = { ...prev };
+            delete newCounts[empId];
+            return newCounts;
+          }
+        });
+      } else if (type === 'group' && groupId !== undefined) {
+        setGroupUnreadCounts(prev => {
+          if (count > 0) {
+            return { ...prev, [groupId]: count };
+          } else {
+            const newCounts = { ...prev };
+            delete newCounts[groupId];
+            return newCounts;
+          }
+        });
+      }
+    };
+
     window.addEventListener('incrementUnreadCount', handleIncrementUnread);
+    window.addEventListener('clearUnreadCount', handleClearUnread);
+    window.addEventListener('setUnreadCount', handleSetUnreadCount);
 
     return () => {
       window.removeEventListener('incrementUnreadCount', handleIncrementUnread);
+      window.removeEventListener('clearUnreadCount', handleClearUnread);
+      window.removeEventListener('setUnreadCount', handleSetUnreadCount);
     };
   }, []);
 
