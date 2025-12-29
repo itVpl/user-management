@@ -2750,7 +2750,7 @@ export default function RateApproved() {
                       </td>
                       <td className="py-2 px-3">
                         <div className="flex gap-2">
-                          <button
+                          {/* <button
                             onClick={() => {
                               setMarginAmount(0); // Reset margin when opening modal
                               setEditableMessage(rate.remarks || ''); // Initialize editable message
@@ -2775,7 +2775,7 @@ export default function RateApproved() {
                                 <span>Add Margin</span>
                               </>
                             )}
-                          </button>
+                          </button> */}
                           {/* Enter Final Price Button - Only show in Approved Rates tab */}
                           {activeTab === 'completed' && (
                             <button
@@ -3954,7 +3954,7 @@ export default function RateApproved() {
                   onClick={async () => {
                     if (approvalModal.type === 'manual') {
                       // Regular margin mode
-                      const baseRate = Number(approvalModal.rate?.originalRate || 0);
+                      const baseRate = Number(approvalModal.rate?.rate || 0);
                       const margin = Number(marginAmount || 0);
                       const total = baseRate + margin;
                       
