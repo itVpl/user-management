@@ -312,7 +312,7 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
           )}
         </div>
 
-        {/* Premium Input Area */}
+        {/* Premium Input Areasss */}
         <div className="px-8 py-6" style={{
           background: 'linear-gradient(to top, #0f172a 0%, #1e293b 100%)',
           borderTop: '1px solid rgba(255, 255, 255, 0.1)',
