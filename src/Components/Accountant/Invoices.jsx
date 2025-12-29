@@ -2896,6 +2896,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
@@ -2909,6 +2910,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           const cust = row?.customers?.[0] || {};
                           const totals = computeTotals(row);
                           const fwBy = row?.forwardedToAccountant?.forwardedBy?.employeeName || "—";
+                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
                           return (
                             <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                               <td className="py-2 px-3">
@@ -2922,6 +2924,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{agentName}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
@@ -3159,6 +3164,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
@@ -3180,6 +3186,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             || row?.accountantApproval?.assignedTo?.empId
                             || "—";
                           const apprAt = row?.accountantApproval?.approvedAt || row?.updatedAt;
+                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
                           return (
                             <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                               <td className="py-2 px-3">
@@ -3193,6 +3200,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{agentName}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
@@ -3522,6 +3532,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved By</th>
@@ -3538,6 +3549,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             || row?.salesApproval?.approvedBy?.empId
                             || "—";
                           const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
+                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
                           // Check both paymentStatus (for bill payment) and carrierPaymentStatus (for carrier payment)
                           const isPaid = row?.paymentStatus?.status === 'paid';
                           const carrierPaymentStatus = row?.carrierPaymentStatus || {};
@@ -3603,6 +3615,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{agentName}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
@@ -3824,6 +3839,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
@@ -3838,6 +3854,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           const totals = computeTotals(row);
                           const rejectedBy = row?.salesApproval?.rejectedBy?.employeeName || "—";
                           const rejectedAt = row?.salesApproval?.rejectedAt || row?.updatedAt;
+                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
                           return (
                             <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                               <td className="py-2 px-3">
@@ -3851,6 +3868,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{agentName}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
@@ -4044,6 +4064,43 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Agent Information */}
+              {selected?.loadReference?.createdBySalesUser && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <User className="text-blue-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Agent Information</h3>
+                  </div>
+
+                  <div className="bg-white rounded-xl p-4 border border-blue-200">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Agent Name</p>
+                        <p className="font-semibold text-gray-800">
+                          {selected?.loadReference?.createdBySalesUser?.empName || 'N/A'}
+                        </p>
+                      </div>
+                      {selected?.loadReference?.createdBySalesUser?.empId && (
+                        <div>
+                          <p className="text-sm text-gray-600">Employee ID</p>
+                          <p className="font-semibold text-gray-800">
+                            {selected?.loadReference?.createdBySalesUser?.empId}
+                          </p>
+                        </div>
+                      )}
+                      {selected?.loadReference?.createdBySalesUser?.department && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-600">Department</p>
+                          <p className="font-semibold text-gray-800">
+                            {selected?.loadReference?.createdBySalesUser?.department}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
