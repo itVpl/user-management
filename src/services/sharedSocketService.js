@@ -69,10 +69,19 @@ class SharedSocketService {
     this.socket.on('connect', () => {
       console.log('✅✅✅ SHARED Socket CONNECTED:', this.socket.id);
       console.log('🌍 This socket is used by ALL components!');
+      console.log('📍 Socket URL:', this.socket.io.uri);
+      console.log('📍 Socket transport:', this.socket.io.engine.transport.name);
       
       // Join with empId after connection
       this.socket.emit('join', empId);
       console.log('📤 Emitted "join" event with empId:', empId);
+      
+      // Debug: Listen for ALL events to see what backend is sending
+      this.socket.onAny((eventName, ...args) => {
+        console.log('🔔🔔🔔 SharedSocket - Event received:', eventName, args);
+        console.log('📍 Event name:', eventName);
+        console.log('📍 Event args:', args);
+      });
       
       // Call all connection callbacks
       this.connectionCallbacks.forEach(callback => {

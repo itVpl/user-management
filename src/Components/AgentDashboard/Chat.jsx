@@ -2292,7 +2292,10 @@ const ChatPage = () => {
 
     // Handle chat list updates from backend (for unread count changes)
     const handleChatListUpdated = (updatedChatItem) => {
+      console.log('📬📬📬 CHAT LIST UPDATED EVENT RECEIVED! 📬📬📬');
       console.log('📬 Chat list updated event received:', updatedChatItem);
+      console.log('📍 Socket ID:', socket?.id);
+      console.log('📍 Socket connected:', socket?.connected);
       
       if (!updatedChatItem || !updatedChatItem.empId) {
         console.warn('⚠️ Invalid chatListUpdated event data:', updatedChatItem);
@@ -2368,6 +2371,14 @@ const ChatPage = () => {
     socket.on("groupMessageSeen", handleGroupMessageSeen);
     socket.on("messageSeen", handleMessageSeen);
     socket.on("chatListUpdated", handleChatListUpdated);
+    
+    // Debug: Listen for ALL events to see what's coming from backend
+    socket.onAny((eventName, ...args) => {
+      console.log('🔔🔔🔔 Chat.jsx - Socket event received:', eventName, args);
+    });
+    
+    console.log('✅ Chat.jsx - All socket listeners set up');
+    console.log('📍 Listening for: user_online, user_offline, newMessage, newGroupMessage, groupMessageSeen, messageSeen, chatListUpdated');
 
     // Cleanup - Remove listeners but DON'T disconnect (shared socket stays connected)
     return () => {

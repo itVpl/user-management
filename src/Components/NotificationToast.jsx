@@ -69,7 +69,16 @@ const NotificationToast = ({ notification, onClose, onClick }) => {
       <div style={{ fontSize: '24px', flexShrink: 0 }}>{getNotificationIcon()}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '14px' }}>
-          {notification.title || notification.senderName || notification.senderAliasName || 'New Message'}
+          {(() => {
+            // For group notifications: show "GroupName: SenderName"
+            if (notification.type === 'group') {
+              const groupName = notification.groupName || notification.title || 'Group';
+              const senderName = notification.senderName || notification.senderAliasName || 'Someone';
+              return `${groupName}: ${senderName}`;
+            }
+            // For individual notifications: show sender name or title
+            return notification.title || notification.senderName || notification.senderAliasName || 'New Message';
+          })()}
         </div>
         <div style={{ color: '#666', fontSize: '13px', marginBottom: '4px', wordBreak: 'break-word' }}>
           {getNotificationBody()}
