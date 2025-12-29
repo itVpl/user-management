@@ -5398,6 +5398,8 @@ const MaterialShipperDropdown = ({
 
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[20rem]">Destination</th>
 
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[15rem]">Shipper</th>
+
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[6rem]">Rate</th>
 
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide min-w-[8rem]">Status</th>
@@ -5435,6 +5437,16 @@ const MaterialShipperDropdown = ({
                       <span className="font-medium text-gray-700 text-sm leading-relaxed" title={load.destination}>
 
                         {load.destination}
+
+                      </span>
+
+                    </td>
+
+                    <td className="py-2 px-3 min-w-[15rem]">
+
+                      <span className="font-medium text-gray-700 text-sm" title={load.shipper?.compName || 'N/A'}>
+
+                        {load.shipper?.compName || 'N/A'}
 
                       </span>
 
@@ -8653,6 +8665,14 @@ const MaterialShipperDropdown = ({
                       <span className="text-gray-600">Vehicle Type:</span>
 
                       <span className="font-medium">{selectedLoadForAction.vehicleType}</span>
+
+                    </div>
+
+                    <div className="flex justify-between">
+
+                      <span className="text-gray-600">Shipper:</span>
+
+                      <span className="font-medium">{selectedLoadForAction.shipper?.compName || 'N/A'}</span>
 
                     </div>
 
