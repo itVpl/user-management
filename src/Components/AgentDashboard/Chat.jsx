@@ -426,12 +426,23 @@ const ChatPage = () => {
   // Mark messages as seen on server
   const markMessagesAsSeen = async (senderEmpId) => {
     try {
-
-      const res = await axios.patch(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/seen/${senderEmpId}`,
-        {},
-        { withCredentials: true }
-      );
+      // Try the endpoint from the guide first: /api/v1/chat/mark-seen/:empId (POST)
+      let res;
+      try {
+        res = await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/chat/mark-seen/${senderEmpId}`,
+          {},
+          { withCredentials: true }
+        );
+      } catch (postError) {
+        // Fallback to the existing endpoint if the new one doesn't work
+        console.log('⚠️ POST /mark-seen failed, trying PATCH /seen endpoint...');
+        res = await axios.patch(
+          `${API_CONFIG.BASE_URL}/api/v1/chat/seen/${senderEmpId}`,
+          {},
+          { withCredentials: true }
+        );
+      }
 
       // Update local unread count
       clearUnreadCount(senderEmpId);
@@ -607,15 +618,33 @@ const ChatPage = () => {
         setOnlineUsers(new Set(onlineEmpIds));
       }
       
-      // Fetch server-side unread counts first
-      await fetchUnreadCounts();
+      // Update unread counts from chat list API response if available
+      // The API may include unreadCount in each chat item (per the guide)
+      const unreadFromList = {};
+      list.forEach(chat => {
+        if (chat.empId && chat.unreadCount !== undefined && chat.unreadCount > 0) {
+          unreadFromList[chat.empId] = chat.unreadCount;
+        }
+      });
+      
+      // Fetch server-side unread counts for consistency
+      const serverUnreadCounts = await fetchUnreadCounts();
+      
+      // Merge unread counts: prefer server-side counts, fallback to list counts
+      const mergedUnreadMap = {
+        ...unreadFromList,
+        ...serverUnreadCounts // Server counts take precedence
+      };
+      
+      // Update state with merged unread counts
+      setNewMessagesMap(mergedUnreadMap);
       
       // Sort chat list with unread priority
-      const sortedList = sortChatListWithUnreadPriority(list, newMessagesMap);
+      const sortedList = sortChatListWithUnreadPriority(list, mergedUnreadMap);
       
       console.log("📊 Sorted chat list with unread priority:", sortedList.map(u => ({
         name: u.employeeName,
-        unread: newMessagesMap[u.empId] || 0
+        unread: mergedUnreadMap[u.empId] || 0
       })));
       
       setChatList(sortedList);
@@ -1279,8 +1308,10 @@ const ChatPage = () => {
       }
 
       setNewMessagesMap(unread);
+      return unread; // Return the unread map for use in fetchChatList
     } catch (err) {
       console.error("❌ Failed to fetch unread counts", err);
+      return {};
     }
   };
 
@@ -2259,6 +2290,76 @@ const ChatPage = () => {
       }
     };
 
+    // Handle chat list updates from backend (for unread count changes)
+    const handleChatListUpdated = (updatedChatItem) => {
+      console.log('📬 Chat list updated event received:', updatedChatItem);
+      
+      if (!updatedChatItem || !updatedChatItem.empId) {
+        console.warn('⚠️ Invalid chatListUpdated event data:', updatedChatItem);
+        return;
+      }
+
+      const { empId, unreadCount, online, lastMessage, lastMessageTime, employeeName, aliasName } = updatedChatItem;
+
+      // Update online status
+      if (online !== undefined) {
+        if (online && empId !== storedUser?.empId) {
+          setOnlineUsers(prev => new Set([...prev, empId]));
+        } else if (!online) {
+          setOnlineUsers(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(empId);
+            return newSet;
+          });
+        }
+      }
+
+      // Update unread count and chat list item (using functional updates to get latest state)
+      setNewMessagesMap(prevUnreadMap => {
+        const updatedUnreadMap = { ...prevUnreadMap };
+        if (unreadCount > 0) {
+          updatedUnreadMap[empId] = unreadCount;
+        } else {
+          delete updatedUnreadMap[empId];
+        }
+
+        // Update chat list with the new unread map
+        setChatList(prevList => {
+          const existingIndex = prevList.findIndex(chat => chat.empId === empId);
+          
+          if (existingIndex !== -1) {
+            // Update existing chat item
+            const updatedList = [...prevList];
+            updatedList[existingIndex] = {
+              ...updatedList[existingIndex],
+              ...(lastMessage !== undefined && { lastMessage }),
+              ...(lastMessageTime !== undefined && { lastMessageTime }),
+              ...(employeeName !== undefined && { employeeName }),
+              ...(aliasName !== undefined && { aliasName }),
+              ...(online !== undefined && { online })
+            };
+            
+            return sortChatListWithUnreadPriority(updatedList, updatedUnreadMap);
+          } else {
+            // Chat item doesn't exist in list yet, add it
+            const newChatItem = {
+              empId,
+              employeeName: employeeName || aliasName || 'Unknown',
+              aliasName: aliasName || employeeName || 'Unknown',
+              lastMessage: lastMessage || '',
+              lastMessageTime: lastMessageTime || new Date().toISOString(),
+              online: online || false
+            };
+
+            const updatedList = [newChatItem, ...prevList];
+            return sortChatListWithUnreadPriority(updatedList, updatedUnreadMap);
+          }
+        });
+
+        return updatedUnreadMap;
+      });
+    };
+
     // Set up all socket listeners
     socket.on("user_online", handleUserOnline);
     socket.on("user_offline", handleUserOffline);
@@ -2266,6 +2367,7 @@ const ChatPage = () => {
     socket.on("newGroupMessage", handleNewGroupMessage);
     socket.on("groupMessageSeen", handleGroupMessageSeen);
     socket.on("messageSeen", handleMessageSeen);
+    socket.on("chatListUpdated", handleChatListUpdated);
 
     // Cleanup - Remove listeners but DON'T disconnect (shared socket stays connected)
     return () => {
@@ -2277,6 +2379,7 @@ const ChatPage = () => {
         socketRef.current.off("messageSeen", handleMessageSeen);
         socketRef.current.off("user_online", handleUserOnline);
         socketRef.current.off("user_offline", handleUserOffline);
+        socketRef.current.off("chatListUpdated", handleChatListUpdated);
       }
     };
   }, [storedUser, selectedUser, selectedGroup, groupMessages]);
