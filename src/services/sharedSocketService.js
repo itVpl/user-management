@@ -48,6 +48,9 @@ class SharedSocketService {
 
     console.log('🚀 Initializing SHARED socket connection for user:', empId);
     console.log('🌍 This socket will be used by ALL components (NotificationHandler, Chat, etc.)');
+    console.log('📍 Socket URL:', socketUrl);
+    console.log('📍 Environment check - VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
+    console.log('📍 Environment check - NODE_ENV:', import.meta.env.MODE);
 
     // Create socket connection with persistent reconnection
     this.socket = io(socketUrl, {
