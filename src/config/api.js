@@ -2,9 +2,20 @@
 const API_CONFIG = {
   // Base URL for all API calls - Use environment variable or fallback
   // VITE_API_BASE_URL includes /api/v1, so we remove it to get base URL
-  BASE_URL: import.meta.env.VITE_API_BASE_URL 
-    ? import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '') 
-    : 'https://vpl-liveproject-1.onrender.com',
+  BASE_URL: (() => {
+    const envUrl = import.meta.env.VITE_API_BASE_URL;
+    if (envUrl) {
+      // Remove /api/v1 if present
+      const baseUrl = envUrl.replace('/api/v1', '').replace(/\/$/, '');
+      console.log('🌍 Using API_BASE_URL from environment:', baseUrl);
+      return baseUrl;
+    }
+    // Production fallback
+    const fallback = 'https://vpl-liveproject-1.onrender.com';
+    console.log('⚠️ VITE_API_BASE_URL not set, using fallback:', fallback);
+    console.log('💡 Set VITE_API_BASE_URL=https://vpl-liveproject-1.onrender.com/api/v1 in Netlify environment variables');
+    return fallback;
+  })(),
   
   // Common headers
   DEFAULT_HEADERS: {
