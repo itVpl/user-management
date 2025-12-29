@@ -131,7 +131,22 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
   });
 
   const token = getStored("token");
-  const salesEmpId = propSalesId || getStored("salesEmpId") || "1234";
+  // Get logged-in user's empId from storage (try direct empId first, then from user object)
+  const getLoggedInEmpId = () => {
+    const directEmpId = getStored("empId");
+    if (directEmpId) return directEmpId;
+    const userString = getStored("user");
+    if (userString) {
+      try {
+        const user = JSON.parse(userString);
+        return user?.empId || null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+  const salesEmpId = propSalesId || getStored("salesEmpId") || getLoggedInEmpId();
 
   const fetchList = async (targetPage = 1) => {
     setLoading(true);
