@@ -1152,6 +1152,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [approvalAction, setApprovalAction] = useState("approve"); // "approve" | "reject"
   const [approvalRemarks, setApprovalRemarks] = useState("");
   const [posting, setPosting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [rejectingToCMT, setRejectingToCMT] = useState(false);
 
   // Resubmit form state
   const [resubmitCorrections, setResubmitCorrections] = useState("");
@@ -2497,6 +2499,52 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
   };
 
+  // ===== POST: Reject Load and Send to CMT (from Final Approval) =====
+  const postRejectToCMT = async () => {
+    if (!selected?._id) {
+      setToast({ open: true, severity: "error", msg: "No DO selected." });
+      return;
+    }
+
+    if (!rejectionReason.trim()) {
+      setToast({ open: true, severity: "error", msg: "Please provide a reason for rejection." });
+      return;
+    }
+
+    setRejectingToCMT(true);
+    try {
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/approval`;
+      const body = {
+        doId: selected._id,
+        accountantEmpId: empId,
+        action: "reject",
+        remarks: rejectionReason.trim(),
+      };
+      const resp = await axios.post(url, body, { headers });
+
+      const msg = resp?.data?.message || "Load rejected and sent to CMT successfully";
+      setToast({ open: true, severity: "success", msg });
+
+      // reset form
+      setRejectionReason("");
+      
+      // refresh assigned tab immediately
+      if (activeTab === 0) {
+        fetchData(page);
+      }
+      
+      // close modal after refresh
+      setTimeout(() => {
+        setDetailsOpen(false);
+      }, 300);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Failed to reject and send to CMT";
+      setToast({ open: true, severity: "error", msg });
+    } finally {
+      setRejectingToCMT(false);
+    }
+  };
+
   // ===== POST: Resubmit to Sales =====
   const postResubmitToSales = async () => {
     if (!selected?._id) {
@@ -3135,6 +3183,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setDetailsOpen(true);
     setApprovalAction("approve");
     setApprovalRemarks("");
+    setRejectionReason("");
     setResubmitCorrections("");
     setResubmitRemarks("");
     setResubmitCMTRemarks("");
@@ -5361,6 +5410,60 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     )}
                   </CardContent>
                 </Card>
+              
+              {/* Corrections and Resubmission Information - Show for Assigned to Accountant tab (tab 0) and Accountant Approved tab (tab 1) */}
+              {(activeTab === 0 || activeTab === 1) && (selected?.accountantApproval?.corrections || selected?.accountantApproval?.resubmissionRemarks) && (
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <FileText className="text-blue-600" size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-800">Corrections & Resubmission Details</h3>
+                      <p className="text-sm text-gray-600">Information from previous resubmission</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Corrections */}
+                    {selected?.accountantApproval?.corrections && (
+                      <div className="bg-white rounded-xl p-4 border border-blue-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle className="text-blue-600" size={16} />
+                          <h4 className="font-semibold text-gray-800">Corrections Made</h4>
+                        </div>
+                        <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                          {selected.accountantApproval.corrections}
+                        </p>
+                        {selected?.accountantApproval?.resubmittedAt && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Resubmitted at: {fmtDateTime(selected.accountantApproval.resubmittedAt)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Resubmission Remarks */}
+                    {selected?.accountantApproval?.resubmissionRemarks && (
+                      <div className="bg-white rounded-xl p-4 border border-cyan-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="text-cyan-600" size={16} />
+                          <h4 className="font-semibold text-gray-800">Resubmission Remarks</h4>
+                        </div>
+                        <p className="text-sm text-gray-700 bg-cyan-50 p-3 rounded-lg border border-cyan-100">
+                          {selected.accountantApproval.resubmissionRemarks}
+                        </p>
+                        {selected?.accountantApproval?.resubmittedBy && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Resubmitted by: {selected.accountantApproval.resubmittedBy?.employeeName || selected.accountantApproval.resubmittedBy?.empId || 'N/A'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Final Approval - Only show for Assigned to Accountant tab (tab 0) */}
               {activeTab === 0 && (
                 <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
@@ -5392,7 +5495,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   <div className="space-y-4">
                     <button
                       onClick={postAccountantApproval}
-                      disabled={posting}
+                      disabled={posting || rejectingToCMT}
                       className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {posting ? (
@@ -5404,6 +5507,56 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <>
                           <Send size={18} />
                           <span>Send to Sales</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="my-6 flex items-center">
+                    <div className="flex-1 border-t border-orange-300"></div>
+                    <span className="px-4 text-sm text-gray-500 font-medium">OR</span>
+                    <div className="flex-1 border-t border-orange-300"></div>
+                  </div>
+
+                  {/* Rejection Section */}
+                  <div className="mt-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                        <XCircle className="text-red-600" size={16} />
+                      </div>
+                      <h4 className="text-md font-bold text-gray-800">Reject Load</h4>
+                    </div>
+
+                    {/* Rejection Reason */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Rejection Reason <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        placeholder="Enter reason for rejecting this load (e.g., Incorrect rates, missing documents, etc.)"
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        rows={4}
+                        className="w-full px-4 py-3 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                      />
+                    </div>
+
+                    {/* Reject to CMT Button */}
+                    <button
+                      onClick={postRejectToCMT}
+                      disabled={rejectingToCMT || posting || !rejectionReason.trim()}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {rejectingToCMT ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Rejecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={18} />
+                          <span>Rejected Load with reason</span>
                         </>
                       )}
                     </button>
