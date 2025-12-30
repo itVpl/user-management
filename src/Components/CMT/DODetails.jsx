@@ -2542,6 +2542,50 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
             </div>
           </section>
 
+          {/* Rejected by Accountant */}
+          {order?.raw?.accountantApproval?.status === 'rejected' && (
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
+              <div className="flex items-center gap-2 mb-4">
+                <XCircle className="text-orange-600" size={20} />
+                <h3 className="text-lg font-bold text-gray-800">Rejected by Accountant</h3>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-orange-200">
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Rejected By</p>
+                    <p className="font-medium text-gray-800">
+                      {order?.raw?.accountantApproval?.rejectedBy?.employeeName || order?.raw?.accountantApproval?.rejectedBy?.empId || order?.raw?.accountantApproval?.assignedTo?.employeeName || order?.raw?.accountantApproval?.assignedTo?.empId || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Rejected At</p>
+                    <p className="font-medium text-gray-800">
+                      {order?.raw?.accountantApproval?.rejectedAt ? (() => {
+                        try {
+                          return new Date(order.raw.accountantApproval.rejectedAt).toLocaleString();
+                        } catch {
+                          return 'N/A';
+                        }
+                      })() : order?.raw?.accountantApproval?.updatedAt ? (() => {
+                        try {
+                          return new Date(order.raw.accountantApproval.updatedAt).toLocaleString();
+                        } catch {
+                          return 'N/A';
+                        }
+                      })() : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Rejection Reason</p>
+                    <p className="font-medium text-gray-800 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                      {order?.raw?.accountantApproval?.rejectionReason || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Remarks & Forward */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4">Forward to Accountant</h3>
