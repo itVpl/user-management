@@ -3,6 +3,8 @@ import axios from "axios";
 import { Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import Logo from '../../assets/LogoFinal.png';
+import IdentificaLogo from '../../assets/identifica_logo.png';
+import MtPoconoLogo from '../../assets/mtPocono.png';
 import { Search, CheckCircle, XCircle, Clock, FileText, RefreshCw, Eye, Edit, Download, User, Truck, DollarSign, MapPin, Calendar, Send, PlusCircle } from 'lucide-react';
 
 import {
@@ -1213,6 +1215,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // Generate Rate Load Confirmation PDF function
   const generateRateLoadConfirmationPDF = async (order) => {
     try {
+      // Get company info based on addDispature
+      const orderCompanyName = order?.addDispature || order?.company || '';
+      let pdfLogo = Logo;
+      if (orderCompanyName === 'IDENTIFICA LLC') {
+        pdfLogo = IdentificaLogo;
+      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC') {
+        pdfLogo = MtPoconoLogo;
+      }
+      
       // 1) Dispatcher info
       let dispatcherPhone = 'N/A';
       let dispatcherEmail = 'N/A';
@@ -1435,7 +1446,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     <!-- Header -->
     <div class="header">
       <div style="width:120px; height:90px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; border:1px solid #ddd;">
-        <img src="${logoSrc}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
+        <img src="${pdfLogo}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
              onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/>
         <div style="display:none; text-align:center; color:#666; font-size:12px;">
           <div style="font-weight:bold;">COMPANY</div>
@@ -1613,6 +1624,31 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
       const printWindow = window.open('', '_blank');
 
+      // Get company info based on addDispature
+      const orderCompanyName = order?.addDispature || order?.company || '';
+      let pdfLogo = Logo;
+      let companyDisplayName = '';
+      let companyDisplayAddress = '';
+      
+      // Determine logo based on company name
+      if (orderCompanyName === 'IDENTIFICA LLC') {
+        pdfLogo = IdentificaLogo;
+        companyDisplayName = 'IDENTIFICA LLC';
+        companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
+      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC') {
+        pdfLogo = MtPoconoLogo;
+        companyDisplayName = 'MT. POCONO TRANSPORTATION INC';
+        companyDisplayAddress = '1900 CORPORATE CENTER DRIVE EAST TOBYHANNA, PA 18466';
+      } else if (orderCompanyName === 'V Power Logistics') {
+        pdfLogo = Logo;
+        companyDisplayName = 'V Power Logistics';
+        companyDisplayAddress = '7945 14TH AVE SW SEATTLE, WA 98106';
+      } else if (orderCompanyName) {
+        pdfLogo = Logo;
+        companyDisplayName = orderCompanyName;
+        companyDisplayAddress = '7945 14TH AVE SW SEATTLE, WA 98106';
+      }
+
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
       const companyName = (cust.billTo || '').trim();
@@ -1664,7 +1700,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   body{font-family:Arial,sans-serif;line-height:1.4;color:#333;background:#fff;font-size:12px}
   .invoice{max-width:800px;margin:0 auto;background:#fff;padding:20px}
   .header{display:flex;gap:16px;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px}
-  .logo{width:140px;height:90px;object-fit:contain;flex:0 0 auto}
+  .logo{width:200px;height:120px;object-fit:contain;flex:0 0 auto}
+  .logo-container{margin-bottom:12px;width:100%}
+  .company-table{border-collapse:collapse;width:150%;max-width:350px;font-size:12px;margin-top:8px}
+  .company-table th,.company-table td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
+  .company-table th{background:#f5f5f5;font-weight:bold}
+  .company-table th:first-child{width:25%}
+  .company-table th:last-child{width:75%}
   .header-right{flex:1 1 auto}
   .billto{border-collapse:collapse;width:65%;font-size:12px;margin-left:auto}
   .billto th,.billto td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
@@ -1693,13 +1735,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   <div class="invoice">
     <!-- HEADER: logo (left) + Bill To table (right) -->
     <div class="header">
-      <div style="width:140px; height:90px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; border:1px solid #ddd;">
-        <img src="${logoSrc}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
-             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/>
-        <div style="display:none; text-align:center; color:#666; font-size:12px;">
-          <div style="font-weight:bold;">COMPANY</div>
-          <div>LOGO</div>
+      <div>
+        <div class="logo-container" style="width:200px; height:120px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; border:1px solid #ddd;">
+          <img src="${pdfLogo}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/>
+          <div style="display:none; text-align:center; color:#666; font-size:12px;">
+            <div style="font-weight:bold;">COMPANY</div>
+            <div>LOGO</div>
+          </div>
         </div>
+        ${companyDisplayName ? `<table class="company-table">
+          <tr><th style="width: 25%;">Bill From</th><td style="width: 75%;">${companyDisplayName}<br>${companyDisplayAddress}</td></tr>
+        </table>` : ''}
       </div>
       <div class="header-right">
         <table class="billto">
@@ -1962,8 +2009,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
     })();
 
-    // Use your actual logo
-    const safeLogo = logoSrc;
+    // Get company info based on addDispature
+    const companyName = order?.addDispature || order?.company || '';
+    let pdfLogo = Logo;
+    if (companyName === 'IDENTIFICA LLC') {
+      pdfLogo = IdentificaLogo;
+    } else if (companyName === 'MT. POCONO TRANSPORTATION INC') {
+      pdfLogo = MtPoconoLogo;
+    }
+    const safeLogo = pdfLogo;
 
     // ---------- HELPERS ----------
     const fmtDate = (d) => {
@@ -4655,6 +4709,29 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Company Information */}
+              {selected?.addDispature && (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                      <Truck className="text-indigo-600" size={20} />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800">Company Information</h3>
+                  </div>
+
+                  <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Company Name</p>
+                        <p className="font-semibold text-gray-800 text-lg">
+                          {selected.addDispature || selected?.company || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
