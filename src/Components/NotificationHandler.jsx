@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import NotificationToast from './NotificationToast';
 import sharedSocketService from '../services/sharedSocketService';
 
@@ -395,6 +396,7 @@ const NotificationHandler = () => {
 
   // Listen for notifications - use ref to store handler to prevent recreation
   const handlerRef = useRef(null);
+  const bidSubmittedHandlerRef = useRef(null);
   const listenerSetupRef = useRef(false);
 
   useEffect(() => {
@@ -493,6 +495,113 @@ const NotificationHandler = () => {
       // Add the listener using the ref handler
       currentSocket.on('notification', handlerRef.current);
       
+      // Add bid-submitted listener for sales person notifications
+      // NOTE: Backend emits TWO events: 'bid-submitted' (detailed) and 'notification' (standard)
+      // We handle 'bid-submitted' here for detailed bid info
+      bidSubmittedHandlerRef.current = (data) => {
+        console.log('🔔🔔🔔 [BID SUBMITTED] Notification received!');
+        console.log('📨 [BID SUBMITTED] Full data:', JSON.stringify(data, null, 2));
+        console.log('📨 [BID SUBMITTED] Rate:', data.rate);
+        console.log('📨 [BID SUBMITTED] LoadId:', data.loadId);
+        console.log('📨 [BID SUBMITTED] SubmittedBy:', data.submittedBy);
+        console.log('📨 [BID SUBMITTED] SalesPerson:', data.salesPerson);
+        console.log('📨 [BID SUBMITTED] LoadDetails:', data.loadDetails);
+        
+        // Show toast notification
+        toast.success(
+          <div className="space-y-1">
+            <div className="font-semibold">New Bid Submitted</div>
+            <div className="text-sm">
+              ${data.rate?.toLocaleString()} bid submitted for Load {data.loadDetails?.shipmentNumber || data.loadId}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Submitted by: {data.submittedBy?.empName || 'CMT Team'}
+            </div>
+          </div>,
+          {
+            position: "top-right",
+            autoClose: 6000,
+            onClick: () => {
+              // Navigate to rate request details page
+              if (data.loadId) {
+                navigate(`/rate-request?loadId=${data.loadId}`);
+              }
+            }
+          }
+        );
+
+        // Add to notifications state
+        setNotifications(prev => [{
+          id: Date.now(),
+          type: 'bid_submitted',
+          title: 'New Bid Submitted',
+          body: `A bid of $${data.rate?.toLocaleString()} has been submitted for your rate request`,
+          timestamp: new Date(data.timestamp || Date.now()),
+          read: false,
+          data: {
+            bidId: data.bidId,
+            loadId: data.loadId,
+            rate: data.rate,
+            message: data.message,
+            submittedBy: data.submittedBy,
+            loadDetails: data.loadDetails
+          }
+        }, ...prev]);
+
+        // Play notification sound
+        playNotificationSound();
+
+        // Show browser notification if permission granted
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            const notification = new Notification('New Bid Submitted', {
+              body: `A bid of $${data.rate?.toLocaleString()} has been submitted for Load ${data.loadDetails?.shipmentNumber || data.loadId}`,
+              icon: '/LogoFinal.png',
+              badge: '/LogoFinal.png',
+              tag: `bid-submitted-${data.bidId}`,
+              data: {
+                bidId: data.bidId,
+                loadId: data.loadId,
+                type: 'bid_submitted'
+              }
+            });
+
+            notification.onclick = () => {
+              window.focus();
+              if (data.loadId) {
+                navigate(`/rate-request?loadId=${data.loadId}`);
+              }
+              notification.close();
+            };
+          } catch (error) {
+            console.error('Error showing browser notification:', error);
+          }
+        }
+      };
+
+      // Remove any existing bid-submitted listener
+      currentSocket.off('bid-submitted', bidSubmittedHandlerRef.current);
+      
+      // Add bid-submitted listener
+      currentSocket.on('bid-submitted', bidSubmittedHandlerRef.current);
+      console.log('✅✅✅ Bid-submitted listener ACTIVE!');
+      console.log('📡 Listening for "bid-submitted" event (detailed bid info)');
+      console.log('📡 Also listening for "notification" event (standard notifications)');
+      
+      // Debug: Log all socket events to see what backend is sending
+      const logAllEvents = (eventName, ...args) => {
+        console.log(`🔍 [SOCKET DEBUG] Event received: ${eventName}`, args);
+        if (eventName === 'bid-submitted' || (eventName === 'notification' && args[0]?.type === 'load')) {
+          console.log(`💰 [BID NOTIFICATION DEBUG] ${eventName} event detected!`);
+        }
+      };
+      
+      // Use onAny to log all events (already set up in sharedSocketService, but adding here for clarity)
+      if (!currentSocket._hasBidDebugListener) {
+        currentSocket.onAny(logAllEvents);
+        currentSocket._hasBidDebugListener = true;
+      }
+      
       // Mark as set up
       listenerSetupRef.current = true;
       
@@ -524,6 +633,7 @@ const NotificationHandler = () => {
         // Removed interval - was causing page freeze
         if (currentSocket) {
           currentSocket.off('notification', handlerRef.current);
+          currentSocket.off('bid-submitted', bidSubmittedHandlerRef.current);
           currentSocket.off('reconnect', handleReconnect);
         }
       };
