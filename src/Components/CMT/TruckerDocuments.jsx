@@ -3,6 +3,8 @@ import { FaArrowLeft, FaDownload, FaEye, FaFileAlt, FaEdit } from 'react-icons/f
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload } from 'lucide-react';
 import AddTruckerForm from './AddTruckerform';
 import axios from 'axios';
+import alertify from 'alertifyjs';
+import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
 // --- Geo helpers: Country / State / City ---
 // ========= US STATES AND CITIES DATA =========
@@ -282,6 +284,7 @@ export default function TruckerDocuments() {
     remarks: '',
     attachment: null, // File
   });
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
 // Geo dropdown state (for EDIT modal)
 const [countryOptions, setCountryOptions] = useState([]);
@@ -602,12 +605,20 @@ const handleWorkingAddressFileChange = (idx, file) => {
       email: trucker.email || trucker.emailId || trucker.contactEmail || '',
       phoneNo: trucker.phoneNo || '',
       secondaryPhoneNo: trucker.secondaryPhoneNo || '',
+      onboardCompany: trucker.assignedCompany || trucker.onboardCompany || '',
       mc_dot_no: trucker.mc_dot_no || '',
       carrierType: trucker.carrierType || '',
       fleetsize: trucker.fleetsize || '',
       city: trucker.city || '',
       state: trucker.state || '',
       country: trucker.country || '',
+      // Banking Details - handle nested structure
+      paymentType: trucker.paymentType || '',
+      factoringName: trucker.factoringName || '',
+      bankName: trucker.bankDetails?.bankName || trucker.bankName || '',
+      accountNumber: trucker.bankDetails?.accountNumber || trucker.accountNumber || '',
+      accountHolderName: trucker.bankDetails?.accountHolderName || trucker.accountHolderName || '',
+      accountType: trucker.bankDetails?.accountType || trucker.accountType || '',
       // Company address - API response uses 'compAdd'
       address: companyAddress,
       // Zip code - API response uses 'zipcode' (lowercase)
@@ -691,10 +702,21 @@ const handleWorkingAddressFileChange = (idx, file) => {
     else if (!isValidZip(editFormData.zipCode)) errs.zipCode = true;
 
     // if (!isValidPhone(editFormData.phoneNo)) errs.phoneNo = true;
+    if (!editFormData.onboardCompany?.trim()) errs.onboardCompany = true;
     if (!editFormData.mc_dot_no?.trim()) errs.mc_dot_no = true;
     if (!editFormData.carrierType?.trim()) errs.carrierType = true;
     if (editFormData.fleetsize === '' || editFormData.fleetsize === null || Number(editFormData.fleetsize) <= 0) {
       errs.fleetsize = true;
+    }
+
+    // Banking Details validation
+    if (!editFormData.paymentType?.trim()) errs.paymentType = true;
+    if (editFormData.paymentType === 'Factoring') {
+      if (!editFormData.factoringName?.trim()) errs.factoringName = true;
+      if (!editFormData.bankName?.trim()) errs.bankName = true;
+      if (!editFormData.accountNumber?.trim()) errs.accountNumber = true;
+      if (!editFormData.accountHolderName?.trim()) errs.accountHolderName = true;
+      if (!editFormData.accountType?.trim()) errs.accountType = true;
     }
 
     setEditErrors(errs);
@@ -726,16 +748,17 @@ const handleWorkingAddressFileChange = (idx, file) => {
         bankingInfo: 'Please choose the Banking Information file.',
         insurance: 'Please choose the Insurance file.',
       };
-      alert(missingRequired.map(k => msgMap[k]).join('\n'));
+      alertify.error(missingRequired.map(k => msgMap[k]).join('\n'));
       return;
     }
 
     if (badFiles.length) {
-      alert('Please select the .pdf , .doc and .docx file only and size <= 10 MB.');
+      alertify.error('Please select the .pdf , .doc and .docx file only and size <= 10 MB.');
       return;
     }
 
     try {
+      setIsEditSubmitting(true);
       // 3) Prepare payloads
       const documentsFormData = new FormData();
       documentFields.forEach(doc => {
@@ -796,9 +819,10 @@ const handleWorkingAddressFileChange = (idx, file) => {
       const jsonData = {
         compName: editFormData.compName,
         email: editFormData.email,
-        phoneNo: editFormData.phoneNo,
-        secondaryPhoneNo: editFormData.secondaryPhoneNo || '',
-        mc_dot_no: editFormData.mc_dot_no,
+      phoneNo: editFormData.phoneNo,
+      secondaryPhoneNo: editFormData.secondaryPhoneNo || '',
+      assignedCompany: editFormData.onboardCompany || '',
+      mc_dot_no: editFormData.mc_dot_no,
         carrierType: editFormData.carrierType,
         fleetsize: editFormData.fleetsize,
         city: editFormData.city,
@@ -806,6 +830,22 @@ const handleWorkingAddressFileChange = (idx, file) => {
         country: editFormData.country,
         address: editFormData.address,
         zipCode: editFormData.zipCode,
+        // Banking Details - nested structure
+        ...(editFormData.paymentType ? {
+          paymentType: editFormData.paymentType,
+          ...(editFormData.paymentType === 'Factoring' ? {
+            ...(editFormData.factoringName?.trim() ? { factoringName: editFormData.factoringName.trim() } : {}),
+            // bankDetails only for Factoring (when fields are filled)
+            ...(editFormData.bankName?.trim() || editFormData.accountNumber?.trim() || editFormData.accountHolderName?.trim() || editFormData.accountType?.trim() ? {
+              bankDetails: {
+                ...(editFormData.bankName?.trim() ? { bankName: editFormData.bankName.trim() } : {}),
+                ...(editFormData.accountNumber?.trim() ? { accountNumber: editFormData.accountNumber.trim() } : {}),
+                ...(editFormData.accountHolderName?.trim() ? { accountHolderName: editFormData.accountHolderName.trim() } : {}),
+                ...(editFormData.accountType?.trim() ? { accountType: editFormData.accountType.trim() } : {}),
+              }
+            } : {})
+          } : {})
+        } : {}),
         // Working Address (only if array has entries, without attachments)
         ...(editFormData.workingAddress && editFormData.workingAddress.length > 0 ? {
           workingAddress: editFormData.workingAddress
@@ -859,12 +899,22 @@ const handleWorkingAddressFileChange = (idx, file) => {
         }
       }
 
+      // Debug: Log jsonData before sending
+      console.log('Update API jsonData:', JSON.stringify(jsonData, null, 2));
+      console.log('Banking Details:', {
+        paymentType: jsonData.paymentType,
+        factoringName: jsonData.factoringName,
+        bankDetails: jsonData.bankDetails
+      });
+
       // Send main update (workingAddress included in jsonData if present)
-      await axiosInstance.put(
+      const updateResponse = await axiosInstance.put(
         `/api/v1/shipper_driver/update/${editFormData._id}`,
         jsonData,
         { headers: { 'Content-Type': 'application/json' } }
       );
+      
+      console.log('Update API Response:', updateResponse.data);
 
       // 5) Reset + refresh
       setShowEditModal(false);
@@ -880,11 +930,13 @@ const handleWorkingAddressFileChange = (idx, file) => {
         insurance: false,
       });
       await fetchTruckers();
-      alert('Trucker Update successfully.');
+      alertify.success('Trucker updated successfully!');
 
     } catch (err) {
       console.error('Error updating trucker:', err);
-      alert('Failed to update trucker. Please try again.');
+      alertify.error(`Failed to update trucker: ${err.response?.data?.message || err.message || 'Please try again.'}`);
+    } finally {
+      setIsEditSubmitting(false);
     }
   };
 
@@ -1335,22 +1387,51 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     </div>
                   </div>
 
-                  {/* Secondary Phone Number */}
-                  <div className="mt-3">
-                    <label className="text-sm font-medium text-gray-700">Secondary Phone Number</label>
-                    <input
-                      type="text"
-                      name="secondaryPhoneNo"
-                      placeholder="Secondary Phone Number (Optional)"
-                      value={editFormData.secondaryPhoneNo || ''}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        setEditFormData(prev => ({ ...prev, secondaryPhoneNo: v }));
-                      }}
-                      onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
-                      inputMode="numeric"
-                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
-                    />
+                  {/* Secondary Phone Number | Onboard Company */}
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Secondary Phone Number</label>
+                      <input
+                        type="text"
+                        name="secondaryPhoneNo"
+                        placeholder="Secondary Phone Number (Optional)"
+                        value={editFormData.secondaryPhoneNo || ''}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setEditFormData(prev => ({ ...prev, secondaryPhoneNo: v }));
+                        }}
+                        onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                        inputMode="numeric"
+                        className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Onboard Company <span className="text-red-500">*</span>
+                      </label>
+                      <SelectWithSearch
+                        name="Onboard Company"
+                        value={editFormData.onboardCompany || ''}
+                        onChange={(val) => {
+                          setEditFormData(prev => ({ ...prev, onboardCompany: val }));
+                          // Clear error on change
+                          if (editErrors.onboardCompany) {
+                            setEditErrors(prev => {
+                              const copy = { ...prev };
+                              delete copy.onboardCompany;
+                              return copy;
+                            });
+                          }
+                        }}
+                        options={[
+                          { label: "V Power Logistics", value: "V Power Logistics" },
+                          { label: "Quick Logistics", value: "Quick Logistics" }
+                        ]}
+                        placeholder="Search company…"
+                        error={editErrors.onboardCompany ? "Please select the onboard company." : ""}
+                      />
+                    </div>
                   </div>
 
                   {/* City | State */}
@@ -1653,6 +1734,157 @@ const handleWorkingAddressFileChange = (idx, file) => {
                   ))}
                 </div>
               </div>
+
+              {/* Banking Details Card */}
+              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
+                <h4 className="text-2xl font-bold mb-4 text-center">Banking Details</h4>
+                <div className="w-full flex flex-col gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">
+                      Payment Type <span className="text-red-500">*</span>
+                    </label>
+                    <SelectWithSearch
+                      name="Payment Type"
+                      value={editFormData.paymentType || ''}
+                      onChange={(val) => {
+                        setEditFormData(prev => ({ 
+                          ...prev, 
+                          paymentType: val,
+                          // Clear factoring fields if switching to ACH
+                          ...(val !== "Factoring" ? {
+                            factoringName: "",
+                            bankName: "",
+                            accountNumber: "",
+                            accountHolderName: "",
+                            accountType: ""
+                          } : {})
+                        }));
+                        // Clear error on change
+                        if (editErrors.paymentType) {
+                          setEditErrors(prev => {
+                            const copy = { ...prev };
+                            delete copy.paymentType;
+                            return copy;
+                          });
+                        }
+                      }}
+                      options={[
+                        { label: "ACH", value: "ACH" },
+                        { label: "Factoring", value: "Factoring" }
+                      ]}
+                      placeholder="Select payment type…"
+                      error={editErrors.paymentType ? "Please select the payment type." : ""}
+                    />
+                    {editErrors.paymentType && (
+                      <p className="text-xs text-red-600 mt-1">Please select the payment type.</p>
+                    )}
+                  </div>
+
+                  {/* Factoring Fields - Show only when Factoring is selected */}
+                  {editFormData.paymentType === "Factoring" && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">
+                          Factoring Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="factoringName"
+                          placeholder="Factoring Name"
+                          value={editFormData.factoringName || ''}
+                          onChange={handleEditInputChange}
+                          className={`w-full border px-4 py-2 rounded-lg ${editErrors.factoringName ? 'border-red-500' : 'border-gray-400'}`}
+                        />
+                        {editErrors.factoringName && (
+                          <p className="text-xs text-red-600 mt-1">Please enter the factoring name.</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">
+                          Bank Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="bankName"
+                          placeholder="Bank Name"
+                          value={editFormData.bankName || ''}
+                          onChange={handleEditInputChange}
+                          className={`w-full border px-4 py-2 rounded-lg ${editErrors.bankName ? 'border-red-500' : 'border-gray-400'}`}
+                        />
+                        {editErrors.bankName && (
+                          <p className="text-xs text-red-600 mt-1">Please enter the bank name.</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">
+                          Account Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="accountNumber"
+                          placeholder="Account Number"
+                          value={editFormData.accountNumber || ''}
+                          onChange={handleEditInputChange}
+                          className={`w-full border px-4 py-2 rounded-lg ${editErrors.accountNumber ? 'border-red-500' : 'border-gray-400'}`}
+                        />
+                        {editErrors.accountNumber && (
+                          <p className="text-xs text-red-600 mt-1">Please enter the account number.</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">
+                          Account Holder Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="accountHolderName"
+                          placeholder="Account Holder Name"
+                          value={editFormData.accountHolderName || ''}
+                          onChange={handleEditInputChange}
+                          className={`w-full border px-4 py-2 rounded-lg ${editErrors.accountHolderName ? 'border-red-500' : 'border-gray-400'}`}
+                        />
+                        {editErrors.accountHolderName && (
+                          <p className="text-xs text-red-600 mt-1">Please enter the account holder name.</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">
+                          Account Type <span className="text-red-500">*</span>
+                        </label>
+                        <SelectWithSearch
+                          name="Account Type"
+                          value={editFormData.accountType || ''}
+                          onChange={(val) => {
+                            setEditFormData(prev => ({ ...prev, accountType: val }));
+                            // Clear error on change
+                            if (editErrors.accountType) {
+                              setEditErrors(prev => {
+                                const copy = { ...prev };
+                                delete copy.accountType;
+                                return copy;
+                              });
+                            }
+                          }}
+                          options={[
+                            { label: "Checking", value: "Checking" },
+                            { label: "Savings", value: "Savings" }
+                          ]}
+                          placeholder="Select account type…"
+                          error={editErrors.accountType ? "Please select the account type." : ""}
+                        />
+                        {editErrors.accountType && (
+                          <p className="text-xs text-red-600 mt-1">Please select the account type.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* NEW: Account Action Block (OK / Blacklist) */}
               {/* Account Action (OK / Blacklist) */}
               <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
@@ -1756,9 +1988,19 @@ const handleWorkingAddressFileChange = (idx, file) => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-3 rounded-full text-lg font-bold bg-black text-white hover:opacity-90 transition"
+                    disabled={isEditSubmitting}
+                    className={`flex-1 py-3 rounded-full text-lg font-bold transition flex items-center justify-center gap-2 ${
+                      isEditSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-black text-white hover:opacity-90"
+                    }`}
                   >
-                    Save Changes
+                    {isEditSubmitting ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
                   </button>
                 </div>
               </div>
@@ -2196,6 +2438,17 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       </div>
                     </div>
                   )}
+                  {(selectedTrucker.assignedCompany || selectedTrucker.onboardCompany) && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Building className="text-blue-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Onboard Company</p>
+                        <p className="font-semibold text-gray-800">{selectedTrucker.assignedCompany || selectedTrucker.onboardCompany}</p>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                       <Truck className="text-orange-600" size={16} />
@@ -2231,6 +2484,86 @@ const handleWorkingAddressFileChange = (idx, file) => {
                   </div>
                 </div>
               </div>
+
+              {/* Banking Details Information */}
+              {selectedTrucker.paymentType && (
+                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-6 mt-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Building className="text-indigo-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Banking Details</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                        <FileText className="text-indigo-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Payment Type</p>
+                        <p className="font-semibold text-gray-800">{selectedTrucker.paymentType}</p>
+                      </div>
+                    </div>
+                    {selectedTrucker.paymentType === "Factoring" && (
+                      <>
+                        {selectedTrucker.factoringName && (
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <Building className="text-indigo-600" size={16} />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Factoring Name</p>
+                              <p className="font-semibold text-gray-800">{selectedTrucker.factoringName}</p>
+                            </div>
+                          </div>
+                        )}
+                        {(selectedTrucker.bankDetails?.bankName || selectedTrucker.bankName) && (
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <Building className="text-indigo-600" size={16} />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Bank Name</p>
+                              <p className="font-semibold text-gray-800">{selectedTrucker.bankDetails?.bankName || selectedTrucker.bankName}</p>
+                            </div>
+                          </div>
+                        )}
+                        {(selectedTrucker.bankDetails?.accountNumber || selectedTrucker.accountNumber) && (
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <FileText className="text-indigo-600" size={16} />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Account Number</p>
+                              <p className="font-semibold text-gray-800">{selectedTrucker.bankDetails?.accountNumber || selectedTrucker.accountNumber}</p>
+                            </div>
+                          </div>
+                        )}
+                        {(selectedTrucker.bankDetails?.accountHolderName || selectedTrucker.accountHolderName) && (
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <User className="text-indigo-600" size={16} />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Account Holder Name</p>
+                              <p className="font-semibold text-gray-800">{selectedTrucker.bankDetails?.accountHolderName || selectedTrucker.accountHolderName}</p>
+                            </div>
+                          </div>
+                        )}
+                        {(selectedTrucker.bankDetails?.accountType || selectedTrucker.accountType) && (
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <FileText className="text-indigo-600" size={16} />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Account Type</p>
+                              <p className="font-semibold text-gray-800">{selectedTrucker.bankDetails?.accountType || selectedTrucker.accountType}</p>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Address Information */}
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">

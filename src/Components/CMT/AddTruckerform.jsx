@@ -232,12 +232,20 @@ export default function AddTruckerForm({ onSuccess }) {
     zipcode: "",
     phoneNo: "",
     secondaryPhoneNo: "",
+    onboardCompany: "",
     mc_dot_no: "",
     carrierType: "",
     fleetsize: "",
     email: "",
     password: "",
     confirmPassword: "",
+    // Banking Details
+    paymentType: "",
+    factoringName: "",
+    bankName: "",
+    accountNumber: "",
+    accountHolderName: "",
+    accountType: "",
     // Working Address (array of {state, city, attachment})
     workingAddress: [],
     // docs
@@ -414,6 +422,9 @@ React.useEffect(() => {
         if (value?.trim() && /\s/.test(value)) return "Please enter the valid mobile number.";
         break;
       }
+      case "onboardCompany":
+        if (!value?.trim()) return "Please select the onboard company.";
+        break;
       case "mc_dot_no":
         if (!value?.trim()) return "Please enter the mc/dot no.";
         break;
@@ -445,6 +456,24 @@ React.useEffect(() => {
         if (value !== formData.password)
           return "Kindly ensure the  password and confirm password are the same";
         break;
+      case "paymentType":
+        if (!value?.trim()) return "Please select the payment type.";
+        break;
+      case "factoringName":
+        if (formData.paymentType === "Factoring" && !value?.trim()) return "Please enter the factoring name.";
+        break;
+      case "bankName":
+        if (formData.paymentType === "Factoring" && !value?.trim()) return "Please enter the bank name.";
+        break;
+      case "accountNumber":
+        if (formData.paymentType === "Factoring" && !value?.trim()) return "Please enter the account number.";
+        break;
+      case "accountHolderName":
+        if (formData.paymentType === "Factoring" && !value?.trim()) return "Please enter the account holder name.";
+        break;
+      case "accountType":
+        if (formData.paymentType === "Factoring" && !value?.trim()) return "Please select the account type.";
+        break;
       default:
         return null;
     }
@@ -463,6 +492,7 @@ React.useEffect(() => {
       "city",
       "zipcode",
       "phoneNo",
+      "onboardCompany",
     ].forEach((f) => {
       const msg = validateField(f, formData[f]);
       if (msg) newErrors[f] = msg;
@@ -479,6 +509,20 @@ React.useEffect(() => {
       const msg = validateField(f, formData[f]);
       if (msg) newErrors[f] = msg;
     });
+
+    // Banking Details
+    ["paymentType"].forEach((f) => {
+      const msg = validateField(f, formData[f]);
+      if (msg) newErrors[f] = msg;
+    });
+    
+    // Factoring fields validation (only if Factoring is selected)
+    if (formData.paymentType === "Factoring") {
+      ["factoringName", "bankName", "accountNumber", "accountHolderName", "accountType"].forEach((f) => {
+        const msg = validateField(f, formData[f]);
+        if (msg) newErrors[f] = msg;
+      });
+    }
 
     // Working Address validation (optional - validate each entry if filled)
     if (formData.workingAddress && formData.workingAddress.length > 0) {
@@ -597,8 +641,32 @@ React.useEffect(() => {
     truckerData.append("zipcode", formData.zipcode.trim());
     truckerData.append("phoneNo", formData.phoneNo.trim());
     truckerData.append("secondaryPhoneNo", formData.secondaryPhoneNo?.trim() || "");
+    truckerData.append("assignedCompany", formData.onboardCompany?.trim() || "");
     truckerData.append("email", formData.email.trim());
     truckerData.append("password", formData.password);
+    
+    // Banking Details - nested structure
+    if (formData.paymentType) {
+      truckerData.append("paymentType", formData.paymentType.trim());
+      
+      if (formData.paymentType === "Factoring") {
+        if (formData.factoringName?.trim()) {
+          truckerData.append("factoringName", formData.factoringName.trim());
+        }
+        
+        // Create bankDetails object with only fields that exist
+        const bankDetails = {};
+        if (formData.bankName?.trim()) bankDetails.bankName = formData.bankName.trim();
+        if (formData.accountNumber?.trim()) bankDetails.accountNumber = formData.accountNumber.trim();
+        if (formData.accountHolderName?.trim()) bankDetails.accountHolderName = formData.accountHolderName.trim();
+        if (formData.accountType?.trim()) bankDetails.accountType = formData.accountType.trim();
+        
+        // Only append bankDetails if it has at least one field
+        if (Object.keys(bankDetails).length > 0) {
+          truckerData.append("bankDetails", JSON.stringify(bankDetails));
+        }
+      }
+    }
 
     // Working Address (optional - send as JSON string, attachments separately)
     if (formData.workingAddress && formData.workingAddress.length > 0) {
@@ -651,12 +719,19 @@ React.useEffect(() => {
           zipcode: "",
           phoneNo: "",
           secondaryPhoneNo: "",
+          onboardCompany: "",
           mc_dot_no: "",
           carrierType: "",
           fleetsize: "",
           email: "",
           password: "",
           confirmPassword: "",
+          paymentType: "",
+          factoringName: "",
+          bankName: "",
+          accountNumber: "",
+          accountHolderName: "",
+          accountType: "",
           workingAddress: [],
           brokeragePacket: null,
           carrierPartnerAgreement: null,
@@ -836,20 +911,45 @@ React.useEffect(() => {
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Secondary Phone Number
-              </label>
-              <input
-                type="text"
-                name="secondaryPhoneNo"
-                placeholder="Secondary Phone Number (Optional)"
-                value={formData.secondaryPhoneNo}
-                onChange={handleChange}
-                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-                inputMode="numeric"
-              />
-              {renderError("secondaryPhoneNo")}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Secondary Phone Number
+                </label>
+                <input
+                  type="text"
+                  name="secondaryPhoneNo"
+                  placeholder="Secondary Phone Number (Optional)"
+                  value={formData.secondaryPhoneNo}
+                  onChange={handleChange}
+                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                  inputMode="numeric"
+                />
+                {renderError("secondaryPhoneNo")}
+              </div>
+
+              <div>
+                <SearchableSelect
+                  label="Onboard Company"
+                  required
+                  name="onboardCompany"
+                  value={formData.onboardCompany || ""}
+                  onChange={(val) => {
+                    setFormData(p => ({ ...p, onboardCompany: val }));
+                    // Live validation
+                    setErrors(prev => ({
+                      ...prev,
+                      onboardCompany: validateField("onboardCompany", val) || undefined,
+                    }));
+                  }}
+                  options={[
+                    { label: "V Power Logistics", value: "V Power Logistics" },
+                    { label: "Quick Logistics", value: "Quick Logistics" }
+                  ]}
+                  placeholder="Search company…"
+                  error={errors.onboardCompany}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1075,6 +1175,142 @@ React.useEffect(() => {
                 {renderError(doc.key)}
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Banking Details */}
+        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
+          <h4 className="text-2xl font-bold mb-4 text-center">Banking Details</h4>
+          <div className="w-full flex flex-col gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Payment Type <span className="text-red-500">*</span>
+              </label>
+              <SearchableSelect
+                label=""
+                required
+                name="paymentType"
+                value={formData.paymentType || ""}
+                onChange={(val) => {
+                  setFormData(p => ({ 
+                    ...p, 
+                    paymentType: val,
+                    // Clear factoring fields if switching to ACH
+                    ...(val !== "Factoring" ? {
+                      factoringName: "",
+                      bankName: "",
+                      accountNumber: "",
+                      accountHolderName: "",
+                      accountType: ""
+                    } : {})
+                  }));
+                  // Live validation
+                  setErrors(prev => ({
+                    ...prev,
+                    paymentType: validateField("paymentType", val) || undefined,
+                  }));
+                }}
+                options={[
+                  { label: "ACH", value: "ACH" },
+                  { label: "Factoring", value: "Factoring" }
+                ]}
+                placeholder="Select payment type…"
+                error={errors.paymentType}
+              />
+              {renderError("paymentType")}
+            </div>
+
+            {/* Factoring Fields - Show only when Factoring is selected */}
+            {formData.paymentType === "Factoring" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Factoring Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="factoringName"
+                    placeholder="Factoring Name"
+                    value={formData.factoringName}
+                    onChange={handleChange}
+                    className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                  />
+                  {renderError("factoringName")}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Bank Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="bankName"
+                    placeholder="Bank Name"
+                    value={formData.bankName}
+                    onChange={handleChange}
+                    className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                  />
+                  {renderError("bankName")}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Account Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="accountNumber"
+                    placeholder="Account Number"
+                    value={formData.accountNumber}
+                    onChange={handleChange}
+                    className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                  />
+                  {renderError("accountNumber")}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Account Holder Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="accountHolderName"
+                    placeholder="Account Holder Name"
+                    value={formData.accountHolderName}
+                    onChange={handleChange}
+                    className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                  />
+                  {renderError("accountHolderName")}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Account Type <span className="text-red-500">*</span>
+                  </label>
+                  <SearchableSelect
+                    label=""
+                    required
+                    name="accountType"
+                    value={formData.accountType || ""}
+                    onChange={(val) => {
+                      setFormData(p => ({ ...p, accountType: val }));
+                      // Live validation
+                      setErrors(prev => ({
+                        ...prev,
+                        accountType: validateField("accountType", val) || undefined,
+                      }));
+                    }}
+                    options={[
+                      { label: "Checking", value: "Checking" },
+                      { label: "Savings", value: "Savings" }
+                    ]}
+                    placeholder="Select account type…"
+                    error={errors.accountType}
+                  />
+                  {renderError("accountType")}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

@@ -981,6 +981,12 @@ const ChatPage = () => {
 
     socketRef.current = io(`${API_CONFIG.BASE_URL}`, {
       withCredentials: true,
+      transports: ["polling"],
+      upgrade: false,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      timeout: 20000,
     });
 
     socketRef.current.on("connect", () => {
