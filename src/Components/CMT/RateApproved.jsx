@@ -3981,13 +3981,21 @@ export default function RateApproved() {
                     setFinalPriceMode(false); // Reset final price mode
                     setFinalPriceAmount(0); // Reset final price
                   }}
+                  disabled={!!actionLoading[approvalModal.rate?.rateNum]}
                   className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
                     approvalModal.type === 'manual'
                       ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
                       : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
-                  }`}
+                  } ${actionLoading[approvalModal.rate?.rateNum] ? 'opacity-70 cursor-not-allowed transform-none' : ''}`}
                 >
-                  {approvalModal.type === 'manual' ? 'Approve Bid' : 'Auto Approve'}
+                  {actionLoading[approvalModal.rate?.rateNum] ? (
+                    <div className="flex items-center justify-center gap-2">
+                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                       <span>Processing...</span>
+                    </div>
+                  ) : (
+                    approvalModal.type === 'manual' ? 'Approve Bid' : 'Auto Approve'
+                  )}
                 </button>
 
               </div>
@@ -4364,6 +4372,7 @@ export default function RateApproved() {
                       setFinalPriceModalMessage('');
                     }
                   }}
+                  disabled={!!actionLoading[finalPriceModal.rate?.rateNum]}
                   className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
                     (() => {
                       const baseRate = Number(finalPriceModal.rate?.originalRate || 0);
@@ -4375,18 +4384,25 @@ export default function RateApproved() {
                         ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 shadow-lg hover:shadow-xl'
                         : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl';
                     })()
-                  }`}
+                  } ${actionLoading[finalPriceModal.rate?.rateNum] ? 'opacity-70 cursor-not-allowed transform-none' : ''}`}
                 >
-                  {(() => {
-                    const baseRate = Number(finalPriceModal.rate?.originalRate || 0);
-                    const finalPrice = Number(finalPriceModalAmount || 0);
-                    const tenPercentOfBase = baseRate * 0.1;
-                    const maxAllowedAmount = baseRate + tenPercentOfBase;
-                    
-                    return finalPrice > 0 && finalPrice <= maxAllowedAmount
-                      ? 'Send to Manager'
-                      : 'Submit';
-                  })()}
+                  {actionLoading[finalPriceModal.rate?.rateNum] ? (
+                    <div className="flex items-center justify-center gap-2">
+                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                       <span>Processing...</span>
+                    </div>
+                  ) : (
+                    (() => {
+                      const baseRate = Number(finalPriceModal.rate?.originalRate || 0);
+                      const finalPrice = Number(finalPriceModalAmount || 0);
+                      const tenPercentOfBase = baseRate * 0.1;
+                      const maxAllowedAmount = baseRate + tenPercentOfBase;
+                      
+                      return finalPrice > 0 && finalPrice <= maxAllowedAmount
+                        ? 'Send to Manager'
+                        : 'Submit';
+                    })()
+                  )}
                 </button>
               </div>
             </div>
