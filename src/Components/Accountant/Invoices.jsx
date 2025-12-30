@@ -3,7 +3,7 @@ import axios from "axios";
 import { Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import Logo from '../../assets/LogoFinal.png';
-import { Search, CheckCircle, XCircle, Clock, FileText, RefreshCw, Eye, Edit, Download, User, Truck, DollarSign, MapPin, Calendar, Send } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Clock, FileText, RefreshCw, Eye, Edit, Download, User, Truck, DollarSign, MapPin, Calendar, Send, PlusCircle } from 'lucide-react';
 
 import {
   Box,
@@ -220,6 +220,12 @@ function TabPanel({ value, index, children }) {
 
 // Edit Form Component
 function EditForm({ data, onSubmit, loading, onClose }) {
+  // Helper function for number conversion
+  const toNum2 = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  };
+
   // Initialize form data with calculated totals
   const initializeFormData = (data) => {
     const customers = (data?.customers || []).map(customer => {
@@ -234,11 +240,26 @@ function EditForm({ data, onSubmit, loading, onClose }) {
         otherValue = customer.other || customer.otherTotal || 0;
       }
       
+      // Calculate FSC as percentage of Line Haul
+      const lineHaul = toNum2(customer.lineHaul || 0);
+      const fscPercent = toNum2(customer.fsc || 0);
+      const fscAmount = lineHaul * (fscPercent / 100);
+      const totalAmount = lineHaul + fscAmount + otherValue;
+      
+      // Preserve chargeRows if available
+      const chargeRows = Array.isArray(customer.other) ? customer.other.map(item => ({
+        name: item?.name || '',
+        quantity: String(item?.quantity || 0),
+        amt: String(item?.amount || 0),
+        total: Number(item?.total || 0)
+      })) : [];
+      
       return {
         ...customer,
         billTo: billTo,
         other: otherValue,
-        totalAmount: (customer.lineHaul || 0) + (customer.fsc || 0) + otherValue
+        chargeRows: chargeRows,
+        totalAmount: totalAmount
       };
     });
     
@@ -261,10 +282,25 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   const [formData, setFormData] = useState(initializeFormData(data));
 
+  // Charges popup state
+  const [showChargesPopup, setShowChargesPopup] = useState(false);
+  const [customerCharges, setCustomerCharges] = useState([
+    { name: '', quantity: '', amt: '', total: 0 }
+  ]);
+  const [currentCustomerIndex, setCurrentCustomerIndex] = useState(null);
+  const [customerChargeErrors, setCustomerChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
+
   // Update form data when data prop changes
   React.useEffect(() => {
     setFormData(initializeFormData(data));
   }, [data]);
+
+  // Keep errors array size in sync with charges rows
+  React.useEffect(() => {
+    setCustomerChargeErrors(prev =>
+      (customerCharges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
+    );
+  }, [customerCharges]);
 
   const handleCustomerChange = (index, field, value) => {
     const newCustomers = [...formData.customers];
@@ -272,13 +308,184 @@ function EditForm({ data, onSubmit, loading, onClose }) {
     
     // Auto-calculate total amount when line haul, FSC, or other changes
     if (field === 'lineHaul' || field === 'fsc' || field === 'other') {
-      const lineHaul = field === 'lineHaul' ? value : (newCustomers[index].lineHaul || 0);
-      const fsc = field === 'fsc' ? value : (newCustomers[index].fsc || 0);
-      const other = field === 'other' ? value : (newCustomers[index].other || 0);
-      newCustomers[index].totalAmount = lineHaul + fsc + other;
+      const lineHaul = toNum2(field === 'lineHaul' ? value : (newCustomers[index].lineHaul || 0));
+      const fscPercent = toNum2(field === 'fsc' ? value : (newCustomers[index].fsc || 0));
+      const fscAmount = lineHaul * (fscPercent / 100); // FSC is percentage of Line Haul
+      const other = toNum2(field === 'other' ? value : (newCustomers[index].other || 0));
+      newCustomers[index].totalAmount = lineHaul + fscAmount + other;
     }
     
     setFormData({ ...formData, customers: newCustomers });
+  };
+
+  // Helper functions for charges validation
+  const onlyAlpha = (s = '') => s.replace(/[^A-Za-z ]/g, '');
+  const clampPosInt = (s = '') => s.replace(/[^\d]/g, '');
+  const blockIntNoSign = (e) => {
+    if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+  };
+
+  // Handle charges input change
+  const handleChargeChange = (index, field, value) => {
+    const updated = [...customerCharges];
+
+    if (field === 'name') value = onlyAlpha(value);
+    if (field === 'quantity') value = clampPosInt(value);
+    if (field === 'amt') {
+      // Allow decimal points for amounts (max 2 decimal places)
+      value = value.replace(/[^\d.]/g, '');
+      // Ensure only one decimal point
+      const parts = value.split('.');
+      if (parts.length > 2) {
+        value = parts[0] + '.' + parts.slice(1).join('');
+      }
+      // Limit to 2 decimal places
+      if (parts[1] && parts[1].length > 2) {
+        value = parts[0] + '.' + parts[1].substring(0, 2);
+      }
+    }
+
+    updated[index] = { ...updated[index], [field]: value };
+
+    // total = quantity * amount
+    const q = parseInt(updated[index].quantity, 10) || 0;
+    const a = parseFloat(updated[index].amt) || 0;
+    updated[index].total = q * a;
+
+    setCustomerCharges(updated);
+
+    // clear inline error as user fixes the field
+    setCustomerChargeErrors(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index] };
+      if (field === 'name') next[index].name = '';
+      if (field === 'quantity') next[index].quantity = '';
+      if (field === 'amt') next[index].amt = '';
+      return next;
+    });
+  };
+
+  // Add charge row
+  const addCharge = () => {
+    setCustomerCharges(prev => [...prev, { name: '', quantity: '', amt: '', total: 0 }]);
+    setCustomerChargeErrors(prev => [...prev, { name: '', quantity: '', amt: '' }]);
+  };
+
+  // Remove charge row
+  const removeCharge = (index) => {
+    if (customerCharges.length > 1) {
+      setCustomerCharges(prev => prev.filter((_, i) => i !== index));
+      setCustomerChargeErrors(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  // Handle customer charges click
+  const handleCustomerChargesClick = (customerIndex) => {
+    setCurrentCustomerIndex(customerIndex);
+    // Load existing customer charges if available
+    const customer = formData.customers[customerIndex];
+    const existingCharges = customer?.chargeRows || [];
+    if (existingCharges.length > 0 && Array.isArray(existingCharges)) {
+      setCustomerCharges(existingCharges.map(ch => ({
+        name: ch.name || '',
+        quantity: String(ch.quantity || ''),
+        amt: String(ch.amount || ch.amt || ''),
+        total: ch.total || 0
+      })));
+    } else {
+      setCustomerCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+    }
+    setShowChargesPopup(true);
+  };
+
+  // Close charges popup
+  const closeChargesPopup = () => {
+    setShowChargesPopup(false);
+    setCurrentCustomerIndex(null);
+  };
+
+  // Apply charges
+  const applyCharges = () => {
+    // 1) Check if all rows are empty
+    const allEmpty = (customerCharges || []).every(
+      ch => !(ch?.name?.trim()) &&
+        !(String(ch?.quantity ?? '') !== '') &&
+        !(String(ch?.amt ?? '') !== '')
+    );
+
+    if (allEmpty) {
+      // Show errors on row 0
+      const errs = (customerCharges || []).map((_, i) =>
+        i === 0
+          ? {
+            name: 'Please enter the charge name',
+            quantity: 'Please enter the Quantity',
+            amt: 'Please enter the amount',
+          }
+          : { name: '', quantity: '', amt: '' }
+      );
+      setCustomerChargeErrors(errs);
+      return;
+    }
+
+    // 2) Row-by-row validation
+    const nextErrs = (customerCharges || []).map((ch) => {
+      const row = { name: '', quantity: '', amt: '' };
+      const hasAny = (ch?.name || ch?.quantity || ch?.amt);
+
+      if (hasAny) {
+        const nm = (ch?.name || '').trim();
+        if (!nm) row.name = 'Please enter the charge name';
+        else if (!/^[A-Za-z ]+$/.test(nm)) row.name = 'Name should contain only alphabets';
+
+        const qRaw = String(ch?.quantity ?? '');
+        if (qRaw === '') row.quantity = 'Please enter the Quantity';
+        else if (!/^[1-9]\d*$/.test(qRaw)) row.quantity = 'Quantity must be a positive integer';
+
+        const aRaw = String(ch?.amt ?? '');
+        if (aRaw === '') row.amt = 'Please enter the amount';
+        else if (!/^\d+(\.\d{1,2})?$/.test(aRaw)) row.amt = 'Amount must be a positive number (max 2 decimal places)';
+      }
+      return row;
+    });
+
+    const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
+    setCustomerChargeErrors(nextErrs);
+
+    if (hasErrors) {
+      return;
+    }
+
+    // 3) Valid -> apply totals
+    const totalCharges = (customerCharges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
+    
+    // Apply to customer
+    if (currentCustomerIndex !== null) {
+      setFormData(prev => {
+        const updatedCustomers = [...prev.customers];
+        if (updatedCustomers[currentCustomerIndex]) {
+          const lh = toNum2(updatedCustomers[currentCustomerIndex].lineHaul || 0);
+          const fscPercent = toNum2(updatedCustomers[currentCustomerIndex].fsc || 0);
+          const fscAmount = lh * (fscPercent / 100);
+          
+          updatedCustomers[currentCustomerIndex] = {
+            ...updatedCustomers[currentCustomerIndex],
+            other: String(totalCharges),
+            chargeRows: customerCharges.map(ch => ({
+              name: ch.name.trim(),
+              quantity: parseInt(ch.quantity, 10) || 0,
+              amount: parseFloat(ch.amt) || 0,
+              total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
+            })),
+            totalAmount: toNum2(lh + fscAmount + totalCharges)
+          };
+        }
+        return { ...prev, customers: updatedCustomers };
+      });
+      setCurrentCustomerIndex(null);
+    }
+    
+    setShowChargesPopup(false);
   };
 
   const handleCarrierChange = (field, value) => {
@@ -314,7 +521,43 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    // Transform formData to match API expectations
+    const transformedData = {
+      ...formData,
+      customers: formData.customers.map(c => {
+        const lh = toNum2(c.lineHaul || 0);
+        const fscPercent = toNum2(c.fsc || 0);
+        const fscAmount = lh * (fscPercent / 100);
+        const oth = toNum2(c.other || 0);
+        
+        // Convert chargeRows to array format expected by API
+        const otherArray = (c.chargeRows && c.chargeRows.length > 0)
+          ? c.chargeRows.map(r => ({
+              name: r.name,
+              quantity: parseInt(r.quantity) || 0,
+              amount: parseFloat(r.amount || r.amt) || 0,
+              total: parseFloat(r.total) || 0
+            }))
+          : (oth > 0 ? [{
+              name: "Other Charges",
+              quantity: 1,
+              amount: oth,
+              total: oth
+            }] : []);
+        
+        return {
+          ...c,
+          lineHaul: lh,
+          fsc: fscPercent, // Store percentage value
+          other: otherArray,
+          otherTotal: oth,
+          totalAmount: toNum2(lh + fscAmount + oth)
+        };
+      })
+    };
+    
+    onSubmit(transformedData);
   };
 
   return (
@@ -406,9 +649,21 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                 <TextField
                   fullWidth
                   label="Other"
-                  type="number"
                   value={customer.other || ""}
-                  onChange={(e) => handleCustomerChange(index, 'other', parseFloat(e.target.value) || 0)}
+                  onClick={() => handleCustomerChargesClick(index)}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      backgroundColor: '#f5f5f5',
+                      cursor: 'pointer'
+                    },
+                    '& .MuiInputBase-root': {
+                      cursor: 'pointer'
+                    }
+                  }}
+                  placeholder="Click to add charges"
                 />
                 <TextField
                   fullWidth
@@ -570,6 +825,238 @@ function EditForm({ data, onSubmit, loading, onClose }) {
           )}
         </button>
       </div>
+
+      {/* Charges Popup */}
+      {showChargesPopup && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60]" onClick={closeChargesPopup}>
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 -m-8 mb-6 p-6 rounded-t-xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                    <DollarSign className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">
+                      Customer Charges Calculator
+                    </h2>
+                    {currentCustomerIndex !== null && (
+                      <p className="text-white/80 text-sm mt-1">Customer {currentCustomerIndex + 1}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={closeChargesPopup}
+                  className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Table header */}
+              <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  <span>Name <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">#</span>
+                  <span>Quantity <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  <span>Amount <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold">$</span>
+                  <span>Total</span>
+                </div>
+                <div className="text-center">Action</div>
+              </div>
+
+              {/* Rows */}
+              {customerCharges.map((charge, index) => (
+                <div key={index} className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  {/* Name */}
+                  <div>
+                    <input
+                      type="text"
+                      value={charge.name}
+                      onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
+                      onKeyDown={(e) => {
+                        const ctrl = e.ctrlKey || e.metaKey;
+                        const allow = ['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+                        if (allow.includes(e.key) || (ctrl && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) return;
+                        if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
+                      }}
+                      onBlur={() => {
+                        setCustomerChargeErrors((prev) => {
+                          const next = [...prev];
+                          const v = (charge.name || '').trim();
+                          next[index] = { ...(next[index] || {}) };
+                          if (!v) next[index].name = 'Please enter the charge name';
+                          else if (!/^[A-Za-z ]+$/.test(v)) next[index].name = 'Name should contain only alphabets';
+                          else next[index].name = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(customerChargeErrors[index]?.name)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.name
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="Enter charge name"
+                    />
+                    {customerChargeErrors[index]?.name && (
+                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].name}</p>
+                    )}
+                  </div>
+
+                  {/* Quantity */}
+                  <div>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      onKeyDown={blockIntNoSign}
+                      value={charge.quantity}
+                      onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
+                      onBlur={() => {
+                        setCustomerChargeErrors((prev) => {
+                          const next = [...prev];
+                          const raw = String(charge.quantity ?? '');
+                          next[index] = { ...(next[index] || {}) };
+                          if (raw === '') next[index].quantity = 'Please enter the Quantity';
+                          else if (!/^[1-9]\d*$/.test(raw)) next[index].quantity = 'Quantity must be a positive integer';
+                          else next[index].quantity = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(customerChargeErrors[index]?.quantity)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.quantity
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="0"
+                    />
+                    {customerChargeErrors[index]?.quantity && (
+                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].quantity}</p>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      onKeyDown={(e) => {
+                        if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                      }}
+                      value={charge.amt}
+                      onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
+                      onBlur={() => {
+                        setCustomerChargeErrors((prev) => {
+                          const next = [...prev];
+                          const raw = String(charge.amt ?? '');
+                          next[index] = { ...(next[index] || {}) };
+                          if (raw === '') next[index].amt = 'Please enter the amount';
+                          else if (!/^\d+(\.\d{1,2})?$/.test(raw)) next[index].amt = 'Amount must be a positive number (max 2 decimal places)';
+                          else next[index].amt = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(customerChargeErrors[index]?.amt)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.amt
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="0.00"
+                    />
+                    {customerChargeErrors[index]?.amt && (
+                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].amt}</p>
+                    )}
+                  </div>
+
+                  {/* Row total */}
+                  <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg font-semibold text-gray-800 border border-green-200">
+                    ${Number(charge.total || 0).toFixed(2)}
+                  </div>
+
+                  {/* Delete */}
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => removeCharge(index)}
+                      disabled={customerCharges.length === 1}
+                      className={`p-2 rounded-full transition-all ${customerCharges.length === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
+                        }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add row */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={addCharge}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                  <span className="font-semibold">Add New Charge</span>
+                </button>
+              </div>
+
+              {/* Total & Apply */}
+              <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-xl border border-gray-200">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-green-500 p-3 rounded-lg">
+                      <DollarSign className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 font-medium">Total Charges</div>
+                      <div className="text-2xl font-bold text-gray-800">
+                        ${(customerCharges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={closeChargesPopup}
+                      className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyCharges}
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      Apply to Customer Charges
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
@@ -670,6 +1157,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [resubmitCorrections, setResubmitCorrections] = useState("");
   const [resubmitRemarks, setResubmitRemarks] = useState("");
   const [resubmitPosting, setResubmitPosting] = useState(false);
+  
+  // Resubmit to CMT form state
+  const [resubmitCMTRemarks, setResubmitCMTRemarks] = useState("");
+  const [resubmitCMTPosting, setResubmitCMTPosting] = useState(false);
 
   // PDF generation state
   const [pdfLoading, setPdfLoading] = useState({ invoice: false, rate: false, bol: false });
@@ -2027,16 +2518,66 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const msg = resp?.data?.message || "DO resubmitted to sales successfully";
       setToast({ open: true, severity: "success", msg });
 
-      // refresh rejected tab silently
+      // reset form
+      setResubmitCorrections("");
+      setResubmitRemarks("");
+      
+      // refresh rejected tab immediately
       fetchRejected(rejectedPage);
       
-      // close modal
-      setDetailsOpen(false);
+      // close modal after refresh
+      setTimeout(() => {
+        setDetailsOpen(false);
+      }, 300);
     } catch (e) {
       const msg = e?.response?.data?.message || e?.message || "Failed to resubmit to sales";
       setToast({ open: true, severity: "error", msg });
     } finally {
       setResubmitPosting(false);
+    }
+  };
+
+  // ===== POST: Resubmit to CMT =====
+  const postResubmitToCMT = async () => {
+    if (!selected?._id) {
+      setToast({ open: true, severity: "error", msg: "No DO selected." });
+      return;
+    }
+
+    if (!resubmitCMTRemarks.trim()) {
+      setToast({ open: true, severity: "error", msg: "Please provide remarks for rejection." });
+      return;
+    }
+
+    setResubmitCMTPosting(true);
+    try {
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/approval`;
+      const body = {
+        doId: selected._id,
+        accountantEmpId: empId,
+        action: "reject",
+        remarks: resubmitCMTRemarks.trim(),
+      };
+      const resp = await axios.post(url, body, { headers });
+
+      const msg = resp?.data?.message || "DO rejected and sent to CMT successfully";
+      setToast({ open: true, severity: "success", msg });
+
+      // reset form
+      setResubmitCMTRemarks("");
+      
+      // refresh rejected tab immediately
+      fetchRejected(rejectedPage);
+      
+      // close modal after refresh
+      setTimeout(() => {
+        setDetailsOpen(false);
+      }, 300);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Failed to resubmit to CMT";
+      setToast({ open: true, severity: "error", msg });
+    } finally {
+      setResubmitCMTPosting(false);
     }
   };
 
@@ -2596,6 +3137,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setApprovalRemarks("");
     setResubmitCorrections("");
     setResubmitRemarks("");
+    setResubmitCMTRemarks("");
     const shipmentNo = row?.loadReference?.shipmentNumber;
     fetchShipmentImages(shipmentNo);
     fetchAdditionalDocs(row?._id);
@@ -4980,6 +5522,49 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
                         This will resubmit the DO back to sales with your corrections and remarks.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Resubmit to CMT - Only show for rejected DOs */}
+                {activeTab === 3 && (
+                  <Card variant="outlined" sx={{ mt: 2 }}>
+                    <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#f59e0b", 0.05) }}>
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        Resubmit to CMT
+                      </Typography>
+                    </Box>
+                    <CardContent>
+                      {/* Remarks */}
+                      <TextField
+                        label="Rejection Remarks"
+                        placeholder="Enter reason for rejecting to CMT (e.g., CMT needs to correct rates, provide additional documents, etc.)"
+                        fullWidth
+                        multiline
+                        minRows={3}
+                        maxRows={6}
+                        value={resubmitCMTRemarks}
+                        onChange={(e) => setResubmitCMTRemarks(e.target.value)}
+                        required
+                        sx={{ mb: 2 }}
+                      />
+
+                      {/* Submit Button */}
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        startIcon={<SendIcon />}
+                        onClick={postResubmitToCMT}
+                        disabled={resubmitCMTPosting || !resubmitCMTRemarks.trim()}
+                        fullWidth
+                        size="large"
+                      >
+                        {resubmitCMTPosting ? "Resubmitting..." : "Resubmit to CMT"}
+                      </Button>
+
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
+                        This will reject the DO and send it back to the assigned CMT user for corrections. The CMT user will receive an email notification with your remarks.
                       </Typography>
                     </CardContent>
                   </Card>
