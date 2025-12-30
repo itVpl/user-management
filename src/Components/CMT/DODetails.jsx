@@ -119,6 +119,70 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   const assign = raw.assignedToCMT || order.assignedToCMT || null;
   const createdBy = raw.createdBySalesUser || {};
   const loadRef = raw.loadReference || {};
+  const loadId = loadRef._id || loadRef.loadId || loadRef.id || order?.raw?.loadId || order?.raw?._id;
+  const loadNo = cust0.loadNo || order.loadNo || loadRef.loadId; // Readable Load No (e.g. 1005)
+
+  // Assigned Driver Details
+  const [assignedDriverDetails, setAssignedDriverDetails] = useState(null);
+  const [loadingDriverDetails, setLoadingDriverDetails] = useState(false);
+
+  useEffect(() => {
+    const fetchAssignedDriver = async () => {
+      // Console logs for debugging
+      console.log('Fetching assigned driver...', { cmtEmpId, loadId, loadNo });
+      
+      if (!open || !cmtEmpId) {
+        console.log('Skipping fetch: open or cmtEmpId missing');
+        return;
+      }
+      
+      try {
+        setLoadingDriverDetails(true);
+        const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/bid/cmt-assigned-loads/${cmtEmpId}`);
+        console.log('Assigned loads API response:', res.data);
+        
+        if (res.data && res.data.success && res.data.data && res.data.data.assignedLoads) {
+            // Try to find a match by Mongo ID or Readable Load ID
+            const match = res.data.data.assignedLoads.find(item => {
+               const itemLoad = item.load || {};
+               const itemLoadMongoId = itemLoad._id || itemLoad.id;
+               const itemReadableLoadId = itemLoad.loadId; // e.g. "1005"
+               
+               // Check match
+               const isMongoMatch = loadId && (itemLoadMongoId === loadId);
+               const isReadableMatch = loadNo && (String(itemReadableLoadId) === String(loadNo));
+               
+               console.log(`Checking load: ${itemReadableLoadId} (${itemLoadMongoId}) vs Target: ${loadNo} (${loadId}) -> Match: ${isMongoMatch || isReadableMatch}`);
+               
+               return isMongoMatch || isReadableMatch;
+            });
+            
+            if (match) {
+                console.log('Match found:', match);
+                if (match.load && match.load.truckers && match.load.truckers.length > 0) {
+                     const trucker = match.load.truckers[0];
+                     console.log('Trucker found:', trucker);
+                     setAssignedDriverDetails({
+                         driverName: trucker.driverName,
+                         vehicleNumber: trucker.vehicleNumber
+                     });
+                } else {
+                    console.log('No truckers in match');
+                    setAssignedDriverDetails(null);
+                }
+            } else {
+              console.log('No match found for loadId:', loadId, 'or loadNo:', loadNo);
+              setAssignedDriverDetails(null);
+            }
+        }
+      } catch (err) {
+        console.error('Error fetching assigned driver details:', err);
+      } finally {
+        setLoadingDriverDetails(false);
+      }
+    };
+    fetchAssignedDriver();
+  }, [open, cmtEmpId, loadId, loadNo]);
 
   // Driver images
   const [imgLoading, setImgLoading] = useState(false);
@@ -1901,6 +1965,36 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                       {assignLoading ? 'Assigning...' : 'Assign Driver'}
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Assigned Driver Details (New Section) */}
+          {assignedDriverDetails && (
+            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 mt-4">
+              <div className="flex items-center gap-2 mb-4">
+                <User className="text-blue-600" size={20} />
+                <h3 className="text-lg font-bold text-gray-800">Assigned Driver Details</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="flex items-center gap-3">
+                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                     <User className="text-blue-600" size={16} />
+                   </div>
+                   <div>
+                      <p className="text-sm text-gray-600">Driver Name</p>
+                      <p className="font-semibold text-gray-800">{assignedDriverDetails.driverName || 'N/A'}</p>
+                   </div>
+                </div>
+                <div className="flex items-center gap-3">
+                   <div className="w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center">
+                     <Truck className="text-cyan-600" size={16} />
+                   </div>
+                   <div>
+                      <p className="text-sm text-gray-600">Vehicle Number</p>
+                      <p className="font-semibold text-gray-800">{assignedDriverDetails.vehicleNumber || 'N/A'}</p>
+                   </div>
                 </div>
               </div>
             </div>

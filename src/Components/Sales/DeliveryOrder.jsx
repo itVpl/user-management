@@ -1606,7 +1606,7 @@ export default function DeliveryOrder() {
       setCarrierCharges(existingCharges.map(ch => ({
         name: ch.name || '',
         quantity: String(ch.quantity || ''),
-        amt: String(ch.amount || ''),
+        amt: String(ch.amt || ch.amount || ''),
         total: ch.total || 0
       })));
     } else {
@@ -1627,7 +1627,7 @@ export default function DeliveryOrder() {
       setCustomerCharges(existingCharges.map(ch => ({
         name: ch.name || '',
         quantity: String(ch.quantity || ''),
-        amt: String(ch.amount || ''),
+        amt: String(ch.amt || ch.amount || ''),
         total: ch.total || 0
       })));
     } else {
@@ -2706,7 +2706,17 @@ const validateForm = (mode = formMode) => {
             ? fullOrderData.bols.map(b => ({ bolNo: b.bolNo || '' }))
             : (fullOrderData.bolInformation ? [{ bolNo: fullOrderData.bolInformation }] : [{ bolNo: '' }])
           ),
-          docs: null
+          docs: (fullOrderData.uploadedFiles && fullOrderData.uploadedFiles.length > 0) 
+            ? {
+                name: fullOrderData.uploadedFiles[0].fileName || 'Document',
+                isExisting: true,
+                url: fullOrderData.uploadedFiles[0].fileUrl
+              } 
+            : (fullOrderData.docUpload ? {
+                name: fullOrderData.docUpload.split(/[/\\]/).pop(),
+                isExisting: true,
+                url: `${API_CONFIG.BASE_URL}/${fullOrderData.docUpload}`
+              } : null)
         };
 
         const chargesData =
@@ -3045,24 +3055,23 @@ const handleUpdateOrder = async (e) => {
       const oth = toNum2(c.other || '0');
 
       // Convert other to array format as expected by API
-      const otherArray = oth > 0 ? [{
-        name: "Other Charges",
-        quantity: 1,
-        amount: oth,
-        total: oth
-      }] : [];
+      // Use detailed chargeRows if available, otherwise fallback to generic
+      const otherArray = (c.chargeRows && c.chargeRows.length > 0)
+        ? c.chargeRows.map(r => ({
+            name: r.name,
+            quantity: parseInt(r.quantity) || 0,
+            amount: parseFloat(r.amount) || parseFloat(r.amt) || 0,
+            total: parseFloat(r.total) || 0
+          }))
+        : (oth > 0 ? [{
+            name: "Other Charges",
+            quantity: 1,
+            amount: oth,
+            total: oth
+          }] : []);
 
       // Get original data if available (from edit mode) - preserve ALL original fields
       const originalData = c._originalData || {};
-      
-      // Debug: Log original data to see what fields are available
-      if (idx === 0) {
-
-      }
-
-      // Start with original data to preserve all fields, then update with form values
-      // IMPORTANT: Don't override fields that don't exist in form (like loadNo, fax, phone, etc.)
-      // Only override fields that are actually in the form
       const customerData = {
         // Preserve all original fields first (this includes loadNo, fax, phone, email, address, etc.)
         ...originalData,
@@ -6368,9 +6377,20 @@ const handleUpdateOrder = async (e) => {
                   {formData.docs && (
                     <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
                       <div className="flex items-center space-x-3">
-                        {/* ...icon... */}
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <FileText className="text-blue-600" size={20} />
+                        </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{formData.docs.name || 'Attached Document'}</p>
+                          {formData.docs.url ? (
+                            <a href={formData.docs.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline flex items-center gap-2">
+                              {formData.docs.name || 'Attached Document'}
+                              {formData.docs.isExisting && <CheckCircle className="text-green-500" size={14} />}
+                            </a>
+                          ) : (
+                            <p className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                              {formData.docs.name || 'Attached Document'}
+                            </p>
+                          )}
                           <p className="text-xs text-gray-500">
                             {formData.docs.size ? `${(formData.docs.size / 1024 / 1024).toFixed(2)} MB` : (formData.docs.isExisting ? 'Linked from Load' : 'Unknown Size')}
                           </p>
