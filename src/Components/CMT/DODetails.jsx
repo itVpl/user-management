@@ -1863,7 +1863,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
         {/* Content */}
         <div className="modal-content overflow-y-auto flex-1 p-6 space-y-6">
-          {/* Customer Information - Hidden per user request */}
+          {/* Customer Information - Hidden per user request  dfg */}
           {false && customers.length > 0 && (
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1892,7 +1892,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Work Order No</p>
-                        <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>
+                        <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>  
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Load No</p>
