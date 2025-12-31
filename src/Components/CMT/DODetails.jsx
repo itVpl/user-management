@@ -222,6 +222,24 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     }
   };
 
+  // Helper function to format date for datetime-local input (without timezone conversion)
+  const formatDateForInput = (dateValue) => {
+    if (!dateValue) return '';
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return '';
+      // Convert to local datetime string without timezone conversion
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch {
+      return '';
+    }
+  };
+
   // API uses different field names, so we need to map them
   const apiImportantDates = raw.importantDates || raw.loadReference?.importantDates || {};
   const [importantDates, setImportantDates] = useState({
@@ -232,11 +250,13 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || apiImportantDates.emptyDate),
     perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay),
     ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || apiImportantDates.ingateDate),
-    readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate)
+    readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate),
+    // Only use dlvyDate from importantDates
+    deliveryDate: getDateValue(apiImportantDates.dlvyDate)
   });
   const [updatingDates, setUpdatingDates] = useState(false);
 
-  // Update important dates when modal opens or order changes
+  // Initialize important dates only when modal opens (not on order changes)
   useEffect(() => {
     if (open && order) {
       // API uses different field names, so we need to map them
@@ -249,10 +269,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || apiImportantDates.emptyDate),
         perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay),
         ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || apiImportantDates.ingateDate),
-        readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate)
+        readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate),
+        // Only use dlvyDate from importantDates
+        deliveryDate: getDateValue(apiImportantDates.dlvyDate)
       });
     }
-  }, [open, order]); // eslint-disable-line
+    // Only run when modal opens/closes, not when order changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   // PDF generate/download loading state
   const [genLoading, setGenLoading] = useState(null); // 'invoice' | 'rate' | 'bol' | null
 
@@ -1620,7 +1644,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         'emptyDate': 'emptyDate',            // Same
         'perDiemFreeDay': 'perDiemFreeDate', // Frontend: perDiemFreeDay -> API: perDiemFreeDate
         'ingateDate': 'ingateDate',          // Same
-        'readyToReturnDate': 'readyToReturnDate' // Same
+        'readyToReturnDate': 'readyToReturnDate', // Same
+        'deliveryDate': 'dlvyDate'           // Frontend: deliveryDate -> API: dlvyDate
       };
 
       const importantDatesPayload = {};
@@ -1659,6 +1684,57 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
       if (response?.data?.success) {
         alertify.success(response?.data?.message || 'Important dates updated successfully');
+        
+        // Update local order object and state with the response data
+        try {
+          const updatedData = response?.data?.data;
+          if (updatedData) {
+            // Update order.raw with the response data
+            if (!order.raw) order.raw = {};
+            
+            // Update importantDates if present in response
+            if (updatedData.importantDates) {
+              if (!order.raw.importantDates) order.raw.importantDates = {};
+              order.raw.importantDates = { ...order.raw.importantDates, ...updatedData.importantDates };
+            }
+            
+            // Update loadReference.importantDates if present
+            if (updatedData.loadReference?.importantDates) {
+              if (!order.raw.loadReference) order.raw.loadReference = {};
+              if (!order.raw.loadReference.importantDates) order.raw.loadReference.importantDates = {};
+              order.raw.loadReference.importantDates = { ...order.raw.loadReference.importantDates, ...updatedData.loadReference.importantDates };
+            }
+            
+            // Get updated importantDates from response (priority: response > existing)
+            const apiImportantDates = updatedData.importantDates || updatedData.loadReference?.importantDates || order.raw.importantDates || order.raw.loadReference?.importantDates || {};
+            
+            // Check if deliveryDate (dlvyDate) was in the payload we sent
+            const wasDeliveryDateInPayload = importantDatesPayload.dlvyDate !== undefined;
+            
+            // Always update all dates from the response
+            setImportantDates(prev => {
+              // For deliveryDate: if it was updated, keep the current state value (user just entered it)
+              // State already has the updated value from the input field onChange handler
+              const updatedDeliveryDate = wasDeliveryDateInPayload 
+                ? prev.deliveryDate  // Keep current state value (what user just entered)
+                : (apiImportantDates.dlvyDate ? getDateValue(apiImportantDates.dlvyDate) : prev.deliveryDate);
+              
+              return {
+                vesselETA: getDateValue(apiImportantDates.vesselDate || apiImportantDates.vesselETA || prev.vesselETA),
+                latfreeDate: getDateValue(apiImportantDates.lastFreeDate || apiImportantDates.latfreeDate || prev.latfreeDate),
+                dischargeDate: getDateValue(apiImportantDates.dischargeDate || prev.dischargeDate),
+                outgateDate: getDateValue(apiImportantDates.outgateDate || prev.outgateDate),
+                emptyDate: getDateValue(apiImportantDates.emptyDate || prev.emptyDate),
+                perDiemFreeDay: getDateValue(apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay || prev.perDiemFreeDay),
+                ingateDate: getDateValue(apiImportantDates.ingateDate || prev.ingateDate),
+                readyToReturnDate: getDateValue(apiImportantDates.readyToReturnDate || prev.readyToReturnDate),
+                deliveryDate: updatedDeliveryDate
+              };
+            });
+          }
+        } catch (updateError) {
+          console.error('Error updating local state after date update:', updateError);
+        }
       } else {
         alertify.error(response?.data?.message || 'Update failed');
       }
@@ -2448,14 +2524,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Vessel ETA</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.vesselETA ? (() => { try { return new Date(importantDates.vesselETA).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.vesselETA)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        // Convert datetime-local format to ISO string
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, vesselETA: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, vesselETA: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, vesselETA: '' }));
@@ -2468,13 +2545,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Lastfree Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.latfreeDate ? (() => { try { return new Date(importantDates.latfreeDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.latfreeDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, latfreeDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, latfreeDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, latfreeDate: '' }));
@@ -2491,13 +2570,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Discharge Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.dischargeDate ? (() => { try { return new Date(importantDates.dischargeDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.dischargeDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, dischargeDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, dischargeDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, dischargeDate: '' }));
@@ -2510,13 +2591,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Outgate Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.outgateDate ? (() => { try { return new Date(importantDates.outgateDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.outgateDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, outgateDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, outgateDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, outgateDate: '' }));
@@ -2533,13 +2616,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Empty Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.emptyDate ? (() => { try { return new Date(importantDates.emptyDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.emptyDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, emptyDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, emptyDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, emptyDate: '' }));
@@ -2552,13 +2637,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Per Diem Free Day</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.perDiemFreeDay ? (() => { try { return new Date(importantDates.perDiemFreeDay).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.perDiemFreeDay)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, perDiemFreeDay: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, perDiemFreeDay: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, perDiemFreeDay: '' }));
@@ -2575,13 +2662,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Ingate Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.ingateDate ? (() => { try { return new Date(importantDates.ingateDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.ingateDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, ingateDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, ingateDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, ingateDate: '' }));
@@ -2594,13 +2683,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Ready To Return Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.readyToReturnDate ? (() => { try { return new Date(importantDates.readyToReturnDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.readyToReturnDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, readyToReturnDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, readyToReturnDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, readyToReturnDate: '' }));
@@ -2608,6 +2699,34 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                     }}
                     className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   />
+                </div>
+              </div>
+
+              {/* Row 5 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Delivery Date</label>
+                  <input
+                    type="datetime-local"
+                    value={formatDateForInput(importantDates.deliveryDate)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, deliveryDate: localDate.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, deliveryDate: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  {/* Empty div to maintain grid layout */}
                 </div>
               </div>
             </div>
