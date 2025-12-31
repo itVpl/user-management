@@ -1082,6 +1082,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // toasts
   const [toast, setToast] = useState({ open: false, severity: "success", msg: "" });
 
+  // Email modal state
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailData, setEmailData] = useState(null);
+  const [emailForm, setEmailForm] = useState({
+    pdfFile: null
+  });
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [pdfUploading, setPdfUploading] = useState(false);
+
   // === TAB 0: Assigned to Accountant ===
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
@@ -2761,6 +2770,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setShortPayModalOpen(true);
   };
 
+  const openEmailModal = (row) => {
+    setEmailData(row);
+    setEmailForm({
+      pdfFile: null
+    });
+    setEmailModalOpen(true);
+  };
+
   // Helper function to emit payment notification via BroadcastChannel
   const emitPaymentNotification = (notificationData) => {
     try {
@@ -3042,6 +3059,92 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       console.error('DO IDs being sent:', doIdsToProcess);
     } finally {
       setBulkPaymentLoading(false);
+    }
+  };
+
+  // Send email to customer function
+  const handleEmailSubmit = async () => {
+    if (!emailData?._id) {
+      setToast({ open: true, severity: "error", msg: "DO ID is required" });
+      return;
+    }
+
+    // Validate PDF file is uploaded
+    if (!emailForm.pdfFile) {
+      setToast({ open: true, severity: "error", msg: "Please upload a PDF file before sending email" });
+      return;
+    }
+
+    const token = getStored("token");
+    if (!token) {
+      setToast({ open: true, severity: "error", msg: "Authentication required. Please login again." });
+      return;
+    }
+
+    const doId = emailData._id;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Step 1: Upload PDF to attachments API first
+    setPdfUploading(true);
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('invoicePDF', emailForm.pdfFile);
+
+      const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${doId}/pdf-attachments`;
+      const uploadResp = await axios.post(uploadUrl, uploadFormData, { headers });
+
+      if (!uploadResp?.data?.success) {
+        const uploadErrorMsg = uploadResp?.data?.message || "Failed to upload PDF";
+        setToast({ open: true, severity: "error", msg: uploadErrorMsg });
+        setPdfUploading(false);
+        return;
+      }
+
+      // PDF uploaded successfully, now send email
+      setPdfUploading(false);
+      setEmailLoading(true);
+
+      // Step 2: Send email to customer (JSON body with doId only, as per API docs)
+      const emailUrl = `${API_CONFIG.BASE_URL}/api/v1/accountant/send-to-customer`;
+      const emailHeaders = {
+        ...headers,
+        'Content-Type': 'application/json',
+      };
+      const emailResp = await axios.post(emailUrl, { doId }, { headers: emailHeaders });
+
+      if (emailResp?.data?.success) {
+        const data = emailResp?.data?.data || {};
+        const shipperName = data.shipperName || "customer";
+        const shipperEmail = data.shipperEmail || "";
+        const pdfsAttached = data.frontendPDFsAttached || 0;
+        const message = `Email sent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ''} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ''}`;
+        setToast({ open: true, severity: "success", msg: message });
+        setEmailModalOpen(false);
+        setEmailForm({ pdfFile: null });
+      } else {
+        setToast({ open: true, severity: "error", msg: emailResp?.data?.message || "Failed to send email" });
+      }
+    } catch (error) {
+      let errorMsg = error?.response?.data?.message || error?.message || "Failed to process request";
+      
+      // Handle specific error codes with user-friendly messages
+      if (errorMsg.includes('MESSAGE_SIZE_EXCEEDED') || errorMsg.includes('Mail size too large')) {
+        errorMsg = "Email size exceeds 20MB limit. Please upload a smaller PDF file or remove other attachments. The backend-generated invoice PDF and other uploaded PDFs are included in the total size.";
+      } else if (errorMsg.includes('INVALID_SENDER')) {
+        errorMsg = "Email sending failed: Sender email not verified. Please contact support.";
+      } else if (errorMsg.includes('INVALID_RECIPIENT')) {
+        errorMsg = "Email sending failed: Invalid recipient email address. Please check the shipper's email.";
+      } else if (pdfUploading) {
+        errorMsg = `Failed to upload PDF: ${errorMsg}`;
+      }
+      
+      setToast({ open: true, severity: "error", msg: errorMsg });
+      console.error('Error:', error);
+    } finally {
+      setPdfUploading(false);
+      setEmailLoading(false);
     }
   };
 
@@ -4284,6 +4387,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     title="View Details"
                                   >
                                     <Eye size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => openEmailModal(row)}
+                                    className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all shadow-md hover:shadow-lg whitespace-nowrap"
+                                    title="Mail Send to Customer"
+                                  >
+                                    Mail Send to Customer
                                   </button>
                                 </div>
                               </td>
@@ -6019,6 +6129,140 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                     >
                       {paymentLoading ? "Processing..." : "Mark as Paid"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Email Modal */}
+      {emailModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setEmailModalOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <Send size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Send Email to Customer</h2>
+                      <p className="text-white/80 text-sm">DO ID: {emailData?._id ? shortId(emailData._id) : 'N/A'}</p>
+                      {emailData?.customers?.[0]?.loadNo && (
+                        <p className="text-white/80 text-sm">Load No: {emailData.customers[0].loadNo}</p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEmailModalOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                    disabled={emailLoading}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                <div className="space-y-4">
+                  {/* PDF Upload */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      PDF File <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-500 transition-colors">
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            if (file.type !== 'application/pdf') {
+                              setToast({ open: true, severity: "error", msg: "Please upload a PDF file only" });
+                              return;
+                            }
+                            setEmailForm({ ...emailForm, pdfFile: file });
+                          }
+                        }}
+                        className="hidden"
+                        id="email-pdf-upload"
+                      />
+                      <label
+                        htmlFor="email-pdf-upload"
+                        className="cursor-pointer flex flex-col items-center justify-center"
+                      >
+                        {emailForm.pdfFile ? (
+                          <div className="text-center">
+                            <FileText size={32} className="text-purple-500 mx-auto mb-2" />
+                            <p className="text-sm font-medium text-gray-700">{emailForm.pdfFile.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(emailForm.pdfFile.size / 1024).toFixed(2)} KB
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEmailForm({ ...emailForm, pdfFile: null });
+                                document.getElementById('email-pdf-upload').value = '';
+                              }}
+                              className="mt-2 text-sm text-red-500 hover:text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <AttachFileIcon className="text-gray-400 mb-2" style={{ fontSize: 40 }} />
+                            <p className="text-sm font-medium text-gray-700">Click to upload PDF file</p>
+                            <p className="text-xs text-gray-500 mt-1">PDF only</p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => setEmailModalOpen(false)}
+                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                      disabled={emailLoading || pdfUploading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleEmailSubmit}
+                      disabled={emailLoading || pdfUploading || !emailForm.pdfFile}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                    >
+                      {pdfUploading ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>Uploading PDF...</span>
+                        </>
+                      ) : emailLoading ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>Sending Email...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={16} />
+                          <span>Send Email</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
