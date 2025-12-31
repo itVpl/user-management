@@ -471,9 +471,75 @@ const handleWorkingAddressFileChange = (idx, file) => {
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Onboard Company state - store company for each trucker
+  const [onboardCompanies, setOnboardCompanies] = useState({}); // { truckerId: companyName }
+  
+  // Company options for dropdown
+  const companyOptions = [
+    { label: 'V Power Logistics', value: 'V Power Logistics' },
+    { label: 'Quick Logistics', value: 'Quick Logistics' }
+  ];
+
   useEffect(() => {
     fetchTruckers();
   }, []);
+
+  // Initialize onboard companies from trucker data
+  useEffect(() => {
+    if (truckers.length > 0) {
+      const initialCompanies = {};
+      truckers.forEach(trucker => {
+        const truckerId = trucker.userId || trucker._id;
+        if (truckerId && (trucker.assignedCompany || trucker.onboardCompany || trucker.companyName)) {
+          initialCompanies[truckerId] = trucker.assignedCompany || trucker.onboardCompany || trucker.companyName || '';
+        }
+      });
+      setOnboardCompanies(prev => ({ ...prev, ...initialCompanies }));
+    }
+  }, [truckers]);
+
+  // Handle onboard company change
+  const handleOnboardCompanyChange = async (truckerId, companyName) => {
+    try {
+      // Update local state immediately for better UX
+      setOnboardCompanies(prev => ({ ...prev, [truckerId]: companyName }));
+
+      // Update in backend
+      const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      if (!token) {
+        alert('Authentication required. Please login again.');
+        return;
+      }
+
+      const axiosInstance = axios.create({
+        baseURL: `${API_CONFIG.BASE_URL}`,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      await axiosInstance.patch(`/api/v1/shipper_driver/update/${truckerId}`, {
+        assignedCompany: companyName
+      });
+
+      // Update the trucker in the list
+      setTruckers(prev => prev.map(t => 
+        (t.userId || t._id) === truckerId 
+          ? { ...t, assignedCompany: companyName, onboardCompany: companyName }
+          : t
+      ));
+    } catch (err) {
+      console.error('Error updating onboard company:', err);
+      alert('Failed to update onboard company. Please try again.');
+      // Revert local state on error
+      setOnboardCompanies(prev => {
+        const updated = { ...prev };
+        delete updated[truckerId];
+        return updated;
+      });
+    }
+  };
 
   const fetchTruckers = async () => {
     try {
@@ -602,9 +668,22 @@ const handleWorkingAddressFileChange = (idx, file) => {
       email: trucker.email || trucker.emailId || trucker.contactEmail || '',
       phoneNo: trucker.phoneNo || '',
       secondaryPhoneNo: trucker.secondaryPhoneNo || '',
+      onboardCompany: trucker.assignedCompany || trucker.onboardCompany || trucker.companyName || '',
       mc_dot_no: trucker.mc_dot_no || '',
       carrierType: trucker.carrierType || '',
       fleetsize: trucker.fleetsize || '',
+      // Banking Details
+      paymentType: trucker.paymentType || trucker.bankingDetails?.paymentType || '',
+      factoringName: trucker.factoringName || trucker.bankingDetails?.factoringName || '',
+      bankName: trucker.bankName || trucker.bankingDetails?.bankName || trucker.bankDetails?.bankName || '',
+      accountNumber: trucker.accountNumber || trucker.bankingDetails?.accountNumber || trucker.bankDetails?.accountNumber || '',
+      routingNumber: trucker.routingNumber || trucker.bankingDetails?.routingNumber || trucker.bankDetails?.routingNumber || '',
+      accountHolderName: trucker.accountHolderName || trucker.bankingDetails?.accountHolderName || trucker.bankDetails?.accountHolderName || '',
+      accountType: trucker.accountType || trucker.bankingDetails?.accountType || trucker.bankDetails?.accountType || '',
+      bankAddress: trucker.bankAddress || trucker.bankingDetails?.address || trucker.bankDetails?.address || '',
+      bankCity: trucker.bankCity || trucker.bankingDetails?.city || trucker.bankDetails?.city || '',
+      bankState: trucker.bankState || trucker.bankingDetails?.state || trucker.bankDetails?.state || '',
+      bankZipcode: trucker.bankZipcode || trucker.bankingDetails?.zipcode || trucker.bankDetails?.zipcode || '',
       city: trucker.city || '',
       state: trucker.state || '',
       country: trucker.country || '',
@@ -798,7 +877,28 @@ const handleWorkingAddressFileChange = (idx, file) => {
         email: editFormData.email,
         phoneNo: editFormData.phoneNo,
         secondaryPhoneNo: editFormData.secondaryPhoneNo || '',
+        assignedCompany: editFormData.onboardCompany || '',
         mc_dot_no: editFormData.mc_dot_no,
+        // Banking Details
+        ...(editFormData.paymentType ? {
+          paymentType: editFormData.paymentType,
+          ...(editFormData.paymentType === 'Factoring' && editFormData.factoringName ? {
+            factoringName: editFormData.factoringName
+          } : {}),
+          ...((editFormData.bankName || editFormData.accountNumber) ? {
+            bankDetails: {
+              bankName: editFormData.bankName || '',
+              accountNumber: editFormData.accountNumber || '',
+              routingNumber: editFormData.routingNumber || '',
+              accountHolderName: editFormData.accountHolderName || '',
+              accountType: editFormData.accountType || '',
+              address: editFormData.bankAddress || '',
+              city: editFormData.bankCity || '',
+              state: editFormData.bankState || '',
+              zipcode: editFormData.bankZipcode || ''
+            }
+          } : {})
+        } : {}),
         carrierType: editFormData.carrierType,
         fleetsize: editFormData.fleetsize,
         city: editFormData.city,
@@ -1335,22 +1435,40 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     </div>
                   </div>
 
-                  {/* Secondary Phone Number */}
-                  <div className="mt-3">
-                    <label className="text-sm font-medium text-gray-700">Secondary Phone Number</label>
-                    <input
-                      type="text"
-                      name="secondaryPhoneNo"
-                      placeholder="Secondary Phone Number (Optional)"
-                      value={editFormData.secondaryPhoneNo || ''}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        setEditFormData(prev => ({ ...prev, secondaryPhoneNo: v }));
-                      }}
-                      onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
-                      inputMode="numeric"
-                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
-                    />
+                  {/* Secondary Phone Number | Onboard Company */}
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Secondary Phone Number</label>
+                      <input
+                        type="text"
+                        name="secondaryPhoneNo"
+                        placeholder="Secondary Phone Number (Optional)"
+                        value={editFormData.secondaryPhoneNo || ''}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setEditFormData(prev => ({ ...prev, secondaryPhoneNo: v }));
+                        }}
+                        onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                        inputMode="numeric"
+                        className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">Onboard Company</label>
+                      <SelectWithSearch
+                        name="onboardCompany"
+                        value={editFormData.onboardCompany || ''}
+                        onChange={(value) => setEditFormData(prev => ({ ...prev, onboardCompany: value }))}
+                        options={[
+                          { label: 'V Power Logistics', value: 'V Power Logistics' },
+                          { label: 'Quick Logistics', value: 'Quick Logistics' }
+                        ]}
+                        placeholder="Select Company..."
+                        disabled={false}
+                        error=""
+                      />
+                    </div>
                   </div>
 
                   {/* City | State */}
@@ -1560,6 +1678,170 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     />
                     {editErrors.fleetsize && <p className="text-xs text-red-600 mt-1">Please enter the Fleet Size.</p>}
                   </div>
+                </div>
+              </div>
+
+              {/* Banking Details Card */}
+              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
+                <h4 className="text-2xl font-bold mb-4 text-center">Banking Details</h4>
+                <div className="w-full flex flex-col gap-4">
+                  {/* Payment Type */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Payment Type</label>
+                    <select
+                      name="paymentType"
+                      value={editFormData.paymentType || ''}
+                      onChange={handleEditInputChange}
+                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                    >
+                      <option value="">Select Payment Type...</option>
+                      <option value="ACH">ACH</option>
+                      <option value="Factoring">Factoring</option>
+                    </select>
+                  </div>
+
+                  {/* Conditional Fields for Factoring */}
+                  {editFormData.paymentType === 'Factoring' && (
+                    <>
+                      {/* Factoring Name */}
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Factoring Name</label>
+                        <input
+                          type="text"
+                          name="factoringName"
+                          placeholder="Factoring Name"
+                          value={editFormData.factoringName || ''}
+                          onChange={handleEditInputChange}
+                          className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                        />
+                      </div>
+
+                      {/* Bank Details Grid */}
+                      <div className="grid grid-cols-2 gap-4 mt-2">
+                        {/* Bank Name */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Bank Name</label>
+                          <input
+                            type="text"
+                            name="bankName"
+                            placeholder="Bank Name"
+                            value={editFormData.bankName || ''}
+                            onChange={handleEditInputChange}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          />
+                        </div>
+
+                        {/* Account Number */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Account Number</label>
+                          <input
+                            type="text"
+                            name="accountNumber"
+                            placeholder="Account Number"
+                            value={editFormData.accountNumber || ''}
+                            onChange={handleEditInputChange}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          />
+                        </div>
+
+                        {/* Routing Number */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Routing Number</label>
+                          <input
+                            type="text"
+                            name="routingNumber"
+                            placeholder="Routing Number"
+                            value={editFormData.routingNumber || ''}
+                            onChange={handleEditInputChange}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          />
+                        </div>
+
+                        {/* Account Holder Name */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Account Holder Name</label>
+                          <input
+                            type="text"
+                            name="accountHolderName"
+                            placeholder="Account Holder Name"
+                            value={editFormData.accountHolderName || ''}
+                            onChange={handleEditInputChange}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          />
+                        </div>
+
+                        {/* Account Type */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Account Type</label>
+                          <select
+                            name="accountType"
+                            value={editFormData.accountType || ''}
+                            onChange={handleEditInputChange}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          >
+                            <option value="">Select Account Type...</option>
+                            <option value="Checking">Checking</option>
+                            <option value="Savings">Savings</option>
+                          </select>
+                        </div>
+
+                        {/* Bank Address */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Address</label>
+                          <input
+                            type="text"
+                            name="bankAddress"
+                            placeholder="Bank Address"
+                            value={editFormData.bankAddress || ''}
+                            onChange={handleEditInputChange}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          />
+                        </div>
+
+                        {/* Bank City */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">City</label>
+                          <input
+                            type="text"
+                            name="bankCity"
+                            placeholder="City"
+                            value={editFormData.bankCity || ''}
+                            onChange={handleEditInputChange}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          />
+                        </div>
+
+                        {/* Bank State */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">State</label>
+                          <input
+                            type="text"
+                            name="bankState"
+                            placeholder="State"
+                            value={editFormData.bankState || ''}
+                            onChange={handleEditInputChange}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          />
+                        </div>
+
+                        {/* Bank Zipcode */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Zipcode</label>
+                          <input
+                            type="text"
+                            name="bankZipcode"
+                            placeholder="Zipcode"
+                            value={editFormData.bankZipcode || ''}
+                            onChange={(e) => {
+                              const v = e.target.value.toUpperCase().replace(/[^0-9-]/g, '').slice(0, 10);
+                              setEditFormData(prev => ({ ...prev, bankZipcode: v }));
+                            }}
+                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1964,47 +2246,52 @@ const handleWorkingAddressFileChange = (idx, file) => {
                   </tr>
                 ) : (
                   <>
-                    {currentTruckers.map((t, idx) => (
-                      <tr key={t.userId || idx} className="border-t text-sm hover:bg-blue-50 transition">
-                        <td className="p-4">{formatDDMMYYYY(t.addedAt)}</td>
-                        <td className="p-4">{t.compName}</td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            <span className="text-sm font-medium text-gray-700">
-                              {t.mc_dot_no || 'N/A'}
+                    {currentTruckers.map((t, idx) => {
+                      const truckerId = t.userId || t._id;
+                      const currentCompany = onboardCompanies[truckerId] || t.assignedCompany || t.onboardCompany || t.companyName || '';
+                      
+                      return (
+                        <tr key={truckerId || idx} className="border-t text-sm hover:bg-blue-50 transition">
+                          <td className="p-4">{formatDDMMYYYY(t.addedAt)}</td>
+                          <td className="p-4">{t.compName}</td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <span className="text-sm font-medium text-gray-700">
+                                {t.mc_dot_no || 'N/A'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-4">{t.email}</td>
+                          <td className="p-4">
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(t.status)}`}>
+                              {t.status === 'approved' && <CheckCircle size={14} />}
+                              {t.status === 'rejected' && <XCircle size={14} />}
+                              {t.status === 'pending' && <Clock size={14} />}
+                              {t.status || 'Pending'}
                             </span>
-                          </div>
-                        </td>
-                        <td className="p-4">{t.email}</td>
-                        <td className="p-4">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(t.status)}`}>
-                            {t.status === 'approved' && <CheckCircle size={14} />}
-                            {t.status === 'rejected' && <XCircle size={14} />}
-                            {t.status === 'pending' && <Clock size={14} />}
-                            {t.status || 'Pending'}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleViewTrucker(t)}
-                              className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                            >
-                              <Eye size={14} />
-                              View
-                            </button>
-                            <button
-                              onClick={() => handleEditTrucker(t)}
-                              className="flex items-center gap-1 bg-transparent text-green-600 px-3 py-1 rounded text-sm hover:bg-green-500/30 transition border border-green-200"
-                            >
-                              <Edit size={14} />
-                              Edit
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleViewTrucker(t)}
+                                className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
+                              >
+                                <Eye size={14} />
+                                View
+                              </button>
+                              <button
+                                onClick={() => handleEditTrucker(t)}
+                                className="flex items-center gap-1 bg-transparent text-green-600 px-3 py-1 rounded text-sm hover:bg-green-500/30 transition border border-green-200"
+                              >
+                                <Edit size={14} />
+                                Edit
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </>
                 )}
               </tbody>
@@ -2196,6 +2483,17 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       </div>
                     </div>
                   )}
+                  {(selectedTrucker.assignedCompany || selectedTrucker.onboardCompany || selectedTrucker.companyName) && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                        <Building className="text-indigo-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Onboard Company</p>
+                        <p className="font-semibold text-gray-800">{selectedTrucker.assignedCompany || selectedTrucker.onboardCompany || selectedTrucker.companyName}</p>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                       <Truck className="text-orange-600" size={16} />
@@ -2231,7 +2529,6 @@ const handleWorkingAddressFileChange = (idx, file) => {
                   </div>
                 </div>
               </div>
-
               {/* Address Information */}
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-4">
