@@ -12,6 +12,132 @@ import alertify from 'alertifyjs';
 
 import 'alertifyjs/build/css/alertify.css';
 
+// Searchable Dropdown Component
+const SearchableDropdown = ({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled = false,
+  loading = false,
+  className = "",
+  searchPlaceholder = "Search..."
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredOptions, setFilteredOptions] = useState(options);
+  const dropdownRef = React.useRef(null);
+
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredOptions(options);
+    } else {
+      const filtered = options.filter(option =>
+        option.label.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredOptions(filtered);
+    }
+  }, [searchTerm, options]);
+
+  // Close dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [isOpen]);
+
+  const handleSelect = (option) => {
+    onChange(option.value);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  const selectedOption = options.find(option => option.value === value);
+  const hasError = className.includes('border-red');
+
+  return (
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      <div
+        className={`w-full px-4 py-3 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'} ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
+          }`}
+        onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center justify-between">
+          <span className={selectedOption ? 'text-gray-900' : 'text-gray-500'}>
+            {loading ? 'Loading...' : selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <svg
+            className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
+
+      {isOpen && !disabled && !loading && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
+          {/* Search Input */}
+          <div className="p-2 border-b border-gray-200">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder={searchPlaceholder}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          {/* Options List */}
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option, index) => (
+                <div
+                  key={index}
+                  className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                  onClick={() => handleSelect(option)}
+                >
+                  {option.label}
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-2 text-gray-500 text-sm text-center">
+                No options found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 
 export default function Loads() {
@@ -464,6 +590,8 @@ export default function Loads() {
 
     shipperId: "",
 
+    company: "",
+
     fromZip: "",       // NEW
 
     fromAddress: "",
@@ -611,6 +739,32 @@ export default function Loads() {
     setShipperSearchQuery("");
 
     setShipperDropdownOpen(false);
+
+  };
+
+
+
+  // Handle company selection
+
+  const handleCompanyChange = (value) => {
+
+    setLoadForm(prev => ({
+
+      ...prev,
+
+      company: value,
+
+    }));
+
+    setFormErrors(p => {
+
+      const n = { ...p };
+
+      delete n.company;
+
+      return n;
+
+    });
 
   };
 
@@ -1837,6 +1991,8 @@ const MaterialShipperDropdown = ({
 
     shipperId: (v) => v ? '' : 'Please select the shipper',
 
+    company: (v) => v ? '' : 'Please select the Company.',
+
     fromZip: (v) => v ? '' : 'Please enter the ZIP code.',
 
     fromAddress: (v) => v ? '' : 'Please enter/select the full address.',
@@ -1927,6 +2083,8 @@ const MaterialShipperDropdown = ({
 
         'shipperId',
 
+        'company',
+
         'vehicleType', 'lineHaul', 'fsc', 'other', ...(loadType !== 'DRAYAGE' ? ['rateType'] : []),
 
         'bidDeadline',
@@ -1940,6 +2098,8 @@ const MaterialShipperDropdown = ({
       return [
 
         'shipperId',
+
+        'company',
 
         'fromZip', 'fromAddress', 'fromCity', 'fromState',
 
@@ -2329,7 +2489,9 @@ const MaterialShipperDropdown = ({
 
           origins: origins,
 
-          destinations: destinations
+          destinations: destinations,
+
+          assignedCompany: (loadForm.company || "").trim()
 
         };
 
@@ -2481,6 +2643,8 @@ const MaterialShipperDropdown = ({
         deliveryDate: loadForm.deliveryDate,
 
         bidDeadline: loadForm.bidDeadline,
+
+        assignedCompany: (loadForm.company || "").trim(),
 
         ...(loadType === 'DRAYAGE' ? {
 
@@ -2756,7 +2920,9 @@ const MaterialShipperDropdown = ({
 
         origins: origins,
 
-        destinations: destinations
+        destinations: destinations,
+
+        assignedCompany: (loadForm.company || "").trim()
 
       };
 
@@ -2908,6 +3074,8 @@ const MaterialShipperDropdown = ({
         deliveryDate: loadForm.deliveryDate,
 
         bidDeadline: loadForm.bidDeadline,
+
+        assignedCompany: (loadForm.company || "").trim(),
 
         ...(loadType === 'DRAYAGE' ? {
 
@@ -6255,6 +6423,50 @@ const MaterialShipperDropdown = ({
 
 
 
+                {/* Company Section */}
+
+                <div className="bg-teal-50 p-4 rounded-lg">
+
+                  <h3 className="text-lg font-semibold text-teal-800 mb-4">Company</h3>
+
+                  <div className="grid grid-cols-1 gap-4">
+
+                    <div>
+
+                      <SearchableDropdown
+
+                        value={loadForm.company || ''}
+
+                        onChange={handleCompanyChange}
+
+                        options={[
+
+                          { value: 'V Power Logistics', label: 'V Power Logistics' },
+
+                          { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' },
+
+                          { value: 'MT. POCONO TRANSPORTATION INC', label: 'MT. POCONO TRANSPORTATION INC' }
+
+                        ]}
+
+                        placeholder="Select Company"
+
+                        searchPlaceholder="Search companies..."
+
+                        className={formErrors.company ? 'border-red-500' : ''}
+
+                      />
+
+                      {formErrors.company && <p className="text-red-600 text-xs mt-1">{formErrors.company}</p>}
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+
                 {/* Location Information Section */}
 
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -9418,6 +9630,50 @@ const MaterialShipperDropdown = ({
                       </div>
 
                     )}
+
+                  </div>
+
+                </div>
+
+
+
+                {/* Company Section */}
+
+                <div className="bg-teal-50 p-4 rounded-lg">
+
+                  <h3 className="text-lg font-semibold text-teal-800 mb-4">Company</h3>
+
+                  <div className="grid grid-cols-1 gap-4">
+
+                    <div>
+
+                      <SearchableDropdown
+
+                        value={loadForm.company || ''}
+
+                        onChange={handleCompanyChange}
+
+                        options={[
+
+                          { value: 'V Power Logistics', label: 'V Power Logistics' },
+
+                          { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' },
+
+                          { value: 'MT. POCONO TRANSPORTATION INC', label: 'MT. POCONO TRANSPORTATION INC' }
+
+                        ]}
+
+                        placeholder="Select Company"
+
+                        searchPlaceholder="Search companies..."
+
+                        className={formErrors.company ? 'border-red-500' : ''}
+
+                      />
+
+                      {formErrors.company && <p className="text-red-600 text-xs mt-1">{formErrors.company}</p>}
+
+                    </div>
 
                   </div>
 
