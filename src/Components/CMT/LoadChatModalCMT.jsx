@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { X, Send, MessageCircle, RefreshCw, User } from 'lucide-react';
+import { X, Send, MessageCircle, RefreshCw, User, Paperclip, Image, Mic, ChevronDown, Reply } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 
 const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName }) => {
@@ -8,7 +8,15 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
+  const [hoveredMessageId, setHoveredMessageId] = useState(null); // Track hovered message
+  const [openMenuId, setOpenMenuId] = useState(null); // Track which message menu is open
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const audioInputRef = useRef(null);
+  const menuRefs = useRef({}); // Store refs for each message menu
   const currentUserEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
 
   useEffect(() => {
@@ -69,6 +77,52 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
     }
   }, [isOpen, loadId, fetchChatMessages]);
 
+  // Handle reply to a message
+  const handleReplyToMessage = (msg) => {
+    console.log('=== handleReplyToMessage called ===');
+    console.log('Message:', msg);
+    console.log('Message ID:', msg._id || msg.id);
+    console.log('Message text:', msg.message || msg.text || msg.content);
+    if (!msg) {
+      console.error('No message provided to handleReplyToMessage!');
+      return;
+    }
+    setReplyingTo(msg);
+    setOpenMenuId(null);
+    console.log('Reply state set, replyingTo:', msg);
+    // Focus on input field
+    setTimeout(() => {
+      const input = document.querySelector('input[type="text"]');
+      if (input) {
+        input.focus();
+        console.log('Input focused');
+      } else {
+        console.log('Input field not found!');
+      }
+    }, 100);
+  };
+
+  // Cancel reply
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (openMenuId) {
+        const menuElement = menuRefs.current[openMenuId];
+        if (menuElement && !menuElement.contains(event.target)) {
+          setOpenMenuId(null);
+        }
+      }
+    };
+    if (openMenuId) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuId]);
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!message.trim() || sending || !receiverEmpId || !loadId) return;
@@ -85,7 +139,8 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
       const payload = { 
         receiverEmpId, 
         message: message.trim(), 
-        loadId 
+        loadId,
+        ...(replyingTo ? { replyTo: replyingTo._id || replyingTo.id } : {})
       };
       
       const response = await axios.post(
@@ -105,6 +160,7 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
           isMyMessage: true,
           isOptimistic: true,
           senderName: 'You',
+          replyTo: replyingTo ? (replyingTo._id || replyingTo.id) : undefined,
           sender: { 
             empId: currentUserEmpId, 
             employeeName: 'You' 
@@ -118,6 +174,7 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
         // Add optimistic message to the list
         setMessages(prev => [...prev, optimisticMessage]);
         setMessage('');
+        setReplyingTo(null); // Clear reply after sending
         
         // Scroll to bottom after a small delay
         setTimeout(() => {
@@ -153,6 +210,87 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
 
   const isMessageFromCurrentUser = (msg) => {
     return String(msg.senderEmpId).trim() === String(currentUserEmpId).trim();
+  };
+
+  // Helper function to detect audio files
+  const isAudioFile = (file) => {
+    const audioFormats = ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac'];
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    return audioFormats.includes(fileExt || '') || file.type.startsWith('audio/');
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (file) => {
+    if (!file || !receiverEmpId || !loadId || uploadingFile) return;
+
+    // Validate file types
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = {
+      images: ['jpg', 'jpeg', 'png'],
+      documents: ['pdf', 'xlsx', 'xls', 'xlsm', 'xlsb'],
+      audio: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac']
+    };
+    
+    const allAllowed = [...allowedExtensions.images, ...allowedExtensions.documents, ...allowedExtensions.audio];
+    if (!allAllowed.includes(fileExtension)) {
+      alert('Please select a valid file type:\n- Images: JPG, JPEG, PNG\n- Documents: PDF, XLSX, XLS, XLSM, XLSB\n- Audio: MP3, WAV, M4A, OGG, AAC, WEBM, FLAC');
+      return;
+    }
+
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) {
+        alert('Authentication required.');
+        setUploadingFile(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('receiverEmpId', receiverEmpId);
+      formData.append('loadId', loadId);
+
+      // Set appropriate message based on file type
+      const isAudio = isAudioFile(file);
+      const isImage = ['jpg', 'jpeg', 'png'].includes(fileExtension);
+      const messageText = isAudio 
+        ? `Sent an audio: ${file.name}` 
+        : isImage 
+        ? `Sent an image: ${file.name}` 
+        : `Sent a file: ${file.name}`;
+      
+      formData.append('message', messageText);
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/load/send`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      if (response.data && (response.data.success || response.status === 200)) {
+        // Refresh messages to show the uploaded file
+        setTimeout(() => {
+          fetchChatMessages(true);
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setUploadingFile(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -253,55 +391,220 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
               {messages.map((msg, index) => {
                 const isCurrentUser = isMessageFromCurrentUser(msg);
                 const displayName = isCurrentUser ? 'You' : (msg.senderName || msg.sender?.employeeName || 'User');
+                const msgId = msg._id || `msg-${index}`;
+                const isHovered = hoveredMessageId === msgId;
+                const isMenuOpen = openMenuId === msgId;
+                
+                // Find replied message if exists
+                // Handle both replyTo as ID or as object
+                let repliedMessage = null;
+                if (msg.replyTo) {
+                  if (typeof msg.replyTo === 'object' && msg.replyTo.message) {
+                    // replyTo is already a populated object
+                    repliedMessage = msg.replyTo;
+                  } else {
+                    // replyTo is an ID, find the message
+                    const replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                    repliedMessage = messages.find(m => {
+                      const msgId = m._id || m.id;
+                      return String(msgId) === String(replyToId);
+                    });
+                  }
+                }
                 
                 return (
                   <div
-                    key={msg._id || `msg-${index}`}
-                    className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                    key={msgId}
+                    className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} group relative`}
+                    onMouseEnter={() => setHoveredMessageId(msgId)}
+                    onMouseLeave={() => {
+                      if (!isMenuOpen) setHoveredMessageId(null);
+                    }}
                   >
                     <div className={`max-w-lg ${isCurrentUser ? '' : 'flex items-start gap-3'}`}>
                       {!isCurrentUser && (
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1" style={{
-                          background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-                          boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)'
-                        }}>
-                          <User className="text-white" size={20} />
-                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            alert('Profile clicked! Replying to: ' + (msg.message || msg.text || 'message'));
+                            console.log('=== Profile avatar clicked! ===');
+                            console.log('Event:', e);
+                            console.log('Message:', msg);
+                            console.log('Message ID:', msg._id || msg.id);
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (e.nativeEvent) {
+                              e.nativeEvent.stopImmediatePropagation();
+                            }
+                            handleReplyToMessage(msg);
+                          }}
+                          onMouseDown={(e) => {
+                            console.log('Mouse down on avatar');
+                            e.stopPropagation();
+                            e.preventDefault();
+                          }}
+                          onMouseUp={(e) => {
+                            console.log('Mouse up on avatar');
+                            e.stopPropagation();
+                          }}
+                          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 hover:scale-110 transition-all z-50 relative border-2 border-transparent hover:border-white/50 outline-none focus:outline-none" 
+                          style={{
+                            background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)',
+                            pointerEvents: 'auto',
+                            WebkitTapHighlightColor: 'transparent'
+                          }}
+                          title="Click to reply"
+                        >
+                          <User className="text-white pointer-events-none" size={20} />
+                        </button>
                       )}
                       
-                      <div className={`px-6 py-4 rounded-2xl ${
-                        isCurrentUser ? 'rounded-br-md' : 'rounded-bl-md'
-                      }`} style={{
-                        background: isCurrentUser 
-                          ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
-                          : 'rgba(255, 255, 255, 0.05)',
-                        backdropFilter: 'blur(10px)',
-                        border: isCurrentUser ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-                        boxShadow: isCurrentUser 
-                          ? '0 8px 24px rgba(139, 92, 246, 0.4)' 
-                          : '0 4px 12px rgba(0, 0, 0, 0.3)'
-                      }}>
-                        {!isCurrentUser && (
-                          <div className="text-xs font-semibold mb-2 text-purple-300">
-                            {displayName}
+                      <div className="relative flex-1">
+                        <div 
+                          className={`px-6 py-4 rounded-2xl cursor-pointer ${
+                            isCurrentUser ? 'rounded-br-md' : 'rounded-bl-md'
+                          }`} 
+                          onClick={(e) => {
+                            // Don't open menu if clicking on profile avatar
+                            if (e.target.closest('button[title="Click to reply"]')) {
+                              return;
+                            }
+                            e.stopPropagation();
+                            setOpenMenuId(isMenuOpen ? null : msgId);
+                          }}
+                          style={{
+                            background: isCurrentUser 
+                              ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                              : 'rgba(255, 255, 255, 0.05)',
+                            backdropFilter: 'blur(10px)',
+                            border: isCurrentUser ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                            boxShadow: isCurrentUser 
+                              ? '0 8px 24px rgba(139, 92, 246, 0.4)' 
+                              : '0 4px 12px rgba(0, 0, 0, 0.3)'
+                          }}
+                        >
+                          {!isCurrentUser && (
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs font-semibold text-purple-300">
+                                {displayName}
+                              </div>
+                              {/* Down arrow - shows on hover */}
+                              {isHovered && (
+                                <ChevronDown size={14} className="text-gray-400" />
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Show replied message if exists - WhatsApp style */}
+                          {repliedMessage && (repliedMessage.message || repliedMessage.text || repliedMessage.content) && (
+                            <div className={`mb-2 pl-3 pr-2 py-1.5 rounded ${
+                              isCurrentUser 
+                                ? 'bg-white/15' 
+                                : 'bg-gray-700/40'
+                            }`} style={{
+                              borderLeft: '3px solid #3b82f6'
+                            }}>
+                              <div className={`text-xs font-semibold mb-0.5 flex items-center gap-1.5 ${
+                                isCurrentUser ? 'text-white/90' : 'text-gray-200'
+                              }`}>
+                                {repliedMessage.senderEmpId === currentUserEmpId ? 'You' : (repliedMessage.senderName || repliedMessage.sender?.employeeName || repliedMessage.senderName || 'User')}
+                                {isCurrentUser && (
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="text-white/70">
+                                    <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+                                  </svg>
+                                )}
+                              </div>
+                              <div className={`text-xs truncate ${
+                                isCurrentUser ? 'text-white/70' : 'text-gray-300'
+                              }`}>
+                                {repliedMessage.message || repliedMessage.text || repliedMessage.content}
+                              </div>
+                            </div>
+                          )}
+                          
+                          <p className={`text-base leading-relaxed whitespace-pre-wrap break-words ${
+                            isCurrentUser ? 'text-white' : 'text-gray-200'
+                          }`}>
+                            {msg.message}
+                          </p>
+                          <div className="flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-2">
+                              <p className={`text-xs ${
+                                isCurrentUser ? 'text-purple-200' : 'text-gray-500'
+                              }`}>
+                                {formatTime(msg.timestamp)}
+                                {msg.isOptimistic && (
+                                  <span className="ml-2 inline-flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
+                                    Sending...
+                                  </span>
+                                )}
+                              </p>
+                              
+                              {/* Down arrow - always visible for current user messages, shows on hover for others */}
+                              {isCurrentUser ? (
+                                <ChevronDown size={14} className="text-white/70" />
+                              ) : (
+                                isHovered && <ChevronDown size={14} className="text-gray-400" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Context Menu - WhatsApp style, appears when message is clicked */}
+                        {isMenuOpen && (
+                          <div 
+                            ref={(el) => {
+                              if (el) menuRefs.current[msgId] = el;
+                              else delete menuRefs.current[msgId];
+                            }}
+                            className={`absolute ${isCurrentUser ? 'right-0' : 'left-0'} ${isCurrentUser ? 'top-0' : 'top-0'} z-50 w-52 bg-white rounded-2xl shadow-2xl overflow-hidden`}
+                            style={{
+                              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                              transform: isCurrentUser ? 'translateX(0)' : 'translateX(0)'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReplyToMessage(msg);
+                              }}
+                              className="w-full px-4 py-3.5 text-left text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-3 transition-colors border-b border-gray-100 first:rounded-t-2xl"
+                            >
+                              <div className="flex items-center justify-center w-6 h-6">
+                                <Reply size={18} className="text-gray-600" />
+                              </div>
+                              <span className="font-medium text-gray-800">Reply</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(msg.message);
+                                setOpenMenuId(null);
+                                // Show feedback
+                                const btn = e.target.closest('button');
+                                if (btn) {
+                                  const originalText = btn.querySelector('span').textContent;
+                                  btn.querySelector('span').textContent = 'Copied!';
+                                  setTimeout(() => {
+                                    btn.querySelector('span').textContent = originalText;
+                                  }, 1000);
+                                }
+                              }}
+                              className="w-full px-4 py-3.5 text-left text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-3 transition-colors last:rounded-b-2xl"
+                            >
+                              <div className="flex items-center justify-center w-6 h-6">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-600">
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                              </div>
+                              <span className="font-medium text-gray-800">Copy</span>
+                            </button>
                           </div>
                         )}
-                        <p className={`text-base leading-relaxed whitespace-pre-wrap break-words ${
-                          isCurrentUser ? 'text-white' : 'text-gray-200'
-                        }`}>
-                          {msg.message}
-                        </p>
-                        <p className={`text-xs mt-2 ${
-                          isCurrentUser ? 'text-purple-200' : 'text-gray-500'
-                        }`}>
-                          {formatTime(msg.timestamp)}
-                          {msg.isOptimistic && (
-                            <span className="ml-2 inline-flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
-                              Sending...
-                            </span>
-                          )}
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -312,20 +615,77 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
           )}
         </div>
 
-        {/* Premium Input Areasss */}
+        {/* Premium Input Area */}
         <div className="px-8 py-6" style={{
           background: 'linear-gradient(to top, #0f172a 0%, #1e293b 100%)',
           borderTop: '1px solid rgba(255, 255, 255, 0.1)',
           boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.3)'
         }}>
+          {/* Reply Preview - WhatsApp style */}
+          {replyingTo && (
+            <div className="mb-3 pl-3 pr-2 py-2 rounded-lg flex items-start justify-between bg-gray-800/50" style={{
+              borderLeft: '3px solid #3b82f6'
+            }}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-xs font-semibold text-gray-200">
+                    {replyingTo.senderEmpId === currentUserEmpId ? 'You' : (replyingTo.senderName || replyingTo.sender?.employeeName || 'User')}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 truncate">
+                  {replyingTo.message || replyingTo.text || replyingTo.content}
+                </p>
+              </div>
+              <button
+                onClick={handleCancelReply}
+                className="ml-3 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          
           <form onSubmit={handleSendMessage} className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {/* File Upload Button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-gray-300 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+                title="Attach file (PDF, Excel)"
+                disabled={uploadingFile || sending || !receiverEmpId}
+              >
+                <Paperclip size={20} />
+              </button>
+              {/* Image Upload Button */}
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className="text-gray-300 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+                title="Attach image (JPG, PNG)"
+                disabled={uploadingFile || sending || !receiverEmpId}
+              >
+                <Image size={20} />
+              </button>
+              {/* Audio Upload Button */}
+              <button
+                type="button"
+                onClick={() => audioInputRef.current?.click()}
+                className="text-gray-300 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+                title="Attach audio"
+                disabled={uploadingFile || sending || !receiverEmpId}
+              >
+                <Mic size={20} />
+              </button>
+            </div>
             <div className="flex-1 relative">
               <input
                 type="text"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Type a message..."
+                placeholder={uploadingFile ? "Uploading..." : "Type a message..."}
                 className="w-full px-6 py-4 rounded-2xl text-gray-200 placeholder-gray-500 focus:outline-none transition-all duration-200"
                 style={{
                   background: 'rgba(255, 255, 255, 0.05)',
@@ -333,30 +693,30 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.2)'
                 }}
-                disabled={sending || !receiverEmpId}
+                disabled={sending || uploadingFile || !receiverEmpId}
               />
             </div>
             <button
               type="submit"
-              disabled={!message.trim() || sending || !receiverEmpId}
+              disabled={!message.trim() || sending || uploadingFile || !receiverEmpId}
               className={`px-8 py-4 rounded-2xl transition-all duration-300 flex items-center gap-3 font-semibold ${
-                message.trim() && !sending && receiverEmpId
+                message.trim() && !sending && !uploadingFile && receiverEmpId
                   ? 'hover:scale-105 shadow-lg'
                   : 'opacity-50 cursor-not-allowed'
               }`}
               style={{
-                background: message.trim() && !sending && receiverEmpId
+                background: message.trim() && !sending && !uploadingFile && receiverEmpId
                   ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
                   : 'rgba(255, 255, 255, 0.1)',
-                boxShadow: message.trim() && !sending && receiverEmpId
+                boxShadow: message.trim() && !sending && !uploadingFile && receiverEmpId
                   ? '0 8px 24px rgba(139, 92, 246, 0.4)'
                   : 'none'
               }}
             >
-              {sending ? (
+              {sending || uploadingFile ? (
                 <>
                   <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-white">Sending</span>
+                  <span className="text-white">{uploadingFile ? 'Uploading' : 'Sending'}</span>
                 </>
               ) : (
                 <>
@@ -365,6 +725,46 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
                 </>
               )}
             </button>
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.xlsx,.xls,.xlsm,.xlsb"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  handleFileUpload(file);
+                }
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={imageInputRef}
+              type="file"
+              className="hidden"
+              accept=".jpg,.jpeg,.png,image/jpeg,image/jpg,image/png"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  handleFileUpload(file);
+                }
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={audioInputRef}
+              type="file"
+              className="hidden"
+              accept=".mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/aac,audio/webm,audio/flac"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  handleFileUpload(file);
+                }
+                e.target.value = '';
+              }}
+            />
           </form>
         </div>
       </div>
