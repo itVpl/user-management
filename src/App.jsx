@@ -96,6 +96,7 @@ import globalNegotiationSocketService from "./services/globalNegotiationSocketFi
 import NegotiationTestButton from "./Components/NegotiationTestButton";
 // import GlobalNegotiationNotifications from "./components/GlobalNegotiationNotifications";
 // import NegotiationSocketTester from "./components/NegotiationSocketTester";
+import LandingPage from "./Pages/LandingPage.jsx";
 
 
 
@@ -541,10 +542,13 @@ function App() {
       />
 
       {/* Routes */}
+
       <Routes>
         {/* Public Routes */}
+
+        <Route path="/" element={<LandingPage />} />
         <Route 
-          path="/" 
+          path="/login" 
           element={
             <Login 
               setIsAuthenticated={setIsAuthenticated} 

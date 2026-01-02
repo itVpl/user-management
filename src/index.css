@@ -71,6 +71,13 @@ button:focus-visible {
 @tailwind utilities;
 @import "leaflet/dist/leaflet.css";
 
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+
 /* Custom scrollbar styles */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* Internet Explorer 10+ */
