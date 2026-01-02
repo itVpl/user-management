@@ -702,32 +702,30 @@ const ChatPage = () => {
       if (res.data && res.data.success) {
         const groupsList = res.data.groups || [];
         
-        // Normalize _id to string for all groups (per guide)
+        // Normalize _id to string for all groups
         const normalizedGroups = groupsList.map(g => ({
           ...g,
-          _id: String(g._id)
+          _id: String(g._id),
+          unreadCount: g.unreadCount || 0  // Backend provides unreadCount (per docs)
         }));
         
         setGroups(normalizedGroups);
         
-        // Calculate unread counts by checking which messages user has read
-        // This ensures we only count messages user hasn't actually seen
+        // Use unreadCount from backend response directly (per docs)
+        // Build unread map for red dot display
         const groupUnreadMap = {};
-        const unreadPromises = normalizedGroups.map(async (group) => {
+        normalizedGroups.forEach(group => {
           const groupId = String(group._id);
-          const unreadCount = await calculateGroupUnreadCount(groupId);
+          const unreadCount = group.unreadCount || 0;
           if (unreadCount > 0) {
             groupUnreadMap[groupId] = unreadCount;
           }
         });
         
-        // Wait for all unread counts to be calculated
-        await Promise.all(unreadPromises);
-        
-        // Update state with calculated unread counts
+        // Update state with unread counts from backend
         setNewGroupMessagesMap(groupUnreadMap);
         
-        console.log('📊 Group unread counts calculated:', groupUnreadMap);
+        console.log('📊 Group unread counts from backend:', groupUnreadMap);
       }
     } catch (err) {
       console.error("❌ Failed to fetch groups", err);
@@ -842,47 +840,12 @@ const ChatPage = () => {
           setGroupMessagesPage(1);
         }
         
-        // Mark ALL unread messages as seen when group is opened (only on initial load)
-        // This ensures all old messages are marked as seen, not just the ones currently loaded
+        // Backend automatically marks all unread messages as read when fetching messages
+        // No need to manually mark - backend handles it and emits groupListUpdated socket event
         if (!loadOlder) {
-          // First, mark all currently loaded messages as seen
           setTimeout(() => {
-            processedMessages.forEach(msg => {
-              if (!msg.isMyMessage && !isMessageSeenByMe(msg) && msg._id) {
-                markGroupMessageAsSeen(groupId, msg._id);
-              }
-            });
-            
-            // Then, fetch ALL messages to mark remaining unread ones as seen
-            // This ensures we don't miss any old unread messages
-            axios.get(
-              `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=1000&skip=0`,
-              { withCredentials: true }
-            ).then(res => {
-              if (res.data && res.data.success) {
-                const allMessages = res.data.messages || [];
-                // Mark all unread messages as seen (batch process to avoid overwhelming the server)
-                const unreadMessages = allMessages.filter(msg => {
-                  const isMyMsg = msg.senderEmpId === storedUser?.empId;
-                  const alreadySeen = isMessageSeenByMe(msg);
-                  return !isMyMsg && !alreadySeen && msg._id;
-                });
-                
-                // Mark messages with staggered delays to avoid rate limiting
-                unreadMessages.forEach((msg, index) => {
-                  setTimeout(() => {
-                    markGroupMessageAsSeen(groupId, msg._id);
-                  }, index * 50); // Stagger API calls by 50ms to avoid overwhelming the server
-                });
-                
-                console.log(`✅ Marking ${unreadMessages.length} unread messages as seen for group ${groupId}`);
-              }
-            }).catch(err => {
-              console.error("❌ Failed to fetch all messages for marking as seen:", err);
-            });
-            
             scrollToBottom();
-          }, 1000); // Increased delay to ensure messages are rendered first
+          }, 100);
         }
       }
     } catch (err) {
@@ -1230,13 +1193,20 @@ const ChatPage = () => {
   const handleGroupImageUpload = async (file) => {
     if (!file || !selectedGroup) return;
     
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
+    // Validate image file types: JPG, JPEG, PNG only
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isValidImage = allowedImageTypes.includes(file.type) || 
+                         ['jpg', 'jpeg', 'png'].includes(fileExtension);
+    
+    if (!isValidImage) {
+      alert('Please select a valid image file (JPG, JPEG, or PNG).');
       return;
     }
     
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image size should be less than 5MB.');
+    // File size limit: 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
       return;
     }
     
@@ -1612,6 +1582,20 @@ const ChatPage = () => {
   const handleFileUpload = async (file) => {
     if (!file || !selectedUser) return;
     
+    // Validate file types
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = {
+      images: ['jpg', 'jpeg', 'png'],
+      documents: ['pdf', 'xlsx', 'xls', 'xlsm', 'xlsb'],
+      audio: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac']
+    };
+    
+    const allAllowed = [...allowedExtensions.images, ...allowedExtensions.documents, ...allowedExtensions.audio];
+    if (!allAllowed.includes(fileExtension)) {
+      alert('Please select a valid file type:\n- Images: JPG, JPEG, PNG\n- Documents: PDF, XLSX, XLS, XLSM, XLSB\n- Audio: MP3, WAV, M4A, OGG, AAC, WEBM, FLAC');
+      return;
+    }
+    
     // Check file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
       alert('File size should be less than 10MB.');
@@ -1699,13 +1683,20 @@ const ChatPage = () => {
   const handleImageUpload = async (file) => {
     if (!file || !selectedUser) return;
     
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
+    // Validate image file types: JPG, JPEG, PNG only
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isValidImage = allowedImageTypes.includes(file.type) || 
+                         ['jpg', 'jpeg', 'png'].includes(fileExtension);
+    
+    if (!isValidImage) {
+      alert('Please select a valid image file (JPG, JPEG, or PNG).');
       return;
     }
     
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image size should be less than 5MB.');
+    // File size limit: 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
       return;
     }
     
@@ -2376,19 +2367,12 @@ const ChatPage = () => {
       if (isForSelectedGroup) {
         await fetchGroupMessages(groupId);
         setTimeout(scrollToBottom, 100);
+        // Backend will automatically mark messages as read and emit groupListUpdated
+        // No need to manually update unread count - socket event handles it
       } else {
-        // If message is NOT for selected group, recalculate unread count
-        // Recalculate by checking which messages user has actually read (seenBy array)
-        const unreadCount = await calculateGroupUnreadCount(groupId);
-        setNewGroupMessagesMap(prev => {
-          const updated = { ...prev };
-          if (unreadCount > 0) {
-            updated[groupId] = unreadCount;
-          } else {
-            delete updated[groupId];
-          }
-          return updated;
-        });
+        // If message is NOT for selected group, backend will emit groupListUpdated
+        // with updated unreadCount - socket event handler will update the UI
+        // No need to manually recalculate - rely on socket events
       }
 
       // Refresh groups list to update last message
@@ -2487,8 +2471,8 @@ const ChatPage = () => {
     };
 
     // Handle group list updates from backend (for unread count changes)
-    // Recalculate unread count by checking which messages user has read
-    const handleGroupListUpdated = async (updatedGroupItem) => {
+    // Backend sends unreadCount in the socket event - use it directly (per docs)
+    const handleGroupListUpdated = (updatedGroupItem) => {
       console.log('📬 Group list updated event received:', updatedGroupItem);
       
       if (!updatedGroupItem || !updatedGroupItem._id) {
@@ -2496,19 +2480,21 @@ const ChatPage = () => {
         return;
       }
 
-      // Normalize groupId to string (per guide)
+      // Normalize groupId to string
       const groupId = String(updatedGroupItem._id);
-      const { groupName, lastMessage } = updatedGroupItem;
+      const { groupName, lastMessage, unreadCount } = updatedGroupItem;
 
-      // Calculate actual unread count by checking which messages user has read
-      const actualUnreadCount = await calculateGroupUnreadCount(groupId);
+      // Use unreadCount from socket event directly (backend calculates it)
+      // unreadCount: 0 means no red dot, > 0 means show red dot with count
+      const actualUnreadCount = unreadCount || 0;
 
-      // Update unread count based on actual calculation
+      // Update unread count map for red dot display
       setNewGroupMessagesMap(prev => {
         const updated = { ...prev };
         if (actualUnreadCount > 0) {
           updated[groupId] = actualUnreadCount;
         } else {
+          // Remove from map if unreadCount is 0 (no red dot)
           delete updated[groupId];
         }
 
@@ -2534,7 +2520,7 @@ const ChatPage = () => {
             ...updated[groupIndex],
             ...(groupName !== undefined && { groupName }),
             ...(lastMessage !== undefined && { lastMessage }),
-            unreadCount: actualUnreadCount  // Store calculated unreadCount
+            unreadCount: actualUnreadCount  // Use unreadCount from socket event
           };
           return updated;
         } else {
@@ -2913,30 +2899,9 @@ const ChatPage = () => {
                               detail: { selectedEmpId: null, selectedGroupId: groupData._id }
                             }));
                             
-                            // After messages are loaded and marked as seen, recalculate unread count
-                            // This ensures red dot disappears after user views the group
-                            // Wait for messages to be marked as seen (happens in fetchGroupMessages)
-                            setTimeout(async () => {
-                              const unreadCount = await calculateGroupUnreadCount(group._id);
-                              setNewGroupMessagesMap(prev => {
-                                const updated = { ...prev };
-                                if (unreadCount > 0) {
-                                  updated[group._id] = unreadCount;
-                                } else {
-                                  delete updated[group._id];
-                                }
-                                return updated;
-                              });
-                              
-                              // Notify UnreadCountContext to update sidebar badge
-                              window.dispatchEvent(new CustomEvent('setUnreadCount', {
-                                detail: {
-                                  type: 'group',
-                                  groupId: group._id,
-                                  count: unreadCount
-                                }
-                              }));
-                            }, 2000); // Wait for messages to be marked as seen
+                            // Backend automatically marks messages as read when fetchGroupMessages is called
+                            // Backend emits groupListUpdated socket event with updated unreadCount
+                            // No need to manually recalculate - socket event handler will update UI
                           }
                         } catch (err) {
                           console.error("❌ Failed to load group", err);
@@ -3536,7 +3501,7 @@ const ChatPage = () => {
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
-                    accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.ppt,.pptx"
+                    accept=".pdf,.xlsx,.xls,.xlsm,.xlsb"
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
@@ -3549,7 +3514,7 @@ const ChatPage = () => {
                     ref={imageInputRef}
                     type="file"
                     className="hidden"
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.png,image/jpeg,image/jpg,image/png"
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
@@ -3562,7 +3527,7 @@ const ChatPage = () => {
                     ref={audioInputRef}
                     type="file"
                     className="hidden"
-                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac"
+                    accept=".mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/aac,audio/webm,audio/flac"
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
@@ -3938,21 +3903,21 @@ const ChatPage = () => {
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
-                    accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.ppt,.pptx"
+                    accept=".pdf,.xlsx,.xls,.xlsm,.xlsb"
                     onChange={handleFileInputChange}
                   />
                   <input
                     ref={imageInputRef}
                     type="file"
                     className="hidden"
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.png,image/jpeg,image/jpg,image/png"
                     onChange={handleImageInputChange}
                   />
                   <input
                     ref={audioInputRef}
                     type="file"
                     className="hidden"
-                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac"
+                    accept=".mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/aac,audio/webm,audio/flac"
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
