@@ -1,25 +1,134 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import emptyTruckLocationService from '../../services/emptyTruckLocationService';
 import API_CONFIG from '../../config/api.js';
 import { MapPin, Truck, Filter, Search, Edit, Navigation, Calendar, User, Package, X, History, Plus } from 'lucide-react';
 
-/* ====================== Soft Theme (DO Design) ====================== */
-const SOFT = {
-  header: 'rounded-2xl bg-gradient-to-r from-[#6D5DF6] via-[#7A5AF8] to-[#19C3FB] text-white px-5 py-4 shadow',
-  cardMint: 'p-4 rounded-2xl border bg-[#F3FBF6] border-[#B9E6C9]',
-  cardPink: 'p-4 rounded-2xl border bg-[#FFF3F7] border-[#F7CADA]',
-  cardBlue: 'p-4 rounded-2xl border bg-[#EEF4FF] border-[#C9D5FF]',
-  cardButter: 'p-4 rounded-2xl border bg-[#FFF7E6] border-[#FFE2AD]',
-  insetWhite: 'p-3 rounded-xl border bg-white',
-};
+// Searchable Dropdown Component
+const SearchableDropdown = ({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled = false,
+  loading = false,
+  className = "",
+  searchPlaceholder = "Search..."
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredOptions, setFilteredOptions] = useState(options);
+  const dropdownRef = useRef(null);
 
-const MS = {
-  primaryBtn: 'bg-[#0078D4] hover:bg-[#106EBE] focus:ring-2 focus:ring-[#9CCCF5] text-white',
-  subtleBtn: 'bg-white border border-[#D6D6D6] hover:bg-[#F5F5F5]',
-  successPill: 'bg-[#DFF6DD] text-[#107C10]',
-  neutralPill: 'bg-[#F3F2F1] text-[#323130]',
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredOptions(options);
+    } else {
+      const filtered = options.filter(option =>
+        option.label.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredOptions(filtered);
+    }
+  }, [searchTerm, options]);
+
+  // Close dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [isOpen]);
+
+  const handleSelect = (option) => {
+    onChange(option.value);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  const selectedOption = options.find(option => option.value === value);
+  const hasError = className.includes('border-red');
+
+  return (
+    <div className={`relative ${className}`} ref={dropdownRef} style={{ zIndex: isOpen ? 9999 : 'auto' }}>
+      <div
+        className={`w-full px-4 py-2.5 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'} ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
+          }`}
+        onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center justify-between">
+          <span className={selectedOption ? 'text-gray-900' : 'text-gray-500'}>
+            {loading ? 'Loading...' : selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <svg
+            className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
+
+      {isOpen && !disabled && !loading && (
+        <div className="absolute z-[9999] w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-2xl max-h-60 overflow-hidden">
+          {/* Search Input */}
+          <div className="p-2 border-b border-gray-200">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder={searchPlaceholder}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          {/* Options List */}
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option, index) => (
+                <div
+                  key={index}
+                  className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                  onClick={() => handleSelect(option)}
+                >
+                  {option.label}
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-2 text-gray-500 text-sm text-center">
+                No options found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 /**
@@ -419,32 +528,18 @@ const EmptyTruckLocation = () => {
   };
 
   return (
-    <div className="p-8 bg-gradient-to-br from-gray-50 to-blue-50 min-h-screen">
-      <div className="max-w-[95%] mx-auto">
-        {/* Header with DO Design */}
-        <div className={SOFT.header + " mb-6"}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Truck className="w-8 h-8" />
-              <div>
-                <h1 className="text-2xl font-bold">Empty Truck Locations</h1>
-                <p className="text-blue-100 text-sm">Track and manage empty truck locations</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Cards and Add Button */}
-        <div className="flex items-center gap-6 mb-6">
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-6">
           {/* Total Trucks Card */}
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Truck className="w-6 h-6 text-blue-600" />
+                <Truck className="text-blue-600" size={20} />
               </div>
               <div>
-                <p className="text-xs text-gray-500 font-medium">Total Trucks</p>
-                <p className="text-xl font-bold text-gray-900">{trucks.length}</p>
+                <p className="text-sm text-gray-600">Total Trucks</p>
+                <p className="text-xl font-bold text-gray-800">{trucks.length}</p>
               </div>
             </div>
           </div>
@@ -458,176 +553,202 @@ const EmptyTruckLocation = () => {
                 </svg>
               </div>
               <div>
-                <p className="text-xs text-gray-500 font-medium">Empty Trucks</p>
+                <p className="text-sm text-gray-600">Empty Trucks</p>
                 <p className="text-xl font-bold text-green-600">
                   {trucks.filter(truck => truck.status === 'empty').length}
                 </p>
               </div>
             </div>
           </div>
-
-          {/* Add Location Button */}
-          <button
-            onClick={handleAddClick}
-            className="ml-auto flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl font-semibold"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
-            </svg>
-            <span>Add Location</span>
-          </button>
         </div>
 
-        {/* Filters Card */}
-        <div className={SOFT.cardBlue + " mb-6 p-6"}>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <Filter className="w-6 h-6 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-800">Filters:</h2>
+        {/* Add Location Button */}
+        <button
+          onClick={handleAddClick}
+          className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+        >
+          <Plus size={20} /> Add Location
+        </button>
+      </div>
+
+      {/* Filters Section */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 mb-6" style={{ overflow: 'visible' }}>
+        {/* Filter Header */}
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Filter className="w-5 h-5 text-blue-600" />
             </div>
-            
-            <div className="flex items-center gap-4 flex-1">
-              <div className="flex-1 min-w-[180px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle Number</label>
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">Search & Filter</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Find trucks by location, vehicle, or trucker</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter Content */}
+        <div className="p-6 overflow-visible">
+          <div className="flex items-end gap-4 flex-wrap relative">
+            {/* Vehicle Number */}
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <Search className="inline w-4 h-4 mr-1.5 text-gray-500" />
+                Vehicle Number
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   value={searchVehicleNo}
                   onChange={(e) => setSearchVehicleNo(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSearchByVehicle()}
                   placeholder="e.g., MH12AB1234"
-                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:border-gray-400 transition-colors"
                 />
               </div>
+            </div>
 
-              <div className="flex-1 min-w-[150px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                <input
-                  type="text"
-                  name="city"
-                  value={filters.city}
-                  onChange={handleFilterChange}
-                  placeholder="Enter city"
-                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+            {/* City */}
+            <div className="flex-1 min-w-[180px]">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <MapPin className="inline w-4 h-4 mr-1.5 text-gray-500" />
+                City
+              </label>
+              <input
+                type="text"
+                name="city"
+                value={filters.city}
+                onChange={handleFilterChange}
+                placeholder="Enter city name"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:border-gray-400 transition-colors"
+              />
+            </div>
 
-              <div className="flex-1 min-w-[150px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
-                <input
-                  type="text"
-                  name="state"
-                  value={filters.state}
-                  onChange={handleFilterChange}
-                  placeholder="Enter state"
-                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+            {/* State */}
+            <div className="flex-1 min-w-[180px]">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <MapPin className="inline w-4 h-4 mr-1.5 text-gray-500" />
+                State
+              </label>
+              <input
+                type="text"
+                name="state"
+                value={filters.state}
+                onChange={handleFilterChange}
+                placeholder="Enter state name"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:border-gray-400 transition-colors"
+              />
+            </div>
 
-              <div className="flex-1 min-w-[180px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Trucker</label>
-                <select
-                  name="truckerId"
-                  value={filters.truckerId}
-                  onChange={handleFilterChange}
-                  disabled={loadingTruckers}
-                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                >
-                  <option value="">All Truckers</option>
-                  {truckers.map((trucker) => (
-                    <option key={trucker._id} value={trucker._id}>
-                      {trucker.compName || trucker.name || 'N/A'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-end gap-3">
-                <button
-                  onClick={handleApplyFilters}
-                  className={`${MS.primaryBtn} px-6 py-3 text-base rounded-lg flex items-center justify-center gap-2 font-semibold`}
-                  style={{ height: '52px' }}
-                >
-                  <Search className="w-5 h-5" />
-                  Apply
-                </button>
-                <button
-                  onClick={handleClearFilters}
-                  className={`${MS.subtleBtn} px-6 py-3 text-base rounded-lg font-semibold`}
-                  style={{ height: '52px' }}
-                >
-                  Clear
-                </button>
-              </div>
+            {/* Trucker */}
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <Truck className="inline w-4 h-4 mr-1.5 text-gray-500" />
+                Trucker
+              </label>
+              <SearchableDropdown
+                value={filters.truckerId}
+                onChange={(value) => handleFilterChange({ target: { name: 'truckerId', value } })}
+                options={[
+                  { value: '', label: 'All Truckers' },
+                  ...truckers.map((trucker) => ({
+                    value: trucker._id,
+                    label: trucker.compName || trucker.name || 'N/A'
+                  }))
+                ]}
+                placeholder="Select Trucker"
+                disabled={loadingTruckers}
+                loading={loadingTruckers}
+                searchPlaceholder="Search truckers..."
+                className="w-full"
+              />
             </div>
           </div>
-        </div>
 
-        {/* Data Table Section */}
-        <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-gray-600">Loading trucks...</p>
-            </div>
-          ) : (
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+            <button
+              onClick={handleClearFilters}
+              className="px-5 py-2.5 bg-white border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-sm"
+            >
+              <X className="w-4 h-4" />
+              Clear Filters
+            </button>
+            <button
+              onClick={handleApplyFilters}
+              className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
+            >
+              <Search className="w-4 h-4" />
+              Apply Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Data Table Section */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-600">Loading trucks...</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-200">
+              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
                 <tr>
-                  <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
-                  <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">VEHICLE NO</th>
-                  <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">VEHICLE TYPE</th>
-                  <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">TRUCKER</th>
-                  <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">LOCATION</th>
-                  <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
-                  <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">LAST UPDATED</th>
-                  <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">VEHICLE NO</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">VEHICLE TYPE</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">TRUCKER</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">LOCATION</th>
+                  <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">LAST UPDATED</th>
+                  <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
+              <tbody>
                 {trucks.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
-                      <div className="flex flex-col items-center justify-center">
-                        <Truck className="w-12 h-12 text-gray-400 mb-3" />
-                        <p className="text-lg font-medium text-gray-600">No trucks found</p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {searchVehicleNo || filters.city || filters.state || filters.truckerId
-                            ? 'Try adjusting your filters'
-                            : 'Get started by adding your first truck location'}
-                        </p>
-                      </div>
+                    <td colSpan="8" className="px-6 py-12 text-center">
+                      <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500 text-lg">
+                        {searchVehicleNo || filters.city || filters.state || filters.truckerId
+                          ? 'No trucks found matching your search'
+                          : 'No trucks found'}
+                      </p>
+                      <p className="text-gray-400 text-sm mt-1">
+                        {searchVehicleNo || filters.city || filters.state || filters.truckerId
+                          ? 'Try adjusting your filters'
+                          : 'Create your first truck location to get started'}
+                      </p>
                     </td>
                   </tr>
                 ) : (
                   trucks.map((truck, index) => (
-                    <tr key={truck._id} className="transition duration-100 border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-3 py-4 whitespace-nowrap text-base font-medium text-gray-900">
-                        {index + 1}
+                    <tr key={truck._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{index + 1}</span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Truck className="w-6 h-6 text-green-600" />
-                          <div>
-                            <p className="text-base font-semibold text-gray-900">{truck.vehicleNo}</p>
-                          </div>
-                        </div>
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{truck.vehicleNo}</span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                        {truck.vehicleId?.vehicleType || 'N/A'}
+                      <td className="py-2 px-3">
+                        <span className="font-medium text-gray-700">{truck.vehicleId?.vehicleType || 'N/A'}</span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="py-2 px-3">
                         <div>
-                          <p className="text-base font-semibold text-gray-700">{truck.truckerId?.compName || 'N/A'}</p>
+                          <span className="font-medium text-gray-700">{truck.truckerId?.compName || 'N/A'}</span>
                           {truck.truckerId?.mc_dot_no && (
                             <p className="text-sm text-gray-500 mt-1">MC: {truck.truckerId.mc_dot_no}</p>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="py-2 px-3">
                         <div>
-                          <p className="text-base font-semibold text-gray-700">
+                          <span className="font-medium text-gray-700">
                             {truck.location?.city || 'N/A'}, {truck.location?.state || 'N/A'}
-                          </p>
+                          </span>
                           {truck.location?.address && (
                             <p className="text-sm text-gray-500 mt-1">{truck.location.address}</p>
                           )}
@@ -636,34 +757,29 @@ const EmptyTruckLocation = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 align-middle text-center">
-                        <div className="flex items-center justify-center">
-                          {getStatusBadge(truck.status)}
+                      <td className="py-2 px-3 text-center">
+                        {getStatusBadge(truck.status)}
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <span className="font-medium text-gray-700">{new Date(truck.lastUpdatedAt).toLocaleDateString()}</span>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {new Date(truck.lastUpdatedAt).toLocaleTimeString()}
+                          </p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2 text-base">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <span className="font-semibold text-gray-700">{new Date(truck.lastUpdatedAt).toLocaleDateString()}</span>
-                        </div>
-                        <div className="text-sm text-gray-500 mt-1 ml-6">
-                          {new Date(truck.lastUpdatedAt).toLocaleTimeString()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 align-middle">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className="py-2 px-3">
+                        <div className="flex gap-2">
                           <button
                             onClick={() => handleViewHistory(truck)}
-                            className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                           >
-                            <History className="w-3.5 h-3.5" />
                             History
                           </button>
                           <button
                             onClick={() => handleUpdateClick(truck)}
-                            className="flex items-center gap-1 bg-transparent text-green-600 px-3 py-1 rounded text-sm hover:bg-green-500/30 transition border border-green-200"
+                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                           >
-                            <Edit className="w-3.5 h-3.5" />
                             Update
                           </button>
                         </div>
@@ -673,23 +789,31 @@ const EmptyTruckLocation = () => {
                 )}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Update Modal */}
       {showUpdateModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className={SOFT.header}>
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold">Update Truck Location</h3>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <Edit className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Update Truck Location</h3>
+                    <p className="text-blue-100 text-sm">Update the existing truck location</p>
+                  </div>
+                </div>
                 <button
                   onClick={() => setShowUpdateModal(false)}
-                  className="text-white hover:bg-white/20 rounded-lg p-1"
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
                 >
-                  <X className="w-6 h-6" />
+                  ×
                 </button>
               </div>
             </div>
@@ -708,7 +832,7 @@ const EmptyTruckLocation = () => {
                     onChange={handleFormChange}
                     required
                     placeholder="e.g., MH12AB1234"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -717,21 +841,19 @@ const EmptyTruckLocation = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Trucker <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    name="truckerId"
+                  <SearchableDropdown
                     value={updateForm.truckerId}
-                    onChange={handleFormChange}
-                    required
+                    onChange={(value) => handleFormChange({ target: { name: 'truckerId', value } })}
+                    options={truckers.map((trucker) => ({
+                      value: trucker._id,
+                      label: trucker.compName || trucker.name || 'N/A'
+                    }))}
+                    placeholder="Select Trucker"
                     disabled={loadingTruckers}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                  >
-                    <option value="">Select Trucker</option>
-                    {truckers.map((trucker) => (
-                      <option key={trucker._id} value={trucker._id}>
-                        {trucker.compName || trucker.name || 'N/A'}
-                      </option>
-                    ))}
-                  </select>
+                    loading={loadingTruckers}
+                    searchPlaceholder="Search truckers..."
+                    className="w-full"
+                  />
                 </div>
 
                 {/* City */}
@@ -745,7 +867,7 @@ const EmptyTruckLocation = () => {
                     value={updateForm.city}
                     onChange={handleFormChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -760,7 +882,7 @@ const EmptyTruckLocation = () => {
                     value={updateForm.state}
                     onChange={handleFormChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -772,7 +894,7 @@ const EmptyTruckLocation = () => {
                     name="zipcode"
                     value={updateForm.zipcode}
                     onChange={handleFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -784,7 +906,7 @@ const EmptyTruckLocation = () => {
                     name="address"
                     value={updateForm.address}
                     onChange={handleFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -797,7 +919,7 @@ const EmptyTruckLocation = () => {
                     value={updateForm.formattedAddress}
                     onChange={handleFormChange}
                     placeholder="Full formatted address (auto-filled from GPS)"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -812,7 +934,7 @@ const EmptyTruckLocation = () => {
                       value={updateForm.latitude}
                       onChange={handleFormChange}
                       placeholder="Latitude"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <input
                       type="number"
@@ -821,7 +943,7 @@ const EmptyTruckLocation = () => {
                       value={updateForm.longitude}
                       onChange={handleFormChange}
                       placeholder="Longitude"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
@@ -834,7 +956,7 @@ const EmptyTruckLocation = () => {
                     value={updateForm.notes}
                     onChange={handleFormChange}
                     rows="3"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -844,14 +966,14 @@ const EmptyTruckLocation = () => {
                 <button
                   type="button"
                   onClick={() => setShowUpdateModal(false)}
-                  className={`${MS.subtleBtn} px-6 py-2 rounded-lg`}
+                  className="px-6 py-2 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg font-semibold transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`${MS.primaryBtn} px-6 py-2 rounded-lg disabled:opacity-50`}
+                  className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50 transition-colors"
                 >
                   {loading ? 'Updating...' : 'Update Location'}
                 </button>
@@ -863,12 +985,20 @@ const EmptyTruckLocation = () => {
 
       {/* Add Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className={SOFT.header}>
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold">Add Empty Truck Location</h3>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <Plus className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Add Empty Truck Location</h3>
+                    <p className="text-blue-100 text-sm">Create a new truck location entry</p>
+                  </div>
+                </div>
                 <button
                   onClick={() => {
                     setShowAddModal(false);
@@ -887,9 +1017,9 @@ const EmptyTruckLocation = () => {
                     });
                     setVehicles([]);
                   }}
-                  className="text-white hover:bg-white/20 rounded-lg p-1"
+                  className="text-white hover:text-gray-200 text-2xl font-bold"
                 >
-                  <X className="w-6 h-6" />
+                  ×
                 </button>
               </div>
             </div>
@@ -901,21 +1031,19 @@ const EmptyTruckLocation = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Trucker <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    name="truckerId"
+                  <SearchableDropdown
                     value={addForm.truckerId}
-                    onChange={handleAddFormChange}
-                    required
+                    onChange={(value) => handleAddFormChange({ target: { name: 'truckerId', value } })}
+                    options={truckers.map((trucker) => ({
+                      value: trucker._id,
+                      label: trucker.compName || trucker.name || 'N/A'
+                    }))}
+                    placeholder="Select Trucker"
                     disabled={loadingTruckers}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                  >
-                    <option value="">Select Trucker</option>
-                    {truckers.map((trucker) => (
-                      <option key={trucker._id} value={trucker._id}>
-                        {trucker.compName || trucker.name || 'N/A'}
-                      </option>
-                    ))}
-                  </select>
+                    loading={loadingTruckers}
+                    searchPlaceholder="Search truckers..."
+                    className="w-full"
+                  />
                 </div>
 
                 {/* Vehicle Number */}
@@ -929,7 +1057,7 @@ const EmptyTruckLocation = () => {
                     onChange={handleAddFormChange}
                     required
                     disabled={!addForm.truckerId || loadingVehicles}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
                   >
                     <option value="">{addForm.truckerId ? (loadingVehicles ? 'Loading vehicles...' : 'Select Vehicle') : 'Select Trucker First'}</option>
                     {vehicles.map((vehicle) => (
@@ -952,7 +1080,7 @@ const EmptyTruckLocation = () => {
                     onChange={handleAddFormChange}
                     required
                     placeholder="e.g., Mumbai"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -968,7 +1096,7 @@ const EmptyTruckLocation = () => {
                     onChange={handleAddFormChange}
                     required
                     placeholder="e.g., Maharashtra"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -981,7 +1109,7 @@ const EmptyTruckLocation = () => {
                     value={addForm.zipcode}
                     onChange={handleAddFormChange}
                     placeholder="e.g., 400001"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -994,7 +1122,7 @@ const EmptyTruckLocation = () => {
                     value={addForm.address}
                     onChange={handleAddFormChange}
                     placeholder="e.g., Near XYZ Warehouse, Andheri"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -1007,7 +1135,7 @@ const EmptyTruckLocation = () => {
                     value={addForm.formattedAddress}
                     onChange={handleAddFormChange}
                     placeholder="Full formatted address (auto-filled from GPS)"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
@@ -1022,7 +1150,7 @@ const EmptyTruckLocation = () => {
                       value={addForm.latitude}
                       onChange={handleAddFormChange}
                       placeholder="Latitude"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <input
                       type="number"
@@ -1031,7 +1159,7 @@ const EmptyTruckLocation = () => {
                       value={addForm.longitude}
                       onChange={handleAddFormChange}
                       placeholder="Longitude"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
@@ -1045,7 +1173,7 @@ const EmptyTruckLocation = () => {
                     onChange={handleAddFormChange}
                     rows="3"
                     placeholder="e.g., Available for immediate pickup"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -1071,14 +1199,14 @@ const EmptyTruckLocation = () => {
                     });
                     setVehicles([]);
                   }}
-                  className={`${MS.subtleBtn} px-6 py-2 rounded-lg`}
+                  className="px-6 py-2 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg font-semibold transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`${MS.primaryBtn} px-6 py-2 rounded-lg disabled:opacity-50`}
+                  className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50 transition-colors"
                 >
                   {loading ? 'Adding...' : 'Add Location'}
                 </button>
@@ -1090,39 +1218,39 @@ const EmptyTruckLocation = () => {
 
       {/* History Modal */}
       {showHistoryModal && selectedTruck && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" onClick={() => setShowHistoryModal(false)} />
-          <div 
-            className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden flex flex-col transform transition-all duration-300 scale-100"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 p-6 flex justify-between items-center text-white shadow-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                  <History className="w-6 h-6" />
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <History className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Update History</h3>
+                    <p className="text-blue-100 text-sm">Location history for {selectedTruck.vehicleNo}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-2xl font-bold">Update History</h3>
-                  <p className="text-sm text-blue-100 mt-1">Location history for {selectedTruck.vehicleNo}</p>
-                </div>
+                <button onClick={() => setShowHistoryModal(false)} className="text-white hover:text-gray-200 text-2xl font-bold">
+                  ×
+                </button>
               </div>
-              <button onClick={() => setShowHistoryModal(false)} className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-xl transition-all duration-200">
-                <X className="w-6 h-6" />
-              </button>
             </div>
             
             {/* Form Body with Scroll */}
-            <div className="p-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [-webkit-overflow-scrolling:touch]">
-              <style jsx>{`
-                .hide-scrollbar::-webkit-scrollbar {
-                  display: none;
-                }
+            <div className="p-6 overflow-y-auto">
+              <style>{`
+                .hide-scrollbar::-webkit-scrollbar { display: none; }
+                .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
               `}</style>
-              <div className="hide-scrollbar space-y-6">
-                {/* SECTION 1: Current Location - Blue Background */}
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <h4 className="text-lg font-bold text-white border-b border-white pb-2 mb-4 -mt-4 bg-blue-600 px-3 py-2 rounded-t-lg -mx-4 mb-4">Current Location</h4>
+              <div className="space-y-6">
+                {/* SECTION 1: Current Location */}
+                <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-lg border border-gray-200 shadow">
+                  <div className="flex items-center gap-2 mb-4">
+                    <MapPin className="text-blue-500" size={20} />
+                    <h4 className="text-lg font-bold text-blue-700">Current Location</h4>
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">City</label>
@@ -1183,12 +1311,15 @@ const EmptyTruckLocation = () => {
                   </div>
                 </div>
 
-                {/* SECTION 2: Update History - Green Background */}
+                {/* SECTION 2: Update History */}
                 {selectedTruck.updateHistory && selectedTruck.updateHistory.length > 0 ? (
-                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <h4 className="text-lg font-bold text-white border-b border-white pb-2 mb-4 -mt-4 bg-green-600 px-3 py-2 rounded-t-lg -mx-4 mb-4">
-                      Previous Locations ({selectedTruck.updateHistory.length})
-                    </h4>
+                  <div className="bg-gradient-to-br from-green-50 to-white p-6 rounded-lg border border-gray-200 shadow">
+                    <div className="flex items-center gap-2 mb-4">
+                      <History className="text-green-500" size={20} />
+                      <h4 className="text-lg font-bold text-green-700">
+                        Previous Locations ({selectedTruck.updateHistory.length})
+                      </h4>
+                    </div>
                     <div className="space-y-4">
                       {selectedTruck.updateHistory.map((history, index) => (
                         <div key={index} className="bg-white p-4 rounded-lg border border-green-200">
@@ -1255,7 +1386,7 @@ const EmptyTruckLocation = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-center py-8">
+                  <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 text-center py-8">
                     <p className="text-gray-500 font-medium">No update history available</p>
                   </div>
                 )}
@@ -1265,7 +1396,7 @@ const EmptyTruckLocation = () => {
                   <button
                     type="button"
                     onClick={() => setShowHistoryModal(false)}
-                    className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150 shadow-sm"
+                    className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors"
                   >
                     Close
                   </button>
