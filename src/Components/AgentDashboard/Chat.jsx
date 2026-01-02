@@ -18,6 +18,8 @@ import {
   Circle,
   MinusCircle,
   AlertCircle,
+  Reply,
+  X,
   Camera,
   PhoneCall,
   Info,
@@ -28,7 +30,6 @@ import {
   Bell,
   Users,
   Plus,
-  X,
   Settings,
   UserPlus,
   UserMinus,
@@ -284,6 +285,9 @@ const ChatPage = () => {
   const [showInAppNotification, setShowInAppNotification] = useState(false);
   const [inAppNotificationData, setInAppNotificationData] = useState(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  // Reply functionality states
+  const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null); // Message ID to highlight
   // Group chat states
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -1035,6 +1039,9 @@ const ChatPage = () => {
     
     // Clear input and tagged users immediately to prevent duplicate sends
     setInput("");
+    // Clear reply after sending
+    const currentReplyingTo = replyingTo;
+    setReplyingTo(null);
     const usersToTag = [...taggedUsers];
     setTaggedUsers([]);
     setShowMentionDropdown(false);
@@ -1064,6 +1071,11 @@ const ChatPage = () => {
       const formData = new FormData();
       formData.append('groupId', selectedGroup._id);
       formData.append('message', messageToSend);
+      
+      // Add replyTo if replying to a message
+      if (currentReplyingTo) {
+        formData.append('replyTo', currentReplyingTo._id || currentReplyingTo.id);
+      }
       
       // Add tagged user IDs
       if (usersToTag.length > 0) {
@@ -1410,6 +1422,103 @@ const ChatPage = () => {
   };
 
 
+  // Handle reply to a message
+  const handleReplyToMessage = (msg) => {
+    console.log('=== Replying to message ===', msg);
+    setReplyingTo(msg);
+    // Focus on input field
+    setTimeout(() => {
+      if (chatType === 'group') {
+        groupTextareaRef.current?.focus();
+      } else {
+        individualTextareaRef.current?.focus();
+      }
+    }, 100);
+  };
+
+  // Cancel reply
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  // Scroll to original message when clicking reply preview
+  const scrollToRepliedMessage = () => {
+    if (!replyingTo) return;
+    
+    const messageId = replyingTo._id || replyingTo.id;
+    if (!messageId) return;
+
+    // Find the message element - check both group and individual message refs
+    const messageElement = groupMessageRefs.current[messageId] || 
+                          document.querySelector(`[data-message-id="${messageId}"]`);
+    
+    if (messageElement) {
+      // Highlight the message briefly
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 2000);
+      
+      // Scroll to the message
+      messageElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    } else {
+      // If message not found, try scrolling and searching after a delay
+      setTimeout(() => {
+        const retryElement = groupMessageRefs.current[messageId] || 
+                            document.querySelector(`[data-message-id="${messageId}"]`);
+        if (retryElement) {
+          setHighlightedMessageId(messageId);
+          setTimeout(() => setHighlightedMessageId(null), 2000);
+          retryElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        } else {
+          console.log('Message not found for scrolling:', messageId);
+        }
+      }, 300);
+    }
+  };
+
+  // Scroll to replied message when clicking on the quoted message in a message bubble
+  const scrollToRepliedMessageFromBubble = (replyToId) => {
+    if (!replyToId) return;
+    
+    const messageId = replyToId._id || replyToId.id || replyToId;
+    if (!messageId) return;
+
+    // Find the message element
+    const messageElement = groupMessageRefs.current[messageId] || 
+                          document.querySelector(`[data-message-id="${messageId}"]`);
+    
+    if (messageElement) {
+      // Highlight the message briefly
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 2000);
+      
+      // Scroll to the message
+      messageElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    } else {
+      // If message not found, try scrolling and searching after a delay
+      setTimeout(() => {
+        const retryElement = groupMessageRefs.current[messageId] || 
+                            document.querySelector(`[data-message-id="${messageId}"]`);
+        if (retryElement) {
+          setHighlightedMessageId(messageId);
+          setTimeout(() => setHighlightedMessageId(null), 2000);
+          retryElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
+      }, 300);
+    }
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || isSendingMessage) return;
     
@@ -1428,6 +1537,8 @@ const ChatPage = () => {
     
     // Clear input immediately to prevent duplicate sends
     setInput("");
+    // Clear reply after sending
+    setReplyingTo(null);
 
     // Create temporary ID for optimistic update
     const tempId = `temp-${Date.now()}-${Math.random()}`;
@@ -1462,6 +1573,7 @@ const ChatPage = () => {
       const payload = {
         receiverEmpId: selectedUser.empId,
         message: messageToSend,
+        ...(replyingTo ? { replyTo: replyingTo._id || replyingTo.id } : {})
       };
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
@@ -3198,14 +3310,31 @@ const ChatPage = () => {
                           </div>
                         )}
                         <div 
-                          ref={el => groupMessageRefs.current[msg._id] = el}
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}
+                          ref={el => {
+                            if (el) {
+                              groupMessageRefs.current[msg._id] = el;
+                              el.setAttribute('data-message-id', msg._id || msg.id || '');
+                            }
+                          }}
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 ${
+                            highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
+                          }`}
                         >
                           <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
-                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Group profile avatar clicked!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0 cursor-pointer hover:scale-110 transition-transform z-10"
+                                title="Click to reply"
+                              >
                                 {msg.senderName?.charAt(0).toUpperCase() || 'U'}
-                              </div>
+                              </button>
                             )}
                             <div className="flex flex-col">
                               {!isSentByMe && (
@@ -3220,6 +3349,41 @@ const ChatPage = () => {
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
+                                {/* Show replied message if exists - WhatsApp style */}
+                                {msg.replyTo && (() => {
+                                  const repliedMsg = typeof msg.replyTo === 'object' && msg.replyTo.message 
+                                    ? msg.replyTo 
+                                    : groupMessages.find(m => (m._id || m.id) === (msg.replyTo._id || msg.replyTo.id || msg.replyTo));
+                                  const replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                  return repliedMsg ? (
+                                    <div 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        scrollToRepliedMessageFromBubble(replyToId);
+                                      }}
+                                      className={`mb-2 pl-3 pr-2 py-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity ${
+                                        isSentByMe 
+                                          ? 'bg-white/15' 
+                                          : 'bg-gray-100'
+                                      }`} 
+                                      style={{
+                                        borderLeft: '3px solid #3b82f6'
+                                      }}
+                                      title="Click to jump to original message"
+                                    >
+                                      <div className={`text-xs font-semibold mb-0.5 ${
+                                        isSentByMe ? 'text-white/90' : 'text-gray-700'
+                                      }`}>
+                                        {repliedMsg.senderEmpId === storedUser?.empId ? 'You' : (repliedMsg.senderName || 'User')}
+                                      </div>
+                                      <div className={`text-xs truncate ${
+                                        isSentByMe ? 'text-white/70' : 'text-gray-600'
+                                      }`}>
+                                        {repliedMsg.message || repliedMsg.text || repliedMsg.content}
+                                      </div>
+                                    </div>
+                                  ) : null;
+                                })()}
                                 {/* Show audio messages FIRST */}
                                 {(msg.audio || (msg.message && msg.message.includes('Sent an audio:'))) && msg._id && (
                                   <div className="mb-2">
@@ -3391,6 +3555,42 @@ const ChatPage = () => {
 
             {/* Group Message Input */}
             <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
+              {/* Reply Preview - WhatsApp style */}
+              {replyingTo && (
+                <div 
+                  className="mb-2 mx-2 px-3 py-2 rounded-lg flex items-start justify-between bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" 
+                  style={{
+                    borderLeft: '4px solid #25D366'
+                  }}
+                  onClick={(e) => {
+                    // Don't scroll if clicking the X button
+                    if (e.target.closest('button')) return;
+                    scrollToRepliedMessage();
+                  }}
+                >
+                  <div className="flex-1 min-w-0 pr-2">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-xs font-semibold" style={{ color: '#075E54' }}>
+                        {replyingTo.senderEmpId === storedUser?.empId ? 'You' : (replyingTo.senderName || replyingTo.senderAliasName || 'User')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 truncate leading-relaxed">
+                      {replyingTo.message || replyingTo.text || replyingTo.content}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCancelReply();
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 rounded-full hover:bg-gray-200"
+                    type="button"
+                    title="Cancel reply"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-3">
                 <div className="flex-1 relative">
                   <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 transition-all shadow-sm">
@@ -3636,13 +3836,30 @@ const ChatPage = () => {
                           </div>
                         )}
                         <div
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}
+                          ref={el => {
+                            if (el) {
+                              el.setAttribute('data-message-id', msg._id || msg.id || '');
+                            }
+                          }}
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 ${
+                            highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
+                          }`}
                         >
                           <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
-                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Profile avatar clicked!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0 cursor-pointer hover:scale-110 transition-transform z-10"
+                                title="Click to reply"
+                              >
                                 {selectedUser.employeeName?.charAt(0).toUpperCase()}
-                              </div>
+                              </button>
                             )}
                             <div className="flex flex-col">
                               {!isSentByMe && (
@@ -3657,6 +3874,41 @@ const ChatPage = () => {
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
+                                {/* Show replied message if exists - WhatsApp style */}
+                                {msg.replyTo && (() => {
+                                  const repliedMsg = typeof msg.replyTo === 'object' && msg.replyTo.message 
+                                    ? msg.replyTo 
+                                    : messages.find(m => (m._id || m.id) === (msg.replyTo._id || msg.replyTo.id || msg.replyTo));
+                                  const replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                  return repliedMsg ? (
+                                    <div 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        scrollToRepliedMessageFromBubble(replyToId);
+                                      }}
+                                      className={`mb-2 pl-3 pr-2 py-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity ${
+                                        isSentByMe 
+                                          ? 'bg-white/15' 
+                                          : 'bg-gray-100'
+                                      }`} 
+                                      style={{
+                                        borderLeft: '3px solid #3b82f6'
+                                      }}
+                                      title="Click to jump to original message"
+                                    >
+                                      <div className={`text-xs font-semibold mb-0.5 ${
+                                        isSentByMe ? 'text-white/90' : 'text-gray-700'
+                                      }`}>
+                                        {repliedMsg.senderEmpId === storedUser?.empId ? 'You' : (repliedMsg.senderName || 'User')}
+                                      </div>
+                                      <div className={`text-xs truncate ${
+                                        isSentByMe ? 'text-white/70' : 'text-gray-600'
+                                      }`}>
+                                        {repliedMsg.message || repliedMsg.text || repliedMsg.content}
+                                      </div>
+                                    </div>
+                                  ) : null;
+                                })()}
                                 {/* Show audio messages FIRST */}
                                 {(msg.audio || (msg.message && msg.message.includes('Sent an audio:'))) && msg._id && (
                                   <div className="mb-2">
@@ -3850,6 +4102,42 @@ const ChatPage = () => {
 
             {/* Message Input */}
             <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
+              {/* Reply Preview - WhatsApp style */}
+              {replyingTo && (
+                <div 
+                  className="mb-2 mx-2 px-3 py-2 rounded-lg flex items-start justify-between bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" 
+                  style={{
+                    borderLeft: '4px solid #25D366'
+                  }}
+                  onClick={(e) => {
+                    // Don't scroll if clicking the X button
+                    if (e.target.closest('button')) return;
+                    scrollToRepliedMessage();
+                  }}
+                >
+                  <div className="flex-1 min-w-0 pr-2">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-xs font-semibold" style={{ color: '#075E54' }}>
+                        {replyingTo.senderEmpId === storedUser?.empId ? 'You' : (replyingTo.senderName || replyingTo.senderAliasName || 'User')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 truncate leading-relaxed">
+                      {replyingTo.message || replyingTo.text || replyingTo.content}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCancelReply();
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 rounded-full hover:bg-gray-200"
+                    type="button"
+                    title="Cancel reply"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-3">
                 <div className="flex-1 relative">
                   <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all shadow-sm">
