@@ -2825,7 +2825,7 @@ const ChatPage = () => {
   }
 
   return (
-    <div className="h-[87vh] bg-gray-50 flex relative">
+    <div className="h-[87vh] bg-gray-50 flex relative overflow-hidden">
       {/* In-App Notification */}
       {showInAppNotification && inAppNotificationData && (
         <div className="fixed top-4 right-4 z-[9999] bg-white border-2 border-blue-200 rounded-lg shadow-2xl p-4 max-w-sm transform transition-all duration-300 ease-in-out">
@@ -3176,7 +3176,7 @@ const ChatPage = () => {
       </div>
 
       {/* Right Side - Chat Area */}
-      <div className="flex-1 flex flex-col bg-white">
+      <div className="flex-1 flex flex-col bg-white min-w-0 overflow-hidden">
         {selectedGroup && chatType === 'group' ? (
           <>
             {/* Group Chat Header */}
@@ -3265,7 +3265,7 @@ const ChatPage = () => {
             </div>
 
             {/* Group Messages Area */}
-            <div ref={groupMessagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-100">
+            <div ref={groupMessagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gray-100">
               <div className="space-y-2">
                 {loadingOlderGroupMessages && (
                   <div className="flex justify-center py-2">
@@ -3320,7 +3320,7 @@ const ChatPage = () => {
                             highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
                           }`}
                         >
-                          <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
+                          <div className={`flex max-w-[75%] min-w-0 ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
                               <button
                                 type="button"
@@ -3336,14 +3336,14 @@ const ChatPage = () => {
                                 {msg.senderName?.charAt(0).toUpperCase() || 'U'}
                               </button>
                             )}
-                            <div className="flex flex-col">
+                            <div className="flex flex-col min-w-0 flex-1">
                               {!isSentByMe && (
                                 <span className="text-xs text-gray-600 font-medium mb-1 px-1">
                                   {msg.senderAliasName ? `${msg.senderName}/${msg.senderAliasName}` : (msg.senderName || 'Unknown')}
                                 </span>
                               )}
                               <div
-                                className={`px-4 py-3 rounded-2xl shadow-md ${
+                                className={`px-4 py-3 rounded-2xl shadow-md min-w-0 max-w-full ${
                                   isSentByMe
                                     ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-md"
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
@@ -3361,7 +3361,7 @@ const ChatPage = () => {
                                         e.stopPropagation();
                                         scrollToRepliedMessageFromBubble(replyToId);
                                       }}
-                                      className={`mb-2 pl-3 pr-2 py-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity ${
+                                      className={`mb-2 pl-3 pr-2 py-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity min-w-0 max-w-full overflow-hidden ${
                                         isSentByMe 
                                           ? 'bg-white/15' 
                                           : 'bg-gray-100'
@@ -3371,14 +3371,14 @@ const ChatPage = () => {
                                       }}
                                       title="Click to jump to original message"
                                     >
-                                      <div className={`text-xs font-semibold mb-0.5 ${
+                                      <div className={`text-xs font-semibold mb-0.5 truncate ${
                                         isSentByMe ? 'text-white/90' : 'text-gray-700'
                                       }`}>
                                         {repliedMsg.senderEmpId === storedUser?.empId ? 'You' : (repliedMsg.senderName || 'User')}
                                       </div>
-                                      <div className={`text-xs truncate ${
+                                      <div className={`text-xs break-words whitespace-pre-wrap line-clamp-2 ${
                                         isSentByMe ? 'text-white/70' : 'text-gray-600'
-                                      }`}>
+                                      }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                                         {repliedMsg.message || repliedMsg.text || repliedMsg.content}
                                       </div>
                                     </div>
@@ -3439,7 +3439,7 @@ const ChatPage = () => {
                                   })()
                                 )}
                                 {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
-                                  <div className={`text-sm leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>
+                                  <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isSentByMe ? 'text-white' : 'text-gray-800'}`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                                     {(() => {
                                       // Highlight mentions in message
                                       const message = msg.message || '';
@@ -3558,7 +3558,7 @@ const ChatPage = () => {
               {/* Reply Preview - WhatsApp style */}
               {replyingTo && (
                 <div 
-                  className="mb-2 mx-2 px-3 py-2 rounded-lg flex items-start justify-between bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" 
+                  className="mb-2 mx-2 px-3 py-2 rounded-lg flex items-start justify-between bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors min-w-0 max-w-full overflow-hidden" 
                   style={{
                     borderLeft: '4px solid #25D366'
                   }}
@@ -3568,13 +3568,13 @@ const ChatPage = () => {
                     scrollToRepliedMessage();
                   }}
                 >
-                  <div className="flex-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-xs font-semibold" style={{ color: '#075E54' }}>
+                  <div className="flex-1 min-w-0 pr-2 overflow-hidden">
+                    <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                      <span className="text-xs font-semibold truncate" style={{ color: '#075E54' }}>
                         {replyingTo.senderEmpId === storedUser?.empId ? 'You' : (replyingTo.senderName || replyingTo.senderAliasName || 'User')}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600 truncate leading-relaxed">
+                    <p className="text-xs text-gray-600 leading-relaxed break-words whitespace-pre-wrap line-clamp-3" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       {replyingTo.message || replyingTo.text || replyingTo.content}
                     </p>
                   </div>
@@ -3591,9 +3591,9 @@ const ChatPage = () => {
                   </button>
                 </div>
               )}
-              <div className="flex items-end gap-3">
-                <div className="flex-1 relative">
-                  <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 transition-all shadow-sm">
+              <div className="flex items-end gap-3 min-w-0">
+                <div className="flex-1 relative min-w-0">
+                  <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 transition-all shadow-sm min-w-0 overflow-hidden">
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile || isSendingMessage}
@@ -3611,7 +3611,7 @@ const ChatPage = () => {
                       onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto overflow-x-hidden min-w-0"
                       style={{ minHeight: '20px', maxHeight: '400px' }}
                     />
                     
@@ -3789,7 +3789,7 @@ const ChatPage = () => {
             </div>
 
             {/* Messages Area */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-100">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gray-100">
               <div className="space-y-2">
                 {loadingOlderMessages && (
                   <div className="flex justify-center py-2">
@@ -3845,7 +3845,7 @@ const ChatPage = () => {
                             highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
                           }`}
                         >
-                          <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
+                          <div className={`flex max-w-[75%] min-w-0 ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
                               <button
                                 type="button"
@@ -3868,7 +3868,7 @@ const ChatPage = () => {
                                 </span>
                               )}
                               <div
-                                className={`px-4 py-3 rounded-2xl shadow-md ${
+                                className={`px-4 py-3 rounded-2xl shadow-md min-w-0 max-w-full ${
                                   isSentByMe
                                     ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-md"
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
@@ -3886,7 +3886,7 @@ const ChatPage = () => {
                                         e.stopPropagation();
                                         scrollToRepliedMessageFromBubble(replyToId);
                                       }}
-                                      className={`mb-2 pl-3 pr-2 py-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity ${
+                                      className={`mb-2 pl-3 pr-2 py-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity min-w-0 max-w-full overflow-hidden ${
                                         isSentByMe 
                                           ? 'bg-white/15' 
                                           : 'bg-gray-100'
@@ -3896,14 +3896,14 @@ const ChatPage = () => {
                                       }}
                                       title="Click to jump to original message"
                                     >
-                                      <div className={`text-xs font-semibold mb-0.5 ${
+                                      <div className={`text-xs font-semibold mb-0.5 truncate ${
                                         isSentByMe ? 'text-white/90' : 'text-gray-700'
                                       }`}>
                                         {repliedMsg.senderEmpId === storedUser?.empId ? 'You' : (repliedMsg.senderName || 'User')}
                                       </div>
-                                      <div className={`text-xs truncate ${
+                                      <div className={`text-xs break-words whitespace-pre-wrap line-clamp-2 ${
                                         isSentByMe ? 'text-white/70' : 'text-gray-600'
-                                      }`}>
+                                      }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                                         {repliedMsg.message || repliedMsg.text || repliedMsg.content}
                                       </div>
                                     </div>
@@ -4057,7 +4057,7 @@ const ChatPage = () => {
                                   </div>
                                 )}
                                 {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
-                                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                                  <p className="text-sm whitespace-pre-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{msg.message}</p>
                                 )}
                               </div>
                               <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
@@ -4101,11 +4101,11 @@ const ChatPage = () => {
             </div>
 
             {/* Message Input */}
-            <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
+            <div className="p-4 border-t border-gray-200 bg-white shadow-lg min-w-0 overflow-hidden">
               {/* Reply Preview - WhatsApp style */}
               {replyingTo && (
                 <div 
-                  className="mb-2 mx-2 px-3 py-2 rounded-lg flex items-start justify-between bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" 
+                  className="mb-2 mx-2 px-3 py-2 rounded-lg flex items-start justify-between bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors min-w-0 max-w-full overflow-hidden" 
                   style={{
                     borderLeft: '4px solid #25D366'
                   }}
@@ -4115,13 +4115,13 @@ const ChatPage = () => {
                     scrollToRepliedMessage();
                   }}
                 >
-                  <div className="flex-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-xs font-semibold" style={{ color: '#075E54' }}>
+                  <div className="flex-1 min-w-0 pr-2 overflow-hidden">
+                    <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                      <span className="text-xs font-semibold truncate" style={{ color: '#075E54' }}>
                         {replyingTo.senderEmpId === storedUser?.empId ? 'You' : (replyingTo.senderName || replyingTo.senderAliasName || 'User')}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600 truncate leading-relaxed">
+                    <p className="text-xs text-gray-600 leading-relaxed break-words whitespace-pre-wrap line-clamp-3" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       {replyingTo.message || replyingTo.text || replyingTo.content}
                     </p>
                   </div>
@@ -4158,7 +4158,7 @@ const ChatPage = () => {
                       onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto overflow-x-hidden min-w-0"
                       style={{ minHeight: '20px', maxHeight: '400px' }}
                     />
                     <button 
