@@ -78,6 +78,7 @@ import InventoryManagement from "./Components/Finance/InventoryManagement.jsx";
 import AcountentPayable from "./Components/Finance/AcountentPayable.jsx";
 import AllCustomer from "./Components/Sales/AllCustomer.jsx";
 import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
+import RateRequestReport from "./Components/CMT/RateRequestReport.jsx";
 import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
 import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
 import FollowUpReport from "./Components/Sales/FollowUpReport.jsx";
@@ -665,11 +666,13 @@ function App() {
           <Route path="inventory-management" element={<InventoryManagement />} />
           <Route path="acountent-payable" element={<AcountentPayable />} />
           <Route path="empty-truck-location" element={<EmptyTruckLocation />} />
+          <Route path="rate-request-report" element={<RateRequestReport />} />
           <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
           <Route path="break-report" element={<BreakReport />} />
           <Route path="allcustomer" element={<AllCustomer />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />
           <Route path="followUpReport" element={<FollowUpReport />} />
+          <Route path="RateRequestReport" element={<RateRequestReport />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
