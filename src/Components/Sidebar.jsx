@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   BackButtonLeft,
   BackButtonRight,
@@ -30,13 +30,239 @@ import {
   WhiteRevenueStatic, 
   BlueRevenueStatic, 
   BlueInbox, 
-  WhiteInbox
+  WhiteInbox,
+  ArrowDown,
+  ArrowUp
 } from "../assets/image";
 import logo from "../assets/LogoFinal.png";
 import LogoutConfirmationModal from "./LogoutConfirmationModal";
 import { useUnreadCount } from "../contexts/UnreadCountContext";
 import sharedSocketService from "../services/sharedSocketService";
 import API_CONFIG from "../config/api";
+
+// Department-specific Module Categories
+const DEPARTMENT_MODULE_CATEGORIES = {
+  "HR": {
+    "User Management": ["Manage Users", "Users Permissions"],
+    "Communication": [
+      "Chat",
+      "Email"
+    ],
+    "Reports": [
+      "Break Report",
+      "Target Reports",
+      "CMT Dept Report",
+      "Sales Dept Report",
+      "DO Report",
+      "Follow Up Report",
+      "Trucker Report",
+      "Rate Request Report",
+      "Call Records (Id)",
+      "Call Data",
+      "Report Analysis"
+    ],
+    "Attendance & Leave": [
+      "Attendance Leave",
+      "Emp Leaves",
+      "Leave Approval"
+    ],
+    "Payroll": ["Pay Rolls"],
+    "Documents": [
+      "HR Document Verification",
+      "Employees Hygine",
+      "Employee Hygiene"
+    ],
+    "Recruitment": ["Candidate Shortlist"],
+    "Office Management": [
+      "Office Inventory",
+      "Office Expenses",
+      "Dinner Status"
+    ],
+    "Tasks": [
+      "Task",
+      "Task Schedule",
+      "Daily Task"
+    ],
+    "Team Management": [
+      "Team",
+      "Team Rating"
+    ],
+    "System Administration": [
+      "Manage Module"
+    ]
+  },
+  "Sales": {
+    "Customer Management": [
+      "Add Customer",
+      "All Customers",
+      "All Leads",
+      "Customer Loads",
+      "Assign Agent"
+    ],
+    "Communication": [
+      "Chat",
+      "Email"
+    ],
+    "Documents": [
+      "Shipper",
+      "Shipper Load Data",
+      "Manager L Document"
+    ],
+    "Reports": [
+      "Sales Dept Report",
+      "Follow Up Report",
+      "DO Report",
+      "Team Rating",
+      "Call Data",
+      "Call Records (Id)",
+      "Report Analysis"
+    ],
+    "Follow-ups": [
+      "Daily Follow-Up",
+      "Follow Up Report"
+    ],
+    "Invoices": [
+      "Check Invoice"
+    ],
+    "Revenue": [
+      "Revenue & Satatistics"
+    ],
+    "Tasks": [
+      "Daily Task"
+    ],
+    "Team Management": [
+      "Team",
+      "Team Rating"
+    ],
+    "System Administration": [
+      "Manage Module"
+    ]
+  },
+  "Finance": {
+    "Financial Management": [
+      "Invoices",
+      "Accounts Payable",
+      "Finance Dashboard"
+    ],
+    "Communication": [
+      "Chat",
+      "Email"
+    ],
+    "Accounting": [
+      "Check Invoice"
+    ],
+    "Inventory": [
+      "Inventry"
+    ],
+    "Reports": [
+      "Finance Dashboard",
+      "Call Data",
+      "Call Records (Id)",
+      "Report Analysis"
+    ],
+    "System Administration": [
+      "Manage Module"
+    ]
+  },
+  "CMT": {
+    "Load Management": [
+      "Loads",
+      "LoadBoard",
+      "Assign Load",
+      "DO Reassign",
+      "Trucker Reassign"
+    ],
+    "Communication": [
+      "Chat",
+      "Email"
+    ],
+    "Documents": [
+      "Trukers",
+      "Trucker L Document",
+      "Carrier Docs",
+      "Carrier Approval",
+      "Add Trucker Drivers"
+    ],
+    "Reports": [
+      "CMT Dept Report",
+      "Trucker Report",
+      "Rate Request Report",
+      "DO Report",
+      "Call Records (Id)",
+      "Call Data",
+      "Report Analysis"
+    ],
+    "Rate Management": [
+      "Rate Request",
+      "Rate Approved",
+      "Manager Rate Approval",
+      "Daily Rate Request"
+    ],
+    "Fleet": [
+      "Fleet",
+      "Add Fleet"
+    ],
+    "Delivery Orders": [
+      "Delivery Order",
+      "DO Details",
+      "Consignment"
+    ],
+    "Location": [
+      "Empty Truck Location",
+      "Trucker Empty Location"
+    ],
+    "Tasks": [
+      "Daily Task"
+    ],
+    "Team Management": [
+      "Team",
+      "Team Rating"
+    ],
+    "System Administration": [
+      "Manage Module"
+    ]
+  }
+};
+
+// Function to get department-specific module categories
+const getDepartmentCategories = (department) => {
+  const dept = department?.toLowerCase();
+  if (dept === "hr") return DEPARTMENT_MODULE_CATEGORIES["HR"];
+  if (dept === "sales") return DEPARTMENT_MODULE_CATEGORIES["Sales"];
+  if (dept === "finance") return DEPARTMENT_MODULE_CATEGORIES["Finance"];
+  if (dept === "cmt") return DEPARTMENT_MODULE_CATEGORIES["CMT"];
+  return null;
+};
+
+// Function to categorize a module for a specific department
+const getModuleCategory = (moduleName, department) => {
+  const categories = getDepartmentCategories(department);
+  if (!categories) return "Other";
+  
+  for (const [category, modules] of Object.entries(categories)) {
+    if (modules.includes(moduleName)) {
+      return category;
+    }
+  }
+  return "Other"; // Default category for uncategorized modules
+};
+
+// Function to get all department module names
+const getAllDepartmentModules = (department) => {
+  const categories = getDepartmentCategories(department);
+  if (!categories) return [];
+  return Object.values(categories).flat();
+};
+
+// Function to get department dropdown name
+const getDepartmentDropdownName = (department) => {
+  const dept = department?.toLowerCase();
+  if (dept === "hr") return "HRM";
+  if (dept === "sales") return "Sales";
+  if (dept === "finance") return "Finance";
+  if (dept === "cmt") return "CMT";
+  return department || "Modules";
+};
 
 const menuItems = [
   { name: "Dashboard", icon: DashboardImage, whiteIcon: WhiteDashboard, path: "/dashboard" },
@@ -117,8 +343,14 @@ const menuItems = [
 const Sidebar = () => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
+  const [departmentMenuItems, setDepartmentMenuItems] = useState([]);
+  const [departmentCategories, setDepartmentCategories] = useState({});
+  const [isDepartmentMenuOpen, setIsDepartmentMenuOpen] = useState(false);
+  const [openCategories, setOpenCategories] = useState({});
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [userDepartment, setUserDepartment] = useState(null);
+  const location = useLocation();
   const { getTotalUnreadCount, hasUnreadMessages } = useUnreadCount();
   const totalUnreadCount = getTotalUnreadCount();
   const hasUnread = hasUnreadMessages();
@@ -179,8 +411,14 @@ const Sidebar = () => {
           return;
         }
 
+        // Get user department
+        const department = user?.department || "";
+        setUserDepartment(department);
+        const hasDepartmentCategories = getDepartmentCategories(department) !== null;
+
         const allowedModuleIds = user?.allowedModules?.map(String) || [];
         console.log("👤 User allowed modules:", allowedModuleIds);
+        console.log("👤 User department:", department, "Has categories:", hasDepartmentCategories);
 
         const res = await fetch(`${API_CONFIG.BASE_URL}/api/v1/module`, {
           credentials: "include",
@@ -223,19 +461,61 @@ const Sidebar = () => {
               ['Dashboard', 'Tracking'].includes(item.name)
             );
             setFilteredMenuItems(basicMenus);
+            setDepartmentMenuItems([]);
+            setDepartmentCategories({});
           } else {
-            // Add Companies to matched menus if not already included
-            const hasCompanies = matchedMenus.some(item => item.name === 'Companies');
-            if (!hasCompanies && companiesMenuItem) {
-              // Insert Companies after Dashboard
-              const dashboardIndex = matchedMenus.findIndex(item => item.name === 'Dashboard');
-              if (dashboardIndex >= 0) {
-                matchedMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
-              } else {
-                matchedMenus.unshift(companiesMenuItem);
+            // For users with department categories, separate department modules and categorize them
+            if (hasDepartmentCategories) {
+              // Get all department module names from categories
+              const allDeptModuleNames = getAllDepartmentModules(department);
+              
+              // Separate department modules from other modules
+              const deptMenus = matchedMenus.filter(item => 
+                allDeptModuleNames.includes(item.name)
+              );
+              const otherMenus = matchedMenus.filter(item => 
+                !allDeptModuleNames.includes(item.name)
+              );
+              
+              // Categorize department modules
+              const categorized = {};
+              deptMenus.forEach(item => {
+                const category = getModuleCategory(item.name, department);
+                if (!categorized[category]) {
+                  categorized[category] = [];
+                }
+                categorized[category].push(item);
+              });
+              
+              // Add Companies to other menus if not already included
+              const hasCompanies = otherMenus.some(item => item.name === 'Companies');
+              if (!hasCompanies && companiesMenuItem) {
+                const dashboardIndex = otherMenus.findIndex(item => item.name === 'Dashboard');
+                if (dashboardIndex >= 0) {
+                  otherMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
+                } else {
+                  otherMenus.unshift(companiesMenuItem);
+                }
               }
+              
+              setDepartmentMenuItems(deptMenus);
+              setDepartmentCategories(categorized);
+              setFilteredMenuItems(otherMenus);
+            } else {
+              // For users without department categories, show all modules as before
+              const hasCompanies = matchedMenus.some(item => item.name === 'Companies');
+              if (!hasCompanies && companiesMenuItem) {
+                const dashboardIndex = matchedMenus.findIndex(item => item.name === 'Dashboard');
+                if (dashboardIndex >= 0) {
+                  matchedMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
+                } else {
+                  matchedMenus.unshift(companiesMenuItem);
+                }
+              }
+              setFilteredMenuItems(matchedMenus);
+              setDepartmentMenuItems([]);
+              setDepartmentCategories({});
             }
-            setFilteredMenuItems(matchedMenus);
           }
         } else {
           console.error("❌ API response not successful:", data);
@@ -244,6 +524,8 @@ const Sidebar = () => {
             ['Dashboard', 'Tracking'].includes(item.name)
           );
           setFilteredMenuItems(basicMenus);
+          setDepartmentMenuItems([]);
+          setDepartmentCategories({});
         }
       } catch (err) {
         console.error("❌ Failed to fetch modules:", err);
@@ -252,6 +534,8 @@ const Sidebar = () => {
           ['Dashboard', 'Tracking'].includes(item.name)
         );
         setFilteredMenuItems(basicMenus);
+        setDepartmentMenuItems([]);
+        setDepartmentCategories({});
       } finally {
         setLoading(false);
       }
@@ -259,6 +543,30 @@ const Sidebar = () => {
 
     fetchModules();
   }, []);
+
+  // Auto-expand department dropdown and relevant category if current location matches any department module path
+  useEffect(() => {
+    if (userDepartment && departmentMenuItems.length > 0) {
+      const currentPath = location.pathname;
+      const isDeptModuleActive = departmentMenuItems.some(item => 
+        currentPath === item.path || currentPath.startsWith(item.path + '/')
+      );
+      
+      if (isDeptModuleActive) {
+        setIsDepartmentMenuOpen(true);
+        
+        // Find which category contains the active module and expand it
+        Object.entries(departmentCategories).forEach(([category, modules]) => {
+          const hasActiveModule = modules.some(item => 
+            currentPath === item.path || currentPath.startsWith(item.path + '/')
+          );
+          if (hasActiveModule) {
+            setOpenCategories(prev => ({ ...prev, [category]: true }));
+          }
+        });
+      }
+    }
+  }, [location.pathname, userDepartment, departmentMenuItems, departmentCategories]);
 
   useEffect(() => {
     const onStorage = () => {
@@ -300,50 +608,191 @@ const Sidebar = () => {
           {/* Scrollable Menu Section */}
           <div className="overflow-y-auto h-[calc(100vh-160px)] px-1 pr-2 scrollbar-hide">
             <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
-              {filteredMenuItems.length > 0 ? (
-                filteredMenuItems.map((item, idx) => (
-                  <NavLink
-                    to={item.path}
-                    key={idx}
-                    title={!isExpanded ? item.name : ""}
-                    className={({ isActive }) =>
-                      `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
-                    }
-                    style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
-                    end
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <div className="relative">
-                          <img
-                            src={isActive ? item.whiteIcon || item.icon : item.icon}
-                            alt={item.name}
-                            className="w-5 h-5"
-                          />
-                          {/* Red dot badge for Chat when there are unread messages */}
-                          {item.name === "Chat" && hasUnread && (
-                            <span
-                              className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"
-                              style={{
-                                boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
-                              }}
-                              title={`${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`}
-                            />
+              {filteredMenuItems.length > 0 || departmentMenuItems.length > 0 ? (
+                <>
+                  {filteredMenuItems.map((item, idx) => {
+                    // Render Dashboard first, then department dropdown for users with department categories
+                    const hasDeptCategories = userDepartment && getDepartmentCategories(userDepartment) !== null;
+                    if (hasDeptCategories && item.name === "Dashboard") {
+                      return (
+                        <React.Fragment key={idx}>
+                          <NavLink
+                            to={item.path}
+                            title={!isExpanded ? item.name : ""}
+                            className={({ isActive }) =>
+                              `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
+                            }
+                            style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
+                            end
+                          >
+                            {({ isActive }) => (
+                              <>
+                                <div className="relative">
+                                  <img
+                                    src={isActive ? item.whiteIcon || item.icon : item.icon}
+                                    alt={item.name}
+                                    className="w-5 h-5"
+                                  />
+                                </div>
+                                <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
+                                  {item.name}
+                                </span>
+                              </>
+                            )}
+                          </NavLink>
+                          {/* Department Dropdown - placed after Dashboard */}
+                          {departmentMenuItems.length > 0 && (
+                            <div className="w-full">
+                              <button
+                                onClick={() => setIsDepartmentMenuOpen(!isDepartmentMenuOpen)}
+                                className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 w-full ${
+                                  departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/'))
+                                    ? "text-white"
+                                    : "hover:bg-gray-100 text-gray-700"
+                                }`}
+                                style={
+                                  departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/'))
+                                    ? { backgroundColor: activeBgColor }
+                                    : {}
+                                }
+                              >
+                                <img
+                                  src={
+                                    departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/'))
+                                      ? WhiteManageUser
+                                      : ManageUser
+                                  }
+                                  alt={getDepartmentDropdownName(userDepartment)}
+                                  className="w-5 h-5"
+                                />
+                                <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
+                                  {getDepartmentDropdownName(userDepartment)}
+                                </span>
+                                {isExpanded && (
+                                  <img
+                                    src={isDepartmentMenuOpen ? ArrowUp : ArrowDown}
+                                    alt={isDepartmentMenuOpen ? "Collapse" : "Expand"}
+                                    className="w-4 h-4"
+                                  />
+                                )}
+                              </button>
+                              {isDepartmentMenuOpen && isExpanded && (
+                                <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
+                                  {Object.entries(departmentCategories).map(([category, modules]) => {
+                                    const isCategoryActive = modules.some(mod => 
+                                      location.pathname === mod.path || location.pathname.startsWith(mod.path + '/')
+                                    );
+                                    const isCategoryOpen = openCategories[category] || false;
+                                    
+                                    return (
+                                      <div key={category} className="w-full">
+                                        <button
+                                          onClick={() => setOpenCategories(prev => ({ ...prev, [category]: !isCategoryOpen }))}
+                                          className={`flex items-center justify-start gap-2 p-2 rounded-lg transition-all w-full ${
+                                            isCategoryActive
+                                              ? "text-white"
+                                              : "hover:bg-gray-100 text-gray-700"
+                                          }`}
+                                          style={isCategoryActive ? { backgroundColor: activeBgColor } : {}}
+                                        >
+                                          <img
+                                            src={isCategoryOpen ? ArrowUp : ArrowDown}
+                                            alt={isCategoryOpen ? "Collapse" : "Expand"}
+                                            className="w-3 h-3"
+                                          />
+                                          <span className="text-sm font-semibold">
+                                            {category}
+                                          </span>
+                                        </button>
+                                        {isCategoryOpen && (
+                                          <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-300 pl-2">
+                                            {modules.map((deptItem, deptIdx) => (
+                                              <NavLink
+                                                to={deptItem.path}
+                                                key={deptIdx}
+                                                title={!isExpanded ? deptItem.name : ""}
+                                                className={({ isActive }) =>
+                                                  `flex items-center justify-start gap-2 p-2 rounded-lg transition-all ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
+                                                }
+                                                style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
+                                                end
+                                              >
+                                                {({ isActive }) => (
+                                                  <>
+                                                    <img
+                                                      src={isActive ? deptItem.whiteIcon || deptItem.icon : deptItem.icon}
+                                                      alt={deptItem.name}
+                                                      className="w-4 h-4"
+                                                    />
+                                                    <span className="text-xs font-medium">
+                                                      {deptItem.name}
+                                                    </span>
+                                                  </>
+                                                )}
+                                              </NavLink>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           )}
-                        </div>
-                        <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
-                          {item.name}
-                        </span>
-                        {/* Show count badge next to Chat name if expanded and has unread */}
-                        {item.name === "Chat" && hasUnread && isExpanded && totalUnreadCount > 0 && (
-                          <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
-                            {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-                          </span>
+                        </React.Fragment>
+                      );
+                    }
+                    // Skip Dashboard if already rendered above for department users
+                    if (hasDeptCategories && item.name === "Dashboard") {
+                      return null;
+                    }
+                    // Regular menu items
+                    return (
+                      <NavLink
+                        to={item.path}
+                        key={idx}
+                        title={!isExpanded ? item.name : ""}
+                        className={({ isActive }) =>
+                          `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
+                        }
+                        style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
+                        end
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <div className="relative">
+                              <img
+                                src={isActive ? item.whiteIcon || item.icon : item.icon}
+                                alt={item.name}
+                                className="w-5 h-5"
+                              />
+                              {/* Red dot badge for Chat when there are unread messages */}
+                              {item.name === "Chat" && hasUnread && (
+                                <span
+                                  className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"
+                                  style={{
+                                    boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
+                                  }}
+                                  title={`${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`}
+                                />
+                              )}
+                            </div>
+                            <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
+                              {item.name}
+                            </span>
+                            {/* Show count badge next to Chat name if expanded and has unread */}
+                            {item.name === "Chat" && hasUnread && isExpanded && totalUnreadCount > 0 && (
+                              <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                                {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                              </span>
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
-                  </NavLink>
-                ))
+                      </NavLink>
+                    );
+                  })}
+                </>
               ) : (
                 <div className="text-center p-4 text-gray-500">
                   No modules available
