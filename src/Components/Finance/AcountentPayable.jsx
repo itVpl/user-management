@@ -143,9 +143,12 @@ const AcountentPayable = () => {
   const [markAsPaidChecked, setMarkAsPaidChecked] = useState({}); // { doId: boolean }
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 15;
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'paid', 'unpaid', 'pending'
   const [remarks, setRemarks] = useState({}); // { doId: 'remark text' }
+  const [statistics, setStatistics] = useState({});
+  const [pagination, setPagination] = useState({});
+  const [selectedStatus, setSelectedStatus] = useState('all'); // 'all', 'sales_verified', 'cmt_verified', 'sales_rejected', 'accountant_rejected'
   
   // Payment modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -168,13 +171,26 @@ const AcountentPayable = () => {
 
   useEffect(() => {
     fetchAllDOs();
-  }, []);
+  }, [currentPage, selectedStatus]);
 
   const fetchAllDOs = async () => {
     try {
       setLoading(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/accountant/paid-dos`, {
+      
+      // Build query parameters
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage
+      };
+      
+      // Add status filter if not 'all'
+      if (selectedStatus !== 'all') {
+        params.status = selectedStatus;
+      }
+      
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/accountant/dos-by-statuses`, {
+        params,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -182,27 +198,54 @@ const AcountentPayable = () => {
       });
 
       if (response.data && response.data.success) {
-        const transformedDOs = (response.data.data?.paidDOs || []).map(order => {
-          const puLocs = order.shipper?.pickUpLocations || order.shipper?.pickupLocations || [];
-          const drLocs = order.shipper?.dropLocations || order.shipper?.deliveryLocations || [];
-          const loadNo = order.customers?.[0]?.loadNo || 'N/A';
+        const transformedDOs = (response.data.data?.doDocuments || []).map(order => {
+          // Handle both new API structure (shipperId/carrierId) and old structure (shipper/carrier)
+          const shipper = order.shipperId || order.shipper || {};
+          const carrier = order.carrierId || order.carrier || {};
+          
+          const puLocs = shipper.pickUpLocations || shipper.pickupLocations || [];
+          const drLocs = shipper.dropLocations || shipper.deliveryLocations || [];
+          const loadNo = order.customers?.[0]?.loadNo || order.loadReference?.loadId || 'N/A';
 
           return {
             id: `DO-${String(order._id).slice(-6)}`,
             originalId: order._id,
             doNum: loadNo,
-            clientName: order.customers?.[0]?.billTo || order.customerName || 'N/A',
-            carrierName: order.carrier?.carrierName || 'N/A',
-            carrierFees: order.carrier?.totalCarrierFees || 0,
-            createdAt: new Date(order.date || order.createdAt).toISOString().split('T')[0],
-            createdBySalesUser: order.createdBySalesUser || 'N/A',
-            status: order.status || 'open',
+            clientName: order.customers?.[0]?.billTo || order.customers?.[0]?.customerName || order.customerName || 'N/A',
+            carrierName: carrier.compName || carrier.carrierName || 'N/A',
+            carrierFees: carrier.totalCarrierFees || order.carrier?.totalCarrierFees || 0,
+            createdAt: new Date(order.createdAt || order.date).toISOString().split('T')[0],
+            createdBySalesUser: order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A',
+            status: order.assignmentStatus || order.status || 'open',
             // Full order data for details
             fullData: order
           };
         });
 
         setDos(transformedDOs);
+        
+        // Set statistics from API response
+        if (response.data.data?.statistics) {
+          setStatistics(response.data.data.statistics);
+        }
+        
+        // Set pagination from API response
+        if (response.data.data?.pagination) {
+          console.log('Pagination from API:', response.data.data.pagination);
+          setPagination(response.data.data.pagination);
+        } else {
+          // Fallback: calculate pagination from data length
+          const totalItems = response.data.data?.totalItems || transformedDOs.length;
+          const calculatedTotalPages = Math.ceil(totalItems / itemsPerPage);
+          const fallbackPagination = {
+            currentPage: currentPage || 1,
+            totalPages: calculatedTotalPages,
+            totalItems: totalItems,
+            itemsPerPage: itemsPerPage
+          };
+          console.log('Calculated pagination:', fallbackPagination);
+          setPagination(fallbackPagination);
+        }
         
         // Initialize carrier payment statuses from API response
         const initialStatus = {};
@@ -213,7 +256,7 @@ const AcountentPayable = () => {
       }
     } catch (error) {
       console.error('Error fetching DOs:', error);
-      alertify.error(`Failed to load delivery orders: ${error.response?.status || 'Network Error'}`);
+      alertify.error(`Failed to load delivery orders: ${error.response?.data?.message || error.response?.status || 'Network Error'}`);
     } finally {
       setLoading(false);
     }
@@ -424,20 +467,29 @@ const AcountentPayable = () => {
     return matchesSearch && matchesTab;
   });
 
-  // Pagination
-  const totalPages = Math.ceil(filteredDOs.length / itemsPerPage);
+  // Pagination - using API pagination
+  // Since API returns paginated data (only current page), we use filteredDOs directly
+  // The API handles pagination, so we don't need to slice again
+  const totalPages = pagination.totalPages || Math.ceil((pagination.totalItems || dos.length) / itemsPerPage) || 1;
+  
+  // API already returns only the current page's data, so use filtered results directly
+  // Only slice if we have more items than itemsPerPage (shouldn't happen with API pagination)
+  const currentDOs = filteredDOs.length > itemsPerPage ? filteredDOs.slice(0, itemsPerPage) : filteredDOs;
+  
+  // Calculate display indices based on API pagination
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentDOs = filteredDOs.slice(startIndex, endIndex);
+  const endIndex = startIndex + currentDOs.length;
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Reset to page 1 when tab or search changes
+  // Reset to page 1 when status filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchTerm]);
+  }, [selectedStatus]);
 
   // DO options for dropdown
   const doOptions = dos.map(deliveryOrder => ({
@@ -530,32 +582,81 @@ const AcountentPayable = () => {
   return (
     <div className="p-6">
       {/* Header Section */}
-      <div className="flex justify-between items-center mb-6">
-        {/* Total DO Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Truck className="text-blue-600" size={20} />
+      <div className="flex flex-col gap-4 mb-6">
+        {/* Top Row: Stats and Search */}
+        <div className="flex justify-between items-center">
+          {/* Statistics Cards */}
+          <div className="flex gap-4">
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Truck className="text-blue-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total DO</p>
+                  <p className="text-xl font-bold text-gray-800">{statistics.total || dos.length}</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Total DO</p>
-              <p className="text-xl font-bold text-gray-800">{dos.length}</p>
+            
+            {statistics.sales_verified !== undefined && (
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="text-green-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Sales Verified</p>
+                    <p className="text-xl font-bold text-gray-800">{statistics.sales_verified || 0}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {statistics.cmt_verified !== undefined && (
+              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="text-purple-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">CMT Verified</p>
+                    <p className="text-xl font-bold text-gray-800">{statistics.cmt_verified || 0}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Search Section */}
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search DOs..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
           </div>
         </div>
         
-        {/* Search Section - Moved to Right */}
+        {/* Status Filter */}
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search DOs..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+          <label className="text-sm font-semibold text-gray-700">Filter by Status:</label>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Statuses</option>
+            <option value="sales_verified">Sales Verified</option>
+            <option value="cmt_verified">CMT Verified</option>
+            <option value="sales_rejected">Sales Rejected</option>
+            <option value="accountant_rejected">Accountant Rejected</option>
+          </select>
         </div>
       </div>
 
@@ -1271,41 +1372,56 @@ const AcountentPayable = () => {
         )}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && filteredDOs.length > 0 && (
+      {/* Pagination - Show when there's data */}
+      {(currentDOs.length > 0 || dos.length > 0) && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredDOs.length)} of {filteredDOs.length} DOs
+            Showing {startIndex + 1} to {endIndex} of {pagination?.totalItems || dos.length} DOs
+            {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              Previous
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+          {totalPages > 1 && (
+            <div className="flex gap-2">
               <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${
-                  currentPage === page
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'border-gray-300 hover:bg-gray-50'
-                }`}
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
               >
-                {page}
+                Previous
               </button>
-            ))}
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              Next
-            </button>
-          </div>
+              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
+                let page;
+                if (totalPages <= 10) {
+                  page = i + 1;
+                } else if (currentPage <= 5) {
+                  page = i + 1;
+                } else if (currentPage >= totalPages - 4) {
+                  page = totalPages - 9 + i;
+                } else {
+                  page = currentPage - 5 + i;
+                }
+                return (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`px-3 py-2 border rounded-lg transition-colors ${
+                      currentPage === page
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
 
