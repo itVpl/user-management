@@ -6,12 +6,12 @@ const TeamSection = () => {
   const teamMembers = [
     { id: 1, name: "Mr. Rishi Jyoti", position: "CEO", image: "/team/Rishijyoti.jpg" },
     { id: 2, name: "Mr. Vivek Lamba", position: "Director of Operations", image: "/team/VivekLamba.jpg" },
-    { id: 3, name: "Mr. Akshay Kathuia", position: "General Manager", image: "/team/AkshayKathuia.jpg" },
+    { id: 3, name: "Mr. Akshay Kathuria", position: "General Manager", image: "/team/AkshayKathuia.jpg" },
     { id: 4, name: "Mr. Harsh Pathak", position: "IT Manager", image: "/team/Harshpatahk.png" },
-    { id: 5, name: "Mr. Varun Mandal", position: "Freight Broker", image: "/team/varunmandal.jpg" },
-    { id: 6, name: "Mrs. Rachna Bisht", position: "HR Manager", image: "/team/rachnabist.jpg" },
-    { id: 7, name: "Mr. Parimay Deswal", position: "Freight Broker", image: "/team/Parimeydeswal.jpg" },
-    { id: 8, name: "David Wilson", position: "Customer Relations", image: "/api/placeholder/300/400" }
+    // { id: 5, name: "Mr. Varun Mandal", position: "Freight Broker", image: "/team/varunmandal.jpg" },
+    // { id: 6, name: "Mrs. Rachna Bisht", position: "HR Manager", image: "/team/rachnabist.jpg" },
+    // { id: 7, name: "Mr. Parimay Deswal", position: "Freight Broker", image: "/team/Parimeydeswal.jpg" },
+    // { id: 8, name: "David Wilson", position: "Customer Relations", image: "/api/placeholder/300/400" }
   ];
 
   const [currentSlide, setCurrentSlide] = useState(0);
