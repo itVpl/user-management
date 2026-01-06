@@ -12,12 +12,19 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
   const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
   const [hoveredMessageId, setHoveredMessageId] = useState(null); // Track hovered message
   const [openMenuId, setOpenMenuId] = useState(null); // Track which message menu is open
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const messagesEndRef = useRef(null);
+  const messagesTopRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const audioInputRef = useRef(null);
   const menuRefs = useRef({}); // Store refs for each message menu
   const currentUserEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
+  const itemsPerPage = 50;
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -25,25 +32,34 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
     }
   }, [messages]);
 
-  const fetchChatMessages = useCallback(async (isSilent = false) => {
+  const fetchChatMessages = useCallback(async (isSilent = false, page = 1, append = false) => {
     if (!loadId) return;
 
-    if (!isSilent) setLoading(true);
+    if (!isSilent && !append) setLoading(true);
+    if (append) setLoadingMore(true);
+    
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       if (!token) {
         alert('Authentication required.');
-        if (!isSilent) setLoading(false);
+        if (!isSilent && !append) setLoading(false);
+        if (append) setLoadingMore(false);
         return;
       }
 
       const response = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/chat/public/load/${loadId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          params: {
+            page,
+            limit: itemsPerPage
+          },
+          headers: { Authorization: `Bearer ${token}` } 
+        }
       );
 
       if (response.data && response.data.success) {
-        const msgs = response.data.messages || [];
+        const msgs = response.data.messages || response.data.data?.messages || [];
         // Sort messages by timestamp
         msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         
@@ -53,29 +69,76 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
           isMyMessage: String(msg.senderEmpId).trim() === String(currentUserEmpId).trim()
         }));
         
-        setMessages(processedMessages);
+        if (append) {
+          // Append older messages at the beginning
+          setMessages(prev => [...processedMessages, ...prev]);
+        } else {
+          // Replace all messages
+          setMessages(processedMessages);
+        }
+        
+        // Update pagination info
+        if (response.data.pagination) {
+          setCurrentPage(response.data.pagination.currentPage || page);
+          setTotalPages(response.data.pagination.totalPages || 1);
+          setHasMore((response.data.pagination.currentPage || page) < (response.data.pagination.totalPages || 1));
+        } else if (response.data.data?.pagination) {
+          setCurrentPage(response.data.data.pagination.currentPage || page);
+          setTotalPages(response.data.data.pagination.totalPages || 1);
+          setHasMore((response.data.data.pagination.currentPage || page) < (response.data.data.pagination.totalPages || 1));
+        } else {
+          // Fallback: check if we got less than itemsPerPage, then no more pages
+          setHasMore(msgs.length >= itemsPerPage);
+          setCurrentPage(page);
+        }
       } else {
-        setMessages([]);
+        if (!append) setMessages([]);
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
-      setMessages([]);
+      if (!append) setMessages([]);
     } finally {
-      if (!isSilent) setLoading(false);
+      if (!isSilent && !append) setLoading(false);
+      if (append) setLoadingMore(false);
     }
-  }, [loadId, currentUserEmpId]);
+  }, [loadId, currentUserEmpId, itemsPerPage]);
+
+  const loadMoreMessages = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    
+    // Store current scroll position
+    const messagesContainer = messagesContainerRef.current;
+    const previousScrollHeight = messagesContainer?.scrollHeight || 0;
+    const previousScrollTop = messagesContainer?.scrollTop || 0;
+    
+    const nextPage = currentPage + 1;
+    await fetchChatMessages(true, nextPage, true);
+    
+    // Restore scroll position after loading older messages
+    setTimeout(() => {
+      if (messagesContainer) {
+        const newScrollHeight = messagesContainer.scrollHeight;
+        const scrollDifference = newScrollHeight - previousScrollHeight;
+        messagesContainer.scrollTop = previousScrollTop + scrollDifference;
+      }
+    }, 50);
+  }, [currentPage, hasMore, loadingMore, fetchChatMessages]);
 
   useEffect(() => {
     if (isOpen && loadId) {
+      setCurrentPage(1);
       fetchChatMessages();
       
       // Set up polling for new messages every 5 seconds (reduced from 3s to prevent 429 errors)
-      const interval = setInterval(() => fetchChatMessages(true), 5000);
+      const interval = setInterval(() => fetchChatMessages(true, currentPage, false), 5000);
       return () => clearInterval(interval);
     } else {
       setMessages([]);
+      setCurrentPage(1);
+      setTotalPages(1);
+      setHasMore(false);
     }
-  }, [isOpen, loadId, fetchChatMessages]);
+  }, [isOpen, loadId, fetchChatMessages, currentPage]);
 
   // Handle reply to a message
   const handleReplyToMessage = (msg) => {
@@ -330,12 +393,20 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
                 <p className="text-purple-100 text-sm mt-1 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-green-400 shadow-lg animate-pulse"></span>
                   Active now
+                  {totalPages > 1 && (
+                    <span className="ml-2 text-xs opacity-75">
+                      • Page {currentPage} of {totalPages}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={fetchChatMessages}
+                onClick={() => {
+                  setCurrentPage(1);
+                  fetchChatMessages();
+                }}
                 className="text-white rounded-xl p-3 transition-all duration-200 hover:scale-110" style={{
                   background: 'rgba(255, 255, 255, 0.15)',
                   backdropFilter: 'blur(10px)'
@@ -358,11 +429,15 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-8 py-6" style={{
-          background: 'linear-gradient(to bottom, #0f172a 0%, #1e293b 100%)',
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(139, 92, 246, 0.5) transparent'
-        }}>
+        <div 
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto px-8 py-6" 
+          style={{
+            background: 'linear-gradient(to bottom, #0f172a 0%, #1e293b 100%)',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(139, 92, 246, 0.5) transparent'
+          }}
+        >
           {loading && messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -388,6 +463,35 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
             </div>
           ) : (
             <div className="space-y-6">
+              {/* Load More Button */}
+              {hasMore && (
+                <div ref={messagesTopRef} className="flex justify-center py-4">
+                  <button
+                    onClick={loadMoreMessages}
+                    disabled={loadingMore}
+                    className="px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
+                    style={{
+                      background: loadingMore 
+                        ? 'rgba(255, 255, 255, 0.1)' 
+                        : 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(99, 102, 241, 0.3) 100%)',
+                      border: '1px solid rgba(139, 92, 246, 0.5)',
+                      color: '#e0e7ff'
+                    }}
+                  >
+                    {loadingMore ? (
+                      <span className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                        Loading older messages...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        Load Older Messages ({currentPage}/{totalPages})
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+              
               {messages.map((msg, index) => {
                 const isCurrentUser = isMessageFromCurrentUser(msg);
                 const displayName = isCurrentUser ? 'You' : (msg.senderName || msg.sender?.employeeName || 'User');
