@@ -130,17 +130,29 @@ const FormSection = () => {
 
                   {/* Input Grids - 1 column on mobile, 3 on desktop */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-4 md:mb-6">
-                    {["fullName", "email", "phone"].map((name) => (
                       <input
-                        key={name}
-                        name={name}
-                        value={formData[name]}
-                        placeholder={name === "fullName" ? "Full Name" : name.charAt(0).toUpperCase() + name.slice(1)}
+                        name="fullName"
+                        value={formData.fullName}
+                        placeholder="Full Name"
                         className="input-style"
-                        required={name === "email" || name === "phone"}
                         onChange={handleInputChange}
                       />
-                    ))}
+                      <input
+                        name="email"
+                        value={formData.email}
+                        placeholder="Email"
+                        className="input-style"
+                        required
+                        onChange={handleInputChange}
+                      />
+                      <input
+                        name="phone"
+                        value={formData.phone}
+                        placeholder="Phone"
+                        className="input-style"
+                        required
+                        onChange={handleInputChange}
+                      />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
