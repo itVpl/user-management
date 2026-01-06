@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaUpload, FaTimes } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Paperclip, Eye } from 'lucide-react';
@@ -143,12 +143,13 @@ const AcountentPayable = () => {
   const [markAsPaidChecked, setMarkAsPaidChecked] = useState({}); // { doId: boolean }
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const itemsPerPage = 15; // Client-side pagination
+  const apiLimit = 1000; // Fetch more data from API for better client-side search
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'paid', 'unpaid', 'pending'
   const [remarks, setRemarks] = useState({}); // { doId: 'remark text' }
   const [statistics, setStatistics] = useState({});
   const [pagination, setPagination] = useState({});
-  const [selectedStatus, setSelectedStatus] = useState('all'); // 'all', 'sales_verified', 'cmt_verified', 'sales_rejected', 'accountant_rejected'
+  const [selectedStatus, setSelectedStatus] = useState('all'); // 'all', 'sales_verified', 'cmt_verified', 'sales_rejected', 'accountant_rejected' // '', 'true'
   
   // Payment modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -179,9 +180,10 @@ const AcountentPayable = () => {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
       // Build query parameters
+      // Fetch more data for client-side filtering (like DO Details module)
       const params = {
-        page: currentPage,
-        limit: itemsPerPage
+        page: 1, // Always fetch first page with large limit for client-side filtering
+        limit: apiLimit
       };
       
       // Add status filter if not 'all'
@@ -207,6 +209,16 @@ const AcountentPayable = () => {
           const drLocs = shipper.dropLocations || shipper.deliveryLocations || [];
           const loadNo = order.customers?.[0]?.loadNo || order.loadReference?.loadId || 'N/A';
 
+          // Debug: Log invoice data if present
+          if (order.invoice) {
+            console.log(`Invoice found for DO ${order._id}:`, {
+              invoiceUrl: order.invoice.invoiceUrl,
+              dueDate: order.invoice.dueDate,
+              uploadedAt: order.invoice.uploadedAt,
+              dueDateInfo: order.invoice.dueDateInfo
+            });
+          }
+
           return {
             id: `DO-${String(order._id).slice(-6)}`,
             originalId: order._id,
@@ -217,6 +229,8 @@ const AcountentPayable = () => {
             createdAt: new Date(order.createdAt || order.date).toISOString().split('T')[0],
             createdBySalesUser: order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A',
             status: order.assignmentStatus || order.status || 'open',
+            // Invoice information (if uploaded) - includes invoiceUrl, dueDate, uploadedAt, uploadedBy, dueDateInfo
+            invoice: order.invoice || null,
             // Full order data for details
             fullData: order
           };
@@ -450,40 +464,47 @@ const AcountentPayable = () => {
     }
   };
 
-  // Filter DOs based on search and active tab
-  const filteredDOs = dos.filter(deliveryOrder => {
-    const text = searchTerm.toLowerCase();
-    const matchesSearch = (
-      deliveryOrder.id.toLowerCase().includes(text) ||
-      deliveryOrder.doNum.toLowerCase().includes(text) ||
-      deliveryOrder.clientName.toLowerCase().includes(text) ||
-      deliveryOrder.carrierName.toLowerCase().includes(text)
-    );
+  // Filter DOs based on search and active tab (payment status)
+  // Client-side filtering like DO Details module
+  const filteredDOs = useMemo(() => {
+    const term = (searchTerm || '').toLowerCase().trim();
+    const base = dos.filter((deliveryOrder) => {
+      // Search filter - matches multiple fields
+      const matchesSearch = !term || (
+        deliveryOrder.id?.toLowerCase().includes(term) ||
+        deliveryOrder.doNum?.toLowerCase().includes(term) ||
+        deliveryOrder.clientName?.toLowerCase().includes(term) ||
+        deliveryOrder.carrierName?.toLowerCase().includes(term) ||
+        deliveryOrder.createdBySalesUser?.toLowerCase().includes(term)
+      );
+      
+      // Filter by active tab (payment status: all/paid/pending)
+      const status = paymentStatus[deliveryOrder.originalId] || 'pending';
+      const matchesTab = activeTab === 'all' || status === activeTab;
+      
+      return matchesSearch && matchesTab;
+    });
     
-    // Filter by active tab
-    const status = paymentStatus[deliveryOrder.originalId] || 'pending';
-    const matchesTab = activeTab === 'all' || status === activeTab;
-    
-    return matchesSearch && matchesTab;
-  });
+    return base;
+  }, [dos, searchTerm, activeTab, paymentStatus]);
 
-  // Pagination - using API pagination
-  // Since API returns paginated data (only current page), we use filteredDOs directly
-  // The API handles pagination, so we don't need to slice again
-  const totalPages = pagination.totalPages || Math.ceil((pagination.totalItems || dos.length) / itemsPerPage) || 1;
-  
-  // API already returns only the current page's data, so use filtered results directly
-  // Only slice if we have more items than itemsPerPage (shouldn't happen with API pagination)
-  const currentDOs = filteredDOs.length > itemsPerPage ? filteredDOs.slice(0, itemsPerPage) : filteredDOs;
-  
-  // Calculate display indices based on API pagination
+  // Client-side pagination (like DO Details module)
+  const totalPages = Math.ceil(filteredDOs.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + currentDOs.length;
+  const endIndex = startIndex + itemsPerPage;
+  const currentDOs = filteredDOs.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search term or active tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeTab]);
 
   const handlePageChange = (page) => {
-    setCurrentPage(page);
-    // Scroll to top when page changes
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      // Scroll to top when page changes
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   // Reset to page 1 when status filter changes
@@ -636,7 +657,10 @@ const AcountentPayable = () => {
                 type="text"
                 placeholder="Search DOs..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -648,7 +672,10 @@ const AcountentPayable = () => {
           <label className="text-sm font-semibold text-gray-700">Filter by Status:</label>
           <select
             value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
+            onChange={(e) => {
+              setSelectedStatus(e.target.value);
+              setCurrentPage(1);
+            }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">All Statuses</option>
@@ -1295,6 +1322,8 @@ const AcountentPayable = () => {
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEES</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
+                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Invoice</th>
+                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pay</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
               </tr>
@@ -1302,6 +1331,19 @@ const AcountentPayable = () => {
             <tbody>
               {currentDOs.map((deliveryOrder, index) => {
                 const isPaid = deliveryOrder.fullData?.carrierPaymentStatus?.status === 'paid';
+                const invoice = deliveryOrder.invoice;
+                const invoiceDueDateInfo = invoice?.dueDateInfo;
+                
+                // Helper function to format date
+                const formatDate = (dateString) => {
+                  if (!dateString) return 'N/A';
+                  return new Date(dateString).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  });
+                };
+
                 return (
                   <tr key={deliveryOrder.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                     <td className="py-2 px-3">
@@ -1323,6 +1365,77 @@ const AcountentPayable = () => {
                       <span className="font-medium text-gray-700">
                         {deliveryOrder.createdBySalesUser?.employeeName || deliveryOrder.createdBySalesUser || 'N/A'}
                       </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center justify-center">
+                        {invoice ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <a
+                              href={invoice.invoiceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+                              title="View Invoice"
+                            >
+                              <FileText size={16} />
+                              <span className="text-xs">View</span>
+                            </a>
+                            <div className="text-xs text-gray-500">
+                              {formatDate(invoice.uploadedAt)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">No Invoice</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2 px-3">
+                      {(() => {
+                        if (!invoice || !invoice.dueDate) {
+                          return <span className="text-gray-400">—</span>;
+                        }
+                        
+                        const dueDateInfo = invoice.dueDateInfo;
+                        if (!dueDateInfo) {
+                          return (
+                            <div className="flex flex-col gap-1 items-center">
+                              <span className="text-sm font-semibold text-gray-600">{formatDate(invoice.dueDate)}</span>
+                            </div>
+                          );
+                        }
+                        
+                        // Get status color
+                        const statusColor = dueDateInfo.isOverdue 
+                          ? '#dc3545' // Red for overdue
+                          : dueDateInfo.status === 'due_soon' || dueDateInfo.isDueToday
+                            ? '#ffc107' // Yellow/Orange for due soon
+                            : '#28a745'; // Green for pending
+                        
+                        // Calculate days value
+                        const daysValue = dueDateInfo.isOverdue 
+                          ? `-${dueDateInfo.daysOverdue}` 
+                          : dueDateInfo.daysRemaining;
+                        
+                        const dueDateFormatted = formatDate(invoice.dueDate);
+                        
+                        return (
+                          <div className="flex flex-col gap-1 items-center">
+                            <span 
+                              className="font-semibold text-sm"
+                              style={{ color: statusColor }}
+                            >
+                              {dueDateFormatted}
+                            </span>
+                            <span 
+                              className="font-bold text-base"
+                              style={{ color: statusColor }}
+                              title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
+                            >
+                              {daysValue}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center justify-center">
