@@ -73,7 +73,7 @@ const RateRequest = () => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [completedRequests, setCompletedRequests] = useState([]);
   const [rateDetailsData, setRateDetailsData] = useState([]);
-  const [rateDetailsLoading, setRateDetailsLoading] = useState(false);Z
+  const [rateDetailsLoading, setRateDetailsLoading] = useState(false);
   const [bidDetailsModal, setBidDetailsModal] = useState({ visible: false, load: null });
   const [bidDetailsData, setBidDetailsData] = useState(null);
   const [bidDetailsLoading, setBidDetailsLoading] = useState(false);
