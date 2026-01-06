@@ -197,11 +197,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   const [selFiles, setSelFiles] = useState([]); // File[]
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [invoiceFile, setInvoiceFile] = useState(null); // File | null
+  // Note: Due date is automatically calculated as 30 days from invoice upload date by backend
 
   // Additional Docs (View)
   const [addDocsLoading, setAddDocsLoading] = useState(false);
   const [addDocsError, setAddDocsError] = useState('');
   const [additionalDocs, setAdditionalDocs] = useState([]); // array of {documentUrl, uploadedBy, uploadedAt, _id}
+  const [invoice, setInvoice] = useState(null); // {invoiceUrl, dueDate, uploadedBy, uploadedAt, _id} | null
 
   // Drivers / Assign Driver UI state
   const [drivers, setDrivers] = useState([]);
@@ -1430,6 +1433,9 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       if (res?.data?.success) {
         const docs = Array.isArray(res.data?.data?.documents) ? res.data.data.documents : [];
         setAdditionalDocs(docs);
+        // Handle invoice separately
+        const invoiceData = res.data?.data?.invoice || null;
+        setInvoice(invoiceData);
       } else {
         setAddDocsError(res?.data?.message || 'Could not fetch additional docs');
       }
@@ -1769,11 +1775,37 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
   const removeDraftFile = (idx) => setSelFiles(prev => prev.filter((_, i) => i !== idx));
 
+  const onInvoiceFilePick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setInvoiceFile(null);
+      return;
+    }
+    const tooBig = file.size > MAX_SIZE_MB * 1024 * 1024;
+    const badType = !allowed.includes(file.type);
+    if (tooBig) {
+      alertify.error(`${file.name}: exceeds ${MAX_SIZE_MB}MB`);
+      e.target.value = '';
+      return;
+    }
+    if (badType) {
+      alertify.error(`${file.name}: unsupported type`);
+      e.target.value = '';
+      return;
+    }
+    setInvoiceFile(file);
+    e.target.value = '';
+  };
+
   const submitAdditionalDocs = async () => {
     try {
       if (!doMongoId) return alertify.error('Missing DO ID');
       if (!cmtEmpId) return alertify.error('Missing CMT EmpId');
-      if (!selFiles.length) return alertify.error('Please select at least one file');
+      
+      // Validate that at least one file is provided
+      if (!selFiles.length && !invoiceFile) {
+        return alertify.error('Please select at least one file (additional documents or invoice)');
+      }
 
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       if (!token) return alertify.error('Authentication required');
@@ -1782,7 +1814,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
       const form = new FormData();
       form.append('empId', String(cmtEmpId));
+      
+      // Add additional documents
       selFiles.forEach(f => form.append('files', f));
+      
+      // Add invoice file if provided
+      // Note: Due date is automatically calculated as 30 days from upload date by backend
+      if (invoiceFile) {
+        form.append('invoiceFile', invoiceFile);
+      }
 
       setUploading(true);
       setProgress(0);
@@ -1796,7 +1836,9 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
       if (res?.data?.success) {
         alertify.success(res?.data?.message || 'Documents uploaded successfully');
-        setSelFiles([]); setProgress(0);
+        setSelFiles([]);
+        setInvoiceFile(null);
+        setProgress(0);
         fetchAdditionalDocs(); // refresh list
       } else {
         alertify.error(res?.data?.message || 'Upload failed');
@@ -2394,6 +2436,67 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
 
 
+          {/* ========== Invoice (VIEW) ========== */}
+          <section className={`${SOFT.cardBlue} md:col-span-2`}>
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">Invoice</h3>
+
+            {addDocsLoading ? (
+              <div className="flex items-center gap-3 text-gray-600">
+                <div className={`animate-spin rounded-full h-5 w-5 ${MS.spinner}`}></div>
+                Loading invoice...
+              </div>
+            ) : invoice ? (
+              <div className="p-4 bg-white border rounded-xl">
+                {(() => {
+                  const hasDueDate = invoice.dueDate;
+                  const isOverdue = hasDueDate && new Date(invoice.dueDate) < new Date();
+                  return (
+                    <div className={`border-2 rounded-lg p-4 ${isOverdue ? 'border-red-500 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <a 
+                            href={invoice.invoiceUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-2 mb-2"
+                          >
+                            <FaFilePdf className="text-red-500" />
+                            <span>View Invoice</span>
+                            <FaDownload className="text-xs" />
+                          </a>
+                          <div className="text-sm text-gray-700 space-y-1">
+                            {hasDueDate && (
+                              <div>
+                                <span className="text-gray-500">Due Date:</span>{' '}
+                                <span className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
+                                  {fmtDate(invoice.dueDate)}
+                                </span>
+                                {isOverdue && (
+                                  <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded">OVERDUE</span>
+                                )}
+                                <div className="text-xs text-gray-500 mt-1 italic">
+                                  (Auto-calculated: 30 days from upload date)
+                                </div>
+                              </div>
+                            )}
+                            <div>
+                              <span className="text-gray-500">Uploaded By:</span>{' '}
+                              {invoice.uploadedBy?.employeeName ? `${invoice.uploadedBy.employeeName} (${invoice.uploadedBy.empId || '-'})` : '—'}
+                            </div>
+                            <div><span className="text-gray-500">Dept:</span> {invoice.uploadedBy?.department || '—'}</div>
+                            <div><span className="text-gray-500">Uploaded At:</span> {fmtDate(invoice.uploadedAt)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 p-4 bg-white border rounded-xl">No invoice uploaded yet.</div>
+            )}
+          </section>
+
           {/* ========== Additional Documents (VIEW) ========== */}
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Additional Documents</h3>
@@ -2457,35 +2560,71 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                 <span className="font-medium">{cmtEmpId || '—'}</span>
               </div>
 
-              <label className={`inline-flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 ${MS.subtleBtn}`}>
-                <FaUpload />
-                <span>Select files</span>
-                <input
-                  type="file"
-                  className="hidden"
-                  multiple
-                  onChange={onFilePick}
-                  accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
-                />
-              </label>
+              {/* Additional Documents Upload */}
+              <div className="mb-4">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Additional Documents:</label>
+                <label className={`inline-flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 ${MS.subtleBtn}`}>
+                  <FaUpload />
+                  <span>Select files</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    multiple
+                    onChange={onFilePick}
+                    accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
+                  />
+                </label>
 
-              {selFiles.length > 0 && (
-                <div className="mt-4">
-                  <div className="text-sm text-gray-700 font-medium mb-2">
-                    {selFiles.length} file(s) selected
+                {selFiles.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-sm text-gray-700 font-medium mb-2">
+                      {selFiles.length} file(s) selected
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {selFiles.map((f, idx) => (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50">
+                          <span className="text-sm truncate max-w-[220px]" title={f.name}>{f.name}</span>
+                          <button onClick={() => removeDraftFile(idx)} className="text-red-600 hover:text-red-700" title="Remove">
+                            <FaTrash />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selFiles.map((f, idx) => (
-                      <div key={idx} className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50">
-                        <span className="text-sm truncate max-w-[220px]" title={f.name}>{f.name}</span>
-                        <button onClick={() => removeDraftFile(idx)} className="text-red-600 hover:text-red-700" title="Remove">
-                          <FaTrash />
-                        </button>
-                      </div>
-                    ))}
+                )}
+              </div>
+
+              {/* Invoice Upload */}
+              <div className="mb-4 pb-4 border-b border-gray-200">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Invoice Upload:</label>
+                <div className="space-y-3">
+                  <label className={`inline-flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 ${MS.subtleBtn}`}>
+                    <FaUpload />
+                    <span>Select invoice file</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={onInvoiceFilePick}
+                      accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
+                    />
+                  </label>
+
+                  {invoiceFile && (
+                    <div className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50">
+                      <span className="text-sm truncate max-w-[220px]" title={invoiceFile.name}>{invoiceFile.name}</span>
+                      <button onClick={() => setInvoiceFile(null)} className="text-red-600 hover:text-red-700" title="Remove">
+                        <FaTrash />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="text-xs text-blue-800">
+                      <strong>Note:</strong> Invoice due date is automatically calculated as <strong>30 days from upload date</strong>.
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
 
               {uploading && (
                 <div className="mt-4">
@@ -2499,10 +2638,10 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <div className="mt-4 flex justify-end">
                 <button
                   onClick={submitAdditionalDocs}
-                  disabled={uploading || selFiles.length === 0}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${(uploading || selFiles.length === 0) ? MS.disabledBtn : MS.primaryBtn
+                  disabled={uploading || (selFiles.length === 0 && !invoiceFile)}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${(uploading || (selFiles.length === 0 && !invoiceFile)) ? MS.disabledBtn : MS.primaryBtn
                     }`}
-                  title="Upload selected files"
+                  title="Upload selected files and/or invoice"
                 >
                   {uploading ? 'Uploading...' : 'Submit Documents'}
                 </button>

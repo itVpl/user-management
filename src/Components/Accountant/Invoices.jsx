@@ -128,9 +128,35 @@ const theme = createTheme({
 // ========= Utils =========
 const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : "—");
 const shortId = (id = "") => (id?.length > 8 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id);
 const isImageUrl = (url = "") => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url);
 const isPdfUrl = (url = "") => /\.pdf$/i.test(url);
+
+// Due Date Helper Functions
+const getDueDateInfo = (row) => {
+  return row?.paymentSummary?.shipperPayment?.dueDateInfo || null;
+};
+
+const getDueDateStatusColor = (dueDateInfo) => {
+  if (!dueDateInfo) return '#666';
+  if (dueDateInfo.isOverdue) return '#dc3545'; // Red for overdue
+  if (dueDateInfo.status === 'due_soon') return '#ffc107'; // Yellow for due soon
+  return '#28a745'; // Green for pending
+};
+
+const formatDueDate = (dueDateInfo) => {
+  if (!dueDateInfo || !dueDateInfo.dueDate) return 'Not set';
+  return fmtDate(dueDateInfo.dueDate);
+};
+
+const getDueDateStatusBadge = (dueDateInfo) => {
+  if (!dueDateInfo) return { text: 'Pending Email', color: '#999', bgColor: 'transparent' };
+  if (dueDateInfo.isOverdue) return { text: 'OVERDUE', color: '#dc3545', bgColor: '#ffebee' };
+  if (dueDateInfo.status === 'due_soon') return { text: 'DUE SOON', color: '#ffc107', bgColor: '#fff8e1' };
+  return { text: 'PENDING', color: '#28a745', bgColor: '#e8f5e9' };
+};
+
 const uniqueById = (arr = []) => {
   const seen = new Set();
   return (arr || []).filter((it) => {
@@ -3119,10 +3145,23 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         const shipperName = data.shipperName || "customer";
         const shipperEmail = data.shipperEmail || "";
         const pdfsAttached = data.frontendPDFsAttached || 0;
-        const message = `Email sent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ''} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ''}`;
+        const paymentDueDate = data.paymentDueDate ? new Date(data.paymentDueDate).toLocaleDateString() : '';
+        const dueDateReset = data.dueDateReset !== undefined ? data.dueDateReset : true;
+        
+        let message = '';
+        if (dueDateReset) {
+          // First email send - due date was set/reset
+          message = `Email sent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ''} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ''}${paymentDueDate ? `. Payment due date set to: ${paymentDueDate}` : ''}`;
+        } else {
+          // Email resent - due date unchanged
+          message = `Email resent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ''} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ''}. Due date remains unchanged${paymentDueDate ? `: ${paymentDueDate}` : ''}`;
+        }
+        
         setToast({ open: true, severity: "success", msg: message });
         setEmailModalOpen(false);
         setEmailForm({ pdfFile: null });
+        // Refresh the accepted rows to show updated email status and due date
+        fetchAccepted(acceptedPage);
       } else {
         setToast({ open: true, severity: "error", msg: emailResp?.data?.message || "Failed to send email" });
       }
@@ -3450,7 +3489,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       });
     } else if (activeTab === 2) {
       // Approved By Sales tab
-      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Payment Status", "Approved By", "Approved At"];
+      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Payment Status", "Approved By", "Approved At", "Payment Due Date", "Days Remaining"];
       rows = data.map((row) => {
         const cust = row?.customers?.[0] || {};
         const totals = computeTotals(row);
@@ -3466,6 +3505,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
         const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
         const carrierIsPaid = carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+        const dueDateInfo = getDueDateInfo(row);
+        const dueDateFormatted = dueDateInfo ? formatDueDate(dueDateInfo) : "—";
+        const daysValue = dueDateInfo 
+          ? (dueDateInfo.isOverdue ? `-${dueDateInfo.daysOverdue}` : dueDateInfo.daysRemaining)
+          : "—";
         return [
           row?._id || "",
           cust?.loadNo || "",
@@ -3475,7 +3519,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           `$${fmtMoney(totals.carrierTotal)}`,
           carrierIsPaid ? "Paid" : "Unpaid/Partial",
           apprBy,
-          fmtDateTime(apprAt)
+          fmtDateTime(apprAt),
+          dueDateFormatted,
+          daysValue
         ];
       });
     }
@@ -4285,6 +4331,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved By</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved At</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
                           <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
                           <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pay</th>
                         </tr>
@@ -4318,6 +4365,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           const carrierIsPartiallyPaid = carrierStatus === 'pending' && carrierTotalPaid > 0 && carrierTotalPaid < carrierTotal - 0.01 && remainingAmount > 0.01;
                           const carrierRemaining = Math.max(0, carrierTotal - carrierTotalPaid);
                           const isSelected = selectedDOs.has(row._id);
+                          const dueDateInfo = getDueDateInfo(row);
+                          const isOverdue = dueDateInfo?.isOverdue || false;
                           
                           // Debug logging for all DOs to understand data structure
                           if (!carrierIsPaid && carrierTotal > 0) {
@@ -4335,7 +4384,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             });
                           }
                           return (
-                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} ${isSelected ? 'bg-blue-50' : ''}`}>
+                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} ${isSelected ? 'bg-blue-50' : ''} ${isOverdue ? 'bg-red-50/50 hover:bg-red-100/50' : ''}`}>
                               <td className="py-2 px-3 text-center">
                                 <Checkbox
                                   checked={isSelected}
@@ -4380,7 +4429,42 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 <span className="font-medium text-gray-700">{fmtDateTime(apprAt)}</span>
                               </td>
                               <td className="py-2 px-3">
-                                <div className="flex items-center justify-center gap-2">
+                                {(() => {
+                                  const dueDateInfo = getDueDateInfo(row);
+                                  
+                                  if (!dueDateInfo) {
+                                    return (
+                                      <span className="text-gray-400">—</span>
+                                    );
+                                  }
+                                  
+                                  const statusColor = getDueDateStatusColor(dueDateInfo);
+                                  const daysValue = dueDateInfo.isOverdue 
+                                    ? `-${dueDateInfo.daysOverdue}` 
+                                    : dueDateInfo.daysRemaining;
+                                  const dueDateFormatted = formatDueDate(dueDateInfo);
+                                  
+                                  return (
+                                    <div className="flex flex-col gap-1">
+                                      <span 
+                                        className="font-semibold text-sm"
+                                        style={{ color: statusColor }}
+                                      >
+                                        {dueDateFormatted}
+                                      </span>
+                                      <span 
+                                        className="font-bold text-base"
+                                        style={{ color: statusColor }}
+                                        title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
+                                      >
+                                        {daysValue}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center justify-center gap-2 flex-wrap">
                                   <button
                                     onClick={() => openDetails(row)}
                                     className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -4388,13 +4472,30 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   >
                                     <Eye size={16} />
                                   </button>
-                                  <button
-                                    onClick={() => openEmailModal(row)}
-                                    className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all shadow-md hover:shadow-lg whitespace-nowrap"
-                                    title="Mail Send to Customer"
-                                  >
-                                    Mail Send to Customer
-                                  </button>
+                                  {row?.emailNotification?.sentToShipper ? (
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
+                                        <CheckCircle size={12} />
+                                        Email Sent {row?.emailNotification?.sentAt ? `(${fmtDate(row.emailNotification.sentAt)})` : ''}
+                                      </span>
+                                      <button
+                                        onClick={() => openEmailModal(row)}
+                                        className="px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-xs font-semibold rounded-lg hover:from-yellow-600 hover:to-yellow-700 transition-all shadow-md hover:shadow-lg whitespace-nowrap flex items-center gap-1"
+                                        title="Resend email to customer (due date will not be reset)"
+                                      >
+                                        <RefreshCw size={14} />
+                                        Resend Email
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => openEmailModal(row)}
+                                      className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all shadow-md hover:shadow-lg whitespace-nowrap"
+                                      title="Send email to customer"
+                                    >
+                                      Mail Send to Customer
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                               <td className="py-2 px-3">
