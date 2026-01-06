@@ -1323,7 +1323,7 @@ const AcountentPayable = () => {
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEES</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Invoice</th>
-                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Due Date</th>
+                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pay</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
               </tr>
@@ -1390,51 +1390,52 @@ const AcountentPayable = () => {
                       </div>
                     </td>
                     <td className="py-2 px-3">
-                      <div className="flex flex-col items-center gap-1">
-                        {invoice && invoice.dueDate ? (
-                          <>
-                            <div className={`text-sm font-semibold ${
-                              invoiceDueDateInfo?.isOverdue 
-                                ? 'text-red-600' 
-                                : invoiceDueDateInfo?.isDueToday || invoiceDueDateInfo?.status === 'due_soon'
-                                  ? 'text-orange-600' 
-                                  : 'text-gray-700'
-                            }`}>
-                              {formatDate(invoice.dueDate)}
+                      {(() => {
+                        if (!invoice || !invoice.dueDate) {
+                          return <span className="text-gray-400">—</span>;
+                        }
+                        
+                        const dueDateInfo = invoice.dueDateInfo;
+                        if (!dueDateInfo) {
+                          return (
+                            <div className="flex flex-col gap-1 items-center">
+                              <span className="text-sm font-semibold text-gray-600">{formatDate(invoice.dueDate)}</span>
                             </div>
-                            {invoiceDueDateInfo && (
-                              <div className={`text-xs font-medium px-2 py-0.5 rounded ${
-                                invoiceDueDateInfo.isOverdue 
-                                  ? 'bg-red-100 text-red-700' 
-                                  : invoiceDueDateInfo.isDueToday
-                                    ? 'bg-orange-100 text-orange-700'
-                                    : invoiceDueDateInfo.status === 'due_soon'
-                                      ? 'bg-yellow-100 text-yellow-700'
-                                      : 'bg-green-100 text-green-700'
-                              }`}>
-                                {invoiceDueDateInfo.isOverdue ? (
-                                  <span className="flex items-center gap-1">
-                                    <XCircle size={10} />
-                                    {invoiceDueDateInfo.daysOverdue}d overdue
-                                  </span>
-                                ) : invoiceDueDateInfo.isDueToday ? (
-                                  <span className="flex items-center gap-1">
-                                    <Clock size={10} />
-                                    Due Today
-                                  </span>
-                                ) : (
-                                  <span className="flex items-center gap-1">
-                                    <Calendar size={10} />
-                                    {invoiceDueDateInfo.daysRemaining}d left
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">—</span>
-                        )}
-                      </div>
+                          );
+                        }
+                        
+                        // Get status color
+                        const statusColor = dueDateInfo.isOverdue 
+                          ? '#dc3545' // Red for overdue
+                          : dueDateInfo.status === 'due_soon' || dueDateInfo.isDueToday
+                            ? '#ffc107' // Yellow/Orange for due soon
+                            : '#28a745'; // Green for pending
+                        
+                        // Calculate days value
+                        const daysValue = dueDateInfo.isOverdue 
+                          ? `-${dueDateInfo.daysOverdue}` 
+                          : dueDateInfo.daysRemaining;
+                        
+                        const dueDateFormatted = formatDate(invoice.dueDate);
+                        
+                        return (
+                          <div className="flex flex-col gap-1 items-center">
+                            <span 
+                              className="font-semibold text-sm"
+                              style={{ color: statusColor }}
+                            >
+                              {dueDateFormatted}
+                            </span>
+                            <span 
+                              className="font-bold text-base"
+                              style={{ color: statusColor }}
+                              title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
+                            >
+                              {daysValue}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center justify-center">
