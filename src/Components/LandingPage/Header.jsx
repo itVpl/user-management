@@ -15,7 +15,7 @@ const Header = () => {
     <header className="fixed top-0 left-0 w-full z-[100] px-4 py-4 md:px-10 transition-all duration-500">
       {/* Floating Glass Container */}
       <div 
-        className={`max-w-6xl bg-white mx-auto transition-all duration-700 ease-in-out rounded-[2rem] flex items-center justify-between px-6 md:px-10 ${
+        className={`max-w-7xl bg-white mx-auto transition-all duration-700 ease-in-out rounded-[2rem] flex items-center justify-between px-6 md:px-10 ${
           isScrolled 
             ? 'bg-white backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] py-3 border border-white/40' 
             : 'bg-transparent py-5'
@@ -35,7 +35,7 @@ const Header = () => {
 
         {/* Minimalist Nav */}
         <nav className="hidden md:flex items-center gap-10">
-          {['Home', 'Shipment','Industries','About','Contact'].map((item) => (
+          {['Home', 'Shipment','Industries','About'].map((item) => (
             <a 
               key={item}
               href={`#${item.toLowerCase()}`} 
@@ -52,6 +52,13 @@ const Header = () => {
             <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
             <button className="relative px-6 py-2.5 bg-black text-white rounded-full flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-all">
               Portal
+              <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </button>
+          </a>
+           <a href="#industries" className="group relative">
+            <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+            <button className="relative px-6 py-2.5 bg-black text-white rounded-full flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-all">
+              Request A Quote
               <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </button>
           </a>

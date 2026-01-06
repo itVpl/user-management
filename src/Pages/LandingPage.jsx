@@ -7,7 +7,7 @@ import IndustrySection from '../Components/LandingPage/IndustrySection'
 import TeamSection from '../Components/LandingPage/TeamSection'
 import NewsSection from '../Components/LandingPage/NewsSection'
 import Footer from '../Components/LandingPage/Footer'
-import FormSection from '../Components/LandingPage/FormSection'
+// import FormSection from '../Components/LandingPage/FormSection'
 
 function LandingPage() {
   return (
@@ -37,9 +37,9 @@ function LandingPage() {
         <NewsSection />
       </section>
 
-      <section id="contact" className="scroll-mt-32">
+      {/* <section id="contact" className="scroll-mt-32">
         <FormSection/>
-      </section>
+      </section> */}
 
       <Footer />
       
