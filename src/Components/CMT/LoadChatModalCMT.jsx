@@ -787,7 +787,7 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
           background: rgba(139, 92, 246, 0.5);
           border-radius: 10px;
         }
-        
+
         div::-webkit-scrollbar-thumb:hover {
           background: rgba(139, 92, 246, 0.7);
         }
@@ -796,4 +796,4 @@ const LoadChatModalCMT = ({ isOpen, onClose, loadId, receiverEmpId, receiverName
   );
 };
 
-export default LoadChatModalCMT;  
+export default LoadChatModalCMT;
