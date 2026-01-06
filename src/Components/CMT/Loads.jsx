@@ -592,6 +592,8 @@ export default function Loads() {
 
     company: "",
 
+    onboardTruckingCompany: "",
+
     fromZip: "",       // NEW
 
     fromAddress: "",
@@ -761,6 +763,31 @@ export default function Loads() {
       const n = { ...p };
 
       delete n.company;
+
+      return n;
+
+    });
+
+  };
+
+
+  // Handle onboard trucking company selection
+
+  const handleOnboardTruckingCompanyChange = (value) => {
+
+    setLoadForm(prev => ({
+
+      ...prev,
+
+      onboardTruckingCompany: value,
+
+    }));
+
+    setFormErrors(p => {
+
+      const n = { ...p };
+
+      delete n.onboardTruckingCompany;
 
       return n;
 
@@ -1993,6 +2020,8 @@ const MaterialShipperDropdown = ({
 
     company: (v) => v ? '' : 'Please select the Company.',
 
+    onboardTruckingCompany: (v) => v ? '' : 'Please select the Onboard Trucking Company.',
+
     fromZip: (v) => v ? '' : 'Please enter the ZIP code.',
 
     fromAddress: (v) => v ? '' : 'Please enter/select the full address.',
@@ -2085,6 +2114,8 @@ const MaterialShipperDropdown = ({
 
         'company',
 
+        'onboardTruckingCompany',
+
         'vehicleType', 'lineHaul', 'fsc', 'other', ...(loadType !== 'DRAYAGE' ? ['rateType'] : []),
 
         'bidDeadline',
@@ -2100,6 +2131,8 @@ const MaterialShipperDropdown = ({
         'shipperId',
 
         'company',
+
+        'onboardTruckingCompany',
 
         'fromZip', 'fromAddress', 'fromCity', 'fromState',
 
@@ -2491,7 +2524,9 @@ const MaterialShipperDropdown = ({
 
           destinations: destinations,
 
-          assignedCompany: (loadForm.company || "").trim()
+          assignedCompany: (loadForm.company || "").trim(),
+
+          OnboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim()
 
         };
 
@@ -2586,6 +2621,10 @@ const MaterialShipperDropdown = ({
 
         bolNumber: (loadForm.bolNumber || "").trim(),
 
+        assignedCompany: (loadForm.company || "").trim(),
+
+        OnboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim(),
+
         returnDate: loadForm.returnDate,
 
         returnAddress: (loadForm.returnAddress || "").trim(),
@@ -2645,6 +2684,8 @@ const MaterialShipperDropdown = ({
         bidDeadline: loadForm.bidDeadline,
 
         assignedCompany: (loadForm.company || "").trim(),
+
+        OnboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim(),
 
         ...(loadType === 'DRAYAGE' ? {
 
@@ -2922,7 +2963,9 @@ const MaterialShipperDropdown = ({
 
         destinations: destinations,
 
-        assignedCompany: (loadForm.company || "").trim()
+        assignedCompany: (loadForm.company || "").trim(),
+
+        onboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim()
 
       };
 
@@ -3017,6 +3060,10 @@ const MaterialShipperDropdown = ({
 
         bolNumber: (loadForm.bolNumber || "").trim(),
 
+        assignedCompany: (loadForm.company || "").trim(),
+
+        OnboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim(),
+
         returnDate: loadForm.returnDate,
 
         returnAddress: (loadForm.returnAddress || "").trim(),
@@ -3076,6 +3123,8 @@ const MaterialShipperDropdown = ({
         bidDeadline: loadForm.bidDeadline,
 
         assignedCompany: (loadForm.company || "").trim(),
+
+        OnboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim(),
 
         ...(loadType === 'DRAYAGE' ? {
 
@@ -4676,6 +4725,10 @@ const MaterialShipperDropdown = ({
     setLoadForm({
 
       shipperId: shipperId,
+
+      company: load.assignedCompany || '',
+
+      onboardTruckingCompany: load.OnboardTruckingCompany || load.onboardTruckingCompany || '',
 
       vehicleType: load.vehicleType || '',
 
@@ -6467,6 +6520,48 @@ const MaterialShipperDropdown = ({
 
 
 
+                {/* Onboard Trucking Company Section */}
+
+                <div className="bg-teal-50 p-4 rounded-lg">
+
+                  <h3 className="text-lg font-semibold text-teal-800 mb-4">Onboard Trucking Company</h3>
+
+                  <div className="grid grid-cols-1 gap-4">
+
+                    <div>
+
+                      <SearchableDropdown
+
+                        value={loadForm.onboardTruckingCompany || ''}
+
+                        onChange={handleOnboardTruckingCompanyChange}
+
+                        options={[
+
+                          { value: 'V Power Logistics', label: 'V Power Logistics' },
+
+                          { value: 'Quick Logistics', label: 'Quick Logistics' }
+
+                        ]}
+
+                        placeholder="Select Onboard Trucking Company"
+
+                        searchPlaceholder="Search companies..."
+
+                        className={formErrors.onboardTruckingCompany ? 'border-red-500' : ''}
+
+                      />
+
+                      {formErrors.onboardTruckingCompany && <p className="text-red-600 text-xs mt-1">{formErrors.onboardTruckingCompany}</p>}
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+
                 {/* Location Information Section */}
 
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -7111,11 +7206,13 @@ const MaterialShipperDropdown = ({
 
                     /* DRAYAGE - Single Pickup and Loading/Unloading Location */
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-8">
 
-                      {/* Pickup Location */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                      <div className="space-y-4">
+                        {/* Pickup Location */}
+
+                        <div className="space-y-4">
 
                         <div className="flex items-center gap-2 mb-3">
 
@@ -7261,9 +7358,9 @@ const MaterialShipperDropdown = ({
 
                         </div>
 
-                      </div>
 
-                      <div className="relative">
+
+                        <div className="relative">
 
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
 
@@ -7277,7 +7374,7 @@ const MaterialShipperDropdown = ({
 
                             name="fromZip"
 
-                            placeholder="Enter 6-digit ZIP code"
+                            placeholder="Enter 5-digit ZIP code"
 
                             value={loadForm.fromZip}
 
@@ -7326,6 +7423,8 @@ const MaterialShipperDropdown = ({
                           />
 
                         </div>
+
+                      </div>
 
 
 
@@ -7477,9 +7576,9 @@ const MaterialShipperDropdown = ({
 
                         </div>
 
-                      </div>
 
-                      <div className="relative">
+
+                        <div className="relative">
 
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
 
@@ -7493,7 +7592,7 @@ const MaterialShipperDropdown = ({
 
                             name="toZip"
 
-                            placeholder="Enter 6-digit ZIP code"
+                            placeholder="Enter 5-digit ZIP code"
 
                             value={loadForm.toZip}
 
@@ -7543,23 +7642,27 @@ const MaterialShipperDropdown = ({
 
                         </div>
 
+                      </div>
 
 
-                      {/* Drayage Details - Moved under Loading/Unloading Location */}
 
-                      <div className="mt-6 pt-6 border-t border-gray-200">
+                      </div>
+
+
+
+                      {/* Return Location Section */}
+
+                      <div className="bg-yellow-50/30 rounded-xl p-5 border border-yellow-100">
 
                         <div className="flex items-center gap-2 mb-4">
 
-                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
 
-                          <h4 className="font-semibold text-gray-700">Return Location</h4>
+                        <h4 className="font-semibold text-gray-700">Return Location</h4>
 
-                        </div>
+                      </div>
 
-                        
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                           
 
@@ -8896,6 +8999,22 @@ const MaterialShipperDropdown = ({
 
                     </div>
 
+                    <div className="flex justify-between">
+
+                      <span className="text-gray-600">Company:</span>
+
+                      <span className="font-medium">{selectedLoadForAction.assignedCompany || 'N/A'}</span>
+
+                    </div>
+
+                    <div className="flex justify-between">
+
+                      <span className="text-gray-600">Onboard Trucking Company:</span>
+
+                      <span className="font-medium">{selectedLoadForAction.OnboardTruckingCompany || selectedLoadForAction.onboardTruckingCompany || 'N/A'}</span>
+
+                    </div>
+
                   </div>
 
                 </div>
@@ -9681,6 +9800,48 @@ const MaterialShipperDropdown = ({
 
 
 
+                {/* Onboard Trucking Company Section */}
+
+                <div className="bg-teal-50 p-4 rounded-lg">
+
+                  <h3 className="text-lg font-semibold text-teal-800 mb-4">Onboard Trucking Company</h3>
+
+                  <div className="grid grid-cols-1 gap-4">
+
+                    <div>
+
+                      <SearchableDropdown
+
+                        value={loadForm.onboardTruckingCompany || ''}
+
+                        onChange={handleOnboardTruckingCompanyChange}
+
+                        options={[
+
+                          { value: 'V Power Logistics', label: 'V Power Logistics' },
+
+                          { value: 'Quick Logistics', label: 'Quick Logistics' }
+
+                        ]}
+
+                        placeholder="Select Onboard Trucking Company"
+
+                        searchPlaceholder="Search companies..."
+
+                        className={formErrors.onboardTruckingCompany ? 'border-red-500' : ''}
+
+                      />
+
+                      {formErrors.onboardTruckingCompany && <p className="text-red-600 text-xs mt-1">{formErrors.onboardTruckingCompany}</p>}
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+
                 {/* Location Information Section */}
 
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -10319,11 +10480,13 @@ const MaterialShipperDropdown = ({
 
                     /* DRAYAGE - Single Pickup and Loading/Unloading Location */
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-8">
 
-                      {/* Pickup Location */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                      <div className="space-y-4">
+                        {/* Pickup Location */}
+
+                        <div className="space-y-4">
 
                         <div className="flex items-center gap-2 mb-3">
 
@@ -10469,9 +10632,9 @@ const MaterialShipperDropdown = ({
 
                         </div>
 
-                      </div>
 
-                      <div className="relative">
+
+                        <div className="relative">
 
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
 
@@ -10534,6 +10697,8 @@ const MaterialShipperDropdown = ({
                           />
 
                         </div>
+
+                      </div>
 
 
 
@@ -10685,13 +10850,13 @@ const MaterialShipperDropdown = ({
 
                         </div>
 
-                      </div>
 
-                      <div className="relative">
+
+                        <div className="relative">
 
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
 
-                             ZIP Code <span className="text-red-500">*</span>
+                            ZIP Code <span className="text-red-500">*</span>
 
                           </label>
 
@@ -10751,11 +10916,17 @@ const MaterialShipperDropdown = ({
 
                         </div>
 
+                      </div>
 
 
-                      {/* Drayage Details - Moved under Loading/Unloading Location */}
 
-                      <div className="mt-6 pt-6 border-t border-gray-200">
+                      </div>
+
+
+
+                      {/* Return Location Section */}
+
+                      <div className="bg-yellow-50/30 rounded-xl p-5 border border-yellow-100">
 
                         <div className="flex items-center gap-2 mb-4">
 
@@ -10764,8 +10935,6 @@ const MaterialShipperDropdown = ({
                           <h4 className="font-semibold text-gray-700">Return Location</h4>
 
                         </div>
-
-                        
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
