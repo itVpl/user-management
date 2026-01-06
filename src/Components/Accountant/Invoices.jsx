@@ -4331,7 +4331,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved By</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved At</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
                           <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
                           <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pay</th>
                         </tr>
@@ -4434,7 +4434,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   
                                   if (!dueDateInfo) {
                                     return (
-                                      <span className="text-gray-400">—</span>
+                                      <div className="flex items-center justify-center">
+                                        <span className="text-gray-400">—</span>
+                                      </div>
                                     );
                                   }
                                   
@@ -4445,20 +4447,30 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   const dueDateFormatted = formatDueDate(dueDateInfo);
                                   
                                   return (
-                                    <div className="flex flex-col gap-1">
+                                    <div className="flex flex-col items-center gap-1">
                                       <span 
                                         className="font-semibold text-sm"
                                         style={{ color: statusColor }}
                                       >
                                         {dueDateFormatted}
                                       </span>
-                                      <span 
-                                        className="font-bold text-base"
-                                        style={{ color: statusColor }}
-                                        title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
-                                      >
-                                        {daysValue}
-                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <span 
+                                          className="font-bold text-base"
+                                          style={{ color: statusColor }}
+                                          title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
+                                        >
+                                          {daysValue}
+                                        </span>
+                                        <span className="text-xs font-medium" style={{ color: statusColor }}>
+                                          {dueDateInfo.isOverdue ? 'days overdue' : 'days left'}
+                                        </span>
+                                        <CheckCircle 
+                                          size={16} 
+                                          style={{ color: statusColor }}
+                                          className="flex-shrink-0"
+                                        />
+                                      </div>
                                     </div>
                                   );
                                 })()}
