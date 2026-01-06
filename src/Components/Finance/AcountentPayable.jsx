@@ -1426,13 +1426,23 @@ const AcountentPayable = () => {
                             >
                               {dueDateFormatted}
                             </span>
-                            <span 
-                              className="font-bold text-base"
-                              style={{ color: statusColor }}
-                              title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
-                            >
-                              {daysValue}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span 
+                                className="font-bold text-base"
+                                style={{ color: statusColor }}
+                                title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
+                              >
+                                {daysValue}
+                              </span>
+                              <span className="text-xs font-medium" style={{ color: statusColor }}>
+                                {dueDateInfo.isOverdue ? 'days overdue' : 'days left'}
+                              </span>
+                              <CheckCircle 
+                                size={16} 
+                                style={{ color: statusColor }}
+                                className="flex-shrink-0"
+                              />
+                            </div>
                           </div>
                         );
                       })()}
