@@ -301,6 +301,10 @@ const ChatPage = () => {
   const [showSeenByModal, setShowSeenByModal] = useState(false);
   const [seenByData, setSeenByData] = useState(null);
   const [loadingSeenBy, setLoadingSeenBy] = useState(false);
+  // Image viewer modal state
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState(null);
+  const [selectedImageName, setSelectedImageName] = useState(null);
   // Mention/Tag states
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -316,7 +320,8 @@ const ChatPage = () => {
   const [loadingOlderGroupMessages, setLoadingOlderGroupMessages] = useState(false);
   const [messagesPage, setMessagesPage] = useState(0);
   const [groupMessagesPage, setGroupMessagesPage] = useState(0);
-  const INITIAL_MESSAGES_COUNT = 10; // Load 10 messages initially when opening chat
+  const INITIAL_MESSAGES_COUNT = 10; // Load 10 messages initially when opening individual chat
+  const INITIAL_GROUP_MESSAGES_COUNT = 100; // Load 100 messages initially for group chats
   const MESSAGES_PER_PAGE = 30; // Load 30 messages at a time when scrolling up
   
   const mentionDropdownRef = useRef(null);
@@ -333,9 +338,212 @@ const ChatPage = () => {
   const groupMessageRefs = useRef({});
   const markedAsSeenRef = useRef(new Set()); // Track which messages have been marked as seen
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (force = false) => {
+    // If force is true (when user sends message), always scroll
+    if (force) {
+      isNearBottomRef.current = true;
+      userScrolledRef.current = false;
+    }
+    
+    // Use requestAnimationFrame to ensure DOM is updated
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
   };
+
+  // Track last message IDs to detect new messages
+  const lastGroupMessageIdRef = useRef(null);
+  const lastIndividualMessageIdRef = useRef(null);
+  
+  // Track if user is near bottom (within 150px) - only auto-scroll if true
+  const isNearBottomRef = useRef(true);
+  const userScrolledRef = useRef(false);
+
+  // Check if user is near the bottom of the chat
+  const checkIfNearBottom = (container) => {
+    if (!container) return true;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    // Consider "near bottom" if within 300px - gives more room for viewing older messages
+    return distanceFromBottom < 300;
+  };
+
+  // Auto-scroll to bottom when NEW messages arrive (only if user is near bottom)
+  useEffect(() => {
+    if (chatType === 'group' && groupMessages.length > 0 && !loadingOlderGroupMessages) {
+      const lastMessage = groupMessages[groupMessages.length - 1];
+      const lastMessageId = lastMessage?._id || lastMessage?.id;
+      
+      // Only scroll if this is a new message (different ID than last one)
+      if (lastMessageId && lastMessageId !== lastGroupMessageIdRef.current) {
+        lastGroupMessageIdRef.current = lastMessageId;
+        
+        // Check current scroll position before auto-scrolling
+        const container = groupMessagesContainerRef.current;
+        if (!container) return;
+        
+        const isNearBottom = checkIfNearBottom(container);
+        
+        // Only auto-scroll if user is near bottom (don't scroll if they're viewing older messages)
+        if (isNearBottom) {
+          const timer = setTimeout(() => {
+            // Double-check before scrolling (user might have scrolled in the meantime)
+            const stillNearBottom = checkIfNearBottom(container);
+            if (stillNearBottom) {
+              scrollToBottom();
+              isNearBottomRef.current = true;
+            }
+          }, 150);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [groupMessages.length, chatType, loadingOlderGroupMessages]);
+
+  useEffect(() => {
+    if (chatType === 'individual' && messages.length > 0 && !loadingOlderMessages) {
+      const lastMessage = messages[messages.length - 1];
+      const lastMessageId = lastMessage?._id || lastMessage?.id;
+      
+      // Only scroll if this is a new message (different ID than last one)
+      if (lastMessageId && lastMessageId !== lastIndividualMessageIdRef.current) {
+        lastIndividualMessageIdRef.current = lastMessageId;
+        
+        // Check current scroll position before auto-scrolling
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        
+        const isNearBottom = checkIfNearBottom(container);
+        
+        // Only auto-scroll if user is near bottom (don't scroll if they're viewing older messages)
+        if (isNearBottom) {
+          const timer = setTimeout(() => {
+            // Double-check before scrolling (user might have scrolled in the meantime)
+            const stillNearBottom = checkIfNearBottom(container);
+            if (stillNearBottom) {
+              scrollToBottom();
+              isNearBottomRef.current = true;
+            }
+          }, 150);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [messages.length, chatType, loadingOlderMessages]);
+
+  // Track scroll position for group messages - update immediately on scroll
+  useEffect(() => {
+    const container = groupMessagesContainerRef.current;
+    if (!container || chatType !== 'group') return;
+
+    let lastScrollTop = container.scrollTop;
+    let scrollToBottomTimer = null;
+
+    const handleScroll = () => {
+      const currentScrollTop = container.scrollTop;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isNearBottom = distanceFromBottom < 300;
+      
+      // Detect if user is scrolling down (towards bottom)
+      const isScrollingDown = currentScrollTop > lastScrollTop;
+      
+      // If user scrolls down and is very close to bottom (within 100px), scroll to newest messages
+      if (isScrollingDown && distanceFromBottom < 100) {
+        // Clear any existing timer
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+        }
+        
+        // User is scrolling down and very close to bottom - scroll to newest messages
+        scrollToBottomTimer = setTimeout(() => {
+          scrollToBottom(true);
+          isNearBottomRef.current = true;
+        }, 150);
+      }
+      
+      // Update tracking
+      isNearBottomRef.current = isNearBottom;
+      userScrolledRef.current = true;
+      lastScrollTop = currentScrollTop;
+    };
+
+    // Use passive listener for better performance
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollToBottomTimer) {
+        clearTimeout(scrollToBottomTimer);
+      }
+    };
+  }, [chatType, groupMessages.length]);
+
+  // Track scroll position for individual messages - update immediately on scroll
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || chatType !== 'individual') return;
+
+    let lastScrollTop = container.scrollTop;
+    let scrollToBottomTimer = null;
+
+    const handleScroll = () => {
+      const currentScrollTop = container.scrollTop;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isNearBottom = distanceFromBottom < 300;
+      
+      // Detect if user is scrolling down (towards bottom)
+      const isScrollingDown = currentScrollTop > lastScrollTop;
+      
+      // If user scrolls down and is very close to bottom (within 100px), scroll to newest messages
+      if (isScrollingDown && distanceFromBottom < 100) {
+        // Clear any existing timer
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+        }
+        
+        // User is scrolling down and very close to bottom - scroll to newest messages
+        scrollToBottomTimer = setTimeout(() => {
+          scrollToBottom(true);
+          isNearBottomRef.current = true;
+        }, 150);
+      }
+      
+      // Update tracking
+      isNearBottomRef.current = isNearBottom;
+      userScrolledRef.current = true;
+      lastScrollTop = currentScrollTop;
+    };
+
+    // Use passive listener for better performance
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollToBottomTimer) {
+        clearTimeout(scrollToBottomTimer);
+      }
+    };
+  }, [chatType, messages.length]);
+
+  // Reset scroll tracking when switching chats
+  useEffect(() => {
+    isNearBottomRef.current = true;
+    userScrolledRef.current = false;
+    // Also check initial position
+    setTimeout(() => {
+      if (chatType === 'group') {
+        const container = groupMessagesContainerRef.current;
+        if (container) {
+          isNearBottomRef.current = checkIfNearBottom(container);
+        }
+      } else if (chatType === 'individual') {
+        const container = messagesContainerRef.current;
+        if (container) {
+          isNearBottomRef.current = checkIfNearBottom(container);
+        }
+      }
+    }, 100);
+  }, [selectedGroup?._id, selectedUser?.empId, chatType]);
 
   // Show notification
   const showNotification = (title, body, senderName) => {
@@ -591,19 +799,41 @@ const ChatPage = () => {
       if (loadOlder) {
         // Prepend older messages to the beginning and ensure entire array is sorted
         setMessages(prev => {
-          const combined = [...processedMessages, ...prev];
+          // Remove optimistic messages when fetching real messages
+          const prevWithoutOptimistic = prev.filter(msg => !msg.isOptimistic);
+          const combined = [...processedMessages, ...prevWithoutOptimistic];
+          // Deduplicate by _id to prevent duplicate messages
+          const seen = new Set();
+          const deduplicated = combined.filter(msg => {
+            const msgId = String(msg._id || msg.id || '');
+            if (!msgId || seen.has(msgId)) {
+              return false;
+            }
+            seen.add(msgId);
+            return true;
+          });
           // Sort the entire array to ensure correct order
-          combined.sort((a, b) => {
+          deduplicated.sort((a, b) => {
             const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
             const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
             return timeA - timeB; // Ascending order (oldest first)
           });
-          return combined;
+          return deduplicated;
         });
         setMessagesPage(prev => prev + 1);
       } else {
-        // Initial load - replace all messages (already sorted)
-        setMessages(processedMessages);
+        // Initial load - deduplicate and replace all messages (already sorted)
+        // Remove optimistic messages when fetching real messages
+        const seen = new Set();
+        const deduplicated = processedMessages.filter(msg => {
+          const msgId = String(msg._id || msg.id || '');
+          if (!msgId || seen.has(msgId)) {
+            return false;
+          }
+          seen.add(msgId);
+          return true;
+        });
+        setMessages(deduplicated);
         setMessagesPage(1);
       }
 
@@ -789,9 +1019,9 @@ const ChatPage = () => {
       }
 
       // Calculate pagination parameters
-      // For initial load, use INITIAL_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
+      // For initial load, use INITIAL_GROUP_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
       const skip = loadOlder ? groupMessagesPage * MESSAGES_PER_PAGE : 0;
-      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_MESSAGES_COUNT;
+      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_GROUP_MESSAGES_COUNT;
       
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=${limit}&skip=${skip}`,
@@ -832,23 +1062,37 @@ const ChatPage = () => {
             }
           }
         } else {
-          // Initial load - take only the last INITIAL_MESSAGES_COUNT messages (10 messages)
-          if (fetchedMessages.length > INITIAL_MESSAGES_COUNT) {
-            messagesToProcess = fetchedMessages.slice(-INITIAL_MESSAGES_COUNT);
+          // Initial load - take only the last INITIAL_GROUP_MESSAGES_COUNT messages (100 messages)
+          if (fetchedMessages.length > INITIAL_GROUP_MESSAGES_COUNT) {
+            messagesToProcess = fetchedMessages.slice(-INITIAL_GROUP_MESSAGES_COUNT);
             setHasMoreGroupMessages(true);
           } else {
             messagesToProcess = fetchedMessages;
-            setHasMoreGroupMessages(fetchedMessages.length >= INITIAL_MESSAGES_COUNT);
+            setHasMoreGroupMessages(fetchedMessages.length >= INITIAL_GROUP_MESSAGES_COUNT);
           }
         }
 
         // Process messages to add isMyMessage flag and ensure seenBy structure
-        let processedMessages = messagesToProcess.map(msg => ({
-          ...msg,
-          isMyMessage: msg.senderEmpId === storedUser?.empId,
-          seenBy: msg.seenBy || [],
-          seenCount: msg.seenCount || (msg.seenBy?.length || 0)
-        }));
+        let processedMessages = messagesToProcess.map(msg => {
+          const processed = {
+            ...msg,
+            isMyMessage: msg.senderEmpId === storedUser?.empId,
+            seenBy: msg.seenBy || [],
+            seenCount: msg.seenCount || (msg.seenBy?.length || 0)
+          };
+          
+          // Debug: log seenBy data for messages sent by current user
+          if (processed.isMyMessage && (processed.seenBy.length > 0 || processed.seenCount > 0)) {
+            console.log('👁️ Group message with seen data:', {
+              messageId: processed._id,
+              message: processed.message?.substring(0, 20),
+              seenBy: processed.seenBy,
+              seenCount: processed.seenCount
+            });
+          }
+          
+          return processed;
+        });
 
         // Sort messages by timestamp to ensure correct chronological order
         processedMessages.sort((a, b) => {
@@ -860,19 +1104,41 @@ const ChatPage = () => {
         if (loadOlder) {
           // Prepend older messages to the beginning and ensure entire array is sorted
           setGroupMessages(prev => {
-            const combined = [...processedMessages, ...prev];
+            // Remove optimistic messages when fetching real messages
+            const prevWithoutOptimistic = prev.filter(msg => !msg.isOptimistic);
+            const combined = [...processedMessages, ...prevWithoutOptimistic];
+            // Deduplicate by _id to prevent duplicate messages
+            const seen = new Set();
+            const deduplicated = combined.filter(msg => {
+              const msgId = String(msg._id || msg.id || '');
+              if (!msgId || seen.has(msgId)) {
+                return false;
+              }
+              seen.add(msgId);
+              return true;
+            });
             // Sort the entire array to ensure correct order
-            combined.sort((a, b) => {
+            deduplicated.sort((a, b) => {
               const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
               const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
               return timeA - timeB; // Ascending order (oldest first)
             });
-            return combined;
+            return deduplicated;
           });
           setGroupMessagesPage(prev => prev + 1);
         } else {
-          // Initial load - replace all messages (already sorted)
-          setGroupMessages(processedMessages);
+          // Initial load - deduplicate and replace all messages (already sorted)
+          // Remove optimistic messages when fetching real messages
+          const seen = new Set();
+          const deduplicated = processedMessages.filter(msg => {
+            const msgId = String(msg._id || msg.id || '');
+            if (!msgId || seen.has(msgId)) {
+              return false;
+            }
+            seen.add(msgId);
+            return true;
+          });
+          setGroupMessages(deduplicated);
           setGroupMessagesPage(1);
         }
         
@@ -1097,7 +1363,7 @@ const ChatPage = () => {
     };
     
     setGroupMessages(prev => [...prev, optimisticMessage]);
-    setTimeout(scrollToBottom, 50);
+    setTimeout(() => scrollToBottom(true), 50);
     
     try {
       const formData = new FormData();
@@ -1145,10 +1411,10 @@ const ChatPage = () => {
         // This ensures the message ID matches what the backend sends in socket events
         setTimeout(async () => {
           await fetchGroupMessages(selectedGroup._id);
-          setTimeout(scrollToBottom, 100);
+          // Scroll will happen automatically via useEffect when new messages arrive
         }, 500);
       } else {
-        setTimeout(scrollToBottom, 100);
+        setTimeout(() => scrollToBottom(true), 100);
       }
     } catch (err) {
       console.error("❌ Send group message failed:", err);
@@ -1219,11 +1485,13 @@ const ChatPage = () => {
         };
         
         setGroupMessages(prev => [...prev, newFileMessage]);
+        // Scroll immediately after adding message
+        setTimeout(() => scrollToBottom(true), 100);
         
         // Refresh group messages to get proper server data
         setTimeout(async () => {
           await fetchGroupMessages(selectedGroup._id);
-          setTimeout(scrollToBottom, 100);
+          // Scroll will happen automatically via useEffect when new messages arrive
         }, 1500);
       }
     } catch (error) {
@@ -1275,7 +1543,7 @@ const ChatPage = () => {
 
       if (response.data && response.data.success) {
         await fetchGroupMessages(selectedGroup._id);
-        setTimeout(scrollToBottom, 100);
+        // Scroll will happen automatically via useEffect when new messages arrive
       }
     } catch (error) {
       console.error('❌ Group image upload failed:', error);
@@ -1591,7 +1859,7 @@ const ChatPage = () => {
     };
     
     setMessages(prev => [...prev, optimisticMessage]);
-    setTimeout(scrollToBottom, 50);
+    setTimeout(() => scrollToBottom(true), 50);
 
     // Emit socket event immediately
     socketRef.current?.emit("newMessage", {
@@ -1632,7 +1900,7 @@ const ChatPage = () => {
         // Refresh messages after a short delay to get proper server data
         setTimeout(async () => {
           await fetchMessages(selectedUser.empId);
-          setTimeout(scrollToBottom, 100);
+          // Scroll will happen automatically via useEffect when new messages arrive
         }, 500);
       }
     } catch (err) {
@@ -1685,9 +1953,59 @@ const ChatPage = () => {
     autoResizeTextarea(textarea);
   };
 
-  const handlePaste = (e) => {
-    // Get pasted text from clipboard
-    const pastedText = e.clipboardData.getData('text');
+  const handlePaste = async (e) => {
+    const clipboardData = e.clipboardData;
+    
+    // Check if clipboard contains image data
+    const items = Array.from(clipboardData.items);
+    const imageItem = items.find(item => item.type.indexOf('image') !== -1);
+    
+    if (imageItem) {
+      // Handle image paste
+      e.preventDefault();
+      
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      
+      // Validate image file types: JPG, JPEG, PNG only
+      const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      const isValidImage = allowedImageTypes.includes(file.type);
+      
+      if (!isValidImage) {
+        alert('Please paste a valid image file (JPG, JPEG, or PNG).');
+        return;
+      }
+      
+      // File size limit: 10MB
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size should be less than 10MB.');
+        return;
+      }
+      
+      // Generate a filename with timestamp if file doesn't have a name
+      const timestamp = new Date().getTime();
+      const fileExtension = file.type.split('/')[1] || 'png';
+      const fileName = file.name || `pasted-image-${timestamp}.${fileExtension}`;
+      
+      // Create a new File object with the proper name
+      const namedFile = new File([file], fileName, { type: file.type });
+      
+      // Upload image based on chat type
+      if (chatType === 'group') {
+        if (selectedGroup) {
+          await handleGroupImageUpload(namedFile);
+        }
+      } else {
+        if (selectedUser) {
+          await handleImageUpload(namedFile);
+        }
+      }
+      
+      return;
+    }
+    
+    // Handle text paste (existing behavior)
+    const pastedText = clipboardData.getData('text');
     if (pastedText) {
       e.preventDefault();
       // Get the active textarea (group or individual)
@@ -1798,11 +2116,13 @@ const ChatPage = () => {
       };
       
       setMessages(prev => [...prev, newFileMessage]);
+      // Scroll immediately after adding message
+      setTimeout(() => scrollToBottom(true), 100);
       
       // Refresh messages to get proper server data
       setTimeout(async () => {
         await fetchMessages(selectedUser.empId);
-        setTimeout(scrollToBottom, 100);
+        // Scroll will happen automatically via useEffect when new messages arrive
       }, 1500);
       
       socketRef.current?.emit("newMessage", {
@@ -1815,7 +2135,8 @@ const ChatPage = () => {
         senderName: storedUser.employeeName
       });
       
-      setTimeout(scrollToBottom, 100);
+      // Scroll immediately after adding optimistic message
+      setTimeout(() => scrollToBottom(true), 100);
     } catch (error) {
       console.error('❌ File upload failed:', error);
       alert('Failed to upload file. Please try again.');
@@ -1876,11 +2197,13 @@ const ChatPage = () => {
       };
       
       setMessages(prev => [...prev, newImageMessage]);
+      // Scroll immediately after adding message
+      setTimeout(() => scrollToBottom(true), 100);
       
       // Refresh messages to get proper server data
       setTimeout(async () => {
         await fetchMessages(selectedUser.empId);
-        setTimeout(scrollToBottom, 100);
+        // Scroll will happen automatically via useEffect when new messages arrive
       }, 1500);
       
       socketRef.current?.emit("newMessage", {
@@ -1889,8 +2212,6 @@ const ChatPage = () => {
         message: `Sent an image: ${file.name}`,
         senderName: storedUser.employeeName
       });
-      
-      setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error('❌ Image upload failed:', error);
       alert('Failed to upload image. Please try again.');
@@ -1995,9 +2316,9 @@ const ChatPage = () => {
     }
     
     try {
-      // Per guide: POST /api/v1/chat/group/:groupId/message/:messageId/seen
-      const res = await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/message/${messageId}/seen`,
+      // Per docs: PATCH /api/v1/chat/group/:groupId/messages/:messageId/seen
+      const res = await axios.patch(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages/${messageId}/seen`,
         {},
         { withCredentials: true }
       );
@@ -2019,6 +2340,36 @@ const ChatPage = () => {
     if (!message || !storedUser?.empId) return false;
     return message.seenBy?.some(s => s.empId === storedUser.empId || s.seenByEmpId === storedUser.empId);
   };
+
+  // Open image viewer modal
+  const openImageModal = (imageUrl, imageName = null) => {
+    setSelectedImageUrl(imageUrl);
+    setSelectedImageName(imageName);
+    setShowImageModal(true);
+  };
+
+  // Close image viewer modal
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setSelectedImageUrl(null);
+    setSelectedImageName(null);
+  };
+
+  // Handle ESC key to close image modal
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && showImageModal) {
+        closeImageModal();
+      }
+    };
+
+    if (showImageModal) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [showImageModal]);
 
   // Update individual message seen status when socket event is received
   const updateIndividualMessageSeenStatus = (messageIds, seenBy, seenAt) => {
@@ -2056,8 +2407,10 @@ const ChatPage = () => {
   };
 
   // Update message seen status when socket event is received
-  const updateGroupMessageSeenStatus = (messageId, seenBy) => {
-    if (!messageId || !seenBy) return;
+  const updateGroupMessageSeenStatus = (messageId, seenByData, isFullArray = false) => {
+    if (!messageId || !seenByData) return;
+    
+    console.log('🔄 Updating group message seen status:', { messageId, seenByData, isFullArray });
     
     setGroupMessages(prevMessages => {
       let messageFound = false;
@@ -2070,25 +2423,37 @@ const ChatPage = () => {
         
         if (msgId === targetId) {
           messageFound = true;
-          // Ensure seenBy array exists
-          const currentSeenBy = msg.seenBy || [];
           
-          // Check if this user already in seenBy array
-          const alreadySeen = currentSeenBy.some(
-            s => {
-              const sEmpId = s.empId || s.seenByEmpId || '';
-              const newEmpId = seenBy.empId || seenBy.seenByEmpId || '';
-              return sEmpId && newEmpId && String(sEmpId) === String(newEmpId);
-            }
-          );
-          
-          if (!alreadySeen) {
+          if (isFullArray && Array.isArray(seenByData)) {
+            // Backend sent full array - replace existing
             updated = true;
             return {
               ...msg,
-              seenBy: [...currentSeenBy, seenBy],
-              seenCount: (msg.seenCount || 0) + 1
+              seenBy: seenByData,
+              seenCount: seenByData.length
             };
+          } else {
+            // Single user addition
+            const currentSeenBy = msg.seenBy || [];
+            
+            // Check if this user already in seenBy array
+            const alreadySeen = currentSeenBy.some(
+              s => {
+                const sEmpId = s.empId || s.seenByEmpId || '';
+                const newEmpId = seenByData.empId || seenByData.seenByEmpId || '';
+                return sEmpId && newEmpId && String(sEmpId) === String(newEmpId);
+              }
+            );
+            
+            if (!alreadySeen) {
+              updated = true;
+              const newSeenBy = [...currentSeenBy, seenByData];
+              return {
+                ...msg,
+                seenBy: newSeenBy,
+                seenCount: newSeenBy.length
+              };
+            }
           }
         }
         return msg;
@@ -2096,6 +2461,7 @@ const ChatPage = () => {
       
       // If message not found, refresh messages to get latest data
       if (!messageFound && selectedGroup?._id) {
+        console.log('⚠️ Message not found in current list, refreshing...');
         setTimeout(() => {
           fetchGroupMessages(selectedGroup._id);
         }, 100);
@@ -2103,9 +2469,20 @@ const ChatPage = () => {
       
       // If message was updated, return new array to trigger re-render
       if (updated) {
+        console.log('✅ Group message seen status updated successfully');
         return updatedMessages;
       }
-      return prevMessages;
+      // Even if not updated, ensure seenCount matches seenBy length
+      const finalMessages = updatedMessages.map(msg => {
+        if (msg.seenBy && Array.isArray(msg.seenBy)) {
+          const calculatedCount = msg.seenBy.length;
+          if (msg.seenCount !== calculatedCount) {
+            return { ...msg, seenCount: calculatedCount };
+          }
+        }
+        return msg;
+      });
+      return finalMessages;
     });
   };
 
@@ -2524,10 +2901,34 @@ const ChatPage = () => {
     };
 
     // Handle group message seen status updates
+    // Per docs: event structure is { groupId, messageId, seenBy: { empId, employeeName, aliasName, seenAt } }
     const handleGroupMessageSeen = ({ groupId, messageId, seenBy }) => {
+      console.log('🔔 Group message seen event received:', { groupId, messageId, seenBy });
+      
       // Only update if it's for the currently selected group
       if (selectedGroup?._id === groupId && messageId && seenBy) {
-        updateGroupMessageSeenStatus(messageId, seenBy);
+        // Update the message's seenBy list in real-time (per docs example)
+        setGroupMessages(prevMessages => 
+          prevMessages.map(msg => {
+            if (String(msg._id) === String(messageId)) {
+              // Ensure seenBy is an array
+              const currentSeenBy = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+              
+              // Check if user already in seenBy list (per docs)
+              const alreadySeen = currentSeenBy.some(s => s.empId === seenBy.empId);
+              
+              if (!alreadySeen) {
+                // Add new seenBy entry and increment count
+                return {
+                  ...msg,
+                  seenBy: [...currentSeenBy, seenBy],
+                  seenCount: (msg.seenCount || 0) + 1
+                };
+              }
+            }
+            return msg;
+          })
+        );
       }
     };
 
@@ -2684,6 +3085,9 @@ const ChatPage = () => {
     socket.on("newMessage", handleNewMessage);
     socket.on("newGroupMessage", handleNewGroupMessage);
     socket.on("groupMessageSeen", handleGroupMessageSeen);
+    // Also listen for alternative event names that backend might use
+    socket.on("groupMessageSeenUpdated", handleGroupMessageSeen);
+    socket.on("groupMessageRead", handleGroupMessageSeen);
     socket.on("messageSeen", handleMessageSeen);
     socket.on("chatListUpdated", handleChatListUpdated);
     socket.on("groupListUpdated", handleGroupListUpdated);  // 🔥 Added per guide
@@ -2691,6 +3095,10 @@ const ChatPage = () => {
     // Debug: Listen for ALL events to see what's coming from backend
     socket.onAny((eventName, ...args) => {
       console.log('🔔🔔🔔 Chat.jsx - Socket event received:', eventName, args);
+      // If it's a seen-related event, try to handle it
+      if (eventName.includes('seen') || eventName.includes('read')) {
+        console.log('👁️ Seen-related event detected:', eventName, args);
+      }
     });
     
     console.log('✅ Chat.jsx - All socket listeners set up');
@@ -2703,6 +3111,8 @@ const ChatPage = () => {
         socketRef.current.off("newMessage", handleNewMessage);
         socketRef.current.off("newGroupMessage", handleNewGroupMessage);
         socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
+        socketRef.current.off("groupMessageSeenUpdated", handleGroupMessageSeen);
+        socketRef.current.off("groupMessageRead", handleGroupMessageSeen);
         socketRef.current.off("messageSeen", handleMessageSeen);
         socketRef.current.off("user_online", handleUserOnline);
         socketRef.current.off("user_offline", handleUserOffline);
@@ -3440,7 +3850,7 @@ const ChatPage = () => {
                                             src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => openImageModal(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, fileName)}
                                           />
                                           <p className={`text-xs mt-1 ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>{fileName}</p>
                                         </div>
@@ -3530,49 +3940,75 @@ const ChatPage = () => {
                                     ))}
                                   </div>
                                 )}
-                                <div className={`flex items-center justify-end mt-2 gap-1`}>
+                                <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
                                   <span className={`text-xs ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>
                                     {formatTime(msg.timestamp)}
                                   </span>
                                   {isSentByMe && (
-                                    <button
-                                      onClick={() => msg._id && fetchSeenBy(msg._id, true)}
-                                      className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
-                                      title="Click to see who has seen this message"
-                                    >
-                                      <CheckCheck size={12} className="text-blue-100" />
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => msg._id && fetchSeenBy(msg._id, true)}
+                                        className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
+                                        title={msg.seenCount > 0 || (msg.seenBy && msg.seenBy.length > 0) ? `Seen by ${msg.seenCount || msg.seenBy?.length || 0} ${(msg.seenCount || msg.seenBy?.length || 0) === 1 ? 'person' : 'people'}` : "Click to see who has seen this message"}
+                                      >
+                                        <span className="text-xs">
+                                          {(() => {
+                                            // Per docs: check seenBy array and seenCount
+                                            const seenByArray = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+                                            const seenCount = msg.seenCount || seenByArray.length;
+                                            const isSeen = seenCount > 0 || seenByArray.length > 0;
+                                            
+                                            return isSeen ? (
+                                              <CheckCheck size={14} className="text-blue-100" />
+                                            ) : (
+                                              <Check size={14} className="text-blue-100 opacity-70" />
+                                            );
+                                          })()}
+                                        </span>
+                                      </button>
+                                      {/* Show seen status text - per docs: seenBy array with { empId, employeeName, aliasName, seenAt } */}
+                                      {/* Always show status for your messages (like individual chats) */}
+                                      {(() => {
+                                        // Per docs: check seenBy array and seenCount
+                                        const seenByArray = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+                                        const seenCount = msg.seenCount || seenByArray.length;
+                                        const hasSeenBy = seenByArray.length > 0;
+                                        const isSeen = seenCount > 0 || hasSeenBy;
+                                        
+                                        // If message has been seen and we have seenBy array, show names
+                                        if (isSeen && hasSeenBy) {
+                                          return (
+                                            <span className="text-xs italic text-white opacity-90">
+                                              Seen by {seenByArray.slice(0, 2).map((user, idx) => (
+                                                <span key={user.empId || idx}>
+                                                  {user.aliasName || user.employeeName}
+                                                  {idx < Math.min(seenByArray.length, 2) - 1 && ', '}
+                                                </span>
+                                              ))}
+                                              {seenByArray.length > 2 && ` +${seenByArray.length - 2} more`}
+                                            </span>
+                                          );
+                                        }
+                                        
+                                        // If message has been seen but no array, show count
+                                        if (isSeen && seenCount > 0) {
+                                          return (
+                                            <span className="text-xs italic text-white opacity-90">
+                                              Seen by {seenCount} {seenCount === 1 ? 'person' : 'people'}
+                                            </span>
+                                          );
+                                        }
+                                        
+                                        // Always show "Sent" if not seen yet (like individual chats)
+                                        return (
+                                          <span className="text-xs italic text-white opacity-75">
+                                            Sent
+                                          </span>
+                                        );
+                                      })()}
+                                    </div>
                                   )}
                                 </div>
-                                {/* Show seen status for messages sent by current user */}
-                                {isSentByMe && (
-                                  <div className={`mt-2 flex flex-col gap-1 ${isSentByMe ? 'items-end' : 'items-start'}`}>
-                                    {msg.seenCount > 0 ? (
-                                      <div className="flex flex-col items-end gap-1">
-                                        <span className={`text-xs font-semibold ${isSentByMe ? 'text-blue-100' : 'text-gray-600'}`}>
-                                          Seen by {msg.seenCount} {msg.seenCount === 1 ? 'person' : 'people'}
-                                        </span>
-                                        {msg.seenBy && msg.seenBy.length > 0 && (
-                                          <div className={`text-xs ${isSentByMe ? 'text-blue-50' : 'text-gray-500'} flex flex-wrap gap-1 justify-end max-w-full`}>
-                                            {msg.seenBy.slice(0, 3).map((user, idx) => (
-                                              <span key={user.empId || user.seenByEmpId || idx} className="italic">
-                                                {user.aliasName || user.employeeName || user.name}
-                                                {idx < Math.min(msg.seenBy.length, 3) - 1 && ','}
-                                              </span>
-                                            ))}
-                                            {msg.seenBy.length > 3 && (
-                                              <span className="italic">+{msg.seenBy.length - 3} more</span>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <span className={`text-xs italic ${isSentByMe ? 'text-blue-50' : 'text-gray-500'}`}>
-                                        Sent
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </div>
@@ -3953,79 +4389,49 @@ const ChatPage = () => {
                                   </div>
                                 )}
                                 
-                                {msg.imageUrl && (
-                                  <div className="mb-2">
-                                    <img 
-                                      src={msg.imageUrl} 
-                                      alt="Shared image" 
-                                      className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                      onClick={() => window.open(msg.imageUrl, '_blank')}
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">{msg.fileName}</p>
-                                  </div>
-                                )}
-                                {/* Show images using message ID if no imageUrl - exclude audio messages */}
-                                {!msg.imageUrl && !msg.audio && msg.message && msg.message.includes('Sent a file:') && !msg.message.includes('Sent an audio:') && msg._id && (
+                                {/* Show images - consolidated to prevent duplicates */}
+                                {!msg.audio && msg._id && (
                                   (() => {
-                                    const fileName = msg.message.replace('Sent a file: ', '');
-                                    const file = files.find(f => f.originalName === fileName || f.fileName === fileName);
-                                    if (file && file.fileType === 'image') {
+                                    // First priority: use imageUrl if available
+                                    if (msg.imageUrl) {
                                       return (
                                         <div className="mb-2">
                                           <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                            src={msg.imageUrl} 
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => openImageModal(msg.imageUrl, msg.fileName)}
                                           />
-                                          <p className="text-xs text-gray-500 mt-1">{fileName}</p>
+                                          <p className="text-xs text-gray-500 mt-1">{msg.fileName}</p>
                                         </div>
                                       );
                                     }
-                                    return null;
-                                  })()
-                                )}
-                                
-                                {/* Show images for any file message with _id */}
-                                {!msg.imageUrl && !msg.audio && msg._id && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:') && (
-                                  (() => {
-                                    const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
-                                    // Check if it's an image based on file extension
-                                    const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
-                                    if (isImage) {
-                                      return (
-                                        <div className="mb-2">
-                                          <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
-                                            alt="Shared image" 
-                                            className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
-                                          />
-                                          <p className="text-xs text-gray-500 mt-1">{fileName}</p>
-                                        </div>
-                                      );
+                                    
+                                    // Second priority: check if message indicates an image/file
+                                    if (msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:')) {
+                                      const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
+                                      
+                                      // Check if it's an image by file extension
+                                      const isImageByExtension = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
+                                      
+                                      // Also check files array if available
+                                      const file = files?.find(f => (f.originalName === fileName || f.fileName === fileName) && f.fileType === 'image');
+                                      
+                                      if (isImageByExtension || file) {
+                                        return (
+                                          <div className="mb-2">
+                                            <img 
+                                              src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                              alt="Shared image" 
+                                              className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                              onClick={() => openImageModal(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, fileName)}
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">{fileName}</p>
+                                          </div>
+                                        );
+                                      }
                                     }
-                                    return null;
-                                  })()
-                                )}
-                                {/* Show images from API if no imageUrl in message */}
-                                {!msg.imageUrl && !msg.fileUrl && msg.message && msg.message.includes('Sent a file:') && (
-                                  (() => {
-                                    const fileName = msg.message.replace('Sent a file: ', '');
-                                    const file = files.find(f => f.originalName === fileName || f.fileName === fileName);
-                                    if (file && file.fileType === 'image') {
-                                      return (
-                                        <div className="mb-2">
-                                          <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
-                                            alt="Shared image" 
-                                            className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
-                                          />
-                                          <p className="text-xs text-gray-500 mt-1">{file.originalName}</p>
-                                        </div>
-                                      );
-                                    }
+                                    
                                     return null;
                                   })()
                                 )}
@@ -4350,6 +4756,48 @@ const ChatPage = () => {
                   <p>No one has seen this message yet</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {showImageModal && selectedImageUrl && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4 overflow-y-auto"
+          onClick={closeImageModal}
+        >
+          <div className="relative max-w-[90vw] w-full flex flex-col items-center justify-center min-h-0 my-auto">
+            <button
+              onClick={closeImageModal}
+              className="absolute top-2 right-2 md:top-4 md:right-4 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-70 rounded-full p-2"
+              aria-label="Close image viewer"
+            >
+              <X size={24} />
+            </button>
+            <div className="flex flex-col items-center w-full max-h-[calc(100vh-120px)]">
+              <img 
+                src={selectedImageUrl} 
+                alt={selectedImageName || "Shared image"} 
+                className="max-w-full max-h-[calc(100vh-180px)] object-contain rounded-lg shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+              {selectedImageName && (
+                <p className="text-white mt-3 text-sm bg-black bg-opacity-70 px-4 py-2 rounded-lg max-w-full truncate">
+                  {selectedImageName}
+                </p>
+              )}
+              <div className="mt-3 flex gap-4">
+                <a
+                  href={selectedImageUrl}
+                  download={selectedImageName || "image"}
+                  onClick={(e) => e.stopPropagation()}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 shadow-lg"
+                >
+                  <Download size={18} />
+                  Download
+                </a>
+              </div>
             </div>
           </div>
         </div>
