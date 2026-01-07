@@ -301,6 +301,10 @@ const ChatPage = () => {
   const [showSeenByModal, setShowSeenByModal] = useState(false);
   const [seenByData, setSeenByData] = useState(null);
   const [loadingSeenBy, setLoadingSeenBy] = useState(false);
+  // Image viewer modal state
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState(null);
+  const [selectedImageName, setSelectedImageName] = useState(null);
   // Mention/Tag states
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -591,19 +595,41 @@ const ChatPage = () => {
       if (loadOlder) {
         // Prepend older messages to the beginning and ensure entire array is sorted
         setMessages(prev => {
-          const combined = [...processedMessages, ...prev];
+          // Remove optimistic messages when fetching real messages
+          const prevWithoutOptimistic = prev.filter(msg => !msg.isOptimistic);
+          const combined = [...processedMessages, ...prevWithoutOptimistic];
+          // Deduplicate by _id to prevent duplicate messages
+          const seen = new Set();
+          const deduplicated = combined.filter(msg => {
+            const msgId = String(msg._id || msg.id || '');
+            if (!msgId || seen.has(msgId)) {
+              return false;
+            }
+            seen.add(msgId);
+            return true;
+          });
           // Sort the entire array to ensure correct order
-          combined.sort((a, b) => {
+          deduplicated.sort((a, b) => {
             const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
             const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
             return timeA - timeB; // Ascending order (oldest first)
           });
-          return combined;
+          return deduplicated;
         });
         setMessagesPage(prev => prev + 1);
       } else {
-        // Initial load - replace all messages (already sorted)
-        setMessages(processedMessages);
+        // Initial load - deduplicate and replace all messages (already sorted)
+        // Remove optimistic messages when fetching real messages
+        const seen = new Set();
+        const deduplicated = processedMessages.filter(msg => {
+          const msgId = String(msg._id || msg.id || '');
+          if (!msgId || seen.has(msgId)) {
+            return false;
+          }
+          seen.add(msgId);
+          return true;
+        });
+        setMessages(deduplicated);
         setMessagesPage(1);
       }
 
@@ -860,19 +886,41 @@ const ChatPage = () => {
         if (loadOlder) {
           // Prepend older messages to the beginning and ensure entire array is sorted
           setGroupMessages(prev => {
-            const combined = [...processedMessages, ...prev];
+            // Remove optimistic messages when fetching real messages
+            const prevWithoutOptimistic = prev.filter(msg => !msg.isOptimistic);
+            const combined = [...processedMessages, ...prevWithoutOptimistic];
+            // Deduplicate by _id to prevent duplicate messages
+            const seen = new Set();
+            const deduplicated = combined.filter(msg => {
+              const msgId = String(msg._id || msg.id || '');
+              if (!msgId || seen.has(msgId)) {
+                return false;
+              }
+              seen.add(msgId);
+              return true;
+            });
             // Sort the entire array to ensure correct order
-            combined.sort((a, b) => {
+            deduplicated.sort((a, b) => {
               const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
               const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
               return timeA - timeB; // Ascending order (oldest first)
             });
-            return combined;
+            return deduplicated;
           });
           setGroupMessagesPage(prev => prev + 1);
         } else {
-          // Initial load - replace all messages (already sorted)
-          setGroupMessages(processedMessages);
+          // Initial load - deduplicate and replace all messages (already sorted)
+          // Remove optimistic messages when fetching real messages
+          const seen = new Set();
+          const deduplicated = processedMessages.filter(msg => {
+            const msgId = String(msg._id || msg.id || '');
+            if (!msgId || seen.has(msgId)) {
+              return false;
+            }
+            seen.add(msgId);
+            return true;
+          });
+          setGroupMessages(deduplicated);
           setGroupMessagesPage(1);
         }
         
@@ -2019,6 +2067,36 @@ const ChatPage = () => {
     if (!message || !storedUser?.empId) return false;
     return message.seenBy?.some(s => s.empId === storedUser.empId || s.seenByEmpId === storedUser.empId);
   };
+
+  // Open image viewer modal
+  const openImageModal = (imageUrl, imageName = null) => {
+    setSelectedImageUrl(imageUrl);
+    setSelectedImageName(imageName);
+    setShowImageModal(true);
+  };
+
+  // Close image viewer modal
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setSelectedImageUrl(null);
+    setSelectedImageName(null);
+  };
+
+  // Handle ESC key to close image modal
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && showImageModal) {
+        closeImageModal();
+      }
+    };
+
+    if (showImageModal) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [showImageModal]);
 
   // Update individual message seen status when socket event is received
   const updateIndividualMessageSeenStatus = (messageIds, seenBy, seenAt) => {
@@ -3440,7 +3518,7 @@ const ChatPage = () => {
                                             src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => openImageModal(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, fileName)}
                                           />
                                           <p className={`text-xs mt-1 ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>{fileName}</p>
                                         </div>
@@ -3953,79 +4031,49 @@ const ChatPage = () => {
                                   </div>
                                 )}
                                 
-                                {msg.imageUrl && (
-                                  <div className="mb-2">
-                                    <img 
-                                      src={msg.imageUrl} 
-                                      alt="Shared image" 
-                                      className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                      onClick={() => window.open(msg.imageUrl, '_blank')}
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">{msg.fileName}</p>
-                                  </div>
-                                )}
-                                {/* Show images using message ID if no imageUrl - exclude audio messages */}
-                                {!msg.imageUrl && !msg.audio && msg.message && msg.message.includes('Sent a file:') && !msg.message.includes('Sent an audio:') && msg._id && (
+                                {/* Show images - consolidated to prevent duplicates */}
+                                {!msg.audio && msg._id && (
                                   (() => {
-                                    const fileName = msg.message.replace('Sent a file: ', '');
-                                    const file = files.find(f => f.originalName === fileName || f.fileName === fileName);
-                                    if (file && file.fileType === 'image') {
+                                    // First priority: use imageUrl if available
+                                    if (msg.imageUrl) {
                                       return (
                                         <div className="mb-2">
                                           <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                            src={msg.imageUrl} 
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => openImageModal(msg.imageUrl, msg.fileName)}
                                           />
-                                          <p className="text-xs text-gray-500 mt-1">{fileName}</p>
+                                          <p className="text-xs text-gray-500 mt-1">{msg.fileName}</p>
                                         </div>
                                       );
                                     }
-                                    return null;
-                                  })()
-                                )}
-                                
-                                {/* Show images for any file message with _id */}
-                                {!msg.imageUrl && !msg.audio && msg._id && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:') && (
-                                  (() => {
-                                    const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
-                                    // Check if it's an image based on file extension
-                                    const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
-                                    if (isImage) {
-                                      return (
-                                        <div className="mb-2">
-                                          <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
-                                            alt="Shared image" 
-                                            className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
-                                          />
-                                          <p className="text-xs text-gray-500 mt-1">{fileName}</p>
-                                        </div>
-                                      );
+                                    
+                                    // Second priority: check if message indicates an image/file
+                                    if (msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:')) {
+                                      const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
+                                      
+                                      // Check if it's an image by file extension
+                                      const isImageByExtension = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
+                                      
+                                      // Also check files array if available
+                                      const file = files?.find(f => (f.originalName === fileName || f.fileName === fileName) && f.fileType === 'image');
+                                      
+                                      if (isImageByExtension || file) {
+                                        return (
+                                          <div className="mb-2">
+                                            <img 
+                                              src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                              alt="Shared image" 
+                                              className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                              onClick={() => openImageModal(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, fileName)}
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">{fileName}</p>
+                                          </div>
+                                        );
+                                      }
                                     }
-                                    return null;
-                                  })()
-                                )}
-                                {/* Show images from API if no imageUrl in message */}
-                                {!msg.imageUrl && !msg.fileUrl && msg.message && msg.message.includes('Sent a file:') && (
-                                  (() => {
-                                    const fileName = msg.message.replace('Sent a file: ', '');
-                                    const file = files.find(f => f.originalName === fileName || f.fileName === fileName);
-                                    if (file && file.fileType === 'image') {
-                                      return (
-                                        <div className="mb-2">
-                                          <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
-                                            alt="Shared image" 
-                                            className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
-                                          />
-                                          <p className="text-xs text-gray-500 mt-1">{file.originalName}</p>
-                                        </div>
-                                      );
-                                    }
+                                    
                                     return null;
                                   })()
                                 )}
@@ -4350,6 +4398,48 @@ const ChatPage = () => {
                   <p>No one has seen this message yet</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {showImageModal && selectedImageUrl && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4 overflow-y-auto"
+          onClick={closeImageModal}
+        >
+          <div className="relative max-w-[90vw] w-full flex flex-col items-center justify-center min-h-0 my-auto">
+            <button
+              onClick={closeImageModal}
+              className="absolute top-2 right-2 md:top-4 md:right-4 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-70 rounded-full p-2"
+              aria-label="Close image viewer"
+            >
+              <X size={24} />
+            </button>
+            <div className="flex flex-col items-center w-full max-h-[calc(100vh-120px)]">
+              <img 
+                src={selectedImageUrl} 
+                alt={selectedImageName || "Shared image"} 
+                className="max-w-full max-h-[calc(100vh-180px)] object-contain rounded-lg shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+              {selectedImageName && (
+                <p className="text-white mt-3 text-sm bg-black bg-opacity-70 px-4 py-2 rounded-lg max-w-full truncate">
+                  {selectedImageName}
+                </p>
+              )}
+              <div className="mt-3 flex gap-4">
+                <a
+                  href={selectedImageUrl}
+                  download={selectedImageName || "image"}
+                  onClick={(e) => e.stopPropagation()}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 shadow-lg"
+                >
+                  <Download size={18} />
+                  Download
+                </a>
+              </div>
             </div>
           </div>
         </div>
