@@ -320,7 +320,8 @@ const ChatPage = () => {
   const [loadingOlderGroupMessages, setLoadingOlderGroupMessages] = useState(false);
   const [messagesPage, setMessagesPage] = useState(0);
   const [groupMessagesPage, setGroupMessagesPage] = useState(0);
-  const INITIAL_MESSAGES_COUNT = 10; // Load 10 messages initially when opening chat
+  const INITIAL_MESSAGES_COUNT = 10; // Load 10 messages initially when opening individual chat
+  const INITIAL_GROUP_MESSAGES_COUNT = 100; // Load 100 messages initially for group chats
   const MESSAGES_PER_PAGE = 30; // Load 30 messages at a time when scrolling up
   
   const mentionDropdownRef = useRef(null);
@@ -337,7 +338,13 @@ const ChatPage = () => {
   const groupMessageRefs = useRef({});
   const markedAsSeenRef = useRef(new Set()); // Track which messages have been marked as seen
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (force = false) => {
+    // If force is true (when user sends message), always scroll
+    if (force) {
+      isNearBottomRef.current = true;
+      userScrolledRef.current = false;
+    }
+    
     // Use requestAnimationFrame to ensure DOM is updated
     requestAnimationFrame(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -347,8 +354,21 @@ const ChatPage = () => {
   // Track last message IDs to detect new messages
   const lastGroupMessageIdRef = useRef(null);
   const lastIndividualMessageIdRef = useRef(null);
+  
+  // Track if user is near bottom (within 150px) - only auto-scroll if true
+  const isNearBottomRef = useRef(true);
+  const userScrolledRef = useRef(false);
 
-  // Auto-scroll to bottom when NEW messages arrive (not when loading older ones)
+  // Check if user is near the bottom of the chat
+  const checkIfNearBottom = (container) => {
+    if (!container) return true;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    // Consider "near bottom" if within 300px - gives more room for viewing older messages
+    return distanceFromBottom < 300;
+  };
+
+  // Auto-scroll to bottom when NEW messages arrive (only if user is near bottom)
   useEffect(() => {
     if (chatType === 'group' && groupMessages.length > 0 && !loadingOlderGroupMessages) {
       const lastMessage = groupMessages[groupMessages.length - 1];
@@ -357,10 +377,25 @@ const ChatPage = () => {
       // Only scroll if this is a new message (different ID than last one)
       if (lastMessageId && lastMessageId !== lastGroupMessageIdRef.current) {
         lastGroupMessageIdRef.current = lastMessageId;
-        const timer = setTimeout(() => {
-          scrollToBottom();
-        }, 150);
-        return () => clearTimeout(timer);
+        
+        // Check current scroll position before auto-scrolling
+        const container = groupMessagesContainerRef.current;
+        if (!container) return;
+        
+        const isNearBottom = checkIfNearBottom(container);
+        
+        // Only auto-scroll if user is near bottom (don't scroll if they're viewing older messages)
+        if (isNearBottom) {
+          const timer = setTimeout(() => {
+            // Double-check before scrolling (user might have scrolled in the meantime)
+            const stillNearBottom = checkIfNearBottom(container);
+            if (stillNearBottom) {
+              scrollToBottom();
+              isNearBottomRef.current = true;
+            }
+          }, 150);
+          return () => clearTimeout(timer);
+        }
       }
     }
   }, [groupMessages.length, chatType, loadingOlderGroupMessages]);
@@ -373,13 +408,142 @@ const ChatPage = () => {
       // Only scroll if this is a new message (different ID than last one)
       if (lastMessageId && lastMessageId !== lastIndividualMessageIdRef.current) {
         lastIndividualMessageIdRef.current = lastMessageId;
-        const timer = setTimeout(() => {
-          scrollToBottom();
-        }, 150);
-        return () => clearTimeout(timer);
+        
+        // Check current scroll position before auto-scrolling
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        
+        const isNearBottom = checkIfNearBottom(container);
+        
+        // Only auto-scroll if user is near bottom (don't scroll if they're viewing older messages)
+        if (isNearBottom) {
+          const timer = setTimeout(() => {
+            // Double-check before scrolling (user might have scrolled in the meantime)
+            const stillNearBottom = checkIfNearBottom(container);
+            if (stillNearBottom) {
+              scrollToBottom();
+              isNearBottomRef.current = true;
+            }
+          }, 150);
+          return () => clearTimeout(timer);
+        }
       }
     }
   }, [messages.length, chatType, loadingOlderMessages]);
+
+  // Track scroll position for group messages - update immediately on scroll
+  useEffect(() => {
+    const container = groupMessagesContainerRef.current;
+    if (!container || chatType !== 'group') return;
+
+    let lastScrollTop = container.scrollTop;
+    let scrollToBottomTimer = null;
+
+    const handleScroll = () => {
+      const currentScrollTop = container.scrollTop;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isNearBottom = distanceFromBottom < 300;
+      
+      // Detect if user is scrolling down (towards bottom)
+      const isScrollingDown = currentScrollTop > lastScrollTop;
+      
+      // If user scrolls down and is very close to bottom (within 100px), scroll to newest messages
+      if (isScrollingDown && distanceFromBottom < 100) {
+        // Clear any existing timer
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+        }
+        
+        // User is scrolling down and very close to bottom - scroll to newest messages
+        scrollToBottomTimer = setTimeout(() => {
+          scrollToBottom(true);
+          isNearBottomRef.current = true;
+        }, 150);
+      }
+      
+      // Update tracking
+      isNearBottomRef.current = isNearBottom;
+      userScrolledRef.current = true;
+      lastScrollTop = currentScrollTop;
+    };
+
+    // Use passive listener for better performance
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollToBottomTimer) {
+        clearTimeout(scrollToBottomTimer);
+      }
+    };
+  }, [chatType, groupMessages.length]);
+
+  // Track scroll position for individual messages - update immediately on scroll
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || chatType !== 'individual') return;
+
+    let lastScrollTop = container.scrollTop;
+    let scrollToBottomTimer = null;
+
+    const handleScroll = () => {
+      const currentScrollTop = container.scrollTop;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isNearBottom = distanceFromBottom < 300;
+      
+      // Detect if user is scrolling down (towards bottom)
+      const isScrollingDown = currentScrollTop > lastScrollTop;
+      
+      // If user scrolls down and is very close to bottom (within 100px), scroll to newest messages
+      if (isScrollingDown && distanceFromBottom < 100) {
+        // Clear any existing timer
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+        }
+        
+        // User is scrolling down and very close to bottom - scroll to newest messages
+        scrollToBottomTimer = setTimeout(() => {
+          scrollToBottom(true);
+          isNearBottomRef.current = true;
+        }, 150);
+      }
+      
+      // Update tracking
+      isNearBottomRef.current = isNearBottom;
+      userScrolledRef.current = true;
+      lastScrollTop = currentScrollTop;
+    };
+
+    // Use passive listener for better performance
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollToBottomTimer) {
+        clearTimeout(scrollToBottomTimer);
+      }
+    };
+  }, [chatType, messages.length]);
+
+  // Reset scroll tracking when switching chats
+  useEffect(() => {
+    isNearBottomRef.current = true;
+    userScrolledRef.current = false;
+    // Also check initial position
+    setTimeout(() => {
+      if (chatType === 'group') {
+        const container = groupMessagesContainerRef.current;
+        if (container) {
+          isNearBottomRef.current = checkIfNearBottom(container);
+        }
+      } else if (chatType === 'individual') {
+        const container = messagesContainerRef.current;
+        if (container) {
+          isNearBottomRef.current = checkIfNearBottom(container);
+        }
+      }
+    }, 100);
+  }, [selectedGroup?._id, selectedUser?.empId, chatType]);
 
   // Show notification
   const showNotification = (title, body, senderName) => {
@@ -855,9 +1019,9 @@ const ChatPage = () => {
       }
 
       // Calculate pagination parameters
-      // For initial load, use INITIAL_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
+      // For initial load, use INITIAL_GROUP_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
       const skip = loadOlder ? groupMessagesPage * MESSAGES_PER_PAGE : 0;
-      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_MESSAGES_COUNT;
+      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_GROUP_MESSAGES_COUNT;
       
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=${limit}&skip=${skip}`,
@@ -898,13 +1062,13 @@ const ChatPage = () => {
             }
           }
         } else {
-          // Initial load - take only the last INITIAL_MESSAGES_COUNT messages (10 messages)
-          if (fetchedMessages.length > INITIAL_MESSAGES_COUNT) {
-            messagesToProcess = fetchedMessages.slice(-INITIAL_MESSAGES_COUNT);
+          // Initial load - take only the last INITIAL_GROUP_MESSAGES_COUNT messages (100 messages)
+          if (fetchedMessages.length > INITIAL_GROUP_MESSAGES_COUNT) {
+            messagesToProcess = fetchedMessages.slice(-INITIAL_GROUP_MESSAGES_COUNT);
             setHasMoreGroupMessages(true);
           } else {
             messagesToProcess = fetchedMessages;
-            setHasMoreGroupMessages(fetchedMessages.length >= INITIAL_MESSAGES_COUNT);
+            setHasMoreGroupMessages(fetchedMessages.length >= INITIAL_GROUP_MESSAGES_COUNT);
           }
         }
 
@@ -1185,7 +1349,7 @@ const ChatPage = () => {
     };
     
     setGroupMessages(prev => [...prev, optimisticMessage]);
-    setTimeout(scrollToBottom, 50);
+    setTimeout(() => scrollToBottom(true), 50);
     
     try {
       const formData = new FormData();
@@ -1236,7 +1400,7 @@ const ChatPage = () => {
           // Scroll will happen automatically via useEffect when new messages arrive
         }, 500);
       } else {
-        setTimeout(scrollToBottom, 100);
+        setTimeout(() => scrollToBottom(true), 100);
       }
     } catch (err) {
       console.error("❌ Send group message failed:", err);
@@ -1308,7 +1472,7 @@ const ChatPage = () => {
         
         setGroupMessages(prev => [...prev, newFileMessage]);
         // Scroll immediately after adding message
-        setTimeout(scrollToBottom, 100);
+        setTimeout(() => scrollToBottom(true), 100);
         
         // Refresh group messages to get proper server data
         setTimeout(async () => {
@@ -1681,7 +1845,7 @@ const ChatPage = () => {
     };
     
     setMessages(prev => [...prev, optimisticMessage]);
-    setTimeout(scrollToBottom, 50);
+    setTimeout(() => scrollToBottom(true), 50);
 
     // Emit socket event immediately
     socketRef.current?.emit("newMessage", {
@@ -1889,7 +2053,7 @@ const ChatPage = () => {
       
       setMessages(prev => [...prev, newFileMessage]);
       // Scroll immediately after adding message
-      setTimeout(scrollToBottom, 100);
+      setTimeout(() => scrollToBottom(true), 100);
       
       // Refresh messages to get proper server data
       setTimeout(async () => {
@@ -1908,7 +2072,7 @@ const ChatPage = () => {
       });
       
       // Scroll immediately after adding optimistic message
-      setTimeout(scrollToBottom, 100);
+      setTimeout(() => scrollToBottom(true), 100);
     } catch (error) {
       console.error('❌ File upload failed:', error);
       alert('Failed to upload file. Please try again.');
@@ -1970,7 +2134,7 @@ const ChatPage = () => {
       
       setMessages(prev => [...prev, newImageMessage]);
       // Scroll immediately after adding message
-      setTimeout(scrollToBottom, 100);
+      setTimeout(() => scrollToBottom(true), 100);
       
       // Refresh messages to get proper server data
       setTimeout(async () => {
