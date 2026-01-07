@@ -338,8 +338,48 @@ const ChatPage = () => {
   const markedAsSeenRef = useRef(new Set()); // Track which messages have been marked as seen
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Use requestAnimationFrame to ensure DOM is updated
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
   };
+
+  // Track last message IDs to detect new messages
+  const lastGroupMessageIdRef = useRef(null);
+  const lastIndividualMessageIdRef = useRef(null);
+
+  // Auto-scroll to bottom when NEW messages arrive (not when loading older ones)
+  useEffect(() => {
+    if (chatType === 'group' && groupMessages.length > 0 && !loadingOlderGroupMessages) {
+      const lastMessage = groupMessages[groupMessages.length - 1];
+      const lastMessageId = lastMessage?._id || lastMessage?.id;
+      
+      // Only scroll if this is a new message (different ID than last one)
+      if (lastMessageId && lastMessageId !== lastGroupMessageIdRef.current) {
+        lastGroupMessageIdRef.current = lastMessageId;
+        const timer = setTimeout(() => {
+          scrollToBottom();
+        }, 150);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [groupMessages.length, chatType, loadingOlderGroupMessages]);
+
+  useEffect(() => {
+    if (chatType === 'individual' && messages.length > 0 && !loadingOlderMessages) {
+      const lastMessage = messages[messages.length - 1];
+      const lastMessageId = lastMessage?._id || lastMessage?.id;
+      
+      // Only scroll if this is a new message (different ID than last one)
+      if (lastMessageId && lastMessageId !== lastIndividualMessageIdRef.current) {
+        lastIndividualMessageIdRef.current = lastMessageId;
+        const timer = setTimeout(() => {
+          scrollToBottom();
+        }, 150);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [messages.length, chatType, loadingOlderMessages]);
 
   // Show notification
   const showNotification = (title, body, senderName) => {
@@ -1193,7 +1233,7 @@ const ChatPage = () => {
         // This ensures the message ID matches what the backend sends in socket events
         setTimeout(async () => {
           await fetchGroupMessages(selectedGroup._id);
-          setTimeout(scrollToBottom, 100);
+          // Scroll will happen automatically via useEffect when new messages arrive
         }, 500);
       } else {
         setTimeout(scrollToBottom, 100);
@@ -1267,11 +1307,13 @@ const ChatPage = () => {
         };
         
         setGroupMessages(prev => [...prev, newFileMessage]);
+        // Scroll immediately after adding message
+        setTimeout(scrollToBottom, 100);
         
         // Refresh group messages to get proper server data
         setTimeout(async () => {
           await fetchGroupMessages(selectedGroup._id);
-          setTimeout(scrollToBottom, 100);
+          // Scroll will happen automatically via useEffect when new messages arrive
         }, 1500);
       }
     } catch (error) {
@@ -1323,7 +1365,7 @@ const ChatPage = () => {
 
       if (response.data && response.data.success) {
         await fetchGroupMessages(selectedGroup._id);
-        setTimeout(scrollToBottom, 100);
+        // Scroll will happen automatically via useEffect when new messages arrive
       }
     } catch (error) {
       console.error('❌ Group image upload failed:', error);
@@ -1680,7 +1722,7 @@ const ChatPage = () => {
         // Refresh messages after a short delay to get proper server data
         setTimeout(async () => {
           await fetchMessages(selectedUser.empId);
-          setTimeout(scrollToBottom, 100);
+          // Scroll will happen automatically via useEffect when new messages arrive
         }, 500);
       }
     } catch (err) {
@@ -1846,11 +1888,13 @@ const ChatPage = () => {
       };
       
       setMessages(prev => [...prev, newFileMessage]);
+      // Scroll immediately after adding message
+      setTimeout(scrollToBottom, 100);
       
       // Refresh messages to get proper server data
       setTimeout(async () => {
         await fetchMessages(selectedUser.empId);
-        setTimeout(scrollToBottom, 100);
+        // Scroll will happen automatically via useEffect when new messages arrive
       }, 1500);
       
       socketRef.current?.emit("newMessage", {
@@ -1863,6 +1907,7 @@ const ChatPage = () => {
         senderName: storedUser.employeeName
       });
       
+      // Scroll immediately after adding optimistic message
       setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error('❌ File upload failed:', error);
@@ -1924,11 +1969,13 @@ const ChatPage = () => {
       };
       
       setMessages(prev => [...prev, newImageMessage]);
+      // Scroll immediately after adding message
+      setTimeout(scrollToBottom, 100);
       
       // Refresh messages to get proper server data
       setTimeout(async () => {
         await fetchMessages(selectedUser.empId);
-        setTimeout(scrollToBottom, 100);
+        // Scroll will happen automatically via useEffect when new messages arrive
       }, 1500);
       
       socketRef.current?.emit("newMessage", {
@@ -1937,8 +1984,6 @@ const ChatPage = () => {
         message: `Sent an image: ${file.name}`,
         senderName: storedUser.employeeName
       });
-      
-      setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error('❌ Image upload failed:', error);
       alert('Failed to upload image. Please try again.');
