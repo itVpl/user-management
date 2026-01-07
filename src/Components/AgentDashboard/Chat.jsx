@@ -572,7 +572,7 @@ const ChatPage = () => {
       }
 
       // Process messages to add isMyMessage flag and ensure seenBy structure
-      const processedMessages = messagesToProcess.map(msg => ({
+      let processedMessages = messagesToProcess.map(msg => ({
         ...msg,
         isMyMessage: msg.senderEmpId === storedUser?.empId,
         seenBy: msg.seenBy || null,
@@ -581,12 +581,28 @@ const ChatPage = () => {
         status: msg.status || (msg.isSeen ? 'seen' : (msg.seenBy ? 'seen' : 'sent'))
       }));
 
+      // Sort messages by timestamp to ensure correct chronological order
+      processedMessages.sort((a, b) => {
+        const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+        const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+        return timeA - timeB; // Ascending order (oldest first)
+      });
+
       if (loadOlder) {
-        // Prepend older messages to the beginning
-        setMessages(prev => [...processedMessages, ...prev]);
+        // Prepend older messages to the beginning and ensure entire array is sorted
+        setMessages(prev => {
+          const combined = [...processedMessages, ...prev];
+          // Sort the entire array to ensure correct order
+          combined.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+            const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+            return timeA - timeB; // Ascending order (oldest first)
+          });
+          return combined;
+        });
         setMessagesPage(prev => prev + 1);
       } else {
-        // Initial load - replace all messages
+        // Initial load - replace all messages (already sorted)
         setMessages(processedMessages);
         setMessagesPage(1);
       }
@@ -827,19 +843,35 @@ const ChatPage = () => {
         }
 
         // Process messages to add isMyMessage flag and ensure seenBy structure
-        const processedMessages = messagesToProcess.map(msg => ({
+        let processedMessages = messagesToProcess.map(msg => ({
           ...msg,
           isMyMessage: msg.senderEmpId === storedUser?.empId,
           seenBy: msg.seenBy || [],
           seenCount: msg.seenCount || (msg.seenBy?.length || 0)
         }));
 
+        // Sort messages by timestamp to ensure correct chronological order
+        processedMessages.sort((a, b) => {
+          const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+          const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+          return timeA - timeB; // Ascending order (oldest first)
+        });
+
         if (loadOlder) {
-          // Prepend older messages to the beginning
-          setGroupMessages(prev => [...processedMessages, ...prev]);
+          // Prepend older messages to the beginning and ensure entire array is sorted
+          setGroupMessages(prev => {
+            const combined = [...processedMessages, ...prev];
+            // Sort the entire array to ensure correct order
+            combined.sort((a, b) => {
+              const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+              const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+              return timeA - timeB; // Ascending order (oldest first)
+            });
+            return combined;
+          });
           setGroupMessagesPage(prev => prev + 1);
         } else {
-          // Initial load - replace all messages
+          // Initial load - replace all messages (already sorted)
           setGroupMessages(processedMessages);
           setGroupMessagesPage(1);
         }
