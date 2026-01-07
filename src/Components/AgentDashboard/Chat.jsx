@@ -1953,9 +1953,59 @@ const ChatPage = () => {
     autoResizeTextarea(textarea);
   };
 
-  const handlePaste = (e) => {
-    // Get pasted text from clipboard
-    const pastedText = e.clipboardData.getData('text');
+  const handlePaste = async (e) => {
+    const clipboardData = e.clipboardData;
+    
+    // Check if clipboard contains image data
+    const items = Array.from(clipboardData.items);
+    const imageItem = items.find(item => item.type.indexOf('image') !== -1);
+    
+    if (imageItem) {
+      // Handle image paste
+      e.preventDefault();
+      
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      
+      // Validate image file types: JPG, JPEG, PNG only
+      const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      const isValidImage = allowedImageTypes.includes(file.type);
+      
+      if (!isValidImage) {
+        alert('Please paste a valid image file (JPG, JPEG, or PNG).');
+        return;
+      }
+      
+      // File size limit: 10MB
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size should be less than 10MB.');
+        return;
+      }
+      
+      // Generate a filename with timestamp if file doesn't have a name
+      const timestamp = new Date().getTime();
+      const fileExtension = file.type.split('/')[1] || 'png';
+      const fileName = file.name || `pasted-image-${timestamp}.${fileExtension}`;
+      
+      // Create a new File object with the proper name
+      const namedFile = new File([file], fileName, { type: file.type });
+      
+      // Upload image based on chat type
+      if (chatType === 'group') {
+        if (selectedGroup) {
+          await handleGroupImageUpload(namedFile);
+        }
+      } else {
+        if (selectedUser) {
+          await handleImageUpload(namedFile);
+        }
+      }
+      
+      return;
+    }
+    
+    // Handle text paste (existing behavior)
+    const pastedText = clipboardData.getData('text');
     if (pastedText) {
       e.preventDefault();
       // Get the active textarea (group or individual)
