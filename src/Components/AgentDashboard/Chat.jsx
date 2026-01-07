@@ -1073,12 +1073,26 @@ const ChatPage = () => {
         }
 
         // Process messages to add isMyMessage flag and ensure seenBy structure
-        let processedMessages = messagesToProcess.map(msg => ({
-          ...msg,
-          isMyMessage: msg.senderEmpId === storedUser?.empId,
-          seenBy: msg.seenBy || [],
-          seenCount: msg.seenCount || (msg.seenBy?.length || 0)
-        }));
+        let processedMessages = messagesToProcess.map(msg => {
+          const processed = {
+            ...msg,
+            isMyMessage: msg.senderEmpId === storedUser?.empId,
+            seenBy: msg.seenBy || [],
+            seenCount: msg.seenCount || (msg.seenBy?.length || 0)
+          };
+          
+          // Debug: log seenBy data for messages sent by current user
+          if (processed.isMyMessage && (processed.seenBy.length > 0 || processed.seenCount > 0)) {
+            console.log('👁️ Group message with seen data:', {
+              messageId: processed._id,
+              message: processed.message?.substring(0, 20),
+              seenBy: processed.seenBy,
+              seenCount: processed.seenCount
+            });
+          }
+          
+          return processed;
+        });
 
         // Sort messages by timestamp to ensure correct chronological order
         processedMessages.sort((a, b) => {
@@ -2252,9 +2266,9 @@ const ChatPage = () => {
     }
     
     try {
-      // Per guide: POST /api/v1/chat/group/:groupId/message/:messageId/seen
-      const res = await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/message/${messageId}/seen`,
+      // Per docs: PATCH /api/v1/chat/group/:groupId/messages/:messageId/seen
+      const res = await axios.patch(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages/${messageId}/seen`,
         {},
         { withCredentials: true }
       );
@@ -2343,8 +2357,10 @@ const ChatPage = () => {
   };
 
   // Update message seen status when socket event is received
-  const updateGroupMessageSeenStatus = (messageId, seenBy) => {
-    if (!messageId || !seenBy) return;
+  const updateGroupMessageSeenStatus = (messageId, seenByData, isFullArray = false) => {
+    if (!messageId || !seenByData) return;
+    
+    console.log('🔄 Updating group message seen status:', { messageId, seenByData, isFullArray });
     
     setGroupMessages(prevMessages => {
       let messageFound = false;
@@ -2357,25 +2373,37 @@ const ChatPage = () => {
         
         if (msgId === targetId) {
           messageFound = true;
-          // Ensure seenBy array exists
-          const currentSeenBy = msg.seenBy || [];
           
-          // Check if this user already in seenBy array
-          const alreadySeen = currentSeenBy.some(
-            s => {
-              const sEmpId = s.empId || s.seenByEmpId || '';
-              const newEmpId = seenBy.empId || seenBy.seenByEmpId || '';
-              return sEmpId && newEmpId && String(sEmpId) === String(newEmpId);
-            }
-          );
-          
-          if (!alreadySeen) {
+          if (isFullArray && Array.isArray(seenByData)) {
+            // Backend sent full array - replace existing
             updated = true;
             return {
               ...msg,
-              seenBy: [...currentSeenBy, seenBy],
-              seenCount: (msg.seenCount || 0) + 1
+              seenBy: seenByData,
+              seenCount: seenByData.length
             };
+          } else {
+            // Single user addition
+            const currentSeenBy = msg.seenBy || [];
+            
+            // Check if this user already in seenBy array
+            const alreadySeen = currentSeenBy.some(
+              s => {
+                const sEmpId = s.empId || s.seenByEmpId || '';
+                const newEmpId = seenByData.empId || seenByData.seenByEmpId || '';
+                return sEmpId && newEmpId && String(sEmpId) === String(newEmpId);
+              }
+            );
+            
+            if (!alreadySeen) {
+              updated = true;
+              const newSeenBy = [...currentSeenBy, seenByData];
+              return {
+                ...msg,
+                seenBy: newSeenBy,
+                seenCount: newSeenBy.length
+              };
+            }
           }
         }
         return msg;
@@ -2383,6 +2411,7 @@ const ChatPage = () => {
       
       // If message not found, refresh messages to get latest data
       if (!messageFound && selectedGroup?._id) {
+        console.log('⚠️ Message not found in current list, refreshing...');
         setTimeout(() => {
           fetchGroupMessages(selectedGroup._id);
         }, 100);
@@ -2390,9 +2419,20 @@ const ChatPage = () => {
       
       // If message was updated, return new array to trigger re-render
       if (updated) {
+        console.log('✅ Group message seen status updated successfully');
         return updatedMessages;
       }
-      return prevMessages;
+      // Even if not updated, ensure seenCount matches seenBy length
+      const finalMessages = updatedMessages.map(msg => {
+        if (msg.seenBy && Array.isArray(msg.seenBy)) {
+          const calculatedCount = msg.seenBy.length;
+          if (msg.seenCount !== calculatedCount) {
+            return { ...msg, seenCount: calculatedCount };
+          }
+        }
+        return msg;
+      });
+      return finalMessages;
     });
   };
 
@@ -2811,10 +2851,34 @@ const ChatPage = () => {
     };
 
     // Handle group message seen status updates
+    // Per docs: event structure is { groupId, messageId, seenBy: { empId, employeeName, aliasName, seenAt } }
     const handleGroupMessageSeen = ({ groupId, messageId, seenBy }) => {
+      console.log('🔔 Group message seen event received:', { groupId, messageId, seenBy });
+      
       // Only update if it's for the currently selected group
       if (selectedGroup?._id === groupId && messageId && seenBy) {
-        updateGroupMessageSeenStatus(messageId, seenBy);
+        // Update the message's seenBy list in real-time (per docs example)
+        setGroupMessages(prevMessages => 
+          prevMessages.map(msg => {
+            if (String(msg._id) === String(messageId)) {
+              // Ensure seenBy is an array
+              const currentSeenBy = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+              
+              // Check if user already in seenBy list (per docs)
+              const alreadySeen = currentSeenBy.some(s => s.empId === seenBy.empId);
+              
+              if (!alreadySeen) {
+                // Add new seenBy entry and increment count
+                return {
+                  ...msg,
+                  seenBy: [...currentSeenBy, seenBy],
+                  seenCount: (msg.seenCount || 0) + 1
+                };
+              }
+            }
+            return msg;
+          })
+        );
       }
     };
 
@@ -2971,6 +3035,9 @@ const ChatPage = () => {
     socket.on("newMessage", handleNewMessage);
     socket.on("newGroupMessage", handleNewGroupMessage);
     socket.on("groupMessageSeen", handleGroupMessageSeen);
+    // Also listen for alternative event names that backend might use
+    socket.on("groupMessageSeenUpdated", handleGroupMessageSeen);
+    socket.on("groupMessageRead", handleGroupMessageSeen);
     socket.on("messageSeen", handleMessageSeen);
     socket.on("chatListUpdated", handleChatListUpdated);
     socket.on("groupListUpdated", handleGroupListUpdated);  // 🔥 Added per guide
@@ -2978,6 +3045,10 @@ const ChatPage = () => {
     // Debug: Listen for ALL events to see what's coming from backend
     socket.onAny((eventName, ...args) => {
       console.log('🔔🔔🔔 Chat.jsx - Socket event received:', eventName, args);
+      // If it's a seen-related event, try to handle it
+      if (eventName.includes('seen') || eventName.includes('read')) {
+        console.log('👁️ Seen-related event detected:', eventName, args);
+      }
     });
     
     console.log('✅ Chat.jsx - All socket listeners set up');
@@ -2990,6 +3061,8 @@ const ChatPage = () => {
         socketRef.current.off("newMessage", handleNewMessage);
         socketRef.current.off("newGroupMessage", handleNewGroupMessage);
         socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
+        socketRef.current.off("groupMessageSeenUpdated", handleGroupMessageSeen);
+        socketRef.current.off("groupMessageRead", handleGroupMessageSeen);
         socketRef.current.off("messageSeen", handleMessageSeen);
         socketRef.current.off("user_online", handleUserOnline);
         socketRef.current.off("user_offline", handleUserOffline);
@@ -3817,49 +3890,75 @@ const ChatPage = () => {
                                     ))}
                                   </div>
                                 )}
-                                <div className={`flex items-center justify-end mt-2 gap-1`}>
+                                <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
                                   <span className={`text-xs ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>
                                     {formatTime(msg.timestamp)}
                                   </span>
                                   {isSentByMe && (
-                                    <button
-                                      onClick={() => msg._id && fetchSeenBy(msg._id, true)}
-                                      className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
-                                      title="Click to see who has seen this message"
-                                    >
-                                      <CheckCheck size={12} className="text-blue-100" />
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => msg._id && fetchSeenBy(msg._id, true)}
+                                        className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
+                                        title={msg.seenCount > 0 || (msg.seenBy && msg.seenBy.length > 0) ? `Seen by ${msg.seenCount || msg.seenBy?.length || 0} ${(msg.seenCount || msg.seenBy?.length || 0) === 1 ? 'person' : 'people'}` : "Click to see who has seen this message"}
+                                      >
+                                        <span className="text-xs">
+                                          {(() => {
+                                            // Per docs: check seenBy array and seenCount
+                                            const seenByArray = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+                                            const seenCount = msg.seenCount || seenByArray.length;
+                                            const isSeen = seenCount > 0 || seenByArray.length > 0;
+                                            
+                                            return isSeen ? (
+                                              <CheckCheck size={14} className="text-blue-100" />
+                                            ) : (
+                                              <Check size={14} className="text-blue-100 opacity-70" />
+                                            );
+                                          })()}
+                                        </span>
+                                      </button>
+                                      {/* Show seen status text - per docs: seenBy array with { empId, employeeName, aliasName, seenAt } */}
+                                      {/* Always show status for your messages (like individual chats) */}
+                                      {(() => {
+                                        // Per docs: check seenBy array and seenCount
+                                        const seenByArray = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+                                        const seenCount = msg.seenCount || seenByArray.length;
+                                        const hasSeenBy = seenByArray.length > 0;
+                                        const isSeen = seenCount > 0 || hasSeenBy;
+                                        
+                                        // If message has been seen and we have seenBy array, show names
+                                        if (isSeen && hasSeenBy) {
+                                          return (
+                                            <span className="text-xs italic text-white opacity-90">
+                                              Seen by {seenByArray.slice(0, 2).map((user, idx) => (
+                                                <span key={user.empId || idx}>
+                                                  {user.aliasName || user.employeeName}
+                                                  {idx < Math.min(seenByArray.length, 2) - 1 && ', '}
+                                                </span>
+                                              ))}
+                                              {seenByArray.length > 2 && ` +${seenByArray.length - 2} more`}
+                                            </span>
+                                          );
+                                        }
+                                        
+                                        // If message has been seen but no array, show count
+                                        if (isSeen && seenCount > 0) {
+                                          return (
+                                            <span className="text-xs italic text-white opacity-90">
+                                              Seen by {seenCount} {seenCount === 1 ? 'person' : 'people'}
+                                            </span>
+                                          );
+                                        }
+                                        
+                                        // Always show "Sent" if not seen yet (like individual chats)
+                                        return (
+                                          <span className="text-xs italic text-white opacity-75">
+                                            Sent
+                                          </span>
+                                        );
+                                      })()}
+                                    </div>
                                   )}
                                 </div>
-                                {/* Show seen status for messages sent by current user */}
-                                {isSentByMe && (
-                                  <div className={`mt-2 flex flex-col gap-1 ${isSentByMe ? 'items-end' : 'items-start'}`}>
-                                    {msg.seenCount > 0 ? (
-                                      <div className="flex flex-col items-end gap-1">
-                                        <span className={`text-xs font-semibold ${isSentByMe ? 'text-blue-100' : 'text-gray-600'}`}>
-                                          Seen by {msg.seenCount} {msg.seenCount === 1 ? 'person' : 'people'}
-                                        </span>
-                                        {msg.seenBy && msg.seenBy.length > 0 && (
-                                          <div className={`text-xs ${isSentByMe ? 'text-blue-50' : 'text-gray-500'} flex flex-wrap gap-1 justify-end max-w-full`}>
-                                            {msg.seenBy.slice(0, 3).map((user, idx) => (
-                                              <span key={user.empId || user.seenByEmpId || idx} className="italic">
-                                                {user.aliasName || user.employeeName || user.name}
-                                                {idx < Math.min(msg.seenBy.length, 3) - 1 && ','}
-                                              </span>
-                                            ))}
-                                            {msg.seenBy.length > 3 && (
-                                              <span className="italic">+{msg.seenBy.length - 3} more</span>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <span className={`text-xs italic ${isSentByMe ? 'text-blue-50' : 'text-gray-500'}`}>
-                                        Sent
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </div>
