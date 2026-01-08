@@ -1696,7 +1696,8 @@ const ChatPage = () => {
       seenBy: [],
       seenCount: 0,
       taggedUsers: usersToTag,
-      isOptimistic: true // Flag to identify optimistic messages
+      isOptimistic: true, // Flag to identify optimistic messages
+      ...(currentReplyingTo ? { replyTo: currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo } : {})
     };
     
     setGroupMessages(prev => [...prev, optimisticMessage]);
@@ -1733,6 +1734,7 @@ const ChatPage = () => {
         // Update the optimistic message with real server data
         const realMessageId = response.data.message?._id || response.data.messageId;
         const realTimestamp = response.data.message?.timestamp || new Date().toISOString();
+        const serverReplyTo = response.data.message?.replyTo || (currentReplyingTo ? (currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo) : null);
         
         setGroupMessages(prev => prev.map(msg => 
           msg._id === tempId 
@@ -1740,7 +1742,8 @@ const ChatPage = () => {
                 ...msg,
                 _id: realMessageId,
                 timestamp: realTimestamp,
-                isOptimistic: false
+                isOptimistic: false,
+                ...(serverReplyTo ? { replyTo: serverReplyTo } : {})
               }
             : msg
         ));
@@ -2230,7 +2233,8 @@ const ChatPage = () => {
       seenBy: null,
       seenAt: null,
       isSeen: false,
-      isOptimistic: true // Flag to identify optimistic messages
+      isOptimistic: true, // Flag to identify optimistic messages
+      ...(replyingTo ? { replyTo: replyingTo._id || replyingTo.id || replyingTo } : {})
     };
     
     setMessages(prev => [...prev, optimisticMessage]);
@@ -2261,6 +2265,7 @@ const ChatPage = () => {
       if (response.data) {
         const realMessageId = response.data.message?._id || response.data.messageId;
         const realTimestamp = response.data.message?.timestamp || new Date().toISOString();
+        const serverReplyTo = response.data.message?.replyTo || (replyingTo ? (replyingTo._id || replyingTo.id || replyingTo) : null);
         
         setMessages(prev => prev.map(msg => 
           msg._id === tempId 
@@ -2268,7 +2273,8 @@ const ChatPage = () => {
                 ...msg,
                 _id: realMessageId,
                 timestamp: realTimestamp,
-                isOptimistic: false
+                isOptimistic: false,
+                ...(serverReplyTo ? { replyTo: serverReplyTo } : {})
               }
             : msg
         ));
@@ -4476,7 +4482,7 @@ const ChatPage = () => {
                               el.setAttribute('data-message-id', msg._id || msg.id || '');
                             }
                           }}
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 ${
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 group ${
                             highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
                           }`}
                         >
@@ -4496,6 +4502,21 @@ const ChatPage = () => {
                                 {msg.senderName?.charAt(0).toUpperCase() || 'U'}
                               </button>
                             )}
+                            {isSentByMe && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Reply button clicked for own group message!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-8 h-8 opacity-0 group-hover:opacity-100 flex items-center justify-center text-gray-500 hover:text-blue-500 hover:bg-gray-100 rounded-full transition-all duration-200 flex-shrink-0 cursor-pointer z-10"
+                                title="Reply to this message"
+                              >
+                                <Reply size={16} />
+                              </button>
+                            )}
                             <div className="flex flex-col min-w-0 flex-1">
                               {!isSentByMe && (
                                 <span className="text-xs text-gray-600 font-medium mb-1 px-1">
@@ -4511,10 +4532,25 @@ const ChatPage = () => {
                               >
                                 {/* Show replied message if exists - WhatsApp style */}
                                 {msg.replyTo && (() => {
-                                  const repliedMsg = typeof msg.replyTo === 'object' && msg.replyTo.message 
-                                    ? msg.replyTo 
-                                    : groupMessages.find(m => (m._id || m.id) === (msg.replyTo._id || msg.replyTo.id || msg.replyTo));
-                                  const replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                  // Handle replyTo as object with message, object with id, or string ID
+                                  let repliedMsg = null;
+                                  let replyToId = null;
+                                  
+                                  if (typeof msg.replyTo === 'object') {
+                                    if (msg.replyTo.message) {
+                                      // Full message object
+                                      repliedMsg = msg.replyTo;
+                                      replyToId = msg.replyTo._id || msg.replyTo.id;
+                                    } else {
+                                      // Object with just ID
+                                      replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                      repliedMsg = groupMessages.find(m => String(m._id || m.id) === String(replyToId));
+                                    }
+                                  } else {
+                                    // String ID
+                                    replyToId = msg.replyTo;
+                                    repliedMsg = groupMessages.find(m => String(m._id || m.id) === String(replyToId));
+                                  }
                                   return repliedMsg ? (
                                     <div 
                                       onClick={(e) => {
@@ -4539,7 +4575,23 @@ const ChatPage = () => {
                                       <div className={`text-xs break-words whitespace-pre-wrap line-clamp-2 ${
                                         isSentByMe ? 'text-white/70' : 'text-gray-600'
                                       }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                                        {repliedMsg.message || repliedMsg.text || repliedMsg.content}
+                                        {(() => {
+                                          // Handle different message types
+                                          if (repliedMsg.message) {
+                                            // Check if it's a file/image/audio message
+                                            if (repliedMsg.message.includes('Sent an image:')) {
+                                              return '📷 Image';
+                                            } else if (repliedMsg.message.includes('Sent a file:')) {
+                                              return '📎 File';
+                                            } else if (repliedMsg.message.includes('Sent an audio:')) {
+                                              return '🎤 Audio';
+                                            }
+                                            // Regular text message - show content (may include caption)
+                                            const text = repliedMsg.message.split('\n')[0]; // Get first line (filename or text)
+                                            return text || repliedMsg.text || repliedMsg.content || 'Message';
+                                          }
+                                          return repliedMsg.text || repliedMsg.content || 'Message';
+                                        })()}
                                       </div>
                                     </div>
                                   ) : null;
@@ -5113,7 +5165,7 @@ const ChatPage = () => {
                               el.setAttribute('data-message-id', msg._id || msg.id || '');
                             }
                           }}
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 ${
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 group ${
                             highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
                           }`}
                         >
@@ -5133,6 +5185,21 @@ const ChatPage = () => {
                                 {selectedUser.employeeName?.charAt(0).toUpperCase()}
                               </button>
                             )}
+                            {isSentByMe && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Reply button clicked for own message!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-8 h-8 opacity-0 group-hover:opacity-100 flex items-center justify-center text-gray-500 hover:text-blue-500 hover:bg-gray-100 rounded-full transition-all duration-200 flex-shrink-0 cursor-pointer z-10"
+                                title="Reply to this message"
+                              >
+                                <Reply size={16} />
+                              </button>
+                            )}
                             <div className="flex flex-col">
                               {!isSentByMe && (
                                 <span className="text-xs text-gray-600 font-medium mb-1 px-1">
@@ -5148,10 +5215,25 @@ const ChatPage = () => {
                               >
                                 {/* Show replied message if exists - WhatsApp style */}
                                 {msg.replyTo && (() => {
-                                  const repliedMsg = typeof msg.replyTo === 'object' && msg.replyTo.message 
-                                    ? msg.replyTo 
-                                    : messages.find(m => (m._id || m.id) === (msg.replyTo._id || msg.replyTo.id || msg.replyTo));
-                                  const replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                  // Handle replyTo as object with message, object with id, or string ID
+                                  let repliedMsg = null;
+                                  let replyToId = null;
+                                  
+                                  if (typeof msg.replyTo === 'object') {
+                                    if (msg.replyTo.message) {
+                                      // Full message object
+                                      repliedMsg = msg.replyTo;
+                                      replyToId = msg.replyTo._id || msg.replyTo.id;
+                                    } else {
+                                      // Object with just ID
+                                      replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                      repliedMsg = messages.find(m => String(m._id || m.id) === String(replyToId));
+                                    }
+                                  } else {
+                                    // String ID
+                                    replyToId = msg.replyTo;
+                                    repliedMsg = messages.find(m => String(m._id || m.id) === String(replyToId));
+                                  }
                                   return repliedMsg ? (
                                     <div 
                                       onClick={(e) => {
@@ -5176,7 +5258,23 @@ const ChatPage = () => {
                                       <div className={`text-xs break-words whitespace-pre-wrap line-clamp-2 ${
                                         isSentByMe ? 'text-white/70' : 'text-gray-600'
                                       }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                                        {repliedMsg.message || repliedMsg.text || repliedMsg.content}
+                                        {(() => {
+                                          // Handle different message types
+                                          if (repliedMsg.message) {
+                                            // Check if it's a file/image/audio message
+                                            if (repliedMsg.message.includes('Sent an image:')) {
+                                              return '📷 Image';
+                                            } else if (repliedMsg.message.includes('Sent a file:')) {
+                                              return '📎 File';
+                                            } else if (repliedMsg.message.includes('Sent an audio:')) {
+                                              return '🎤 Audio';
+                                            }
+                                            // Regular text message - show content (may include caption)
+                                            const text = repliedMsg.message.split('\n')[0]; // Get first line (filename or text)
+                                            return text || repliedMsg.text || repliedMsg.content || 'Message';
+                                          }
+                                          return repliedMsg.text || repliedMsg.content || 'Message';
+                                        })()}
                                       </div>
                                     </div>
                                   ) : null;
