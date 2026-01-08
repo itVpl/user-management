@@ -491,9 +491,42 @@ const ChatPage = () => {
       userScrolledRef.current = false;
     }
     
-    // Use requestAnimationFrame to ensure DOM is updated
+    // Use requestAnimationFrame to ensure DOM is updated, then double RAF for better reliability
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      requestAnimationFrame(() => {
+        // Determine which container to scroll based on chat type
+        const container = chatType === 'group' 
+          ? groupMessagesContainerRef.current 
+          : messagesContainerRef.current;
+        
+        if (container) {
+          // Scroll container directly to bottom - use scrollTop for immediate scroll
+          const scrollHeight = container.scrollHeight;
+          const clientHeight = container.clientHeight;
+          
+          // Ensure we scroll to the absolute bottom
+          container.scrollTop = scrollHeight - clientHeight;
+          
+          // If smooth scrolling is requested, do it after setting scrollTop
+          if (force) {
+            setTimeout(() => {
+              container.scrollTo({
+                top: scrollHeight,
+                behavior: "smooth"
+              });
+            }, 10);
+          }
+        } else {
+          // Fallback to messagesEndRef if container refs aren't available
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ 
+              behavior: force ? "smooth" : "auto",
+              block: "end",
+              inline: "nearest"
+            });
+          }
+        }
+      });
     });
   };
 
@@ -519,24 +552,27 @@ const ChatPage = () => {
     if (chatType === 'group' && groupMessages.length > 0 && !loadingOlderGroupMessages) {
       const lastMessage = groupMessages[groupMessages.length - 1];
       const lastMessageId = lastMessage?._id || lastMessage?.id;
-      
+
       // Only scroll if this is a new message (different ID than last one)
       if (lastMessageId && lastMessageId !== lastGroupMessageIdRef.current) {
         lastGroupMessageIdRef.current = lastMessageId;
-        
+
         // Check current scroll position before auto-scrolling
         const container = groupMessagesContainerRef.current;
         if (!container) return;
-        
+
         const isNearBottom = checkIfNearBottom(container);
-        
+
         // Only auto-scroll if user is near bottom (don't scroll if they're viewing older messages)
-        if (isNearBottom) {
+        // OR if the last message is optimistic (user just sent it)
+        const isOptimisticMessage = lastMessage.isOptimistic;
+        
+        if (isNearBottom || isOptimisticMessage) {
           const timer = setTimeout(() => {
             // Double-check before scrolling (user might have scrolled in the meantime)
             const stillNearBottom = checkIfNearBottom(container);
-            if (stillNearBottom) {
-              scrollToBottom();
+            if (stillNearBottom || isOptimisticMessage) {
+              scrollToBottom(isOptimisticMessage);
               isNearBottomRef.current = true;
             }
           }, 150);
@@ -562,12 +598,15 @@ const ChatPage = () => {
         const isNearBottom = checkIfNearBottom(container);
         
         // Only auto-scroll if user is near bottom (don't scroll if they're viewing older messages)
-        if (isNearBottom) {
+        // OR if the last message is optimistic (user just sent it)
+        const isOptimisticMessage = lastMessage.isOptimistic;
+        
+        if (isNearBottom || isOptimisticMessage) {
           const timer = setTimeout(() => {
             // Double-check before scrolling (user might have scrolled in the meantime)
             const stillNearBottom = checkIfNearBottom(container);
-            if (stillNearBottom) {
-              scrollToBottom();
+            if (stillNearBottom || isOptimisticMessage) {
+              scrollToBottom(isOptimisticMessage);
               isNearBottomRef.current = true;
             }
           }, 150);
@@ -1581,7 +1620,8 @@ const ChatPage = () => {
     };
     
     setGroupMessages(prev => [...prev, optimisticMessage]);
-    setTimeout(() => scrollToBottom(true), 50);
+    // Scroll to bottom after message is added - wait for DOM update
+    setTimeout(() => scrollToBottom(true), 100);
     
     try {
       const formData = new FormData();
@@ -2114,7 +2154,8 @@ const ChatPage = () => {
     };
     
     setMessages(prev => [...prev, optimisticMessage]);
-    setTimeout(() => scrollToBottom(true), 50);
+    // Scroll to bottom after message is added - wait for DOM update
+    setTimeout(() => scrollToBottom(true), 100);
 
     // Emit socket event immediately
     socketRef.current?.emit("newMessage", {
@@ -2155,7 +2196,8 @@ const ChatPage = () => {
         // Refresh messages after a short delay to get proper server data
         setTimeout(async () => {
           await fetchMessages(selectedUser.empId);
-          // Scroll will happen automatically via useEffect when new messages arrive
+          // Ensure scroll to bottom after refetch (user just sent a message)
+          setTimeout(() => scrollToBottom(true), 200);
         }, 500);
       }
     } catch (err) {
