@@ -53,7 +53,7 @@ const formatEmployeeName = (user) => {
 };
 
 // Emoji Picker Component
-const EmojiPicker = ({ onEmojiSelect, onClose, position = 'bottom' }) => {
+const EmojiPicker = ({ onEmojiSelect, onClose, position = 'bottom', buttonRef }) => {
   const emojiCategories = {
     'Smileys & People': ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓'],
     'Gestures': ['🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕'],
@@ -64,21 +64,62 @@ const EmojiPicker = ({ onEmojiSelect, onClose, position = 'bottom' }) => {
   };
 
   const pickerRef = useRef(null);
+  const [pickerStyle, setPickerStyle] = useState({});
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        // Don't close if clicking the button that opened it
+        if (buttonRef?.current && buttonRef.current.contains(event.target)) {
+          return;
+        }
         onClose();
       }
     };
 
-    if (pickerRef.current) {
+    if (pickerRef.current && buttonRef?.current) {
+      // Calculate position relative to button
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const pickerHeight = 400; // maxHeight
+      
+      let top, bottom, left, right;
+      
+      if (position === 'top') {
+        // Position above button
+        bottom = viewportHeight - buttonRect.top + 8; // 8px margin
+        top = 'auto';
+      } else {
+        // Position below button
+        top = buttonRect.bottom + 8; // 8px margin
+        bottom = 'auto';
+      }
+      
+      // Position horizontally - align to right edge of button
+      right = window.innerWidth - buttonRect.right;
+      left = 'auto';
+      
+      // Adjust if picker would go off-screen
+      if (right < 0) {
+        right = 8;
+        left = 'auto';
+      }
+      
+      setPickerStyle({
+        position: 'fixed',
+        top: position === 'top' ? 'auto' : top,
+        bottom: position === 'top' ? bottom : 'auto',
+        right: right,
+        left: left,
+        zIndex: 9999
+      });
+
       document.addEventListener('mousedown', handleClickOutside);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
-  }, [onClose]);
+  }, [onClose, position, buttonRef]);
 
   const handleEmojiClick = (emoji) => {
     onEmojiSelect(emoji);
@@ -87,14 +128,12 @@ const EmojiPicker = ({ onEmojiSelect, onClose, position = 'bottom' }) => {
   return (
     <div
       ref={pickerRef}
-      className={`absolute z-50 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 ${
-        position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
-      }`}
+      className="bg-white rounded-lg shadow-2xl border border-gray-200 p-4"
       style={{
         width: '320px',
         maxHeight: '400px',
         overflowY: 'auto',
-        right: 0
+        ...pickerStyle
       }}
     >
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
@@ -482,6 +521,9 @@ const ChatPage = () => {
   const groupMessageRefs = useRef({});
   const markedAsSeenRef = useRef(new Set()); // Track which messages have been marked as seen
   const emojiPickerRef = useRef(null); // Ref for emoji picker dropdown
+  const groupEmojiButtonRef = useRef(null); // Ref for group chat emoji button
+  const individualEmojiButtonRef = useRef(null); // Ref for individual chat emoji button
+  const previewEmojiButtonRef = useRef(null); // Ref for preview modal emoji button
   const lastFetchedGroupIdRef = useRef(null); // Track last fetched group to prevent duplicate fetches
 
   const scrollToBottom = (force = false) => {
@@ -4769,6 +4811,7 @@ const ChatPage = () => {
                       <Image size={20} className="text-gray-500" />
                     </button>
                     <button 
+                      ref={groupEmojiButtonRef}
                       onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                       disabled={uploadingFile || isSendingMessage}
                       className="relative p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -4780,6 +4823,7 @@ const ChatPage = () => {
                           onEmojiSelect={insertEmoji}
                           onClose={() => setShowEmojiPicker(false)}
                           position="top"
+                          buttonRef={groupEmojiButtonRef}
                         />
                       )}
                     </button>
@@ -5293,6 +5337,7 @@ const ChatPage = () => {
                       <Image size={20} className="text-gray-500" />
                     </button>
                     <button 
+                      ref={individualEmojiButtonRef}
                       onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                       disabled={uploadingFile || isSendingMessage}
                       className="relative p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -5304,6 +5349,7 @@ const ChatPage = () => {
                           onEmojiSelect={insertEmoji}
                           onClose={() => setShowEmojiPicker(false)}
                           position="top"
+                          buttonRef={individualEmojiButtonRef}
                         />
                       )}
                     </button>
@@ -5689,6 +5735,7 @@ const ChatPage = () => {
                   </button>
                 )}
                 <button
+                  ref={previewEmojiButtonRef}
                   onClick={() => setShowPreviewEmojiPicker(!showPreviewEmojiPicker)}
                   className="relative p-1.5 hover:bg-gray-200 rounded-full transition-colors flex-shrink-0"
                   aria-label="Add emoji"
@@ -5702,6 +5749,7 @@ const ChatPage = () => {
                       }}
                       onClose={() => setShowPreviewEmojiPicker(false)}
                       position="top"
+                      buttonRef={previewEmojiButtonRef}
                     />
                   )}
                 </button>
