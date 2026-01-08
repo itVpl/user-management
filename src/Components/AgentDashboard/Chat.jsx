@@ -1696,7 +1696,8 @@ const ChatPage = () => {
       seenBy: [],
       seenCount: 0,
       taggedUsers: usersToTag,
-      isOptimistic: true // Flag to identify optimistic messages
+      isOptimistic: true, // Flag to identify optimistic messages
+      ...(currentReplyingTo ? { replyTo: currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo } : {})
     };
     
     setGroupMessages(prev => [...prev, optimisticMessage]);
@@ -1704,19 +1705,130 @@ const ChatPage = () => {
     setTimeout(() => scrollToBottom(true), 100);
     
     try {
+      // Validate group ID
+      if (!selectedGroup?._id) {
+        throw new Error('Invalid group selected. Please select a group and try again.');
+      }
+      
+      // Validate message
+      if (!messageToSend || !messageToSend.trim()) {
+        throw new Error('Message cannot be empty.');
+      }
+      
       const formData = new FormData();
       formData.append('groupId', selectedGroup._id);
-      formData.append('message', messageToSend);
+      formData.append('message', messageToSend.trim());
       
       // Add replyTo if replying to a message
       if (currentReplyingTo) {
-        formData.append('replyTo', currentReplyingTo._id || currentReplyingTo.id);
+        let replyToId = currentReplyingTo._id || currentReplyingTo.id;
+        
+        // If ID is missing, undefined, or temporary, try to find the real message
+        if (!replyToId || replyToId === 'undefined' || String(replyToId).startsWith('temp-') || String(replyToId).startsWith('temp-group-')) {
+          console.log('🔍 ReplyTo ID missing or temporary, searching for real message...', {
+            hasId: !!replyToId,
+            id: replyToId,
+            message: currentReplyingTo.message,
+            sender: currentReplyingTo.senderEmpId
+          });
+          
+          // Try to find the real message in groupMessages by matching multiple properties
+          const replyTimestamp = new Date(currentReplyingTo.timestamp || 0).getTime();
+          const replyContent = (currentReplyingTo.message || '').trim();
+          
+          // Search for the message - try exact match first, then fuzzy match
+          let realMessage = groupMessages.find(msg => {
+            // Skip optimistic messages
+            if (msg.isOptimistic || !msg._id || String(msg._id).startsWith('temp-')) {
+              return false;
+            }
+            
+            // Match by sender
+            if (msg.senderEmpId !== currentReplyingTo.senderEmpId) {
+              return false;
+            }
+            
+            // Match by message content (exact match)
+            const msgContent = (msg.message || '').trim();
+            if (msgContent === replyContent) {
+              // If timestamps are close (within 30 seconds), it's likely the same message
+              if (msg.timestamp) {
+                const msgTimestamp = new Date(msg.timestamp).getTime();
+                const timeDiff = Math.abs(msgTimestamp - replyTimestamp);
+                if (timeDiff <= 30000) { // Within 30 seconds
+                  return true;
+                }
+              } else {
+                // No timestamp, but content matches - likely the same
+                return true;
+              }
+            }
+            
+            return false;
+          });
+          
+          // If not found, try matching by content only (for recently sent messages)
+          if (!realMessage && replyContent) {
+            // Find the most recent message with matching content from the same sender
+            const matchingMessages = groupMessages
+              .filter(msg => {
+                if (msg.isOptimistic || !msg._id || String(msg._id).startsWith('temp-')) {
+                  return false;
+                }
+                return msg.senderEmpId === currentReplyingTo.senderEmpId &&
+                       (msg.message || '').trim() === replyContent;
+              })
+              .sort((a, b) => {
+                const timeA = new Date(a.timestamp || 0).getTime();
+                const timeB = new Date(b.timestamp || 0).getTime();
+                return timeB - timeA; // Most recent first
+              });
+            
+            if (matchingMessages.length > 0) {
+              realMessage = matchingMessages[0];
+            }
+          }
+          
+          if (realMessage && realMessage._id) {
+            replyToId = realMessage._id;
+            console.log('✅ Found real message ID for replyTo:', replyToId, 'matching message:', realMessage.message);
+          } else {
+            console.warn('⚠️ Could not find real message ID. Message being replied to:', {
+              content: replyContent,
+              sender: currentReplyingTo.senderEmpId,
+              timestamp: currentReplyingTo.timestamp
+            });
+            replyToId = null;
+          }
+        }
+        
+        if (replyToId && replyToId !== 'undefined' && !String(replyToId).startsWith('temp-')) {
+          formData.append('replyTo', String(replyToId));
+          console.log('📤 Sending group message with replyTo:', replyToId);
+        } else if (currentReplyingTo) {
+          console.warn('⚠️ ReplyTo message has invalid or temporary ID, skipping replyTo field. Message:', currentReplyingTo.message);
+        }
       }
       
       // Add tagged user IDs
       if (usersToTag.length > 0) {
-        formData.append('taggedUserIds', JSON.stringify(usersToTag.map(u => u.empId)));
+        const taggedIds = usersToTag
+          .map(u => u?.empId)
+          .filter(id => id); // Filter out any undefined/null IDs
+        
+        if (taggedIds.length > 0) {
+          formData.append('taggedUserIds', JSON.stringify(taggedIds));
+          console.log('📤 Sending group message with tagged users:', taggedIds);
+        }
       }
+
+      console.log('📤 Sending group message:', {
+        groupId: selectedGroup._id,
+        groupName: selectedGroup.groupName,
+        message: messageToSend.substring(0, 50) + (messageToSend.length > 50 ? '...' : ''),
+        hasReplyTo: !!currentReplyingTo,
+        taggedUsersCount: usersToTag.length
+      });
 
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/send`,
@@ -1733,6 +1845,7 @@ const ChatPage = () => {
         // Update the optimistic message with real server data
         const realMessageId = response.data.message?._id || response.data.messageId;
         const realTimestamp = response.data.message?.timestamp || new Date().toISOString();
+        const serverReplyTo = response.data.message?.replyTo || (currentReplyingTo ? (currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo) : null);
         
         setGroupMessages(prev => prev.map(msg => 
           msg._id === tempId 
@@ -1740,7 +1853,8 @@ const ChatPage = () => {
                 ...msg,
                 _id: realMessageId,
                 timestamp: realTimestamp,
-                isOptimistic: false
+                isOptimistic: false,
+                ...(serverReplyTo ? { replyTo: serverReplyTo } : {})
               }
             : msg
         ));
@@ -1759,12 +1873,71 @@ const ChatPage = () => {
       }
     } catch (err) {
       console.error("❌ Send group message failed:", err);
+      
+      // Log detailed error information for debugging
+      if (err.response) {
+        console.error("❌ Server error response:", {
+          status: err.response.status,
+          statusText: err.response.statusText,
+          data: err.response.data,
+          headers: err.response.headers
+        });
+      }
+      
+      // Determine error type and message
+      let errorMessage = 'Failed to send message. Please try again.';
+      
+      if (err.response) {
+        // Server responded with error status
+        const status = err.response.status;
+        const errorData = err.response.data;
+        
+        if (status === 401) {
+          errorMessage = 'Session expired. Please refresh the page and try again.';
+        } else if (status === 403) {
+          errorMessage = 'You don\'t have permission to send messages to this group.';
+        } else if (status === 404) {
+          errorMessage = 'Group not found. Please select a valid group.';
+        } else if (status >= 500) {
+          // Include server error details if available
+          const serverErrorMsg = errorData?.message || errorData?.error || errorData?.errorMessage;
+          if (serverErrorMsg) {
+            errorMessage = `Server error: ${serverErrorMsg}. Please try again in a moment.`;
+          } else {
+            errorMessage = 'Server error. Please try again in a moment.';
+          }
+          console.error("🔴 Server error details:", {
+            status,
+            error: errorData,
+            groupId: selectedGroup?._id,
+            messageLength: messageToSend.length
+          });
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        }
+      } else if (err.request) {
+        // Request was made but no response received
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errorMessage = 'Request timed out. Please check your connection and try again.';
+        } else if (err.code === 'ERR_NETWORK') {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = 'No response from server. Please check your connection and try again.';
+        }
+      }
+      
       // Remove optimistic message on error
       setGroupMessages(prev => prev.filter(msg => msg._id !== tempId));
-      // Restore input on error
+      
+      // Restore input, reply state, and tagged users on error
       setInput(messageToSend);
+      if (currentReplyingTo) {
+        setReplyingTo(currentReplyingTo);
+      }
       setTaggedUsers(usersToTag);
-      alert('Failed to send message. Please try again.');
+      
+      // Show error message
+      alert(errorMessage);
     } finally {
       setIsSendingMessage(false);
     }
@@ -2210,9 +2383,12 @@ const ChatPage = () => {
     setIsSendingMessage(true);
     const messageToSend = input.trim();
     
+    // Store reply state before clearing (needed for error recovery)
+    const currentReplyingTo = replyingTo;
+    
     // Clear input immediately to prevent duplicate sends
     setInput("");
-    // Clear reply after sending
+    // Clear reply after sending (will restore on error)
     setReplyingTo(null);
 
     // Create temporary ID for optimistic update
@@ -2230,26 +2406,116 @@ const ChatPage = () => {
       seenBy: null,
       seenAt: null,
       isSeen: false,
-      isOptimistic: true // Flag to identify optimistic messages
+      isOptimistic: true, // Flag to identify optimistic messages
+      ...(currentReplyingTo ? { replyTo: currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo } : {})
     };
     
     setMessages(prev => [...prev, optimisticMessage]);
     // Scroll to bottom after message is added - wait for DOM update
     setTimeout(() => scrollToBottom(true), 100);
 
-    // Emit socket event immediately
+    // Emit socket event immediately (server will broadcast with full data including replyTo)
+    // Note: The server's broadcast will include replyTo from the database
     socketRef.current?.emit("newMessage", {
       senderEmpId: storedUser.empId,
       receiverEmpId: selectedUser.empId,
       message: messageToSend,
-      senderName: storedUser.employeeName
+      senderName: storedUser.employeeName,
+      ...(currentReplyingTo && (currentReplyingTo._id || currentReplyingTo.id) && !String(currentReplyingTo._id || currentReplyingTo.id).startsWith('temp-') 
+        ? { replyTo: currentReplyingTo._id || currentReplyingTo.id } 
+        : {})
     });
 
     try {
+      // Get replyTo ID, ensuring it's not a temporary optimistic ID
+      let replyToId = null;
+      if (currentReplyingTo) {
+        replyToId = currentReplyingTo._id || currentReplyingTo.id;
+        
+        // If ID is missing, undefined, or temporary, try to find the real message
+        if (!replyToId || replyToId === 'undefined' || String(replyToId).startsWith('temp-') || String(replyToId).startsWith('temp-group-')) {
+          console.log('🔍 ReplyTo ID missing or temporary, searching for real message...', {
+            hasId: !!replyToId,
+            id: replyToId,
+            message: currentReplyingTo.message,
+            sender: currentReplyingTo.senderEmpId
+          });
+          
+          // Try to find the real message in messages by matching multiple properties
+          const replyTimestamp = new Date(currentReplyingTo.timestamp || 0).getTime();
+          const replyContent = (currentReplyingTo.message || '').trim();
+          
+          // Search for the message - try exact match first
+          let realMessage = messages.find(msg => {
+            // Skip optimistic messages
+            if (msg.isOptimistic || !msg._id || String(msg._id).startsWith('temp-')) {
+              return false;
+            }
+            
+            // Match by sender
+            if (msg.senderEmpId !== currentReplyingTo.senderEmpId) {
+              return false;
+            }
+            
+            // Match by message content (exact match)
+            const msgContent = (msg.message || '').trim();
+            if (msgContent === replyContent) {
+              // If timestamps are close (within 30 seconds), it's likely the same message
+              if (msg.timestamp) {
+                const msgTimestamp = new Date(msg.timestamp).getTime();
+                const timeDiff = Math.abs(msgTimestamp - replyTimestamp);
+                if (timeDiff <= 30000) { // Within 30 seconds
+                  return true;
+                }
+              } else {
+                // No timestamp, but content matches - likely the same
+                return true;
+              }
+            }
+            
+            return false;
+          });
+          
+          // If not found, try matching by content only (for recently sent messages)
+          if (!realMessage && replyContent) {
+            // Find the most recent message with matching content from the same sender
+            const matchingMessages = messages
+              .filter(msg => {
+                if (msg.isOptimistic || !msg._id || String(msg._id).startsWith('temp-')) {
+                  return false;
+                }
+                return msg.senderEmpId === currentReplyingTo.senderEmpId &&
+                       (msg.message || '').trim() === replyContent;
+              })
+              .sort((a, b) => {
+                const timeA = new Date(a.timestamp || 0).getTime();
+                const timeB = new Date(b.timestamp || 0).getTime();
+                return timeB - timeA; // Most recent first
+              });
+            
+            if (matchingMessages.length > 0) {
+              realMessage = matchingMessages[0];
+            }
+          }
+          
+          if (realMessage && realMessage._id) {
+            replyToId = realMessage._id;
+            console.log('✅ Found real message ID for replyTo:', replyToId, 'matching message:', realMessage.message);
+          } else {
+            console.warn('⚠️ Could not find real message ID. Message being replied to:', {
+              content: replyContent,
+              sender: currentReplyingTo.senderEmpId,
+              timestamp: currentReplyingTo.timestamp
+            });
+            replyToId = null;
+          }
+        }
+      }
+      
       const payload = {
         receiverEmpId: selectedUser.empId,
         message: messageToSend,
-        ...(replyingTo ? { replyTo: replyingTo._id || replyingTo.id } : {})
+        ...(replyToId && !String(replyToId).startsWith('temp-') ? { replyTo: replyToId } : {})
       };
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
@@ -2261,6 +2527,7 @@ const ChatPage = () => {
       if (response.data) {
         const realMessageId = response.data.message?._id || response.data.messageId;
         const realTimestamp = response.data.message?.timestamp || new Date().toISOString();
+        const serverReplyTo = response.data.message?.replyTo || (currentReplyingTo ? (currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo) : null);
         
         setMessages(prev => prev.map(msg => 
           msg._id === tempId 
@@ -2268,7 +2535,8 @@ const ChatPage = () => {
                 ...msg,
                 _id: realMessageId,
                 timestamp: realTimestamp,
-                isOptimistic: false
+                isOptimistic: false,
+                ...(serverReplyTo ? { replyTo: serverReplyTo } : {})
               }
             : msg
         ));
@@ -2282,11 +2550,46 @@ const ChatPage = () => {
       }
     } catch (err) {
       console.error("❌ Send message failed:", err);
+      
+      // Determine error type and message
+      let errorMessage = 'Failed to send message. Please try again.';
+      
+      if (err.response) {
+        // Server responded with error status
+        const status = err.response.status;
+        if (status === 401) {
+          errorMessage = 'Session expired. Please refresh the page and try again.';
+        } else if (status === 403) {
+          errorMessage = 'You don\'t have permission to send messages.';
+        } else if (status === 404) {
+          errorMessage = 'User not found. Please select a valid contact.';
+        } else if (status >= 500) {
+          errorMessage = 'Server error. Please try again in a moment.';
+        } else if (err.response.data?.message) {
+          errorMessage = err.response.data.message;
+        }
+      } else if (err.request) {
+        // Request was made but no response received
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errorMessage = 'Request timed out. Please check your connection and try again.';
+        } else if (err.code === 'ERR_NETWORK') {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = 'No response from server. Please check your connection and try again.';
+        }
+      }
+      
       // Remove optimistic message on error
       setMessages(prev => prev.filter(msg => msg._id !== tempId));
-      // Restore input on error
+      
+      // Restore input and reply state on error
       setInput(messageToSend);
-      alert('Failed to send message. Please try again.');
+      if (currentReplyingTo) {
+        setReplyingTo(currentReplyingTo);
+      }
+      
+      // Show error message
+      alert(errorMessage);
     } finally {
       setIsSendingMessage(false);
     }
@@ -3378,7 +3681,7 @@ const ChatPage = () => {
       }
     };
 
-    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file }) => {
+    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file, replyTo }) => {
       // Mark sender as online when they send a message
       if (senderEmpId && senderEmpId !== storedUser.empId) {
         setOnlineUsers(prev => new Set([...prev, senderEmpId]));
@@ -3432,9 +3735,39 @@ const ChatPage = () => {
 
       // If message is for current user OR involves current selected user, refresh messages
       if ((isForMe && isFromSelectedUser) || (isToSelectedUser && senderEmpId === storedUser.empId)) {
-
-        await fetchMessages(selectedUser.empId);
-        setTimeout(scrollToBottom, 100);
+        // Fetch messages to get full data including replyTo from server
+        if (replyTo) {
+          console.log('📥 Received message with replyTo via socket:', replyTo);
+        }
+        
+        // Retry logic to ensure replyTo is fetched correctly
+        // If replyTo is expected, retry fetching with increasing delays to handle server save timing
+        const fetchWithRetry = async (retryCount = 0) => {
+          const maxRetries = replyTo ? 2 : 0; // Only retry if replyTo is expected
+          const delays = [500, 1000, 1500]; // Progressive delays: 500ms, 1000ms, 1500ms
+          const delay = delays[retryCount] || delays[delays.length - 1];
+          
+          setTimeout(async () => {
+            try {
+              console.log(`📥 Fetching messages (attempt ${retryCount + 1}${replyTo ? ' - expecting replyTo' : ''})...`);
+              await fetchMessages(selectedUser.empId);
+              
+              // If replyTo was expected and we haven't exhausted retries, schedule another fetch
+              if (replyTo && retryCount < maxRetries) {
+                console.log(`⏳ Waiting before retry ${retryCount + 2} to ensure replyTo is saved...`);
+                fetchWithRetry(retryCount + 1);
+              } else {
+                console.log('✅ Message fetch completed');
+              }
+              
+              setTimeout(scrollToBottom, 100);
+            } catch (error) {
+              console.error('❌ Error fetching messages:', error);
+            }
+          }, delay);
+        };
+        
+        fetchWithRetry();
       }
 
       // Update chat list to show new message count
@@ -3453,7 +3786,19 @@ const ChatPage = () => {
       }
     };
 
-    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message, audio, image, file }) => {
+    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message, audio, image, file, replyTo }) => {
+      console.log('📥📥📥 NEW GROUP MESSAGE RECEIVED:', {
+        groupId,
+        groupName,
+        senderEmpId,
+        senderName,
+        message: message?.substring(0, 50),
+        hasReplyTo: !!replyTo,
+        replyTo,
+        isForSelectedGroup: selectedGroup?._id === groupId,
+        isFromMe: senderEmpId === storedUser.empId
+      });
+      
       // Mark sender as online when they send a message
       if (senderEmpId && senderEmpId !== storedUser.empId) {
         setOnlineUsers(prev => new Set([...prev, senderEmpId]));
@@ -3488,11 +3833,69 @@ const ChatPage = () => {
       
       // If message is for selected group, refresh messages
       if (isForSelectedGroup) {
-        await fetchGroupMessages(groupId);
-        setTimeout(scrollToBottom, 100);
+        console.log('✅ Message is for selected group, fetching messages...', {
+          groupId,
+          hasReplyTo: !!replyTo,
+          replyTo
+        });
+        
+        // Fetch messages to get full data including replyTo from server
+        if (replyTo) {
+          console.log('📥 Received group message with replyTo via socket:', replyTo);
+        }
+        
+        // Retry logic to ensure replyTo is fetched correctly
+        // If replyTo is expected, retry fetching with increasing delays to handle server save timing
+        const fetchWithRetry = async (retryCount = 0) => {
+          const maxRetries = replyTo ? 2 : 0; // Only retry if replyTo is expected
+          const delays = [500, 1000, 1500]; // Progressive delays: 500ms, 1000ms, 1500ms
+          const delay = delays[retryCount] || delays[delays.length - 1];
+          
+          setTimeout(async () => {
+            try {
+              console.log(`📥 Fetching group messages (attempt ${retryCount + 1}${replyTo ? ' - expecting replyTo: ' + replyTo : ''})...`);
+              await fetchGroupMessages(groupId);
+              
+              // Check if the last message has replyTo after fetch
+              setTimeout(() => {
+                setGroupMessages(currentMessages => {
+                  const lastMessage = currentMessages[currentMessages.length - 1];
+                  if (lastMessage) {
+                    console.log('🔍 Last message after fetch:', {
+                      id: lastMessage._id,
+                      message: lastMessage.message,
+                      hasReplyTo: !!lastMessage.replyTo,
+                      replyTo: lastMessage.replyTo
+                    });
+                    
+                    // If replyTo was expected but not found, retry
+                    if (replyTo && !lastMessage.replyTo && retryCount < maxRetries) {
+                      console.log(`🔄 Retry ${retryCount + 1}/${maxRetries}: replyTo missing, retrying...`);
+                      fetchWithRetry(retryCount + 1);
+                    } else if (lastMessage.replyTo) {
+                      console.log('✅ ReplyTo found in fetched message!');
+                    }
+                  }
+                  return currentMessages; // Return unchanged
+                });
+              }, 200);
+              
+              setTimeout(scrollToBottom, 100);
+            } catch (error) {
+              console.error('❌ Error fetching group messages:', error);
+            }
+          }, delay);
+        };
+        
+        fetchWithRetry();
         // Backend will automatically mark messages as read and emit groupListUpdated
         // No need to manually update unread count - socket event handles it
       } else {
+        console.log('ℹ️ Message is NOT for selected group, skipping fetch', {
+          messageGroupId: groupId,
+          selectedGroupId: selectedGroup?._id,
+          hasReplyTo: !!replyTo
+        });
         // If message is NOT for selected group, backend will emit groupListUpdated
         // with updated unreadCount - socket event handler will update the UI
         // No need to manually recalculate - rely on socket events
@@ -4315,10 +4718,15 @@ const ChatPage = () => {
                 >
                   <MoreVertical size={20} className="text-gray-600" />
                   {showGroupMenu && (
-                    <div className="absolute right-0 top-12 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <div 
+                      className="absolute right-0 top-12 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-[100]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {selectedGroup.adminEmpIds?.includes(storedUser?.empId) && (
                         <button 
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
                             setShowGroupMenu(false);
                             setShowAddMembersModal(true);
                           }}
@@ -4329,9 +4737,22 @@ const ChatPage = () => {
                         </button>
                       )}
                       <button 
-                        onClick={() => {
-                          setShowGroupMenu(false);
-                          setShowGroupInfoModal(true);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          console.log('Group Info clicked, selectedGroup:', selectedGroup);
+                          if (selectedGroup) {
+                            console.log('Opening Group Info Modal');
+                            // Open modal first, then close menu to avoid React batching issues
+                            setShowGroupInfoModal(true);
+                            // Use setTimeout to ensure menu closes after modal state is set
+                            setTimeout(() => {
+                              setShowGroupMenu(false);
+                            }, 10);
+                            console.log('State updated - showGroupInfoModal should be true');
+                          } else {
+                            console.error('selectedGroup is null/undefined');
+                          }
                         }}
                         className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                       >
@@ -4458,7 +4879,7 @@ const ChatPage = () => {
                               el.setAttribute('data-message-id', msg._id || msg.id || '');
                             }
                           }}
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 ${
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 group ${
                             highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
                           }`}
                         >
@@ -4478,6 +4899,21 @@ const ChatPage = () => {
                                 {msg.senderName?.charAt(0).toUpperCase() || 'U'}
                               </button>
                             )}
+                            {isSentByMe && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Reply button clicked for own group message!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-8 h-8 opacity-0 group-hover:opacity-100 flex items-center justify-center text-gray-500 hover:text-blue-500 hover:bg-gray-100 rounded-full transition-all duration-200 flex-shrink-0 cursor-pointer z-10"
+                                title="Reply to this message"
+                              >
+                                <Reply size={16} />
+                              </button>
+                            )}
                             <div className="flex flex-col min-w-0 flex-1">
                               {!isSentByMe && (
                                 <span className="text-xs text-gray-600 font-medium mb-1 px-1">
@@ -4493,10 +4929,25 @@ const ChatPage = () => {
                               >
                                 {/* Show replied message if exists - WhatsApp style */}
                                 {msg.replyTo && (() => {
-                                  const repliedMsg = typeof msg.replyTo === 'object' && msg.replyTo.message 
-                                    ? msg.replyTo 
-                                    : groupMessages.find(m => (m._id || m.id) === (msg.replyTo._id || msg.replyTo.id || msg.replyTo));
-                                  const replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                  // Handle replyTo as object with message, object with id, or string ID
+                                  let repliedMsg = null;
+                                  let replyToId = null;
+                                  
+                                  if (typeof msg.replyTo === 'object') {
+                                    if (msg.replyTo.message) {
+                                      // Full message object
+                                      repliedMsg = msg.replyTo;
+                                      replyToId = msg.replyTo._id || msg.replyTo.id;
+                                    } else {
+                                      // Object with just ID
+                                      replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                      repliedMsg = groupMessages.find(m => String(m._id || m.id) === String(replyToId));
+                                    }
+                                  } else {
+                                    // String ID
+                                    replyToId = msg.replyTo;
+                                    repliedMsg = groupMessages.find(m => String(m._id || m.id) === String(replyToId));
+                                  }
                                   return repliedMsg ? (
                                     <div 
                                       onClick={(e) => {
@@ -4521,7 +4972,23 @@ const ChatPage = () => {
                                       <div className={`text-xs break-words whitespace-pre-wrap line-clamp-2 ${
                                         isSentByMe ? 'text-white/70' : 'text-gray-600'
                                       }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                                        {repliedMsg.message || repliedMsg.text || repliedMsg.content}
+                                        {(() => {
+                                          // Handle different message types
+                                          if (repliedMsg.message) {
+                                            // Check if it's a file/image/audio message
+                                            if (repliedMsg.message.includes('Sent an image:')) {
+                                              return '📷 Image';
+                                            } else if (repliedMsg.message.includes('Sent a file:')) {
+                                              return '📎 File';
+                                            } else if (repliedMsg.message.includes('Sent an audio:')) {
+                                              return '🎤 Audio';
+                                            }
+                                            // Regular text message - show content (may include caption)
+                                            const text = repliedMsg.message.split('\n')[0]; // Get first line (filename or text)
+                                            return text || repliedMsg.text || repliedMsg.content || 'Message';
+                                          }
+                                          return repliedMsg.text || repliedMsg.content || 'Message';
+                                        })()}
                                       </div>
                                     </div>
                                   ) : null;
@@ -5095,7 +5562,7 @@ const ChatPage = () => {
                               el.setAttribute('data-message-id', msg._id || msg.id || '');
                             }
                           }}
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 ${
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 group ${
                             highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
                           }`}
                         >
@@ -5115,6 +5582,21 @@ const ChatPage = () => {
                                 {selectedUser.employeeName?.charAt(0).toUpperCase()}
                               </button>
                             )}
+                            {isSentByMe && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Reply button clicked for own message!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-8 h-8 opacity-0 group-hover:opacity-100 flex items-center justify-center text-gray-500 hover:text-blue-500 hover:bg-gray-100 rounded-full transition-all duration-200 flex-shrink-0 cursor-pointer z-10"
+                                title="Reply to this message"
+                              >
+                                <Reply size={16} />
+                              </button>
+                            )}
                             <div className="flex flex-col">
                               {!isSentByMe && (
                                 <span className="text-xs text-gray-600 font-medium mb-1 px-1">
@@ -5130,10 +5612,25 @@ const ChatPage = () => {
                               >
                                 {/* Show replied message if exists - WhatsApp style */}
                                 {msg.replyTo && (() => {
-                                  const repliedMsg = typeof msg.replyTo === 'object' && msg.replyTo.message 
-                                    ? msg.replyTo 
-                                    : messages.find(m => (m._id || m.id) === (msg.replyTo._id || msg.replyTo.id || msg.replyTo));
-                                  const replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                  // Handle replyTo as object with message, object with id, or string ID
+                                  let repliedMsg = null;
+                                  let replyToId = null;
+                                  
+                                  if (typeof msg.replyTo === 'object') {
+                                    if (msg.replyTo.message) {
+                                      // Full message object
+                                      repliedMsg = msg.replyTo;
+                                      replyToId = msg.replyTo._id || msg.replyTo.id;
+                                    } else {
+                                      // Object with just ID
+                                      replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                      repliedMsg = messages.find(m => String(m._id || m.id) === String(replyToId));
+                                    }
+                                  } else {
+                                    // String ID
+                                    replyToId = msg.replyTo;
+                                    repliedMsg = messages.find(m => String(m._id || m.id) === String(replyToId));
+                                  }
                                   return repliedMsg ? (
                                     <div 
                                       onClick={(e) => {
@@ -5158,7 +5655,23 @@ const ChatPage = () => {
                                       <div className={`text-xs break-words whitespace-pre-wrap line-clamp-2 ${
                                         isSentByMe ? 'text-white/70' : 'text-gray-600'
                                       }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                                        {repliedMsg.message || repliedMsg.text || repliedMsg.content}
+                                        {(() => {
+                                          // Handle different message types
+                                          if (repliedMsg.message) {
+                                            // Check if it's a file/image/audio message
+                                            if (repliedMsg.message.includes('Sent an image:')) {
+                                              return '📷 Image';
+                                            } else if (repliedMsg.message.includes('Sent a file:')) {
+                                              return '📎 File';
+                                            } else if (repliedMsg.message.includes('Sent an audio:')) {
+                                              return '🎤 Audio';
+                                            }
+                                            // Regular text message - show content (may include caption)
+                                            const text = repliedMsg.message.split('\n')[0]; // Get first line (filename or text)
+                                            return text || repliedMsg.text || repliedMsg.content || 'Message';
+                                          }
+                                          return repliedMsg.text || repliedMsg.content || 'Message';
+                                        })()}
                                       </div>
                                     </div>
                                   ) : null;
@@ -6466,7 +6979,11 @@ const AddMembersModal = ({ isOpen, onClose, group, onAddMembers, onRemoveMembers
 
 // Group Info Modal Component
 const GroupInfoModal = ({ isOpen, onClose, group, storedUser }) => {
-  if (!isOpen) return null;
+  console.log('GroupInfoModal render - isOpen:', isOpen, 'group:', group);
+  if (!isOpen || !group) {
+    console.log('GroupInfoModal returning null - isOpen:', isOpen, 'group:', group);
+    return null;
+  }
 
   return (
     <div 
