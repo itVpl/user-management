@@ -52,8 +52,85 @@ const formatEmployeeName = (user) => {
   return user.employeeName || user.aliasName || '';
 };
 
+// Emoji Picker Component
+const EmojiPicker = ({ onEmojiSelect, onClose, position = 'bottom' }) => {
+  const emojiCategories = {
+    'Smileys & People': ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓'],
+    'Gestures': ['🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕'],
+    'Hands': ['👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏'],
+    'Hearts': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❤️‍🔥', '❤️‍🩹', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟'],
+    'Objects': ['⌚', '📱', '📲', '💻', '⌨️', '🖥', '🖨', '🖱', '🖲', '🕹', '🗜', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙', '🎚', '🎛', '⏱', '⏲', '⏰', '🕰', '⌛', '⏳', '📡'],
+    'Symbols': ['✅', '❌', '❓', '❔', '❕', '❗', '💯', '🔅', '🔆', '📛', '🔰', '⭕', '✅', '☑️', '✔️', '✖️', '❌', '❎', '➕', '➖', '➗', '➰', '➿', '〽️', '✳️', '✴️', '❇️', '‼️', '⁉️', '❓', '❔', '❕', '❗', '〰️', '💱', '💲', '⚕️', '♻️', '✅', '🈯', '🉐', '🈹', '🈲', '🉑', '🈸', '🈴', '🈳', '㊗️', '㊙️', '🈺', '🈵'],
+  };
+
+  const pickerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        onClose();
+      }
+    };
+
+    if (pickerRef.current) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [onClose]);
+
+  const handleEmojiClick = (emoji) => {
+    onEmojiSelect(emoji);
+  };
+
+  return (
+    <div
+      ref={pickerRef}
+      className={`absolute z-50 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 ${
+        position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+      }`}
+      style={{
+        width: '320px',
+        maxHeight: '400px',
+        overflowY: 'auto',
+        right: 0
+      }}
+    >
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+        <h4 className="text-sm font-semibold text-gray-700">Emoji</h4>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X size={16} />
+        </button>
+      </div>
+      <div className="space-y-4">
+        {Object.entries(emojiCategories).map(([category, emojis]) => (
+          <div key={category}>
+            <h5 className="text-xs font-medium text-gray-500 mb-2">{category}</h5>
+            <div className="grid grid-cols-8 gap-1">
+              {emojis.map((emoji, index) => (
+                <button
+                  key={`${category}-${index}`}
+                  onClick={() => handleEmojiClick(emoji)}
+                  className="text-2xl hover:bg-gray-100 rounded p-1 transition-colors"
+                  title={emoji}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Audio Player Component
-const AudioPlayer = ({ src, isMyMessage, fileName, messageId }) => {
+const AudioPlayer = ({ src, isMyMessage, fileName, messageId, caption }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -96,52 +173,100 @@ const AudioPlayer = ({ src, isMyMessage, fileName, messageId }) => {
   };
 
   const handleDownload = async () => {
-    if (!messageId && !src) return;
+    if (!messageId && !src) {
+      alert('Cannot download: Missing file information.');
+      return;
+    }
     
     setIsDownloading(true);
     try {
       // Determine download URL
-      // If src is an S3 URL (starts with http/https), use it directly
-      // Otherwise, use the download endpoint
       let downloadUrl = src;
       
       if (!src || (!src.startsWith('http://') && !src.startsWith('https://'))) {
         // Use download endpoint for local files
+        if (!messageId) {
+          throw new Error('Message ID is required for download');
+        }
         downloadUrl = `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`;
       }
       
-      // Fetch the audio file
-      const response = await fetch(downloadUrl, {
-        method: 'GET',
-        credentials: 'include', // Include cookies for authentication
+      console.log('📥 Downloading audio from:', downloadUrl);
+      
+      // Use axios for better error handling and authentication
+      const response = await axios.get(downloadUrl, {
+        responseType: 'blob',
+        withCredentials: true,
+        headers: {
+          'Accept': 'audio/*, application/octet-stream, */*'
+        },
+        onDownloadProgress: (progressEvent) => {
+          // Optional: Show download progress
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`Download progress: ${percentCompleted}%`);
+          }
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Download failed');
-      }
-
-      // Get the blob
-      const blob = await response.blob();
+      // Get the blob from response
+      const blob = response.data;
       
-      // Create a blob URL and trigger download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
+      if (!blob || blob.size === 0) {
+        throw new Error('Downloaded file is empty');
+      }
       
       // Extract file extension from fileName or use default
       const fileExtension = fileName?.split('.').pop()?.toLowerCase() || 'mp3';
       const downloadFileName = fileName || `audio-${messageId || Date.now()}.${fileExtension}`;
       
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
       link.download = downloadFileName;
+      link.style.display = 'none';
+      
       document.body.appendChild(link);
       link.click();
       
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
+      // Cleanup after a short delay to ensure download starts
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+      }, 100);
+      
+      console.log('✅ Audio download initiated:', downloadFileName);
     } catch (error) {
-      console.error('Error downloading audio:', error);
-      alert('Failed to download audio. Please try again.');
+      console.error('❌ Error downloading audio:', error);
+      
+      // Fallback: Try direct download link
+      if (messageId) {
+        try {
+          const directUrl = `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`;
+          console.log('🔄 Trying direct download link:', directUrl);
+          
+          // Create a temporary link and trigger download
+          const link = document.createElement('a');
+          link.href = directUrl;
+          link.download = fileName || `audio-${messageId}.mp3`;
+          link.target = '_blank';
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Also try opening in new tab as backup
+          setTimeout(() => {
+            window.open(directUrl, '_blank');
+          }, 500);
+        } catch (fallbackError) {
+          console.error('❌ Fallback download also failed:', fallbackError);
+          alert(`Failed to download audio: ${error.message || 'Unknown error'}\n\nPlease try:\n1. Right-clicking the audio player and selecting "Save audio as..."\n2. Or copy this URL and paste in browser: ${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`);
+        }
+      } else {
+        alert(`Failed to download audio: ${error.message || 'Unknown error'}\n\nPlease try right-clicking the audio player and selecting "Save audio as..."`);
+      }
     } finally {
       setIsDownloading(false);
     }
@@ -251,6 +376,19 @@ const AudioPlayer = ({ src, isMyMessage, fileName, messageId }) => {
           )}
         </button>
       </div>
+      
+      {/* Caption text below audio player */}
+      {caption && (
+        <div className={`mt-2 pt-2 border-t ${
+          isMyMessage ? 'border-white/20' : 'border-gray-300'
+        }`}>
+          <p className={`text-sm whitespace-pre-wrap break-words ${
+            isMyMessage ? 'text-white' : 'text-gray-800'
+          }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+            {caption}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
@@ -309,6 +447,7 @@ const ChatPage = () => {
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [previewFiles, setPreviewFiles] = useState([]); // Array of { file, preview, type, caption }
   const [previewCaption, setPreviewCaption] = useState('');
+  const [showPreviewEmojiPicker, setShowPreviewEmojiPicker] = useState(false);
   // Mention/Tag states
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -325,7 +464,7 @@ const ChatPage = () => {
   const [messagesPage, setMessagesPage] = useState(0);
   const [groupMessagesPage, setGroupMessagesPage] = useState(0);
   const INITIAL_MESSAGES_COUNT = 10; // Load 10 messages initially when opening individual chat
-  const INITIAL_GROUP_MESSAGES_COUNT = 100; // Load 100 messages initially for group chats
+  const INITIAL_GROUP_MESSAGES_COUNT = 20; // Load 20 messages initially for group chats (reduced from 100 for better performance)
   const MESSAGES_PER_PAGE = 30; // Load 30 messages at a time when scrolling up
   
   const mentionDropdownRef = useRef(null);
@@ -342,6 +481,8 @@ const ChatPage = () => {
   const individualTextareaRef = useRef(null);
   const groupMessageRefs = useRef({});
   const markedAsSeenRef = useRef(new Set()); // Track which messages have been marked as seen
+  const emojiPickerRef = useRef(null); // Ref for emoji picker dropdown
+  const lastFetchedGroupIdRef = useRef(null); // Track last fetched group to prevent duplicate fetches
 
   const scrollToBottom = (force = false) => {
     // If force is true (when user sends message), always scroll
@@ -1014,6 +1155,7 @@ const ChatPage = () => {
 
   const fetchGroupMessages = async (groupId, loadOlder = false) => {
     if (!groupId) return;
+    
     try {
       if (loadOlder) {
         setLoadingOlderGroupMessages(true);
@@ -1021,12 +1163,40 @@ const ChatPage = () => {
         setLoadingGroupMessages(true);
         setGroupMessagesPage(0);
         setHasMoreGroupMessages(true);
+        // Only clear messages if switching to a different group
+        if (lastFetchedGroupIdRef.current && lastFetchedGroupIdRef.current !== groupId) {
+          setGroupMessages([]);
+        }
+        lastFetchedGroupIdRef.current = groupId;
       }
 
       // Calculate pagination parameters
-      // For initial load, use INITIAL_GROUP_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
-      const skip = loadOlder ? groupMessagesPage * MESSAGES_PER_PAGE : 0;
-      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_GROUP_MESSAGES_COUNT;
+      // For initial load, use INITIAL_GROUP_MESSAGES_COUNT (reduced to 20 for better performance), for older messages use MESSAGES_PER_PAGE
+      let skip = 0;
+      let limit = INITIAL_GROUP_MESSAGES_COUNT;
+      
+      if (loadOlder) {
+        // For loading older messages, we need to get messages BEFORE the oldest message we currently have
+        // Since API might not support proper pagination, we'll fetch more and filter client-side
+        if (groupMessages.length > 0) {
+          // Get the oldest message timestamp to use as a reference
+          const oldestMessage = groupMessages[0];
+          const oldestTimestamp = new Date(oldestMessage.timestamp || oldestMessage.createdAt || 0).getTime();
+          
+          // Fetch a larger batch to ensure we get older messages
+          limit = MESSAGES_PER_PAGE * 2; // Fetch more to account for API limitations
+          skip = 0; // Start from beginning, we'll filter client-side
+          
+          console.log(`📥 Loading older messages: groupId=${groupId}, limit=${limit}, oldestTimestamp=${oldestTimestamp}`);
+        } else {
+          // No messages yet, can't load older
+          setLoadingOlderGroupMessages(false);
+          setHasMoreGroupMessages(false);
+          return;
+        }
+      }
+      
+      console.log(`📥 Fetching group messages: groupId=${groupId}, limit=${limit}, skip=${skip}, loadOlder=${loadOlder}`);
       
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=${limit}&skip=${skip}`,
@@ -1040,34 +1210,63 @@ const ChatPage = () => {
         let messagesToProcess = fetchedMessages;
         
         if (loadOlder) {
-          // Loading older messages
-          // If API returned all messages (doesn't support pagination), filter to get only older ones
-          if (groupMessages.length > 0 && fetchedMessages.length > groupMessages.length) {
-            // API returned all messages, find the oldest message we have and get messages before it
-            const oldestMessageId = groupMessages[0]._id;
-            const oldestMessageIndex = fetchedMessages.findIndex(msg => msg._id === oldestMessageId);
+          // Loading older messages - filter to get only messages older than what we have
+          if (groupMessages.length > 0) {
+            const oldestMessage = groupMessages[0];
+            const oldestMessageId = oldestMessage._id;
+            const oldestTimestamp = new Date(oldestMessage.timestamp || oldestMessage.createdAt || 0).getTime();
             
-            if (oldestMessageIndex > 0) {
-              // Get messages before the oldest one we have
-              const olderMessages = fetchedMessages.slice(0, oldestMessageIndex);
-              // Take only the last MESSAGES_PER_PAGE older messages
-              messagesToProcess = olderMessages.slice(-MESSAGES_PER_PAGE);
-              setHasMoreGroupMessages(olderMessages.length > MESSAGES_PER_PAGE);
-            } else {
-              // No older messages found
-              messagesToProcess = [];
-              setHasMoreGroupMessages(false);
-            }
-          } else {
-            // API supports pagination or returned exactly what we need
-            if (fetchedMessages.length < MESSAGES_PER_PAGE) {
-              setHasMoreGroupMessages(false);
-            } else {
+            // Filter messages that are older than our oldest message
+            const olderMessages = fetchedMessages.filter(msg => {
+              const msgTimestamp = new Date(msg.timestamp || msg.createdAt || 0).getTime();
+              const msgId = String(msg._id || '');
+              const oldestId = String(oldestMessageId || '');
+              
+              // Include if timestamp is older OR if it's a different message with same timestamp
+              return msgTimestamp < oldestTimestamp || (msgTimestamp === oldestTimestamp && msgId !== oldestId);
+            });
+            
+            // Remove duplicates and check against existing messages
+            const existingMessageIds = new Set(groupMessages.map(msg => String(msg._id || '')));
+            const seen = new Set();
+            const uniqueOlderMessages = olderMessages.filter(msg => {
+              const msgId = String(msg._id || '');
+              // Skip if already in our messages list or duplicate in fetched messages
+              if (!msgId || seen.has(msgId) || existingMessageIds.has(msgId)) return false;
+              seen.add(msgId);
+              return true;
+            });
+            
+            // Sort by timestamp (oldest first) and take the last MESSAGES_PER_PAGE
+            uniqueOlderMessages.sort((a, b) => {
+              const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+              const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+              return timeA - timeB;
+            });
+            
+            // Take the most recent MESSAGES_PER_PAGE older messages (last ones in sorted array)
+            messagesToProcess = uniqueOlderMessages.slice(-MESSAGES_PER_PAGE);
+            
+            // Check if there are more older messages
+            // If we got exactly MESSAGES_PER_PAGE messages, there might be more
+            // If we got fewer, check if API returned fewer than limit (might mean no more)
+            if (uniqueOlderMessages.length >= MESSAGES_PER_PAGE) {
               setHasMoreGroupMessages(true);
+            } else if (fetchedMessages.length < limit) {
+              // API returned fewer than requested, likely no more messages
+              setHasMoreGroupMessages(false);
+            } else {
+              // Got some messages but less than a page - might be more, might not
+              setHasMoreGroupMessages(uniqueOlderMessages.length > 0);
             }
+            
+            console.log(`📥 Found ${uniqueOlderMessages.length} older messages, loading ${messagesToProcess.length}, hasMore=${uniqueOlderMessages.length >= MESSAGES_PER_PAGE}`);
+          } else {
+            messagesToProcess = [];
+            setHasMoreGroupMessages(false);
           }
         } else {
-          // Initial load - take only the last INITIAL_GROUP_MESSAGES_COUNT messages (100 messages)
+          // Initial load - take only the last INITIAL_GROUP_MESSAGES_COUNT messages (20 messages)
           if (fetchedMessages.length > INITIAL_GROUP_MESSAGES_COUNT) {
             messagesToProcess = fetchedMessages.slice(-INITIAL_GROUP_MESSAGES_COUNT);
             setHasMoreGroupMessages(true);
@@ -1412,12 +1611,15 @@ const ChatPage = () => {
             : msg
         ));
         
-        // Refresh messages after a short delay to get proper server data with correct ID
-        // This ensures the message ID matches what the backend sends in socket events
+        // Don't refetch all messages - socket events will handle new messages
+        // Only refetch if needed for message ID correction (reduced delay)
         setTimeout(async () => {
-          await fetchGroupMessages(selectedGroup._id);
-          // Scroll will happen automatically via useEffect when new messages arrive
-        }, 500);
+          // Only refetch if socket didn't update the message (check after 1 second)
+          const messageStillOptimistic = groupMessages.some(msg => msg._id === tempId);
+          if (messageStillOptimistic) {
+            await fetchGroupMessages(selectedGroup._id);
+          }
+        }, 1000);
       } else {
         setTimeout(() => scrollToBottom(true), 100);
       }
@@ -1503,9 +1705,17 @@ const ChatPage = () => {
         setGroupMessages(prev => [...prev, newFileMessage]);
         setTimeout(() => scrollToBottom(true), 100);
         
+        // Don't refetch all messages - socket events will handle new messages
+        // Only refetch if socket didn't update (check after 1 second)
         setTimeout(async () => {
-          await fetchGroupMessages(selectedGroup._id);
-        }, 1500);
+          const messageExists = groupMessages.some(msg => 
+            msg._id === newFileMessage._id || 
+            (msg.fileName === file.name && Math.abs(new Date(msg.timestamp) - new Date(newFileMessage.timestamp)) < 2000)
+          );
+          if (!messageExists) {
+            await fetchGroupMessages(selectedGroup._id);
+          }
+        }, 1000);
       }
     } catch (error) {
       console.error('❌ Group file upload failed:', error);
@@ -1573,8 +1783,8 @@ const ChatPage = () => {
       );
 
       if (response.data && response.data.success) {
-        await fetchGroupMessages(selectedGroup._id);
-        // Scroll will happen automatically via useEffect when new messages arrive
+        // Don't refetch all messages - socket events will handle new messages
+        // The optimistic message is already added, socket will update it if needed
       }
     } catch (error) {
       console.error('❌ Group image upload failed:', error);
@@ -1968,6 +2178,30 @@ const ChatPage = () => {
       textarea.style.height = 'auto';
       textarea.style.height = `${Math.min(textarea.scrollHeight, 400)}px`;
     }
+  };
+
+  // Insert emoji into input field
+  const insertEmoji = (emoji) => {
+    const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const currentValue = input;
+      const newValue = currentValue.substring(0, start) + emoji + currentValue.substring(end);
+      setInput(newValue);
+      
+      // Set cursor position after emoji
+      setTimeout(() => {
+        const newCursorPos = start + emoji.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+        autoResizeTextarea(textarea);
+      }, 0);
+    } else {
+      // Fallback if textarea ref not available
+      setInput(input + emoji);
+    }
+    setShowEmojiPicker(false);
   };
 
   const handleInputChange = (e) => {
@@ -2807,11 +3041,22 @@ const ChatPage = () => {
     }
   }, [selectedUser, storedUser, chatType]);
 
+  // Fetch group messages when group is selected (only if not already loaded)
   useEffect(() => {
     if (storedUser?.empId && selectedGroup?._id && chatType === 'group') {
-      fetchGroupMessages(selectedGroup._id);
+      const currentGroupId = selectedGroup._id;
+      
+      // Only fetch if this is a different group than the last one we fetched
+      if (lastFetchedGroupIdRef.current !== currentGroupId && !loadingGroupMessages) {
+        lastFetchedGroupIdRef.current = currentGroupId;
+        fetchGroupMessages(currentGroupId);
+      }
+    } else if (chatType !== 'group') {
+      // Clear group messages and reset ref when switching away from group chat
+      setGroupMessages([]);
+      lastFetchedGroupIdRef.current = null;
     }
-  }, [selectedGroup, storedUser, chatType]);
+  }, [selectedGroup?._id, storedUser?.empId, chatType]);
 
   // Fetch chat list when storedUser changes
   useEffect(() => {
@@ -3374,12 +3619,12 @@ const ChatPage = () => {
       }
     };
 
-    container.addEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       container.removeEventListener('scroll', handleScroll);
       isLoading = false;
     };
-  }, [selectedUser?.empId, hasMoreMessages, loadingOlderMessages, chatType]);
+  }, [selectedGroup?._id, hasMoreGroupMessages, loadingOlderGroupMessages, chatType, groupMessages.length]);
 
   // Handle scroll to load older messages for group chat
   useEffect(() => {
@@ -3389,24 +3634,56 @@ const ChatPage = () => {
     let isLoading = false; // Prevent multiple simultaneous loads
 
     const handleScroll = () => {
-      // Check if user scrolled near the top (within 200px)
-      if (container.scrollTop < 200 && hasMoreGroupMessages && !loadingOlderGroupMessages && !isLoading) {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromTop = scrollTop;
+      
+      // Check if user scrolled near the top (within 300px) and has more messages to load
+      if (distanceFromTop < 300 && hasMoreGroupMessages && !loadingOlderGroupMessages && !isLoading) {
+        console.log('📜 Scrolling near top, loading older messages...', {
+          scrollTop,
+          hasMoreGroupMessages,
+          loadingOlderGroupMessages,
+          currentMessagesCount: groupMessages.length
+        });
+        
         isLoading = true;
-        // Store current scroll position
+        setLoadingOlderGroupMessages(true);
+        
+        // Store current scroll position and first message ID for reference
         const previousScrollHeight = container.scrollHeight;
+        const firstMessageElement = container.querySelector('[data-message-id]');
+        const firstMessageId = firstMessageElement?.getAttribute('data-message-id');
         
         // Load older messages
-        fetchGroupMessages(selectedGroup._id, true).then(() => {
-          // Restore scroll position after new messages are loaded
-          setTimeout(() => {
-            const newScrollHeight = container.scrollHeight;
-            const scrollDiff = newScrollHeight - previousScrollHeight;
-            container.scrollTop = scrollDiff;
+        fetchGroupMessages(selectedGroup._id, true)
+          .then(() => {
+            // Restore scroll position after new messages are loaded
+            setTimeout(() => {
+              const newScrollHeight = container.scrollHeight;
+              const scrollDiff = newScrollHeight - previousScrollHeight;
+              
+              // Try to maintain position relative to the first message
+              if (firstMessageId) {
+                const newFirstMessageElement = container.querySelector(`[data-message-id="${firstMessageId}"]`);
+                if (newFirstMessageElement) {
+                  newFirstMessageElement.scrollIntoView({ block: 'start', behavior: 'auto' });
+                } else {
+                  // Fallback: use scroll difference
+                  container.scrollTop = scrollDiff;
+                }
+              } else {
+                container.scrollTop = scrollDiff;
+              }
+              
+              isLoading = false;
+              setLoadingOlderGroupMessages(false);
+            }, 150);
+          })
+          .catch((err) => {
+            console.error('❌ Failed to load older messages:', err);
             isLoading = false;
-          }, 100);
-        }).catch(() => {
-          isLoading = false;
-        });
+            setLoadingOlderGroupMessages(false);
+          });
       }
     };
 
@@ -4060,6 +4337,13 @@ const ChatPage = () => {
                                         return fileName.split('\n')[0].trim();
                                       })()}
                                       messageId={msg._id}
+                                      caption={(() => {
+                                        // Extract caption if it exists in the message (after newline)
+                                        if (msg.message && msg.message.includes('\n')) {
+                                          return msg.message.split('\n').slice(1).join('\n').trim();
+                                        }
+                                        return null;
+                                      })()}
                                     />
                                   </div>
                                 )}
@@ -4389,12 +4673,19 @@ const ChatPage = () => {
                       <Image size={20} className="text-gray-500" />
                     </button>
                     <button 
-                      onClick={() => audioInputRef.current?.click()}
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                       disabled={uploadingFile || isSendingMessage}
-                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Send audio"
+                      className="relative p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Add emoji"
                     >
-                      <Mic size={20} className="text-gray-500" />
+                      <Smile size={20} className="text-gray-500" />
+                      {showEmojiPicker && (
+                        <EmojiPicker
+                          onEmojiSelect={insertEmoji}
+                          onClose={() => setShowEmojiPicker(false)}
+                          position="top"
+                        />
+                      )}
                     </button>
                     {input.trim() ? (
                       <button
@@ -4631,6 +4922,13 @@ const ChatPage = () => {
                                         return fileName.split('\n')[0].trim();
                                       })()}
                                       messageId={msg._id}
+                                      caption={(() => {
+                                        // Extract caption if it exists in the message (after newline)
+                                        if (msg.message && msg.message.includes('\n')) {
+                                          return msg.message.split('\n').slice(1).join('\n').trim();
+                                        }
+                                        return null;
+                                      })()}
                                     />
                                   </div>
                                 )}
@@ -4899,12 +5197,19 @@ const ChatPage = () => {
                       <Image size={20} className="text-gray-500" />
                     </button>
                     <button 
-                      onClick={() => audioInputRef.current?.click()}
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                       disabled={uploadingFile || isSendingMessage}
-                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Send audio"
+                      className="relative p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Add emoji"
                     >
-                      <Mic size={20} className="text-gray-500" />
+                      <Smile size={20} className="text-gray-500" />
+                      {showEmojiPicker && (
+                        <EmojiPicker
+                          onEmojiSelect={insertEmoji}
+                          onClose={() => setShowEmojiPicker(false)}
+                          position="top"
+                        />
+                      )}
                     </button>
                     {input.trim() && (
                       <button
@@ -5105,28 +5410,30 @@ const ChatPage = () => {
             }
           }}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+          {/* Header - WhatsApp Style */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white shadow-sm">
             <button
               onClick={closeFilePreview}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               aria-label="Close preview"
             >
-              <X size={24} className="text-gray-600" />
+              <X size={20} className="text-gray-600" />
             </button>
             <h3 className="text-lg font-semibold text-gray-800">Send Media</h3>
             <div className="w-10"></div> {/* Spacer for centering */}
           </div>
 
-          {/* Preview Area */}
-          <div className="flex-1 overflow-y-auto bg-gray-50 flex flex-col">
+          {/* Preview Area - WhatsApp Style Background */}
+          <div className="flex-1 overflow-y-auto bg-gray-50 flex flex-col" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e5e5e5' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+          }}>
             {/* File Preview Container */}
-            <div className="flex-1 flex items-center justify-center p-4">
+            <div className="flex-1 flex items-center justify-center p-6">
               <div className="w-full max-w-2xl">
                 {previewFiles.map((previewFile, index) => (
                   <div key={index} className="mb-4">
                     {previewFile.type === 'image' && previewFile.preview && (
-                      <div className="relative bg-gray-100 rounded-lg overflow-hidden" style={{ minHeight: '300px' }}>
+                      <div className="relative bg-white rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '300px' }}>
                         <img
                           src={previewFile.preview}
                           alt={previewFile.file.name}
@@ -5135,7 +5442,7 @@ const ChatPage = () => {
                         {previewFiles.length > 1 && (
                           <button
                             onClick={() => removePreviewFile(index)}
-                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-colors"
+                            className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-colors shadow-lg"
                             aria-label="Remove file"
                           >
                             <X size={16} />
@@ -5144,45 +5451,45 @@ const ChatPage = () => {
                       </div>
                     )}
                     {previewFile.type === 'audio' && previewFile.preview && (
-                      <div className="bg-gray-100 rounded-lg p-6">
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center">
-                            <Mic size={24} className="text-white" />
+                      <div className="bg-white rounded-lg p-5 shadow-lg">
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="w-14 h-14 bg-[#25D366] rounded-full flex items-center justify-center shadow-md flex-shrink-0">
+                            <Mic size={22} className="text-white" />
                           </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-800">{previewFile.file.name}</p>
-                            <p className="text-sm text-gray-500">Audio file</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 truncate">{previewFile.file.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Audio file</p>
                           </div>
                           {previewFiles.length > 1 && (
                             <button
                               onClick={() => removePreviewFile(index)}
-                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
                               aria-label="Remove file"
                             >
-                              <X size={20} />
+                              <X size={18} />
                             </button>
                           )}
                         </div>
-                        <audio src={previewFile.preview} controls className="w-full mt-4" />
+                        <audio src={previewFile.preview} controls className="w-full h-10" />
                       </div>
                     )}
                     {previewFile.type === 'document' && (
-                      <div className="bg-gray-100 rounded-lg p-6">
+                      <div className="bg-white rounded-lg p-5 shadow-lg">
                         <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 bg-blue-500 rounded-lg flex items-center justify-center">
-                            <Paperclip size={24} className="text-white" />
+                          <div className="w-14 h-14 bg-[#0084ff] rounded-lg flex items-center justify-center shadow-md flex-shrink-0">
+                            <Paperclip size={22} className="text-white" />
                           </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-800">{previewFile.file.name}</p>
-                            <p className="text-sm text-gray-500">Document file</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 truncate">{previewFile.file.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Document file</p>
                           </div>
                           {previewFiles.length > 1 && (
                             <button
                               onClick={() => removePreviewFile(index)}
-                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
                               aria-label="Remove file"
                             >
-                              <X size={20} />
+                              <X size={18} />
                             </button>
                           )}
                         </div>
@@ -5193,41 +5500,15 @@ const ChatPage = () => {
               </div>
             </div>
 
-            {/* Caption Input Area */}
-            <div className="border-t border-gray-200 bg-white p-4">
-              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100 transition-all">
-                <textarea
-                  placeholder="some text for the files or photo"
-                  value={previewCaption}
-                  onChange={(e) => setPreviewCaption(e.target.value)}
-                  className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 min-h-[40px] max-h-[120px] overflow-y-auto"
-                  rows={1}
-                  style={{ minHeight: '40px' }}
-                />
-                <button
-                  onClick={() => setPreviewCaption('')}
-                  className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
-                  aria-label="Clear caption"
-                >
-                  <X size={18} className="text-gray-500" />
-                </button>
-                <button
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
-                  aria-label="Add emoji"
-                >
-                  <Smile size={18} className="text-gray-500" />
-                </button>
-              </div>
-
-              {/* File Thumbnails and Actions */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-2">
+            {/* Caption Input Area - WhatsApp Style */}
+            <div className="border-t border-gray-200 bg-white px-4 py-3">
+              <div className="flex items-end gap-2 mb-3">
+                <div className="flex items-center gap-1.5 flex-1">
                   {previewFiles.map((previewFile, index) => (
                     <div
                       key={index}
-                      className={`w-16 h-16 rounded-lg border-2 overflow-hidden ${
-                        index === 0 ? 'border-green-500' : 'border-gray-300'
+                      className={`w-14 h-14 rounded-lg border-2 overflow-hidden flex-shrink-0 ${
+                        index === 0 ? 'border-[#25D366]' : 'border-gray-300'
                       }`}
                     >
                       {previewFile.type === 'image' && previewFile.preview ? (
@@ -5237,11 +5518,13 @@ const ChatPage = () => {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                        <div className={`w-full h-full flex items-center justify-center ${
+                          previewFile.type === 'audio' ? 'bg-[#25D366]' : 'bg-[#0084ff]'
+                        }`}>
                           {previewFile.type === 'audio' ? (
-                            <Mic size={20} className="text-gray-500" />
+                            <Mic size={18} className="text-white" />
                           ) : (
-                            <Paperclip size={20} className="text-gray-500" />
+                            <Paperclip size={18} className="text-white" />
                           )}
                         </div>
                       )}
@@ -5249,10 +5532,10 @@ const ChatPage = () => {
                   ))}
                   <button
                     onClick={() => allFilesInputRef.current?.click()}
-                    className="w-16 h-16 rounded-lg border-2 border-gray-300 border-dashed flex items-center justify-center hover:bg-gray-50 transition-colors"
+                    className="w-14 h-14 rounded-lg border-2 border-gray-300 border-dashed flex items-center justify-center hover:bg-gray-50 transition-colors flex-shrink-0"
                     aria-label="Add more files"
                   >
-                    <Plus size={24} className="text-gray-400" />
+                    <Plus size={20} className="text-gray-400" />
                   </button>
                   <input
                     ref={allFilesInputRef}
@@ -5278,10 +5561,53 @@ const ChatPage = () => {
                 <button
                   onClick={sendPreviewFiles}
                   disabled={uploadingFile}
-                  className="bg-green-500 hover:bg-green-600 text-white rounded-full p-4 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-full p-3 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
                   aria-label="Send"
+                  style={{ minWidth: '48px', minHeight: '48px' }}
                 >
-                  <Send size={24} className="text-white" />
+                  {uploadingFile ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send size={20} className="text-white" />
+                  )}
+                </button>
+              </div>
+              
+              {/* Caption Input */}
+              <div className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-[#25D366] focus-within:bg-white transition-all">
+                <textarea
+                  placeholder="Add a caption..."
+                  value={previewCaption}
+                  onChange={(e) => setPreviewCaption(e.target.value)}
+                  className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-400 text-gray-800 min-h-[36px] max-h-[100px] overflow-y-auto"
+                  rows={1}
+                  style={{ minHeight: '36px' }}
+                />
+                {previewCaption && (
+                  <button
+                    onClick={() => setPreviewCaption('')}
+                    className="p-1.5 hover:bg-gray-200 rounded-full transition-colors flex-shrink-0"
+                    aria-label="Clear caption"
+                  >
+                    <X size={16} className="text-gray-500" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowPreviewEmojiPicker(!showPreviewEmojiPicker)}
+                  className="relative p-1.5 hover:bg-gray-200 rounded-full transition-colors flex-shrink-0"
+                  aria-label="Add emoji"
+                >
+                  <Smile size={18} className="text-gray-500" />
+                  {showPreviewEmojiPicker && (
+                    <EmojiPicker
+                      onEmojiSelect={(emoji) => {
+                        setPreviewCaption(previewCaption + emoji);
+                        setShowPreviewEmojiPicker(false);
+                      }}
+                      onClose={() => setShowPreviewEmojiPicker(false)}
+                      position="top"
+                    />
+                  )}
                 </button>
               </div>
             </div>
