@@ -4315,10 +4315,15 @@ const ChatPage = () => {
                 >
                   <MoreVertical size={20} className="text-gray-600" />
                   {showGroupMenu && (
-                    <div className="absolute right-0 top-12 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <div 
+                      className="absolute right-0 top-12 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-[100]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {selectedGroup.adminEmpIds?.includes(storedUser?.empId) && (
                         <button 
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
                             setShowGroupMenu(false);
                             setShowAddMembersModal(true);
                           }}
@@ -4329,9 +4334,22 @@ const ChatPage = () => {
                         </button>
                       )}
                       <button 
-                        onClick={() => {
-                          setShowGroupMenu(false);
-                          setShowGroupInfoModal(true);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          console.log('Group Info clicked, selectedGroup:', selectedGroup);
+                          if (selectedGroup) {
+                            console.log('Opening Group Info Modal');
+                            // Open modal first, then close menu to avoid React batching issues
+                            setShowGroupInfoModal(true);
+                            // Use setTimeout to ensure menu closes after modal state is set
+                            setTimeout(() => {
+                              setShowGroupMenu(false);
+                            }, 10);
+                            console.log('State updated - showGroupInfoModal should be true');
+                          } else {
+                            console.error('selectedGroup is null/undefined');
+                          }
                         }}
                         className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                       >
@@ -6466,7 +6484,11 @@ const AddMembersModal = ({ isOpen, onClose, group, onAddMembers, onRemoveMembers
 
 // Group Info Modal Component
 const GroupInfoModal = ({ isOpen, onClose, group, storedUser }) => {
-  if (!isOpen) return null;
+  console.log('GroupInfoModal render - isOpen:', isOpen, 'group:', group);
+  if (!isOpen || !group) {
+    console.log('GroupInfoModal returning null - isOpen:', isOpen, 'group:', group);
+    return null;
+  }
 
   return (
     <div 
