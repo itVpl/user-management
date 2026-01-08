@@ -672,11 +672,26 @@ const ChatPage = () => {
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       const isNearBottom = distanceFromBottom < 300;
       
-      // Detect if user is scrolling down (towards bottom)
+      // Detect scroll direction - only trigger auto-scroll when actively scrolling DOWN
       const isScrollingDown = currentScrollTop > lastScrollTop;
+      const isScrollingUp = currentScrollTop < lastScrollTop;
       
-      // If user scrolls down and is very close to bottom (within 100px), scroll to newest messages
-      if (isScrollingDown && distanceFromBottom < 100) {
+      // Clear any pending auto-scroll timer if user is scrolling UP
+      if (isScrollingUp) {
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+          scrollToBottomTimer = null;
+        }
+        // User is scrolling up - don't auto-scroll
+        isNearBottomRef.current = false;
+        userScrolledRef.current = true;
+        lastScrollTop = currentScrollTop;
+        return;
+      }
+      
+      // Only auto-scroll if user is actively scrolling DOWN and is very close to bottom (within 50px)
+      // This prevents auto-scroll when user is trying to scroll up to read older messages
+      if (isScrollingDown && distanceFromBottom < 50 && distanceFromBottom >= 0) {
         // Clear any existing timer
         if (scrollToBottomTimer) {
           clearTimeout(scrollToBottomTimer);
@@ -684,9 +699,13 @@ const ChatPage = () => {
         
         // User is scrolling down and very close to bottom - scroll to newest messages
         scrollToBottomTimer = setTimeout(() => {
-          scrollToBottom(true);
-          isNearBottomRef.current = true;
-        }, 150);
+          // Double-check user is still near bottom before auto-scrolling
+          const finalDistance = container.scrollHeight - container.scrollTop - container.clientHeight;
+          if (finalDistance < 100) {
+            scrollToBottom(true);
+            isNearBottomRef.current = true;
+          }
+        }, 200);
       }
       
       // Update tracking
@@ -719,11 +738,26 @@ const ChatPage = () => {
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       const isNearBottom = distanceFromBottom < 300;
       
-      // Detect if user is scrolling down (towards bottom)
+      // Detect scroll direction - only trigger auto-scroll when actively scrolling DOWN
       const isScrollingDown = currentScrollTop > lastScrollTop;
+      const isScrollingUp = currentScrollTop < lastScrollTop;
       
-      // If user scrolls down and is very close to bottom (within 100px), scroll to newest messages
-      if (isScrollingDown && distanceFromBottom < 100) {
+      // Clear any pending auto-scroll timer if user is scrolling UP
+      if (isScrollingUp) {
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+          scrollToBottomTimer = null;
+        }
+        // User is scrolling up - don't auto-scroll
+        isNearBottomRef.current = false;
+        userScrolledRef.current = true;
+        lastScrollTop = currentScrollTop;
+        return;
+      }
+      
+      // Only auto-scroll if user is actively scrolling DOWN and is very close to bottom (within 50px)
+      // This prevents auto-scroll when user is trying to scroll up to read older messages
+      if (isScrollingDown && distanceFromBottom < 50 && distanceFromBottom >= 0) {
         // Clear any existing timer
         if (scrollToBottomTimer) {
           clearTimeout(scrollToBottomTimer);
@@ -731,9 +765,13 @@ const ChatPage = () => {
         
         // User is scrolling down and very close to bottom - scroll to newest messages
         scrollToBottomTimer = setTimeout(() => {
-          scrollToBottom(true);
-          isNearBottomRef.current = true;
-        }, 150);
+          // Double-check user is still near bottom before auto-scrolling
+          const finalDistance = container.scrollHeight - container.scrollTop - container.clientHeight;
+          if (finalDistance < 100) {
+            scrollToBottom(true);
+            isNearBottomRef.current = true;
+          }
+        }, 200);
       }
       
       // Update tracking
@@ -4343,8 +4381,34 @@ const ChatPage = () => {
             </div>
 
             {/* Group Messages Area */}
-            <div ref={groupMessagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gray-100">
-              <div className="space-y-2">
+            <div 
+              ref={groupMessagesContainerRef} 
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 relative"
+              style={{
+                backgroundColor: '#EFEAE2',
+                backgroundImage: `
+                  repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px),
+                  repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px)
+                `,
+                backgroundAttachment: 'fixed'
+              }}
+            >
+              {/* WhatsApp-style emoji pattern overlay */}
+              <div 
+                className="absolute inset-0 pointer-events-none z-0"
+                style={{
+                  backgroundImage: `
+                    radial-gradient(circle at 15% 25%, rgba(212,212,212,0.08) 0%, transparent 25%),
+                    radial-gradient(circle at 85% 75%, rgba(212,212,212,0.08) 0%, transparent 25%),
+                    radial-gradient(circle at 50% 50%, rgba(212,212,212,0.06) 0%, transparent 30%),
+                    radial-gradient(circle at 30% 70%, rgba(212,212,212,0.07) 0%, transparent 20%),
+                    radial-gradient(circle at 70% 30%, rgba(212,212,212,0.07) 0%, transparent 20%)
+                  `,
+                  backgroundSize: '400px 400px',
+                  backgroundAttachment: 'fixed'
+                }}
+              />
+              <div className="space-y-2 relative z-10">
                 {loadingOlderGroupMessages && (
                   <div className="flex justify-center py-2">
                     <div className="flex items-center gap-2 text-gray-500 text-sm">
@@ -4511,7 +4575,12 @@ const ChatPage = () => {
                                             onClick={() => openImageModal(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, fileName)}
                                           />
                                           {caption && (
-                                            <p className={`text-sm mt-2 whitespace-pre-wrap ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>{caption}</p>
+                                            <p className={`text-sm mt-2 whitespace-pre-wrap font-medium leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-900'}`} style={{
+                                              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                              letterSpacing: '0.01em',
+                                              WebkitFontSmoothing: 'antialiased',
+                                              MozOsxFontSmoothing: 'grayscale'
+                                            }}>{caption}</p>
                                           )}
                                         </div>
                                       );
@@ -4536,7 +4605,12 @@ const ChatPage = () => {
                                             </div>
                                           </div>
                                           {caption && (
-                                            <p className={`text-sm mt-2 whitespace-pre-wrap ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>{caption}</p>
+                                            <p className={`text-sm mt-2 whitespace-pre-wrap font-medium leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-900'}`} style={{
+                                              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                              letterSpacing: '0.01em',
+                                              WebkitFontSmoothing: 'antialiased',
+                                              MozOsxFontSmoothing: 'grayscale'
+                                            }}>{caption}</p>
                                           )}
                                         </div>
                                       );
@@ -4544,7 +4618,14 @@ const ChatPage = () => {
                                   })()
                                 )}
                                 {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
-                                  <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isSentByMe ? 'text-white' : 'text-gray-800'}`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                                  <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words font-medium ${isSentByMe ? 'text-white' : 'text-gray-900'}`} style={{ 
+                                    wordBreak: 'break-word', 
+                                    overflowWrap: 'anywhere',
+                                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                    letterSpacing: '0.01em',
+                                    WebkitFontSmoothing: 'antialiased',
+                                    MozOsxFontSmoothing: 'grayscale'
+                                  }}>
                                     {(() => {
                                       // Highlight mentions in message
                                       const message = msg.message || '';
@@ -4742,8 +4823,15 @@ const ChatPage = () => {
                       onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto overflow-x-hidden min-w-0"
-                      style={{ minHeight: '20px', maxHeight: '400px' }}
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-900 disabled:opacity-50 overflow-y-auto overflow-x-hidden min-w-0 font-medium leading-relaxed"
+                      style={{ 
+                        minHeight: '20px', 
+                        maxHeight: '400px',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        letterSpacing: '0.01em',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale'
+                      }}
                     />
                     
                     {/* Mention Dropdown */}
@@ -4929,8 +5017,34 @@ const ChatPage = () => {
             </div>
 
             {/* Messages Area */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gray-100">
-              <div className="space-y-2">
+            <div 
+              ref={messagesContainerRef} 
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 relative"
+              style={{
+                backgroundColor: '#EFEAE2',
+                backgroundImage: `
+                  repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px),
+                  repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px)
+                `,
+                backgroundAttachment: 'fixed'
+              }}
+            >
+              {/* WhatsApp-style emoji pattern overlay */}
+              <div 
+                className="absolute inset-0 pointer-events-none z-0"
+                style={{
+                  backgroundImage: `
+                    radial-gradient(circle at 15% 25%, rgba(212,212,212,0.08) 0%, transparent 25%),
+                    radial-gradient(circle at 85% 75%, rgba(212,212,212,0.08) 0%, transparent 25%),
+                    radial-gradient(circle at 50% 50%, rgba(212,212,212,0.06) 0%, transparent 30%),
+                    radial-gradient(circle at 30% 70%, rgba(212,212,212,0.07) 0%, transparent 20%),
+                    radial-gradient(circle at 70% 30%, rgba(212,212,212,0.07) 0%, transparent 20%)
+                  `,
+                  backgroundSize: '400px 400px',
+                  backgroundAttachment: 'fixed'
+                }}
+              />
+              <div className="space-y-2 relative z-10">
                 {loadingOlderMessages && (
                   <div className="flex justify-center py-2">
                     <div className="flex items-center gap-2 text-gray-500 text-sm">
@@ -5121,7 +5235,12 @@ const ChatPage = () => {
                                               onClick={() => openImageModal(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, fileName)}
                                             />
                                             {caption && (
-                                              <p className="text-sm mt-2 whitespace-pre-wrap text-gray-800">{caption}</p>
+                                              <p className="text-sm mt-2 whitespace-pre-wrap text-gray-900 font-medium leading-relaxed" style={{
+                                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                                letterSpacing: '0.01em',
+                                                WebkitFontSmoothing: 'antialiased',
+                                                MozOsxFontSmoothing: 'grayscale'
+                                              }}>{caption}</p>
                                             )}
                                           </div>
                                         );
@@ -5162,7 +5281,12 @@ const ChatPage = () => {
                                       if (msg.message && msg.message.includes('\n')) {
                                         const caption = msg.message.split('\n').slice(1).join('\n').trim();
                                         if (caption) {
-                                          return <p className="text-sm mt-2 whitespace-pre-wrap text-gray-800">{caption}</p>;
+                                          return <p className="text-sm mt-2 whitespace-pre-wrap text-gray-900 font-medium leading-relaxed" style={{
+                                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                            letterSpacing: '0.01em',
+                                            WebkitFontSmoothing: 'antialiased',
+                                            MozOsxFontSmoothing: 'grayscale'
+                                          }}>{caption}</p>;
                                         }
                                       }
                                       return null;
@@ -5216,7 +5340,12 @@ const ChatPage = () => {
                                       if (msg.message && msg.message.includes('\n')) {
                                         const caption = msg.message.split('\n').slice(1).join('\n').trim();
                                         if (caption) {
-                                          return <p className="text-sm mt-2 whitespace-pre-wrap text-gray-800">{caption}</p>;
+                                          return <p className="text-sm mt-2 whitespace-pre-wrap text-gray-900 font-medium leading-relaxed" style={{
+                                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                            letterSpacing: '0.01em',
+                                            WebkitFontSmoothing: 'antialiased',
+                                            MozOsxFontSmoothing: 'grayscale'
+                                          }}>{caption}</p>;
                                         }
                                       }
                                       return null;
@@ -5224,7 +5353,14 @@ const ChatPage = () => {
                                   </div>
                                 )}
                                 {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
-                                  <p className="text-sm whitespace-pre-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{msg.message}</p>
+                                  <p className="text-sm whitespace-pre-wrap break-words font-medium leading-relaxed" style={{ 
+                                    wordBreak: 'break-word', 
+                                    overflowWrap: 'anywhere',
+                                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                    letterSpacing: '0.01em',
+                                    WebkitFontSmoothing: 'antialiased',
+                                    MozOsxFontSmoothing: 'grayscale'
+                                  }}>{msg.message}</p>
                                 )}
                               </div>
                               <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
@@ -5325,8 +5461,15 @@ const ChatPage = () => {
                       onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto overflow-x-hidden min-w-0"
-                      style={{ minHeight: '20px', maxHeight: '400px' }}
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-900 disabled:opacity-50 overflow-y-auto overflow-x-hidden min-w-0 font-medium leading-relaxed"
+                      style={{ 
+                        minHeight: '20px', 
+                        maxHeight: '400px',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        letterSpacing: '0.01em',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale'
+                      }}
                     />
                     <button 
                       onClick={() => imageInputRef.current?.click()}
@@ -5721,9 +5864,15 @@ const ChatPage = () => {
                   placeholder="Add a caption..."
                   value={previewCaption}
                   onChange={(e) => setPreviewCaption(e.target.value)}
-                  className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-400 text-gray-800 min-h-[36px] max-h-[100px] overflow-y-auto"
+                  className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-400 text-gray-900 min-h-[36px] max-h-[100px] overflow-y-auto font-medium leading-relaxed"
                   rows={1}
-                  style={{ minHeight: '36px' }}
+                  style={{ 
+                    minHeight: '36px',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                    letterSpacing: '0.01em',
+                    WebkitFontSmoothing: 'antialiased',
+                    MozOsxFontSmoothing: 'grayscale'
+                  }}
                 />
                 {previewCaption && (
                   <button
