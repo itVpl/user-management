@@ -803,14 +803,101 @@ export default function DOReport() {
         throw new Error(data.message || 'Preview failed');
       }
 
+      // Console log Excel data
+      console.log('=== EXCEL DATA RECEIVED ===');
+      console.log('Excel Preview Data:', data.data);
+      console.log('Excel Structure Headers:', data.data.excelStructure?.headers);
+      console.log('Excel Preview Rows:', data.data.previewRows);
+      console.log('File Reference:', data.data.fileReference);
+      console.log('===========================');
+
+      // Extract and log values for "Total (Carrier)" header immediately after upload
+      const extractColumnValues = (headerName, excelData) => {
+        const headers = excelData?.excelStructure?.headers || [];
+        const rows = excelData?.previewRows || [];
+        const sampleData = excelData?.sampleData?.rows || [];
+        
+        // Find the header that matches (case-insensitive, flexible matching)
+        const normalizeHeader = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const targetNormalized = normalizeHeader(headerName);
+        
+        const matchedHeader = headers.find(h => {
+          const headerNormalized = normalizeHeader(h.columnName || '');
+          return headerNormalized.includes(targetNormalized) || targetNormalized.includes(headerNormalized);
+        });
+        
+        if (!matchedHeader) {
+          return null;
+        }
+        
+        const columnName = matchedHeader.columnName;
+        
+        // Extract values from previewRows
+        const valuesFromRows = rows.map((row, index) => {
+          if (row.cells && row.cells[columnName] !== undefined) {
+            return row.cells[columnName];
+          }
+          if (row[columnName] !== undefined) {
+            return row[columnName];
+          }
+          if (row.values && row.values[matchedHeader.columnNumber - 1] !== undefined) {
+            return row.values[matchedHeader.columnNumber - 1];
+          }
+          return null;
+        }).filter(v => v !== null);
+        
+        // Extract values from sampleData
+        const valuesFromSample = sampleData.map((row) => {
+          if (row.cells && row.cells[columnName] !== undefined) {
+            return row.cells[columnName];
+          }
+          return null;
+        }).filter(v => v !== null);
+        
+        return {
+          header: columnName,
+          columnLetter: matchedHeader.columnLetter,
+          columnNumber: matchedHeader.columnNumber,
+          values: valuesFromRows.length > 0 ? valuesFromRows : valuesFromSample,
+          totalRows: rows.length || sampleData.length
+        };
+      };
+
+      // Log values for "Total (Carrier)" after upload
+      console.log('=== VALUES FOR "Total (Carrier)" HEADER (After Upload) ===');
+      const totalCarrierUpload = extractColumnValues('Total (Carrier)', data.data);
+      if (totalCarrierUpload) {
+        console.log('Excel Column Name:', totalCarrierUpload.header);
+        console.log('Column Position:', `${totalCarrierUpload.columnLetter} (Column ${totalCarrierUpload.columnNumber})`);
+        console.log('Total Rows:', totalCarrierUpload.totalRows);
+        console.log('Values in Excel:', totalCarrierUpload.values);
+        console.log('Values by Row Index:');
+        totalCarrierUpload.values.forEach((value, index) => {
+          console.log(`  Row ${index + 1}:`, value);
+        });
+      } else {
+        console.log('⚠️ "Total (Carrier)" header not found. Available headers:');
+        data.data?.excelStructure?.headers?.forEach(h => {
+          console.log(`  - ${h.columnName} (${h.columnLetter})`);
+        });
+      }
+      console.log('===========================================================');
+
       setPreviewData(data.data);
       setFileReference(data.data.fileReference);
       setExcelFile(file);
       
       // Auto-fill mapping if available fields are loaded
       if (availableFields.length > 0 && data.data.excelStructure?.headers) {
+        console.log('=== STARTING AUTO-MAPPING ===');
+        console.log('Available Fields Count:', availableFields.length);
+        console.log('Excel Headers Count:', data.data.excelStructure.headers.length);
         const autoMapping = autoFillMapping(data.data.excelStructure.headers, availableFields);
+        console.log('Auto-mapping result:', autoMapping);
+        console.log('Checking "Total (Carrier)" mapping:', autoMapping['Total (Carrier)'] || 'NOT MAPPED');
         setColumnMapping(autoMapping);
+      } else {
+        console.log('⚠️ Cannot auto-map: availableFields=', availableFields.length, 'headers=', data.data.excelStructure?.headers?.length);
       }
       
       setImportStep(2);
@@ -841,6 +928,11 @@ export default function DOReport() {
         .trim();
     };
 
+    // Debug: Log available fields
+    console.log('=== AUTO-MAPPING DEBUG ===');
+    console.log('Available Database Fields:', dbFields);
+    console.log('Excel Headers:', excelHeaders);
+
     // Common field name mappings/variations
     // IMPORTANT: Excel "Load Number" maps to database "workOrderNo" (not loadNo)
     // loadNo is auto-generated by backend (L0001, L0002, etc.)
@@ -868,8 +960,19 @@ export default function DOReport() {
 
     excelHeaders.forEach((header) => {
       const excelColName = normalize(header.columnName);
+      const originalHeaderName = header.columnName;
       let bestMatch = null;
       let bestScore = 0;
+      let matchDetails = null;
+
+      // Special debug for "Total (Carrier)" header
+      const isTotalCarrier = normalize(originalHeaderName).includes('total') && 
+                             normalize(originalHeaderName).includes('carrier');
+      
+      if (isTotalCarrier) {
+        console.log(`\n🔍 Processing "Total (Carrier)" header: "${originalHeaderName}"`);
+        console.log(`   Normalized: "${excelColName}"`);
+      }
 
       // Try to find matching database field
       dbFields.forEach((dbField) => {
@@ -894,7 +997,15 @@ export default function DOReport() {
               if (score > bestScore) {
                 bestMatch = matchingField.field;
                 bestScore = score;
+                matchDetails = { type: 'fieldVariations', key, field: matchingField };
+                if (isTotalCarrier) {
+                  console.log(`   ✅ Found match via fieldVariations: "${key}" → "${matchingField.field}" (${matchingField.label})`);
+                }
               }
+            } else if (isTotalCarrier && key === 'carrierfees') {
+              console.log(`   ⚠️ Field variation "${key}" found but no matching database field`);
+              console.log(`   Looking for field with: field="${key}" OR label includes "carrier fees"`);
+              console.log(`   Available fields:`, dbFields.map(f => ({ field: f.field, label: f.label })));
             }
           }
         }
@@ -986,8 +1097,20 @@ export default function DOReport() {
       // Only set mapping if we found a reasonable match
       if (bestMatch && bestScore >= 50) {
         mapping[header.columnName] = bestMatch;
+        if (isTotalCarrier) {
+          console.log(`   ✅ FINAL MAPPING: "${originalHeaderName}" → "${bestMatch}"`);
+        }
+      } else {
+        if (isTotalCarrier) {
+          console.log(`   ❌ NO MATCH FOUND for "${originalHeaderName}"`);
+          console.log(`   Best score was: ${bestScore} (minimum required: 50)`);
+        }
       }
     });
+
+    console.log('\n=== FINAL AUTO-MAPPING RESULT ===');
+    console.log('Generated Mapping:', mapping);
+    console.log('===================================\n');
 
     return mapping;
   };
@@ -1048,6 +1171,149 @@ export default function DOReport() {
         }
       });
 
+      // Console log fields and data going to API
+      console.log('=== FIELDS MAPPING GOING TO API ===');
+      console.log('Original Column Mapping:', columnMapping);
+      console.log('Transformed Column Mapping (fields):', transformedMapping);
+      console.log('Available Fields:', availableFields);
+      console.log('Preview Data:', previewData);
+      console.log('Excel Structure:', previewData?.excelStructure);
+      console.log('Excel Headers:', previewData?.excelStructure?.headers);
+      console.log('Excel Preview Rows:', previewData?.previewRows);
+      console.log('====================================');
+
+      // Extract and log values for "Total (Carrier)" header
+      const findColumnValues = (headerName) => {
+        const headers = previewData?.excelStructure?.headers || [];
+        const rows = previewData?.previewRows || [];
+        const sampleData = previewData?.sampleData?.rows || [];
+        
+        // Find the header that matches (case-insensitive, flexible matching)
+        const normalizeHeader = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const targetNormalized = normalizeHeader(headerName);
+        
+        const matchedHeader = headers.find(h => {
+          const headerNormalized = normalizeHeader(h.columnName || '');
+          return headerNormalized.includes(targetNormalized) || targetNormalized.includes(headerNormalized);
+        });
+        
+        if (!matchedHeader) {
+          console.log(`⚠️ Header "${headerName}" not found in Excel`);
+          return null;
+        }
+        
+        const columnName = matchedHeader.columnName;
+        const dbField = transformedMapping[columnName];
+        
+        // Extract values from previewRows
+        const valuesFromRows = rows.map((row, index) => {
+          // Try different possible structures
+          if (row.cells && row.cells[columnName] !== undefined) {
+            return row.cells[columnName];
+          }
+          if (row[columnName] !== undefined) {
+            return row[columnName];
+          }
+          if (row.values && row.values[matchedHeader.columnNumber - 1] !== undefined) {
+            return row.values[matchedHeader.columnNumber - 1];
+          }
+          return null;
+        }).filter(v => v !== null);
+        
+        // Extract values from sampleData
+        const valuesFromSample = sampleData.map((row, index) => {
+          if (row.cells && row.cells[columnName] !== undefined) {
+            return row.cells[columnName];
+          }
+          return null;
+        }).filter(v => v !== null);
+        
+        return {
+          header: columnName,
+          columnLetter: matchedHeader.columnLetter,
+          columnNumber: matchedHeader.columnNumber,
+          mappedToField: dbField || 'NOT MAPPED',
+          values: valuesFromRows.length > 0 ? valuesFromRows : valuesFromSample,
+          totalRows: rows.length || sampleData.length
+        };
+      };
+
+      // Log values for "Total (Carrier)"
+      console.log('=== VALUES FOR "Total (Carrier)" HEADER ===');
+      console.log('Current Column Mapping State:', columnMapping);
+      console.log('Available Fields:', availableFields.map(f => ({ field: f.field, label: f.label })));
+      
+      const totalCarrierData = findColumnValues('Total (Carrier)');
+      if (totalCarrierData) {
+        console.log('Excel Column Name:', totalCarrierData.header);
+        console.log('Column Position:', `${totalCarrierData.columnLetter} (Column ${totalCarrierData.columnNumber})`);
+        console.log('Maps to Database Field:', totalCarrierData.mappedToField);
+        
+        // Check if it's mapped correctly
+        if (totalCarrierData.mappedToField === 'NOT MAPPED') {
+          console.error('❌ PROBLEM: "Total (Carrier)" is NOT MAPPED to any database field!');
+          console.log('Current mapping for this column:', columnMapping[totalCarrierData.header]);
+          console.log('Available carrier-related fields:', availableFields.filter(f => 
+            f.field.toLowerCase().includes('carrier') || f.label.toLowerCase().includes('carrier')
+          ));
+        } else {
+          console.log('✅ Mapping found:', totalCarrierData.mappedToField);
+        }
+        
+        console.log('Total Rows:', totalCarrierData.totalRows);
+        console.log('Values going to API:', totalCarrierData.values);
+        console.log('Values by Row Index:');
+        totalCarrierData.values.forEach((value, index) => {
+          console.log(`  Row ${index + 1}:`, value, `(will be sent as ${totalCarrierData.mappedToField})`);
+        });
+      } else {
+        // Try alternative names
+        console.log('⚠️ "Total (Carrier)" not found, trying alternatives...');
+        const alternatives = ['Total Carrier', 'Carrier Total', 'Carrier Fees', 'Total Carrier Fees'];
+        for (const alt of alternatives) {
+          const altData = findColumnValues(alt);
+          if (altData) {
+            console.log(`Found similar header: "${altData.header}"`);
+            console.log('Excel Column Name:', altData.header);
+            console.log('Column Position:', `${altData.columnLetter} (Column ${altData.columnNumber})`);
+            console.log('Maps to Database Field:', altData.mappedToField);
+            if (altData.mappedToField === 'NOT MAPPED') {
+              console.error(`❌ PROBLEM: "${altData.header}" is NOT MAPPED!`);
+            }
+            console.log('Values going to API:', altData.values);
+            break;
+          }
+        }
+      }
+      console.log('==========================================');
+
+      const apiPayload = {
+        fileReference: fileReference,
+        columnMapping: transformedMapping,
+        entityType: 'do',
+        options: {
+          skipDuplicates: skipDuplicates,
+          updateExisting: updateExisting
+        }
+      };
+
+      console.log('=== COMPLETE API PAYLOAD ===');
+      console.log('API Payload:', JSON.stringify(apiPayload, null, 2));
+      
+      // Check if totalCarrierFees is mapped but carrierFees array components are missing
+      const hasTotalCarrierFees = Object.values(transformedMapping).includes('totalCarrierFees');
+      const hasCarrierFeesComponents = 
+        Object.values(transformedMapping).includes('carrierFeesLineHaul') ||
+        Object.values(transformedMapping).includes('carrierFeesFSC') ||
+        Object.values(transformedMapping).includes('carrierFeesOther');
+      
+      if (hasTotalCarrierFees && !hasCarrierFeesComponents) {
+        console.warn('⚠️ WARNING: "Total (Carrier)" is mapped to totalCarrierFees, but individual carrier fee components (Line Haul, FSC, Other) are not mapped.');
+        console.warn('⚠️ Backend might require carrierFees array structure. Check backend response for errors.');
+      }
+      
+      console.log('============================');
+
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const response = await fetch(`${API_CONFIG.BASE_URL}/api/excel/import`, {
         method: 'POST',
@@ -1055,18 +1321,22 @@ export default function DOReport() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          fileReference: fileReference,
-          columnMapping: transformedMapping,
-          entityType: 'do',
-          options: {
-            skipDuplicates: skipDuplicates,
-            updateExisting: updateExisting
-          }
-        })
+        body: JSON.stringify(apiPayload)
       });
 
       const result = await response.json();
+
+      console.log('=== BACKEND RESPONSE ===');
+      console.log('Full Response:', result);
+      console.log('Success:', result.success);
+      console.log('Summary:', result.summary);
+      if (result.errors && result.errors.length > 0) {
+        console.error('Import Errors:', result.errors);
+      }
+      if (result.warnings && result.warnings.length > 0) {
+        console.warn('Import Warnings:', result.warnings);
+      }
+      console.log('========================');
 
       if (!result.success) {
         throw new Error(result.message || 'Import failed');
@@ -1075,6 +1345,25 @@ export default function DOReport() {
       setImportResult(result);
       setImportStep(3);
       alertify.success(`Import completed! ${result.summary.successfullyImported} records imported.`);
+      
+      // Check imported data for carrierFees
+      if (result.summary && result.summary.successfullyImported > 0) {
+        console.log('=== CHECKING IMPORTED DATA ===');
+        console.log('Import Summary:', result.summary);
+        
+        // If result contains sample imported records, check their carrierFees
+        if (result.data && result.data.sampleRecords) {
+          console.log('Sample Imported Records:', result.data.sampleRecords);
+          result.data.sampleRecords.forEach((record, idx) => {
+            console.log(`Record ${idx + 1} - Carrier Fees:`, {
+              totalCarrierFees: record.carrier?.totalCarrierFees,
+              carrierFees: record.carrier?.carrierFees,
+              workOrderNo: record.workOrderNo
+            });
+          });
+        }
+        console.log('=============================');
+      }
       
       // Refresh orders list
       await fetchOrders();

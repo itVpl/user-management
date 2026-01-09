@@ -216,6 +216,3 @@ export const useOnlineStatus = () => {
   return context;
 };
 
-export default OnlineStatusContext;
-
-
