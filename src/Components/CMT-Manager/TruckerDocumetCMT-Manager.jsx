@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { FaArrowLeft, FaCheck, FaTimes, FaRedo } from "react-icons/fa";
+import API_CONFIG from "../../config/api";
 
 const TruckerLDocuments = () => {
   const [truckers, setTruckers] = useState([]);
@@ -22,7 +23,7 @@ const TruckerLDocuments = () => {
         }
         
         // Fetch truckers with user-specific filtering
-        const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/truckers?addedBy=${empId}`, {
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers?addedBy=${empId}`, {
           withCredentials: true
         });
         setTruckers(res.data.data || []);
@@ -39,7 +40,7 @@ const TruckerLDocuments = () => {
     if (!selectedTrucker?._id) return;
     try {
       const res = await axios.patch(
-        `https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/simple-status/${selectedTrucker._id}`,
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/simple-status/${selectedTrucker._id}`,
         { status }
       );
       alert(`Status updated to "${status}"`);
@@ -161,7 +162,7 @@ const TruckerLDocuments = () => {
             <div className="mt-4">
               <h3 className="font-semibold mb-2">Uploaded Document</h3>
               <img
-                src={`https://vpl-liveproject-1.onrender.com/${selectedTrucker.docUpload}`}
+                src={`${API_CONFIG.BASE_URL}/${selectedTrucker.docUpload}`}
                 alt="Document"
                 className="w-64 h-auto rounded shadow"
               />

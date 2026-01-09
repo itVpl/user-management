@@ -3469,13 +3469,52 @@ const handleUpdateOrder = async (e) => {
     const currency = (n) =>
       Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+    // Fixed date formatting - parses date correctly without timezone shifts
     const formatDateStr = (d) => {
       if (!d) return 'N/A';
-      try { return new Date(d).toLocaleDateString(); } catch { return 'N/A'; }
+      try {
+        // Handle ISO date strings (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss) by parsing directly
+        let year, month, day;
+        if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+          // ISO format: extract date parts directly from string
+          const parts = d.split('T')[0].split('-');
+          year = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10);
+          day = parseInt(parts[2], 10);
+        } else {
+          // Other formats: use Date object but extract UTC components to avoid timezone shift
+          const dt = new Date(d);
+          if (Number.isNaN(dt.getTime())) return 'N/A';
+          // Use UTC methods to avoid timezone conversion issues
+          year = dt.getUTCFullYear();
+          month = dt.getUTCMonth() + 1;
+          day = dt.getUTCDate();
+        }
+        return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
+      } catch { return 'N/A'; }
     };
     const formatDateStrUS = (d) => {
       if (!d) return 'N/A';
-      try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return 'N/A'; }
+      try {
+        // Handle ISO date strings (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss) by parsing directly
+        let year, month, day;
+        if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+          // ISO format: extract date parts directly from string
+          const parts = d.split('T')[0].split('-');
+          year = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10);
+          day = parseInt(parts[2], 10);
+        } else {
+          // Other formats: use Date object but extract UTC components to avoid timezone shift
+          const dt = new Date(d);
+          if (Number.isNaN(dt.getTime())) return 'N/A';
+          // Use UTC methods to avoid timezone conversion issues
+          year = dt.getUTCFullYear();
+          month = dt.getUTCMonth() + 1;
+          day = dt.getUTCDate();
+        }
+        return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
+      } catch { return 'N/A'; }
     };
     const formatTimeStr = (d) => {
       if (!d) return 'N/A';
@@ -3927,22 +3966,31 @@ const handleUpdateOrder = async (e) => {
       const OTH = Number(cust.otherTotal) || 0;
       const CUSTOMER_TOTAL = LH + FSC + OTH;
 
-      // helpers
+      // helpers - Fixed date formatting without timezone conversion
       const fmtDate = (d) => {
         if (!d) return 'N/A';
         try {
-          const dt = new Date(d);
-          if (Number.isNaN(dt.getTime())) return 'Invalid Date';
-          // Sirf date; UTC use kiya to avoid timezone issues
-          return dt.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            timeZone: 'UTC'
-          });
+          // Handle ISO date strings (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss) by parsing directly
+          let year, month, day;
+          if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+            // ISO format: extract date parts directly from string
+            const parts = d.split('T')[0].split('-');
+            year = parseInt(parts[0], 10);
+            month = parseInt(parts[1], 10);
+            day = parseInt(parts[2], 10);
+          } else {
+            // Other formats: use Date object but extract UTC components to avoid timezone shift
+            const dt = new Date(d);
+            if (Number.isNaN(dt.getTime())) return 'N/A';
+            // Use UTC methods to avoid timezone conversion issues
+            year = dt.getUTCFullYear();
+            month = dt.getUTCMonth() + 1;
+            day = dt.getUTCDate();
+          }
+          return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
         } catch (error) {
           console.error('Error formatting date:', error, d);
-          return 'Invalid Date';
+          return 'N/A';
         }
       };
 
@@ -4104,10 +4152,31 @@ const handleUpdateOrder = async (e) => {
         return parts.length ? parts.join(', ') : 'N/A';
       };
       
+      // Fixed date formatting - parses date correctly without timezone shifts
       const fmtDate = (d) => {
         if (!d) return 'N/A';
-        const dt = new Date(d);
-        return isNaN(dt) ? 'N/A' : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+        try {
+          // Handle ISO date strings (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss) by parsing directly
+          let year, month, day;
+          if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+            // ISO format: extract date parts directly from string
+            const parts = d.split('T')[0].split('-');
+            year = parseInt(parts[0], 10);
+            month = parseInt(parts[1], 10);
+            day = parseInt(parts[2], 10);
+          } else {
+            // Other formats: use Date object but extract UTC components to avoid timezone shift
+            const dt = new Date(d);
+            if (Number.isNaN(dt.getTime())) return 'N/A';
+            // Use UTC methods to avoid timezone conversion issues
+            year = dt.getUTCFullYear();
+            month = dt.getUTCMonth() + 1;
+            day = dt.getUTCDate();
+          }
+          return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
+        } catch {
+          return 'N/A';
+        }
       };
       
       // If returnFullAddress exists, use only that (it already contains full address)
@@ -4270,12 +4339,31 @@ const handleUpdateOrder = async (e) => {
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGP4BwQACgAB/WHvJ2sAAAAASUVORK5CYII=');
 
     // ---------- HELPERS ----------
+    // Fixed date formatting - parses date correctly without timezone shifts
     const fmtDate = (d) => {
       if (!d) return 'N/A';
-      const dt = new Date(d);
-      return isNaN(dt)
-        ? 'N/A'
-        : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      try {
+        // Handle ISO date strings (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss) by parsing directly
+        let year, month, day;
+        if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+          // ISO format: extract date parts directly from string
+          const parts = d.split('T')[0].split('-');
+          year = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10);
+          day = parseInt(parts[2], 10);
+        } else {
+          // Other formats: use Date object but extract UTC components to avoid timezone shift
+          const dt = new Date(d);
+          if (Number.isNaN(dt.getTime())) return 'N/A';
+          // Use UTC methods to avoid timezone conversion issues
+          year = dt.getUTCFullYear();
+          month = dt.getUTCMonth() + 1;
+          day = dt.getUTCDate();
+        }
+        return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
+      } catch {
+        return 'N/A';
+      }
     };
 
     const fmtTime = (d) => {

@@ -138,7 +138,13 @@ export const useEnhancedNotifications = () => {
             });
           }
         } catch (error) {
-          console.error(`Error fetching chat for load ${item.loadId}:`, error);
+          // Only log non-404 errors (404 means endpoint doesn't exist or load has no chat)
+          if (error.response?.status !== 404) {
+            console.error(`Error fetching chat for load ${item.loadId}:`, error);
+          } else {
+            // 404 is expected if load doesn't have chat messages yet
+            // Silently skip - this is not an error condition
+          }
         }
       }));
 
@@ -209,7 +215,13 @@ export const useEnhancedNotifications = () => {
             });
           }
         } catch (error) {
-          console.error(`Error fetching negotiation for bid ${item.bidId}:`, error);
+          // Only log non-404 errors (404 means endpoint doesn't exist or bid has no negotiation thread)
+          if (error.response?.status !== 404) {
+            console.error(`Error fetching negotiation for bid ${item.bidId}:`, error);
+          } else {
+            // 404 is expected if bid doesn't have an internal negotiation thread yet
+            // Silently skip - this is not an error condition
+          }
         }
       }));
 
@@ -230,10 +242,10 @@ export const useEnhancedNotifications = () => {
     }
   }, [getCurrentUser]);
 
-  // Set up polling
+  // Set up polling - reduced frequency to prevent 429 errors
   useEffect(() => {
     fetchNotifications();
-    const intervalId = setInterval(fetchNotifications, 10000); // Poll every 10 seconds
+    const intervalId = setInterval(fetchNotifications, 30000); // Poll every 30 seconds (was 10s)
     return () => clearInterval(intervalId);
   }, [fetchNotifications]);
 

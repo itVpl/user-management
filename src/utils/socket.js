@@ -19,7 +19,8 @@ class SocketService {
     }
 
     this.token = token;
-    const socketUrl = API_CONFIG.BASE_URL || 'https://vpl-liveproject-1.onrender.com';
+    // Get socket URL from API config (uses VITE_API_BASE_URL from .env)
+    const socketUrl = API_CONFIG.BASE_URL;
 
     this.socket = io(socketUrl, {
       auth: { token },

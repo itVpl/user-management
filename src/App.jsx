@@ -78,6 +78,7 @@ import InventoryManagement from "./Components/Finance/InventoryManagement.jsx";
 import AcountentPayable from "./Components/Finance/AcountentPayable.jsx";
 import AllCustomer from "./Components/Sales/AllCustomer.jsx";
 import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
+import RateRequestReport from "./Components/CMT/RateRequestReport.jsx";
 import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
 import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
 import FollowUpReport from "./Components/Sales/FollowUpReport.jsx";
@@ -94,6 +95,10 @@ import globalNegotiationService from "./services/globalNegotiationService";
 import SocketTest from "./Components/SocketTest";
 import globalNegotiationSocketService from "./services/globalNegotiationSocketFixed";
 import NegotiationTestButton from "./Components/NegotiationTestButton";
+import NotificationHandler from "./Components/NotificationHandler";
+import sharedSocketService from "./services/sharedSocketService";
+import { OnlineStatusProvider } from "./contexts/OnlineStatusContext";
+import { UnreadCountProvider } from "./contexts/UnreadCountContext";
 // import GlobalNegotiationNotifications from "./components/GlobalNegotiationNotifications";
 // import NegotiationSocketTester from "./components/NegotiationSocketTester";
 import LandingPage from "./Pages/LandingPage.jsx";
@@ -381,7 +386,7 @@ function GlobalNegotiationNotification() {
     const userInfo = globalNegotiationService.getCurrentUser();
     if (userInfo) {
       console.log('🚀 Starting global negotiation polling service...');
-      globalNegotiationService.startPolling(20000); // Poll every 20 seconds
+      globalNegotiationService.startPolling(60000); // Poll every 60 seconds (reduced frequency to prevent 429 errors)
     }
 
     return () => {
@@ -460,6 +465,30 @@ function App() {
     checkAuthStatus();
   }, []);
 
+  // Initialize shared socket service when user is authenticated
+  // This ensures the socket is ALWAYS connected when user is logged in
+  useEffect(() => {
+    if (userData?.empId && isAuthenticated) {
+      console.log('🚀 App.jsx: Ensuring shared socket service is connected for user:', userData.empId);
+      
+      // Get existing socket or initialize if needed
+      let socket = sharedSocketService.getSocket();
+      
+      if (!socket || !socket.connected) {
+        console.log('⏳ App.jsx: Socket not connected, initializing...');
+        socket = sharedSocketService.initialize(userData.empId);
+      } else {
+        console.log('✅ App.jsx: Socket already connected:', socket.id);
+      }
+      
+      // Socket.io handles reconnection automatically - no need for manual monitoring
+    } else if (!isAuthenticated) {
+      // Disconnect socket when user logs out
+      console.log('🧹 App.jsx: User logged out, disconnecting shared socket');
+      sharedSocketService.disconnect();
+    }
+  }, [userData?.empId, isAuthenticated]);
+
   // Handle terms acceptance
   const handleTermsAccepted = useCallback(() => {
     try {
@@ -500,11 +529,14 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <ChatMessageProvider>
-        {/* Global Components */}
-        <GlobalAssignmentNotification />
-        <GlobalNegotiationNotification />
-        <ChatMessagePopup />
+      <OnlineStatusProvider>
+        <UnreadCountProvider>
+          <ChatMessageProvider>
+            {/* Global Components */}
+            <GlobalAssignmentNotification />
+            <GlobalNegotiationNotification />
+            <NotificationHandler />
+            <ChatMessagePopup />
         {/* {import.meta.env.DEV && <TestChatPopup />} */}
         {/* {import.meta.env.DEV && <ChatSystemStatus />} */}
         {/* {import.meta.env.DEV && <SocketTest />} */}
@@ -634,11 +666,13 @@ function App() {
           <Route path="inventory-management" element={<InventoryManagement />} />
           <Route path="acountent-payable" element={<AcountentPayable />} />
           <Route path="empty-truck-location" element={<EmptyTruckLocation />} />
+          <Route path="rate-request-report" element={<RateRequestReport />} />
           <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
           <Route path="break-report" element={<BreakReport />} />
           <Route path="allcustomer" element={<AllCustomer />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />
           <Route path="followUpReport" element={<FollowUpReport />} />
+          <Route path="RateRequestReport" element={<RateRequestReport />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -655,7 +689,9 @@ function App() {
           user={userData} 
         />
       )}
-    </ChatMessageProvider>
+          </ChatMessageProvider>
+        </UnreadCountProvider>
+      </OnlineStatusProvider>
     </ErrorBoundary>
   );
 }

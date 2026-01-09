@@ -197,11 +197,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   const [selFiles, setSelFiles] = useState([]); // File[]
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [invoiceFile, setInvoiceFile] = useState(null); // File | null
+  // Note: Due date is automatically calculated as 30 days from invoice upload date by backend
 
   // Additional Docs (View)
   const [addDocsLoading, setAddDocsLoading] = useState(false);
   const [addDocsError, setAddDocsError] = useState('');
   const [additionalDocs, setAdditionalDocs] = useState([]); // array of {documentUrl, uploadedBy, uploadedAt, _id}
+  const [invoice, setInvoice] = useState(null); // {invoiceUrl, dueDate, uploadedBy, uploadedAt, _id} | null
 
   // Drivers / Assign Driver UI state
   const [drivers, setDrivers] = useState([]);
@@ -222,6 +225,24 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     }
   };
 
+  // Helper function to format date for datetime-local input (without timezone conversion)
+  const formatDateForInput = (dateValue) => {
+    if (!dateValue) return '';
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return '';
+      // Convert to local datetime string without timezone conversion
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch {
+      return '';
+    }
+  };
+
   // API uses different field names, so we need to map them
   const apiImportantDates = raw.importantDates || raw.loadReference?.importantDates || {};
   const [importantDates, setImportantDates] = useState({
@@ -232,11 +253,13 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || apiImportantDates.emptyDate),
     perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay),
     ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || apiImportantDates.ingateDate),
-    readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate)
+    readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate),
+    // Only use dlvyDate from importantDates
+    deliveryDate: getDateValue(apiImportantDates.dlvyDate)
   });
   const [updatingDates, setUpdatingDates] = useState(false);
 
-  // Update important dates when modal opens or order changes
+  // Initialize important dates only when modal opens (not on order changes)
   useEffect(() => {
     if (open && order) {
       // API uses different field names, so we need to map them
@@ -249,10 +272,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         emptyDate: getDateValue(raw.emptyDate || raw.loadReference?.emptyDate || apiImportantDates.emptyDate),
         perDiemFreeDay: getDateValue(raw.perDiemFreeDay || raw.loadReference?.perDiemFreeDay || apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay),
         ingateDate: getDateValue(raw.ingateDate || raw.loadReference?.ingateDate || apiImportantDates.ingateDate),
-        readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate)
+        readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate),
+        // Only use dlvyDate from importantDates
+        deliveryDate: getDateValue(apiImportantDates.dlvyDate)
       });
     }
-  }, [open, order]); // eslint-disable-line
+    // Only run when modal opens/closes, not when order changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   // PDF generate/download loading state
   const [genLoading, setGenLoading] = useState(null); // 'invoice' | 'rate' | 'bol' | null
 
@@ -1406,6 +1433,9 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       if (res?.data?.success) {
         const docs = Array.isArray(res.data?.data?.documents) ? res.data.data.documents : [];
         setAdditionalDocs(docs);
+        // Handle invoice separately
+        const invoiceData = res.data?.data?.invoice || null;
+        setInvoice(invoiceData);
       } else {
         setAddDocsError(res?.data?.message || 'Could not fetch additional docs');
       }
@@ -1448,7 +1478,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       }
 
       // Fetch drivers by compName
-      const url = `https://vpl-liveproject-1.onrender.com/api/v1/cmt-reports/drivers-by-company?compName=${encodeURIComponent(
+      const url = `${API_CONFIG.BASE_URL}/api/v1/cmt-reports/drivers-by-company?compName=${encodeURIComponent(
         compName
       )}`;
       
@@ -1518,7 +1548,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       if (!token) return alertify.error('Authentication required');
 
       setAssignLoading(true);
-      const url = `https://vpl-liveproject-1.onrender.com/api/v1/do/load/${encodeURIComponent(loadId)}/assign-driver`;
+      const url = `${API_CONFIG.BASE_URL}/api/v1/do/load/${encodeURIComponent(loadId)}/assign-driver`;
       
       // Prepare payload - only driverId and vehicleNumber as per API spec
       const payload = { 
@@ -1620,7 +1650,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
         'emptyDate': 'emptyDate',            // Same
         'perDiemFreeDay': 'perDiemFreeDate', // Frontend: perDiemFreeDay -> API: perDiemFreeDate
         'ingateDate': 'ingateDate',          // Same
-        'readyToReturnDate': 'readyToReturnDate' // Same
+        'readyToReturnDate': 'readyToReturnDate', // Same
+        'deliveryDate': 'dlvyDate'           // Frontend: deliveryDate -> API: dlvyDate
       };
 
       const importantDatesPayload = {};
@@ -1659,6 +1690,57 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
       if (response?.data?.success) {
         alertify.success(response?.data?.message || 'Important dates updated successfully');
+        
+        // Update local order object and state with the response data
+        try {
+          const updatedData = response?.data?.data;
+          if (updatedData) {
+            // Update order.raw with the response data
+            if (!order.raw) order.raw = {};
+            
+            // Update importantDates if present in response
+            if (updatedData.importantDates) {
+              if (!order.raw.importantDates) order.raw.importantDates = {};
+              order.raw.importantDates = { ...order.raw.importantDates, ...updatedData.importantDates };
+            }
+            
+            // Update loadReference.importantDates if present
+            if (updatedData.loadReference?.importantDates) {
+              if (!order.raw.loadReference) order.raw.loadReference = {};
+              if (!order.raw.loadReference.importantDates) order.raw.loadReference.importantDates = {};
+              order.raw.loadReference.importantDates = { ...order.raw.loadReference.importantDates, ...updatedData.loadReference.importantDates };
+            }
+            
+            // Get updated importantDates from response (priority: response > existing)
+            const apiImportantDates = updatedData.importantDates || updatedData.loadReference?.importantDates || order.raw.importantDates || order.raw.loadReference?.importantDates || {};
+            
+            // Check if deliveryDate (dlvyDate) was in the payload we sent
+            const wasDeliveryDateInPayload = importantDatesPayload.dlvyDate !== undefined;
+            
+            // Always update all dates from the response
+            setImportantDates(prev => {
+              // For deliveryDate: if it was updated, keep the current state value (user just entered it)
+              // State already has the updated value from the input field onChange handler
+              const updatedDeliveryDate = wasDeliveryDateInPayload 
+                ? prev.deliveryDate  // Keep current state value (what user just entered)
+                : (apiImportantDates.dlvyDate ? getDateValue(apiImportantDates.dlvyDate) : prev.deliveryDate);
+              
+              return {
+                vesselETA: getDateValue(apiImportantDates.vesselDate || apiImportantDates.vesselETA || prev.vesselETA),
+                latfreeDate: getDateValue(apiImportantDates.lastFreeDate || apiImportantDates.latfreeDate || prev.latfreeDate),
+                dischargeDate: getDateValue(apiImportantDates.dischargeDate || prev.dischargeDate),
+                outgateDate: getDateValue(apiImportantDates.outgateDate || prev.outgateDate),
+                emptyDate: getDateValue(apiImportantDates.emptyDate || prev.emptyDate),
+                perDiemFreeDay: getDateValue(apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay || prev.perDiemFreeDay),
+                ingateDate: getDateValue(apiImportantDates.ingateDate || prev.ingateDate),
+                readyToReturnDate: getDateValue(apiImportantDates.readyToReturnDate || prev.readyToReturnDate),
+                deliveryDate: updatedDeliveryDate
+              };
+            });
+          }
+        } catch (updateError) {
+          console.error('Error updating local state after date update:', updateError);
+        }
       } else {
         alertify.error(response?.data?.message || 'Update failed');
       }
@@ -1693,11 +1775,37 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
   const removeDraftFile = (idx) => setSelFiles(prev => prev.filter((_, i) => i !== idx));
 
+  const onInvoiceFilePick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setInvoiceFile(null);
+      return;
+    }
+    const tooBig = file.size > MAX_SIZE_MB * 1024 * 1024;
+    const badType = !allowed.includes(file.type);
+    if (tooBig) {
+      alertify.error(`${file.name}: exceeds ${MAX_SIZE_MB}MB`);
+      e.target.value = '';
+      return;
+    }
+    if (badType) {
+      alertify.error(`${file.name}: unsupported type`);
+      e.target.value = '';
+      return;
+    }
+    setInvoiceFile(file);
+    e.target.value = '';
+  };
+
   const submitAdditionalDocs = async () => {
     try {
       if (!doMongoId) return alertify.error('Missing DO ID');
       if (!cmtEmpId) return alertify.error('Missing CMT EmpId');
-      if (!selFiles.length) return alertify.error('Please select at least one file');
+      
+      // Validate that at least one file is provided
+      if (!selFiles.length && !invoiceFile) {
+        return alertify.error('Please select at least one file (additional documents or invoice)');
+      }
 
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       if (!token) return alertify.error('Authentication required');
@@ -1706,7 +1814,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
       const form = new FormData();
       form.append('empId', String(cmtEmpId));
+      
+      // Add additional documents
       selFiles.forEach(f => form.append('files', f));
+      
+      // Add invoice file if provided
+      // Note: Due date is automatically calculated as 30 days from upload date by backend
+      if (invoiceFile) {
+        form.append('invoiceFile', invoiceFile);
+      }
 
       setUploading(true);
       setProgress(0);
@@ -1720,7 +1836,9 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
       if (res?.data?.success) {
         alertify.success(res?.data?.message || 'Documents uploaded successfully');
-        setSelFiles([]); setProgress(0);
+        setSelFiles([]);
+        setInvoiceFile(null);
+        setProgress(0);
         fetchAdditionalDocs(); // refresh list
       } else {
         alertify.error(res?.data?.message || 'Upload failed');
@@ -1787,7 +1905,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
         {/* Content */}
         <div className="modal-content overflow-y-auto flex-1 p-6 space-y-6">
-          {/* Customer Information - Hidden per user request */}
+          {/* Customer Information - Hidden per user request  dfg */}
           {false && customers.length > 0 && (
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1816,7 +1934,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Work Order No</p>
-                        <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>
+                        <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>  
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Load No</p>
@@ -2318,6 +2436,67 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
 
 
+          {/* ========== Invoice (VIEW) ========== */}
+          <section className={`${SOFT.cardBlue} md:col-span-2`}>
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">Invoice</h3>
+
+            {addDocsLoading ? (
+              <div className="flex items-center gap-3 text-gray-600">
+                <div className={`animate-spin rounded-full h-5 w-5 ${MS.spinner}`}></div>
+                Loading invoice...
+              </div>
+            ) : invoice ? (
+              <div className="p-4 bg-white border rounded-xl">
+                {(() => {
+                  const hasDueDate = invoice.dueDate;
+                  const isOverdue = hasDueDate && new Date(invoice.dueDate) < new Date();
+                  return (
+                    <div className={`border-2 rounded-lg p-4 ${isOverdue ? 'border-red-500 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <a 
+                            href={invoice.invoiceUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-2 mb-2"
+                          >
+                            <FaFilePdf className="text-red-500" />
+                            <span>View Invoice</span>
+                            <FaDownload className="text-xs" />
+                          </a>
+                          <div className="text-sm text-gray-700 space-y-1">
+                            {hasDueDate && (
+                              <div>
+                                <span className="text-gray-500">Due Date:</span>{' '}
+                                <span className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
+                                  {fmtDate(invoice.dueDate)}
+                                </span>
+                                {isOverdue && (
+                                  <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded">OVERDUE</span>
+                                )}
+                                <div className="text-xs text-gray-500 mt-1 italic">
+                                  (Auto-calculated: 30 days from upload date)
+                                </div>
+                              </div>
+                            )}
+                            <div>
+                              <span className="text-gray-500">Uploaded By:</span>{' '}
+                              {invoice.uploadedBy?.employeeName ? `${invoice.uploadedBy.employeeName} (${invoice.uploadedBy.empId || '-'})` : '—'}
+                            </div>
+                            <div><span className="text-gray-500">Dept:</span> {invoice.uploadedBy?.department || '—'}</div>
+                            <div><span className="text-gray-500">Uploaded At:</span> {fmtDate(invoice.uploadedAt)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 p-4 bg-white border rounded-xl">No invoice uploaded yet.</div>
+            )}
+          </section>
+
           {/* ========== Additional Documents (VIEW) ========== */}
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Additional Documents</h3>
@@ -2381,35 +2560,71 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                 <span className="font-medium">{cmtEmpId || '—'}</span>
               </div>
 
-              <label className={`inline-flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 ${MS.subtleBtn}`}>
-                <FaUpload />
-                <span>Select files</span>
-                <input
-                  type="file"
-                  className="hidden"
-                  multiple
-                  onChange={onFilePick}
-                  accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
-                />
-              </label>
+              {/* Additional Documents Upload */}
+              <div className="mb-4">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Additional Documents:</label>
+                <label className={`inline-flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 ${MS.subtleBtn}`}>
+                  <FaUpload />
+                  <span>Select files</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    multiple
+                    onChange={onFilePick}
+                    accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
+                  />
+                </label>
 
-              {selFiles.length > 0 && (
-                <div className="mt-4">
-                  <div className="text-sm text-gray-700 font-medium mb-2">
-                    {selFiles.length} file(s) selected
+                {selFiles.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-sm text-gray-700 font-medium mb-2">
+                      {selFiles.length} file(s) selected
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {selFiles.map((f, idx) => (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50">
+                          <span className="text-sm truncate max-w-[220px]" title={f.name}>{f.name}</span>
+                          <button onClick={() => removeDraftFile(idx)} className="text-red-600 hover:text-red-700" title="Remove">
+                            <FaTrash />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selFiles.map((f, idx) => (
-                      <div key={idx} className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50">
-                        <span className="text-sm truncate max-w-[220px]" title={f.name}>{f.name}</span>
-                        <button onClick={() => removeDraftFile(idx)} className="text-red-600 hover:text-red-700" title="Remove">
-                          <FaTrash />
-                        </button>
-                      </div>
-                    ))}
+                )}
+              </div>
+
+              {/* Invoice Upload */}
+              <div className="mb-4 pb-4 border-b border-gray-200">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Invoice Upload:</label>
+                <div className="space-y-3">
+                  <label className={`inline-flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 ${MS.subtleBtn}`}>
+                    <FaUpload />
+                    <span>Select invoice file</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={onInvoiceFilePick}
+                      accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp"
+                    />
+                  </label>
+
+                  {invoiceFile && (
+                    <div className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50">
+                      <span className="text-sm truncate max-w-[220px]" title={invoiceFile.name}>{invoiceFile.name}</span>
+                      <button onClick={() => setInvoiceFile(null)} className="text-red-600 hover:text-red-700" title="Remove">
+                        <FaTrash />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="text-xs text-blue-800">
+                      <strong>Note:</strong> Invoice due date is automatically calculated as <strong>30 days from upload date</strong>.
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
 
               {uploading && (
                 <div className="mt-4">
@@ -2423,10 +2638,10 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <div className="mt-4 flex justify-end">
                 <button
                   onClick={submitAdditionalDocs}
-                  disabled={uploading || selFiles.length === 0}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${(uploading || selFiles.length === 0) ? MS.disabledBtn : MS.primaryBtn
+                  disabled={uploading || (selFiles.length === 0 && !invoiceFile)}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${(uploading || (selFiles.length === 0 && !invoiceFile)) ? MS.disabledBtn : MS.primaryBtn
                     }`}
-                  title="Upload selected files"
+                  title="Upload selected files and/or invoice"
                 >
                   {uploading ? 'Uploading...' : 'Submit Documents'}
                 </button>
@@ -2448,14 +2663,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Vessel ETA</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.vesselETA ? (() => { try { return new Date(importantDates.vesselETA).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.vesselETA)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        // Convert datetime-local format to ISO string
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, vesselETA: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, vesselETA: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, vesselETA: '' }));
@@ -2468,13 +2684,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Lastfree Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.latfreeDate ? (() => { try { return new Date(importantDates.latfreeDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.latfreeDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, latfreeDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, latfreeDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, latfreeDate: '' }));
@@ -2491,13 +2709,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Discharge Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.dischargeDate ? (() => { try { return new Date(importantDates.dischargeDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.dischargeDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, dischargeDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, dischargeDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, dischargeDate: '' }));
@@ -2510,13 +2730,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Outgate Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.outgateDate ? (() => { try { return new Date(importantDates.outgateDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.outgateDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, outgateDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, outgateDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, outgateDate: '' }));
@@ -2533,13 +2755,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Empty Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.emptyDate ? (() => { try { return new Date(importantDates.emptyDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.emptyDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, emptyDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, emptyDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, emptyDate: '' }));
@@ -2552,13 +2776,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Per Diem Free Day</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.perDiemFreeDay ? (() => { try { return new Date(importantDates.perDiemFreeDay).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.perDiemFreeDay)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, perDiemFreeDay: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, perDiemFreeDay: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, perDiemFreeDay: '' }));
@@ -2575,13 +2801,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Ingate Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.ingateDate ? (() => { try { return new Date(importantDates.ingateDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.ingateDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, ingateDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, ingateDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, ingateDate: '' }));
@@ -2594,13 +2822,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Ready To Return Date</label>
                   <input
                     type="datetime-local"
-                    value={importantDates.readyToReturnDate ? (() => { try { return new Date(importantDates.readyToReturnDate).toISOString().slice(0, 16); } catch { return ''; } })() : ''}
+                    value={formatDateForInput(importantDates.readyToReturnDate)}
                     onChange={(e) => {
                       const value = e.target.value;
                       if (value) {
-                        const date = new Date(value);
-                        if (!isNaN(date.getTime())) {
-                          setImportantDates(prev => ({ ...prev, readyToReturnDate: date.toISOString() }));
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, readyToReturnDate: localDate.toISOString() }));
                         }
                       } else {
                         setImportantDates(prev => ({ ...prev, readyToReturnDate: '' }));
@@ -2608,6 +2838,34 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                     }}
                     className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   />
+                </div>
+              </div>
+
+              {/* Row 5 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-1">Delivery Date</label>
+                  <input
+                    type="datetime-local"
+                    value={formatDateForInput(importantDates.deliveryDate)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        // Parse datetime-local value (it's already in local timezone)
+                        const localDate = new Date(value);
+                        if (!isNaN(localDate.getTime())) {
+                          // Store as ISO string (this preserves the local time as UTC)
+                          setImportantDates(prev => ({ ...prev, deliveryDate: localDate.toISOString() }));
+                        }
+                      } else {
+                        setImportantDates(prev => ({ ...prev, deliveryDate: '' }));
+                      }
+                    }}
+                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  {/* Empty div to maintain grid layout */}
                 </div>
               </div>
             </div>
@@ -2635,6 +2893,50 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               })()}
             </div>
           </section>
+
+          {/* Rejected by Accountant */}
+          {order?.raw?.accountantApproval?.status === 'rejected' && (
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
+              <div className="flex items-center gap-2 mb-4">
+                <XCircle className="text-orange-600" size={20} />
+                <h3 className="text-lg font-bold text-gray-800">Rejected by Accountant</h3>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-orange-200">
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Rejected By</p>
+                    <p className="font-medium text-gray-800">
+                      {order?.raw?.accountantApproval?.rejectedBy?.employeeName || order?.raw?.accountantApproval?.rejectedBy?.empId || order?.raw?.accountantApproval?.assignedTo?.employeeName || order?.raw?.accountantApproval?.assignedTo?.empId || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Rejected At</p>
+                    <p className="font-medium text-gray-800">
+                      {order?.raw?.accountantApproval?.rejectedAt ? (() => {
+                        try {
+                          return new Date(order.raw.accountantApproval.rejectedAt).toLocaleString();
+                        } catch {
+                          return 'N/A';
+                        }
+                      })() : order?.raw?.accountantApproval?.updatedAt ? (() => {
+                        try {
+                          return new Date(order.raw.accountantApproval.updatedAt).toLocaleString();
+                        } catch {
+                          return 'N/A';
+                        }
+                      })() : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Rejection Reason</p>
+                    <p className="font-medium text-gray-800 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                      {order?.raw?.accountantApproval?.rejectionReason || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Remarks & Forward */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">

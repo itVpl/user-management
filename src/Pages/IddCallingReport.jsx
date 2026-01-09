@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { Phone, CheckCircle, XCircle, BarChart3, Clock } from "lucide-react";
+import API_CONFIG from "../config/api";
 
 const formatDateTime = (date) => {
   const d = new Date(date);
@@ -116,7 +117,7 @@ const IddCallingReport = () => {
 
     try {
       // Construct URL with query parameters manually for Triton API
-      const baseUrl = "https://vpl-liveproject-1.onrender.com/api/v1/analytics/8x8-triton/call-records/filter";
+      const baseUrl = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton/call-records/filter`;
       const queryParams = new URLSearchParams({
         callerName: alias,
         calleeName: alias,

@@ -24,8 +24,16 @@ export const SocketProvider = ({ children, userId }) => {
 
     console.log('🚀 Initializing WebSocket connection for user:', userId);
 
-    // Get backend URL from environment or use default
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+    // Get backend URL from environment or use API config
+    // Import API_CONFIG dynamically to avoid circular dependencies
+    const getBackendUrl = () => {
+      if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
+      if (import.meta.env.VITE_API_BASE_URL) {
+        return import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
+      }
+      return 'https://vpl-liveproject-1.onrender.com';
+    };
+    const backendUrl = getBackendUrl();
     
     const socketInstance = io(backendUrl, {
       transports: ['websocket', 'polling'],
@@ -48,6 +56,10 @@ export const SocketProvider = ({ children, userId }) => {
       
       // Register user after connection
       socketInstance.emit('register-user', userId);
+      
+      // CRITICAL: Join user room for notifications (backend sends to user_{empId})
+      socketInstance.emit('join', userId);
+      console.log('📤 [SocketContext] Emitted "join" event with userId:', userId);
     });
 
     socketInstance.on('connect_error', (error) => {
@@ -77,6 +89,28 @@ export const SocketProvider = ({ children, userId }) => {
             socketInstance.connect();
           }
         }, 2000);
+      }
+    });
+
+    // Reconnect event - rejoin room
+    socketInstance.on('reconnect', (attemptNumber) => {
+      console.log(`✅ WebSocket Reconnected after ${attemptNumber} attempts`);
+      setConnected(true);
+      setReconnectionAttempts(0);
+      
+      // Re-join user room after reconnection
+      if (userId) {
+        socketInstance.emit('join', userId);
+        console.log('📤 [SocketContext] Re-emitted "join" event after reconnect with userId:', userId);
+      }
+    });
+
+    // DEBUG: Listen for ALL socket events to see what backend is sending
+    socketInstance.onAny((eventName, ...args) => {
+      console.log('🔔🔔🔔 [SocketContext] Event received:', eventName);
+      console.log('📍 [SocketContext] Event args:', args);
+      if (eventName === 'bid-submitted') {
+        console.log('🎯 [SocketContext] BID-SUBMITTED EVENT DETECTED!');
       }
     });
 
@@ -248,6 +282,87 @@ export const SocketProvider = ({ children, userId }) => {
         read: false,
         data: data.data
       }, ...prev]);
+    });
+
+    // Bid submitted notification - for sales person when CMT submits a bid
+    socketInstance.on('bid-submitted', (data) => {
+      console.log('🔔🔔🔔 [BID NOTIFICATION] Bid submitted notification received!');
+      console.log('📨 [BID NOTIFICATION] Full data:', JSON.stringify(data, null, 2));
+      console.log('📨 [BID NOTIFICATION] Rate:', data.rate);
+      console.log('📨 [BID NOTIFICATION] LoadId:', data.loadId);
+      console.log('📨 [BID NOTIFICATION] SubmittedBy:', data.submittedBy);
+      console.log('📨 [BID NOTIFICATION] SalesPerson:', data.salesPerson);
+      
+      // Show toast notification
+      toast.success(
+        <div className="space-y-1">
+          <div className="font-semibold">New Bid Submitted</div>
+          <div className="text-sm">
+            ${data.rate?.toLocaleString()} bid submitted for Load {data.loadDetails?.shipmentNumber || data.loadId}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            Submitted by: {data.submittedBy?.empName || 'CMT Team'}
+          </div>
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 6000,
+          onClick: () => {
+            // Navigate to rate request details page
+            if (data.loadId) {
+              window.location.href = `/rate-request?loadId=${data.loadId}`;
+            }
+          }
+        }
+      );
+
+      // Add to notifications state
+      setNotifications(prev => [{
+        id: Date.now(),
+        type: 'bid_submitted',
+        title: 'New Bid Submitted',
+        body: `A bid of $${data.rate?.toLocaleString()} has been submitted for your rate request`,
+        timestamp: new Date(data.timestamp || Date.now()),
+        read: false,
+        data: {
+          bidId: data.bidId,
+          loadId: data.loadId,
+          rate: data.rate,
+          message: data.message,
+          submittedBy: data.submittedBy,
+          loadDetails: data.loadDetails
+        }
+      }, ...prev]);
+
+      // Play notification sound
+      playNotificationSound();
+
+      // Show browser notification if permission granted
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          const notification = new Notification('New Bid Submitted', {
+            body: `A bid of $${data.rate?.toLocaleString()} has been submitted for Load ${data.loadDetails?.shipmentNumber || data.loadId}`,
+            icon: '/LogoFinal.png',
+            badge: '/LogoFinal.png',
+            tag: `bid-submitted-${data.bidId}`,
+            data: {
+              bidId: data.bidId,
+              loadId: data.loadId,
+              type: 'bid_submitted'
+            }
+          });
+
+          notification.onclick = () => {
+            window.focus();
+            if (data.loadId) {
+              window.location.href = `/rate-request?loadId=${data.loadId}`;
+            }
+            notification.close();
+          };
+        } catch (error) {
+          console.error('Error showing browser notification:', error);
+        }
+      }
     });
 
     socketInstance.on('bid-status-updated', (data) => {

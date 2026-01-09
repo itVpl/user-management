@@ -286,7 +286,7 @@ const DocumentsVerification = () => {
               {selectedEmployee.allDocs?.map((doc, i) => (
                 <a
                   key={i}
-                  href={`https://vpl-liveproject-1.onrender.com/${doc.url}`}
+                  href={`${API_CONFIG.BASE_URL}/${doc.url}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-40 h-24 border rounded shadow flex items-center justify-center text-sm bg-gray-50 hover:bg-gray-100"

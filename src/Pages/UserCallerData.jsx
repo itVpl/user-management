@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { Phone, CheckCircle, XCircle, BarChart3, Clock } from "lucide-react";
+import API_CONFIG from "../config/api";
 
 const formatDateTime = (date) => {
   const d = new Date(date);
@@ -104,7 +105,7 @@ const UserCallDashboard = () => {
 
     try {
       const res = await axios.get(
-        "https://vpl-liveproject-1.onrender.com/api/v1/analytics/8x8/call-records/filter",
+        `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8/call-records/filter`,
         {
           // IMPORTANT: Keep both to fetch when user is caller or callee
           params: { callerName: alias, calleeName: alias, from, to },

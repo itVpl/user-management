@@ -18,6 +18,8 @@ import {
   Circle,
   MinusCircle,
   AlertCircle,
+  Reply,
+  X,
   Camera,
   PhoneCall,
   Info,
@@ -28,7 +30,6 @@ import {
   Bell,
   Users,
   Plus,
-  X,
   Settings,
   UserPlus,
   UserMinus,
@@ -38,8 +39,9 @@ import {
   Pause,
   Download
 } from "lucide-react";
-import { io } from "socket.io-client";
 import API_CONFIG from '../../config/api.js';
+import sharedSocketService from '../../services/sharedSocketService';
+import LogoFinal from '../../assets/LogoFinal.png';
 
 // Helper function to format employee name with alias
 const formatEmployeeName = (user) => {
@@ -50,8 +52,124 @@ const formatEmployeeName = (user) => {
   return user.employeeName || user.aliasName || '';
 };
 
+// Emoji Picker Component
+const EmojiPicker = ({ onEmojiSelect, onClose, position = 'bottom', buttonRef }) => {
+  const emojiCategories = {
+    'Smileys & People': ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓'],
+    'Gestures': ['🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕'],
+    'Hands': ['👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏'],
+    'Hearts': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❤️‍🔥', '❤️‍🩹', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟'],
+    'Objects': ['⌚', '📱', '📲', '💻', '⌨️', '🖥', '🖨', '🖱', '🖲', '🕹', '🗜', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙', '🎚', '🎛', '⏱', '⏲', '⏰', '🕰', '⌛', '⏳', '📡'],
+    'Symbols': ['✅', '❌', '❓', '❔', '❕', '❗', '💯', '🔅', '🔆', '📛', '🔰', '⭕', '✅', '☑️', '✔️', '✖️', '❌', '❎', '➕', '➖', '➗', '➰', '➿', '〽️', '✳️', '✴️', '❇️', '‼️', '⁉️', '❓', '❔', '❕', '❗', '〰️', '💱', '💲', '⚕️', '♻️', '✅', '🈯', '🉐', '🈹', '🈲', '🉑', '🈸', '🈴', '🈳', '㊗️', '㊙️', '🈺', '🈵'],
+  };
+
+  const pickerRef = useRef(null);
+  const [pickerStyle, setPickerStyle] = useState({});
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        // Don't close if clicking the button that opened it
+        if (buttonRef?.current && buttonRef.current.contains(event.target)) {
+          return;
+        }
+        onClose();
+      }
+    };
+
+    if (pickerRef.current && buttonRef?.current) {
+      // Calculate position relative to button
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const pickerHeight = 400; // maxHeight
+      
+      let top, bottom, left, right;
+      
+      if (position === 'top') {
+        // Position above button
+        bottom = viewportHeight - buttonRect.top + 8; // 8px margin
+        top = 'auto';
+      } else {
+        // Position below button
+        top = buttonRect.bottom + 8; // 8px margin
+        bottom = 'auto';
+      }
+      
+      // Position horizontally - align to right edge of button
+      right = window.innerWidth - buttonRect.right;
+      left = 'auto';
+      
+      // Adjust if picker would go off-screen
+      if (right < 0) {
+        right = 8;
+        left = 'auto';
+      }
+      
+      setPickerStyle({
+        position: 'fixed',
+        top: position === 'top' ? 'auto' : top,
+        bottom: position === 'top' ? bottom : 'auto',
+        right: right,
+        left: left,
+        zIndex: 9999
+      });
+
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [onClose, position, buttonRef]);
+
+  const handleEmojiClick = (emoji) => {
+    onEmojiSelect(emoji);
+  };
+
+  return (
+    <div
+      ref={pickerRef}
+      className="bg-white rounded-lg shadow-2xl border border-gray-200 p-4"
+      style={{
+        width: '320px',
+        maxHeight: '400px',
+        overflowY: 'auto',
+        ...pickerStyle
+      }}
+    >
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+        <h4 className="text-sm font-semibold text-gray-700">Emoji</h4>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X size={16} />
+        </button>
+      </div>
+      <div className="space-y-4">
+        {Object.entries(emojiCategories).map(([category, emojis]) => (
+          <div key={category}>
+            <h5 className="text-xs font-medium text-gray-500 mb-2">{category}</h5>
+            <div className="grid grid-cols-8 gap-1">
+              {emojis.map((emoji, index) => (
+                <button
+                  key={`${category}-${index}`}
+                  onClick={() => handleEmojiClick(emoji)}
+                  className="text-2xl hover:bg-gray-100 rounded p-1 transition-colors"
+                  title={emoji}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Audio Player Component
-const AudioPlayer = ({ src, isMyMessage, fileName, messageId }) => {
+const AudioPlayer = ({ src, isMyMessage, fileName, messageId, caption }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -94,52 +212,100 @@ const AudioPlayer = ({ src, isMyMessage, fileName, messageId }) => {
   };
 
   const handleDownload = async () => {
-    if (!messageId && !src) return;
+    if (!messageId && !src) {
+      alert('Cannot download: Missing file information.');
+      return;
+    }
     
     setIsDownloading(true);
     try {
       // Determine download URL
-      // If src is an S3 URL (starts with http/https), use it directly
-      // Otherwise, use the download endpoint
       let downloadUrl = src;
       
       if (!src || (!src.startsWith('http://') && !src.startsWith('https://'))) {
         // Use download endpoint for local files
+        if (!messageId) {
+          throw new Error('Message ID is required for download');
+        }
         downloadUrl = `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`;
       }
       
-      // Fetch the audio file
-      const response = await fetch(downloadUrl, {
-        method: 'GET',
-        credentials: 'include', // Include cookies for authentication
+      console.log('📥 Downloading audio from:', downloadUrl);
+      
+      // Use axios for better error handling and authentication
+      const response = await axios.get(downloadUrl, {
+        responseType: 'blob',
+        withCredentials: true,
+        headers: {
+          'Accept': 'audio/*, application/octet-stream, */*'
+        },
+        onDownloadProgress: (progressEvent) => {
+          // Optional: Show download progress
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`Download progress: ${percentCompleted}%`);
+          }
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Download failed');
-      }
-
-      // Get the blob
-      const blob = await response.blob();
+      // Get the blob from response
+      const blob = response.data;
       
-      // Create a blob URL and trigger download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
+      if (!blob || blob.size === 0) {
+        throw new Error('Downloaded file is empty');
+      }
       
       // Extract file extension from fileName or use default
       const fileExtension = fileName?.split('.').pop()?.toLowerCase() || 'mp3';
       const downloadFileName = fileName || `audio-${messageId || Date.now()}.${fileExtension}`;
       
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
       link.download = downloadFileName;
+      link.style.display = 'none';
+      
       document.body.appendChild(link);
       link.click();
       
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
+      // Cleanup after a short delay to ensure download starts
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+      }, 100);
+      
+      console.log('✅ Audio download initiated:', downloadFileName);
     } catch (error) {
-      console.error('Error downloading audio:', error);
-      alert('Failed to download audio. Please try again.');
+      console.error('❌ Error downloading audio:', error);
+      
+      // Fallback: Try direct download link
+      if (messageId) {
+        try {
+          const directUrl = `${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`;
+          console.log('🔄 Trying direct download link:', directUrl);
+          
+          // Create a temporary link and trigger download
+          const link = document.createElement('a');
+          link.href = directUrl;
+          link.download = fileName || `audio-${messageId}.mp3`;
+          link.target = '_blank';
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Also try opening in new tab as backup
+          setTimeout(() => {
+            window.open(directUrl, '_blank');
+          }, 500);
+        } catch (fallbackError) {
+          console.error('❌ Fallback download also failed:', fallbackError);
+          alert(`Failed to download audio: ${error.message || 'Unknown error'}\n\nPlease try:\n1. Right-clicking the audio player and selecting "Save audio as..."\n2. Or copy this URL and paste in browser: ${API_CONFIG.BASE_URL}/api/v1/chat/download/${messageId}`);
+        }
+      } else {
+        alert(`Failed to download audio: ${error.message || 'Unknown error'}\n\nPlease try right-clicking the audio player and selecting "Save audio as..."`);
+      }
     } finally {
       setIsDownloading(false);
     }
@@ -249,6 +415,19 @@ const AudioPlayer = ({ src, isMyMessage, fileName, messageId }) => {
           )}
         </button>
       </div>
+      
+      {/* Caption text below audio player */}
+      {caption && (
+        <div className={`mt-2 pt-2 border-t ${
+          isMyMessage ? 'border-white/20' : 'border-gray-300'
+        }`}>
+          <p className={`text-sm whitespace-pre-wrap break-words ${
+            isMyMessage ? 'text-white' : 'text-gray-800'
+          }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+            {caption}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
@@ -283,6 +462,9 @@ const ChatPage = () => {
   const [showInAppNotification, setShowInAppNotification] = useState(false);
   const [inAppNotificationData, setInAppNotificationData] = useState(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  // Reply functionality states
+  const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null); // Message ID to highlight
   // Group chat states
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -296,33 +478,340 @@ const ChatPage = () => {
   const [showSeenByModal, setShowSeenByModal] = useState(false);
   const [seenByData, setSeenByData] = useState(null);
   const [loadingSeenBy, setLoadingSeenBy] = useState(false);
+  // Image viewer modal state
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState(null);
+  const [selectedImageName, setSelectedImageName] = useState(null);
+  // File preview and caption state (WhatsApp-style)
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [previewFiles, setPreviewFiles] = useState([]); // Array of { file, preview, type, caption }
+  const [previewCaption, setPreviewCaption] = useState('');
+  const [showPreviewEmojiPicker, setShowPreviewEmojiPicker] = useState(false);
   // Mention/Tag states
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [taggedUsers, setTaggedUsers] = useState([]); // Array of { empId, employeeName, aliasName }
+  // Online status tracking
+  const [onlineUsers, setOnlineUsers] = useState(new Set()); // Set of empIds that are online
+  // Pagination states for lazy loading
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [hasMoreGroupMessages, setHasMoreGroupMessages] = useState(true);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [loadingOlderGroupMessages, setLoadingOlderGroupMessages] = useState(false);
+  const [messagesPage, setMessagesPage] = useState(0);
+  const [groupMessagesPage, setGroupMessagesPage] = useState(0);
+  const INITIAL_MESSAGES_COUNT = 10; // Load 10 messages initially when opening individual chat
+  const INITIAL_GROUP_MESSAGES_COUNT = 20; // Load 20 messages initially for group chats (reduced from 100 for better performance)
+  const MESSAGES_PER_PAGE = 30; // Load 30 messages at a time when scrolling up
+  
   const mentionDropdownRef = useRef(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null); // Ref for individual messages container
+  const groupMessagesContainerRef = useRef(null); // Ref for group messages container
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const audioInputRef = useRef(null);
+  const allFilesInputRef = useRef(null); // For "add more files" in preview modal
   const audioRef = useRef(null);
   const groupTextareaRef = useRef(null);
   const individualTextareaRef = useRef(null);
   const groupMessageRefs = useRef({});
   const markedAsSeenRef = useRef(new Set()); // Track which messages have been marked as seen
+  const emojiPickerRef = useRef(null); // Ref for emoji picker dropdown
+  const groupEmojiButtonRef = useRef(null); // Ref for group chat emoji button
+  const individualEmojiButtonRef = useRef(null); // Ref for individual chat emoji button
+  const previewEmojiButtonRef = useRef(null); // Ref for preview modal emoji button
+  const lastFetchedGroupIdRef = useRef(null); // Track last fetched group to prevent duplicate fetches
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (force = false) => {
+    // If force is true (when user sends message), always scroll
+    if (force) {
+      isNearBottomRef.current = true;
+      userScrolledRef.current = false;
+    }
+    
+    // Use requestAnimationFrame to ensure DOM is updated, then double RAF for better reliability
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        // Determine which container to scroll based on chat type
+        const container = chatType === 'group' 
+          ? groupMessagesContainerRef.current 
+          : messagesContainerRef.current;
+        
+        if (container) {
+          // Scroll container directly to bottom - use scrollTop for immediate scroll
+          const scrollHeight = container.scrollHeight;
+          const clientHeight = container.clientHeight;
+          
+          // Ensure we scroll to the absolute bottom
+          container.scrollTop = scrollHeight - clientHeight;
+          
+          // If smooth scrolling is requested, do it after setting scrollTop
+          if (force) {
+            setTimeout(() => {
+              container.scrollTo({
+                top: scrollHeight,
+                behavior: "smooth"
+              });
+            }, 10);
+          }
+        } else {
+          // Fallback to messagesEndRef if container refs aren't available
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ 
+              behavior: force ? "smooth" : "auto",
+              block: "end",
+              inline: "nearest"
+            });
+          }
+        }
+      });
+    });
   };
+
+  // Track last message IDs to detect new messages
+  const lastGroupMessageIdRef = useRef(null);
+  const lastIndividualMessageIdRef = useRef(null);
+  
+  // Track if user is near bottom (within 150px) - only auto-scroll if true
+  const isNearBottomRef = useRef(true);
+  const userScrolledRef = useRef(false);
+
+  // Check if user is near the bottom of the chat
+  const checkIfNearBottom = (container) => {
+    if (!container) return true;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    // Consider "near bottom" if within 300px - gives more room for viewing older messages
+    return distanceFromBottom < 300;
+  };
+
+  // Auto-scroll to bottom when NEW messages arrive (only if user is near bottom)
+  useEffect(() => {
+    if (chatType === 'group' && groupMessages.length > 0 && !loadingOlderGroupMessages) {
+      const lastMessage = groupMessages[groupMessages.length - 1];
+      const lastMessageId = lastMessage?._id || lastMessage?.id;
+
+      // Only scroll if this is a new message (different ID than last one)
+      if (lastMessageId && lastMessageId !== lastGroupMessageIdRef.current) {
+        lastGroupMessageIdRef.current = lastMessageId;
+
+        // Check current scroll position before auto-scrolling
+        const container = groupMessagesContainerRef.current;
+        if (!container) return;
+
+        const isNearBottom = checkIfNearBottom(container);
+
+        // Only auto-scroll if user is near bottom (don't scroll if they're viewing older messages)
+        // OR if the last message is optimistic (user just sent it)
+        const isOptimisticMessage = lastMessage.isOptimistic;
+        
+        if (isNearBottom || isOptimisticMessage) {
+          const timer = setTimeout(() => {
+            // Double-check before scrolling (user might have scrolled in the meantime)
+            const stillNearBottom = checkIfNearBottom(container);
+            if (stillNearBottom || isOptimisticMessage) {
+              scrollToBottom(isOptimisticMessage);
+              isNearBottomRef.current = true;
+            }
+          }, 150);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [groupMessages.length, chatType, loadingOlderGroupMessages]);
+
+  useEffect(() => {
+    if (chatType === 'individual' && messages.length > 0 && !loadingOlderMessages) {
+      const lastMessage = messages[messages.length - 1];
+      const lastMessageId = lastMessage?._id || lastMessage?.id;
+      
+      // Only scroll if this is a new message (different ID than last one)
+      if (lastMessageId && lastMessageId !== lastIndividualMessageIdRef.current) {
+        lastIndividualMessageIdRef.current = lastMessageId;
+        
+        // Check current scroll position before auto-scrolling
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        
+        const isNearBottom = checkIfNearBottom(container);
+        
+        // Only auto-scroll if user is near bottom (don't scroll if they're viewing older messages)
+        // OR if the last message is optimistic (user just sent it)
+        const isOptimisticMessage = lastMessage.isOptimistic;
+        
+        if (isNearBottom || isOptimisticMessage) {
+          const timer = setTimeout(() => {
+            // Double-check before scrolling (user might have scrolled in the meantime)
+            const stillNearBottom = checkIfNearBottom(container);
+            if (stillNearBottom || isOptimisticMessage) {
+              scrollToBottom(isOptimisticMessage);
+              isNearBottomRef.current = true;
+            }
+          }, 150);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [messages.length, chatType, loadingOlderMessages]);
+
+  // Track scroll position for group messages - update immediately on scroll
+  useEffect(() => {
+    const container = groupMessagesContainerRef.current;
+    if (!container || chatType !== 'group') return;
+
+    let lastScrollTop = container.scrollTop;
+    let scrollToBottomTimer = null;
+
+    const handleScroll = () => {
+      const currentScrollTop = container.scrollTop;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isNearBottom = distanceFromBottom < 300;
+      
+      // Detect scroll direction - only trigger auto-scroll when actively scrolling DOWN
+      const isScrollingDown = currentScrollTop > lastScrollTop;
+      const isScrollingUp = currentScrollTop < lastScrollTop;
+      
+      // Clear any pending auto-scroll timer if user is scrolling UP
+      if (isScrollingUp) {
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+          scrollToBottomTimer = null;
+        }
+        // User is scrolling up - don't auto-scroll
+        isNearBottomRef.current = false;
+        userScrolledRef.current = true;
+        lastScrollTop = currentScrollTop;
+        return;
+      }
+      
+      // Only auto-scroll if user is actively scrolling DOWN and is very close to bottom (within 50px)
+      // This prevents auto-scroll when user is trying to scroll up to read older messages
+      if (isScrollingDown && distanceFromBottom < 50 && distanceFromBottom >= 0) {
+        // Clear any existing timer
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+        }
+        
+        // User is scrolling down and very close to bottom - scroll to newest messages
+        scrollToBottomTimer = setTimeout(() => {
+          // Double-check user is still near bottom before auto-scrolling
+          const finalDistance = container.scrollHeight - container.scrollTop - container.clientHeight;
+          if (finalDistance < 100) {
+            scrollToBottom(true);
+            isNearBottomRef.current = true;
+          }
+        }, 200);
+      }
+      
+      // Update tracking
+      isNearBottomRef.current = isNearBottom;
+      userScrolledRef.current = true;
+      lastScrollTop = currentScrollTop;
+    };
+
+    // Use passive listener for better performance
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollToBottomTimer) {
+        clearTimeout(scrollToBottomTimer);
+      }
+    };
+  }, [chatType, groupMessages.length]);
+
+  // Track scroll position for individual messages - update immediately on scroll
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || chatType !== 'individual') return;
+
+    let lastScrollTop = container.scrollTop;
+    let scrollToBottomTimer = null;
+
+    const handleScroll = () => {
+      const currentScrollTop = container.scrollTop;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isNearBottom = distanceFromBottom < 300;
+      
+      // Detect scroll direction - only trigger auto-scroll when actively scrolling DOWN
+      const isScrollingDown = currentScrollTop > lastScrollTop;
+      const isScrollingUp = currentScrollTop < lastScrollTop;
+      
+      // Clear any pending auto-scroll timer if user is scrolling UP
+      if (isScrollingUp) {
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+          scrollToBottomTimer = null;
+        }
+        // User is scrolling up - don't auto-scroll
+        isNearBottomRef.current = false;
+        userScrolledRef.current = true;
+        lastScrollTop = currentScrollTop;
+        return;
+      }
+      
+      // Only auto-scroll if user is actively scrolling DOWN and is very close to bottom (within 50px)
+      // This prevents auto-scroll when user is trying to scroll up to read older messages
+      if (isScrollingDown && distanceFromBottom < 50 && distanceFromBottom >= 0) {
+        // Clear any existing timer
+        if (scrollToBottomTimer) {
+          clearTimeout(scrollToBottomTimer);
+        }
+        
+        // User is scrolling down and very close to bottom - scroll to newest messages
+        scrollToBottomTimer = setTimeout(() => {
+          // Double-check user is still near bottom before auto-scrolling
+          const finalDistance = container.scrollHeight - container.scrollTop - container.clientHeight;
+          if (finalDistance < 100) {
+            scrollToBottom(true);
+            isNearBottomRef.current = true;
+          }
+        }, 200);
+      }
+      
+      // Update tracking
+      isNearBottomRef.current = isNearBottom;
+      userScrolledRef.current = true;
+      lastScrollTop = currentScrollTop;
+    };
+
+    // Use passive listener for better performance
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollToBottomTimer) {
+        clearTimeout(scrollToBottomTimer);
+      }
+    };
+  }, [chatType, messages.length]);
+
+  // Reset scroll tracking when switching chats
+  useEffect(() => {
+    isNearBottomRef.current = true;
+    userScrolledRef.current = false;
+    // Also check initial position
+    setTimeout(() => {
+      if (chatType === 'group') {
+        const container = groupMessagesContainerRef.current;
+        if (container) {
+          isNearBottomRef.current = checkIfNearBottom(container);
+        }
+      } else if (chatType === 'individual') {
+        const container = messagesContainerRef.current;
+        if (container) {
+          isNearBottomRef.current = checkIfNearBottom(container);
+        }
+      }
+    }, 100);
+  }, [selectedGroup?._id, selectedUser?.empId, chatType]);
 
   // Show notification
   const showNotification = (title, body, senderName) => {
-
-
-
     // Check if Notification API is supported
     if (typeof Notification === 'undefined') {
       console.error("❌ Notification API not supported in this browser");
@@ -332,23 +821,22 @@ const ChatPage = () => {
     if (Notification.permission === "granted") {
       try {
         const notification = new Notification(title, {
-          body: `${senderName}: ${body}`,
-          icon: "/vite.svg",
-          badge: "/vite.svg",
+          body: body, // Body already contains the message, title has the sender name
+          icon: LogoFinal,
+          badge: LogoFinal,
           requireInteraction: true, // Keep notification until user interacts
           silent: false // Play sound
         });
 
         // Add click handler
         notification.onclick = () => {
-
           window.focus();
           notification.close();
         };
         
         // Add close handler
         notification.onclose = () => {
-
+          // Notification closed
         };
         
         // Auto close after 5 seconds
@@ -359,11 +847,9 @@ const ChatPage = () => {
       } catch (error) {
         console.error("❌ Failed to create notification:", error);
       }
-    } else {
-
-      // Try to request permission again
+    } else if (Notification.permission === "default") {
+      // Try to request permission
       Notification.requestPermission().then(permission => {
-
         if (permission === "granted") {
           showNotification(title, body, senderName); // Retry
         }
@@ -406,37 +892,56 @@ const ChatPage = () => {
 
   // Clear unread count for a user
   const clearUnreadCount = (empId) => {
-
     setNewMessagesMap(prev => {
       const copy = { ...prev };
       delete copy[empId];
       return copy;
     });
+    
+    // Notify UnreadCountContext to update sidebar badge
+    window.dispatchEvent(new CustomEvent('clearUnreadCount', {
+      detail: {
+        type: 'individual',
+        empId: empId
+      }
+    }));
   };
 
-  // Mark messages as seen on server
+  // Mark individual chat messages as seen on server
+  // CRITICAL: Must call this when user opens/views a chat (per guide)
   const markMessagesAsSeen = async (senderEmpId) => {
     try {
-
-      const res = await axios.patch(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/seen/${senderEmpId}`,
+      // Per guide: POST /api/v1/chat/mark-seen/:empId
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/mark-seen/${senderEmpId}`,
         {},
         { withCredentials: true }
       );
 
-      // Update local unread count
-      clearUnreadCount(senderEmpId);
-      
-      // Refresh unread counts from server
-      await fetchUnreadCounts();
+      if (res.data && res.data.success) {
+        console.log(`✅ Marked messages as seen for empId: ${senderEmpId}`);
+        // Backend will automatically emit chatListUpdated with unreadCount: 0
+        // No need to manually update - socket event will handle it (per guide)
+      }
     } catch (err) {
       console.error("❌ Failed to mark messages as seen:", err);
+      // Fallback to the existing endpoint if the new one doesn't work
+      try {
+        console.log('⚠️ POST /mark-seen failed, trying PATCH /seen endpoint...');
+        await axios.patch(
+          `${API_CONFIG.BASE_URL}/api/v1/chat/seen/${senderEmpId}`,
+          {},
+          { withCredentials: true }
+        );
+      } catch (fallbackErr) {
+        console.error("❌ Fallback endpoint also failed:", fallbackErr);
+      }
     }
   };
 
   // Show in-app notification
   const displayInAppNotification = (title, body, senderName) => {
-
+    console.log("🔔 Showing in-app notification:", { title, body, senderName });
     setInAppNotificationData({ title, body, senderName });
     setShowInAppNotification(true);
     
@@ -447,18 +952,100 @@ const ChatPage = () => {
     }, 5000);
   };
 
-  const fetchMessages = async (selectedEmpId) => {
+  const fetchMessages = async (selectedEmpId, loadOlder = false) => {
     if (!storedUser?.empId || !selectedEmpId) return;
     try {
-      setLoadingMessages(true);
+      if (loadOlder) {
+        setLoadingOlderMessages(true);
+      } else {
+        setLoadingMessages(true);
+        setMessagesPage(0);
+        setHasMoreMessages(true);
+      }
+
+      // Calculate pagination parameters
+      // For initial load, use INITIAL_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
+      const skip = loadOlder ? messagesPage * MESSAGES_PER_PAGE : 0;
+      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_MESSAGES_COUNT;
+      
       const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/with/${selectedEmpId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/with/${selectedEmpId}?limit=${limit}&skip=${skip}`,
         { withCredentials: true }
       );
 
-      const allMessages = res.data || [];
+      // Handle new API response structure: { messages: [], otherUser: { ... } }
+      let fetchedMessages = [];
+      let otherUserData = null;
+      
+      if (res.data) {
+        if (Array.isArray(res.data)) {
+          // Legacy format: array of messages
+          fetchedMessages = res.data;
+        } else if (res.data.messages && Array.isArray(res.data.messages)) {
+          // New format: object with messages and otherUser
+          fetchedMessages = res.data.messages;
+          otherUserData = res.data.otherUser;
+          
+          // Update online status from otherUser
+          if (otherUserData && otherUserData.empId && otherUserData.online !== undefined) {
+            if (otherUserData.online) {
+              setOnlineUsers(prev => new Set([...prev, otherUserData.empId]));
+            } else {
+              setOnlineUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(otherUserData.empId);
+                return newSet;
+              });
+            }
+          }
+        } else {
+          fetchedMessages = res.data;
+        }
+      }
+      
+      // Handle pagination - API may or may not support it
+      let messagesToProcess = fetchedMessages;
+      
+      if (loadOlder) {
+        // Loading older messages
+        // If API returned all messages (doesn't support pagination), filter to get only older ones
+        if (messages.length > 0 && fetchedMessages.length > messages.length) {
+          // API returned all messages, find the oldest message we have and get messages before it
+          const oldestMessageId = messages[0]._id;
+          const oldestMessageIndex = fetchedMessages.findIndex(msg => msg._id === oldestMessageId);
+          
+          if (oldestMessageIndex > 0) {
+            // Get messages before the oldest one we have
+            const olderMessages = fetchedMessages.slice(0, oldestMessageIndex);
+            // Take only the last MESSAGES_PER_PAGE older messages
+            messagesToProcess = olderMessages.slice(-MESSAGES_PER_PAGE);
+            setHasMoreMessages(olderMessages.length > MESSAGES_PER_PAGE);
+          } else {
+            // No older messages found
+            messagesToProcess = [];
+            setHasMoreMessages(false);
+          }
+        } else {
+          // API supports pagination or returned exactly what we need
+          if (fetchedMessages.length < MESSAGES_PER_PAGE) {
+            setHasMoreMessages(false);
+          } else {
+            setHasMoreMessages(true);
+          }
+        }
+      } else {
+        // Initial load - take only the last INITIAL_MESSAGES_COUNT messages (10 messages)
+        if (fetchedMessages.length > INITIAL_MESSAGES_COUNT) {
+          messagesToProcess = fetchedMessages.slice(-INITIAL_MESSAGES_COUNT);
+          setHasMoreMessages(true);
+        } else {
+          messagesToProcess = fetchedMessages;
+          setHasMoreMessages(fetchedMessages.length >= INITIAL_MESSAGES_COUNT);
+        }
+      }
+
       // Process messages to add isMyMessage flag and ensure seenBy structure
-      const processedMessages = allMessages.map(msg => ({
+      let processedMessages = messagesToProcess.map(msg => ({
         ...msg,
         isMyMessage: msg.senderEmpId === storedUser?.empId,
         seenBy: msg.seenBy || null,
@@ -466,18 +1053,72 @@ const ChatPage = () => {
         isSeen: msg.isSeen !== undefined ? msg.isSeen : (msg.seenBy ? true : false),
         status: msg.status || (msg.isSeen ? 'seen' : (msg.seenBy ? 'seen' : 'sent'))
       }));
-      
-      setMessages(processedMessages);
 
-      // Mark messages as seen when opening chat
-      markMessagesAsSeen(selectedEmpId);
+      // Sort messages by timestamp to ensure correct chronological order
+      processedMessages.sort((a, b) => {
+        const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+        const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+        return timeA - timeB; // Ascending order (oldest first)
+      });
 
-      setTimeout(scrollToBottom, 100);
+      if (loadOlder) {
+        // Prepend older messages to the beginning and ensure entire array is sorted
+        setMessages(prev => {
+          // Remove optimistic messages when fetching real messages
+          const prevWithoutOptimistic = prev.filter(msg => !msg.isOptimistic);
+          const combined = [...processedMessages, ...prevWithoutOptimistic];
+          // Deduplicate by _id to prevent duplicate messages
+          const seen = new Set();
+          const deduplicated = combined.filter(msg => {
+            const msgId = String(msg._id || msg.id || '');
+            if (!msgId || seen.has(msgId)) {
+              return false;
+            }
+            seen.add(msgId);
+            return true;
+          });
+          // Sort the entire array to ensure correct order
+          deduplicated.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+            const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+            return timeA - timeB; // Ascending order (oldest first)
+          });
+          return deduplicated;
+        });
+        setMessagesPage(prev => prev + 1);
+      } else {
+        // Initial load - deduplicate and replace all messages (already sorted)
+        // Remove optimistic messages when fetching real messages
+        const seen = new Set();
+        const deduplicated = processedMessages.filter(msg => {
+          const msgId = String(msg._id || msg.id || '');
+          if (!msgId || seen.has(msgId)) {
+            return false;
+          }
+          seen.add(msgId);
+          return true;
+        });
+        setMessages(deduplicated);
+        setMessagesPage(1);
+      }
+
+      // Mark messages as seen when opening chat (only on initial load)
+      if (!loadOlder) {
+        markMessagesAsSeen(selectedEmpId);
+        setTimeout(scrollToBottom, 100);
+      }
     } catch (err) {
       console.error("❌ Failed to load messages:", err);
-      setMessages([]);
+      if (!loadOlder) {
+        setMessages([]);
+      }
+      setHasMoreMessages(false);
     } finally {
-      setLoadingMessages(false);
+      if (loadOlder) {
+        setLoadingOlderMessages(false);
+      } else {
+        setLoadingMessages(false);
+      }
     }
   };
 
@@ -490,16 +1131,30 @@ const ChatPage = () => {
       );
       const list = res.data || [];
       
-      // Fetch server-side unread counts first
-      await fetchUnreadCounts();
+      // Initialize online status from API response
+      const onlineEmpIds = list
+        .filter(chat => chat.online === true)
+        .map(chat => chat.empId)
+        .filter(empId => empId && empId !== storedUser?.empId);
+      
+      if (onlineEmpIds.length > 0) {
+        setOnlineUsers(new Set(onlineEmpIds));
+      }
+      
+      // Initialize unread counts from API response (per guide)
+      // Backend sends unreadCount in each chat item
+      const unreadFromList = {};
+      list.forEach(chat => {
+        if (chat.empId && chat.unreadCount !== undefined && chat.unreadCount > 0) {
+          unreadFromList[chat.empId] = chat.unreadCount;
+        }
+      });
+      
+      // Update state with unread counts from API
+      setNewMessagesMap(unreadFromList);
       
       // Sort chat list with unread priority
-      const sortedList = sortChatListWithUnreadPriority(list, newMessagesMap);
-      
-      console.log("📊 Sorted chat list with unread priority:", sortedList.map(u => ({
-        name: u.employeeName,
-        unread: newMessagesMap[u.empId] || 0
-      })));
+      const sortedList = sortChatListWithUnreadPriority(list, unreadFromList);
       
       setChatList(sortedList);
     } catch (err) {
@@ -510,6 +1165,48 @@ const ChatPage = () => {
   };
 
   // Group Chat Functions
+  // Calculate unread count for a group by checking which messages user has NOT read
+  const calculateGroupUnreadCount = async (groupId) => {
+    try {
+      // Fetch all messages for this group
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=1000&skip=0`,
+        { withCredentials: true }
+      );
+      
+      if (res.data && res.data.success) {
+        const messages = res.data.messages || [];
+        let unreadCount = 0;
+        
+        // Count only messages where current user has NOT read (not in seenBy)
+        messages.forEach(msg => {
+          // Skip messages sent by current user
+          if (msg.senderEmpId === storedUser?.empId) {
+            return;
+          }
+          
+          // Check if current user is in seenBy array
+          const isSeenByMe = msg.seenBy?.some(seen => {
+            const seenEmpId = seen.empId || seen.seenByEmpId;
+            return seenEmpId === storedUser?.empId;
+          });
+          
+          // If not seen by current user, count as unread
+          if (!isSeenByMe) {
+            unreadCount++;
+          }
+        });
+        
+        console.log(`📊 Calculated unread count for group ${groupId}: ${unreadCount}`);
+        return unreadCount;
+      }
+    } catch (err) {
+      console.error(`❌ Failed to calculate unread count for group ${groupId}:`, err);
+      return 0;
+    }
+    return 0;
+  };
+
   const fetchGroups = async () => {
     try {
       setLoadingGroups(true);
@@ -518,7 +1215,32 @@ const ChatPage = () => {
         { withCredentials: true }
       );
       if (res.data && res.data.success) {
-        setGroups(res.data.groups || []);
+        const groupsList = res.data.groups || [];
+        
+        // Normalize _id to string for all groups
+        const normalizedGroups = groupsList.map(g => ({
+          ...g,
+          _id: String(g._id),
+          unreadCount: g.unreadCount || 0  // Backend provides unreadCount (per docs)
+        }));
+        
+        setGroups(normalizedGroups);
+        
+        // Use unreadCount from backend response directly (per docs)
+        // Build unread map for red dot display
+        const groupUnreadMap = {};
+        normalizedGroups.forEach(group => {
+          const groupId = String(group._id);
+          const unreadCount = group.unreadCount || 0;
+          if (unreadCount > 0) {
+            groupUnreadMap[groupId] = unreadCount;
+          }
+        });
+        
+        // Update state with unread counts from backend
+        setNewGroupMessagesMap(groupUnreadMap);
+        
+        console.log('📊 Group unread counts from backend:', groupUnreadMap);
       }
     } catch (err) {
       console.error("❌ Failed to fetch groups", err);
@@ -550,39 +1272,233 @@ const ChatPage = () => {
     }
   };
 
-  const fetchGroupMessages = async (groupId) => {
+  const fetchGroupMessages = async (groupId, loadOlder = false) => {
     if (!groupId) return;
+    
     try {
-      setLoadingGroupMessages(true);
+      if (loadOlder) {
+        setLoadingOlderGroupMessages(true);
+      } else {
+        setLoadingGroupMessages(true);
+        setGroupMessagesPage(0);
+        setHasMoreGroupMessages(true);
+        // Only clear messages if switching to a different group
+        if (lastFetchedGroupIdRef.current && lastFetchedGroupIdRef.current !== groupId) {
+          setGroupMessages([]);
+        }
+        lastFetchedGroupIdRef.current = groupId;
+      }
+
+      // Calculate pagination parameters
+      // For initial load, use INITIAL_GROUP_MESSAGES_COUNT (reduced to 20 for better performance), for older messages use MESSAGES_PER_PAGE
+      let skip = 0;
+      let limit = INITIAL_GROUP_MESSAGES_COUNT;
+      
+      if (loadOlder) {
+        // For loading older messages, fetch ALL messages and filter client-side
+        // This ensures we get all previous messages when scrolling up
+        if (groupMessages.length > 0) {
+          // Fetch a very large batch to get all messages (API will return what it has)
+          // Using a large limit to get as many messages as possible
+          limit = 1000; // Large limit to fetch all available messages
+          skip = 0; // Start from beginning, we'll filter client-side
+          
+          const oldestMessage = groupMessages[0];
+          const oldestTimestamp = new Date(oldestMessage.timestamp || oldestMessage.createdAt || 0).getTime();
+          
+          console.log(`📥 Loading ALL older messages: groupId=${groupId}, limit=${limit}, oldestTimestamp=${oldestTimestamp}`);
+        } else {
+          // No messages yet, can't load older
+          setLoadingOlderGroupMessages(false);
+          setHasMoreGroupMessages(false);
+          return;
+        }
+      }
+      
+      console.log(`📥 Fetching group messages: groupId=${groupId}, limit=${limit}, skip=${skip}, loadOlder=${loadOlder}`);
+      
       const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages`,
+        `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages?limit=${limit}&skip=${skip}`,
         { withCredentials: true }
       );
+      
       if (res.data && res.data.success) {
-        // Process messages to add isMyMessage flag and ensure seenBy structure
-        const processedMessages = (res.data.messages || []).map(msg => ({
-          ...msg,
-          isMyMessage: msg.senderEmpId === storedUser?.empId,
-          seenBy: msg.seenBy || [],
-          seenCount: msg.seenCount || (msg.seenBy?.length || 0)
-        }));
-        setGroupMessages(processedMessages);
+        const fetchedMessages = res.data.messages || [];
         
-        // Mark visible messages as seen after a short delay
-        setTimeout(() => {
-          processedMessages.forEach(msg => {
-            if (!msg.isMyMessage && !isMessageSeenByMe(msg) && msg._id) {
-              markGroupMessageAsSeen(groupId, msg._id);
+        // Handle pagination - API may or may not support it
+        let messagesToProcess = fetchedMessages;
+        
+        if (loadOlder) {
+          // Loading older messages - filter to get only messages older than what we have
+          if (groupMessages.length > 0) {
+            const oldestMessage = groupMessages[0];
+            const oldestMessageId = oldestMessage._id;
+            const oldestTimestamp = new Date(oldestMessage.timestamp || oldestMessage.createdAt || 0).getTime();
+            
+            // Filter messages that are older than our oldest message
+            const olderMessages = fetchedMessages.filter(msg => {
+              const msgTimestamp = new Date(msg.timestamp || msg.createdAt || 0).getTime();
+              const msgId = String(msg._id || '');
+              const oldestId = String(oldestMessageId || '');
+              
+              // Include if timestamp is older OR if it's a different message with same timestamp
+              return msgTimestamp < oldestTimestamp || (msgTimestamp === oldestTimestamp && msgId !== oldestId);
+            });
+            
+            // Remove duplicates and check against existing messages
+            const existingMessageIds = new Set(groupMessages.map(msg => String(msg._id || '')));
+            const seen = new Set();
+            const uniqueOlderMessages = olderMessages.filter(msg => {
+              const msgId = String(msg._id || '');
+              // Skip if already in our messages list or duplicate in fetched messages
+              if (!msgId || seen.has(msgId) || existingMessageIds.has(msgId)) return false;
+              seen.add(msgId);
+              return true;
+            });
+            
+            // Sort by timestamp (oldest first) - load ALL older messages, not just a page
+            uniqueOlderMessages.sort((a, b) => {
+              const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+              const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+              return timeA - timeB;
+            });
+            
+            // Load ALL older messages found, not just a paginated batch
+            messagesToProcess = uniqueOlderMessages;
+            
+            // Check if there are more older messages
+            // If API returned fewer messages than requested, likely no more messages exist
+            // Otherwise, if we got messages older than what we have, there might be more
+            if (fetchedMessages.length < limit) {
+              // API returned fewer than requested - likely no more messages
+              setHasMoreGroupMessages(false);
+              console.log(`📥 Loaded all older messages. Total: ${uniqueOlderMessages.length}, API returned ${fetchedMessages.length} (less than limit ${limit})`);
+            } else if (uniqueOlderMessages.length === 0) {
+              // No older messages found in this fetch
+              setHasMoreGroupMessages(false);
+              console.log(`📥 No older messages found`);
+            } else {
+              // Got older messages, but API returned full limit - might be more
+              // Check if the oldest fetched message is significantly older than our oldest
+              const oldestFetched = fetchedMessages[0];
+              const oldestFetchedTimestamp = new Date(oldestFetched?.timestamp || oldestFetched?.createdAt || 0).getTime();
+              
+              // If fetched messages go back further than our oldest, there might be more
+              if (oldestFetchedTimestamp < oldestTimestamp) {
+                setHasMoreGroupMessages(true);
+                console.log(`📥 Loaded ${uniqueOlderMessages.length} older messages, might be more (oldest fetched: ${new Date(oldestFetchedTimestamp).toISOString()})`);
+              } else {
+                setHasMoreGroupMessages(false);
+                console.log(`📥 Loaded ${uniqueOlderMessages.length} older messages, no more available`);
+              }
             }
+            
+            console.log(`📥 Processing ${messagesToProcess.length} older messages to add`);
+          } else {
+            messagesToProcess = [];
+            setHasMoreGroupMessages(false);
+          }
+        } else {
+          // Initial load - take only the last INITIAL_GROUP_MESSAGES_COUNT messages (20 messages)
+          if (fetchedMessages.length > INITIAL_GROUP_MESSAGES_COUNT) {
+            messagesToProcess = fetchedMessages.slice(-INITIAL_GROUP_MESSAGES_COUNT);
+            setHasMoreGroupMessages(true);
+          } else {
+            messagesToProcess = fetchedMessages;
+            setHasMoreGroupMessages(fetchedMessages.length >= INITIAL_GROUP_MESSAGES_COUNT);
+          }
+        }
+
+        // Process messages to add isMyMessage flag and ensure seenBy structure
+        let processedMessages = messagesToProcess.map(msg => {
+          const processed = {
+            ...msg,
+            isMyMessage: msg.senderEmpId === storedUser?.empId,
+            seenBy: msg.seenBy || [],
+            seenCount: msg.seenCount || (msg.seenBy?.length || 0)
+          };
+          
+          // Debug: log seenBy data for messages sent by current user
+          if (processed.isMyMessage && (processed.seenBy.length > 0 || processed.seenCount > 0)) {
+            console.log('👁️ Group message with seen data:', {
+              messageId: processed._id,
+              message: processed.message?.substring(0, 20),
+              seenBy: processed.seenBy,
+              seenCount: processed.seenCount
+            });
+          }
+          
+          return processed;
+        });
+
+        // Sort messages by timestamp to ensure correct chronological order
+        processedMessages.sort((a, b) => {
+          const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+          const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+          return timeA - timeB; // Ascending order (oldest first)
+        });
+
+        if (loadOlder) {
+          // Prepend older messages to the beginning and ensure entire array is sorted
+          setGroupMessages(prev => {
+            // Remove optimistic messages when fetching real messages
+            const prevWithoutOptimistic = prev.filter(msg => !msg.isOptimistic);
+            const combined = [...processedMessages, ...prevWithoutOptimistic];
+            // Deduplicate by _id to prevent duplicate messages
+            const seen = new Set();
+            const deduplicated = combined.filter(msg => {
+              const msgId = String(msg._id || msg.id || '');
+              if (!msgId || seen.has(msgId)) {
+                return false;
+              }
+              seen.add(msgId);
+              return true;
+            });
+            // Sort the entire array to ensure correct order
+            deduplicated.sort((a, b) => {
+              const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+              const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+              return timeA - timeB; // Ascending order (oldest first)
+            });
+            return deduplicated;
           });
-          scrollToBottom();
-        }, 500);
+          setGroupMessagesPage(prev => prev + 1);
+        } else {
+          // Initial load - deduplicate and replace all messages (already sorted)
+          // Remove optimistic messages when fetching real messages
+          const seen = new Set();
+          const deduplicated = processedMessages.filter(msg => {
+            const msgId = String(msg._id || msg.id || '');
+            if (!msgId || seen.has(msgId)) {
+              return false;
+            }
+            seen.add(msgId);
+            return true;
+          });
+          setGroupMessages(deduplicated);
+          setGroupMessagesPage(1);
+        }
+        
+        // Backend automatically marks all unread messages as read when fetching messages
+        // No need to manually mark - backend handles it and emits groupListUpdated socket event
+        if (!loadOlder) {
+          setTimeout(() => {
+            scrollToBottom();
+          }, 100);
+        }
       }
     } catch (err) {
       console.error("❌ Failed to fetch group messages", err);
-      setGroupMessages([]);
+      if (!loadOlder) {
+        setGroupMessages([]);
+      }
+      setHasMoreGroupMessages(false);
     } finally {
-      setLoadingGroupMessages(false);
+      if (loadOlder) {
+        setLoadingOlderGroupMessages(false);
+      } else {
+        setLoadingGroupMessages(false);
+      }
     }
   };
 
@@ -758,19 +1674,161 @@ const ChatPage = () => {
     
     // Clear input and tagged users immediately to prevent duplicate sends
     setInput("");
+    // Clear reply after sending
+    const currentReplyingTo = replyingTo;
+    setReplyingTo(null);
     const usersToTag = [...taggedUsers];
     setTaggedUsers([]);
     setShowMentionDropdown(false);
+
+    // Create temporary ID for optimistic update
+    const tempId = `temp-group-${Date.now()}-${Math.random()}`;
+    
+    // Optimistically add message to UI immediately
+    const optimisticMessage = {
+      _id: tempId,
+      senderEmpId: storedUser.empId,
+      senderName: storedUser.employeeName,
+      senderAliasName: storedUser.aliasName,
+      message: messageToSend,
+      timestamp: new Date().toISOString(),
+      isMyMessage: true,
+      seenBy: [],
+      seenCount: 0,
+      taggedUsers: usersToTag,
+      isOptimistic: true, // Flag to identify optimistic messages
+      ...(currentReplyingTo ? { replyTo: currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo } : {})
+    };
+    
+    setGroupMessages(prev => [...prev, optimisticMessage]);
+    // Scroll to bottom after message is added - wait for DOM update
+    setTimeout(() => scrollToBottom(true), 100);
     
     try {
+      // Validate group ID
+      if (!selectedGroup?._id) {
+        throw new Error('Invalid group selected. Please select a group and try again.');
+      }
+      
+      // Validate message
+      if (!messageToSend || !messageToSend.trim()) {
+        throw new Error('Message cannot be empty.');
+      }
+      
       const formData = new FormData();
       formData.append('groupId', selectedGroup._id);
-      formData.append('message', messageToSend);
+      formData.append('message', messageToSend.trim());
+      
+      // Add replyTo if replying to a message
+      if (currentReplyingTo) {
+        let replyToId = currentReplyingTo._id || currentReplyingTo.id;
+        
+        // If ID is missing, undefined, or temporary, try to find the real message
+        if (!replyToId || replyToId === 'undefined' || String(replyToId).startsWith('temp-') || String(replyToId).startsWith('temp-group-')) {
+          console.log('🔍 ReplyTo ID missing or temporary, searching for real message...', {
+            hasId: !!replyToId,
+            id: replyToId,
+            message: currentReplyingTo.message,
+            sender: currentReplyingTo.senderEmpId
+          });
+          
+          // Try to find the real message in groupMessages by matching multiple properties
+          const replyTimestamp = new Date(currentReplyingTo.timestamp || 0).getTime();
+          const replyContent = (currentReplyingTo.message || '').trim();
+          
+          // Search for the message - try exact match first, then fuzzy match
+          let realMessage = groupMessages.find(msg => {
+            // Skip optimistic messages
+            if (msg.isOptimistic || !msg._id || String(msg._id).startsWith('temp-')) {
+              return false;
+            }
+            
+            // Match by sender
+            if (msg.senderEmpId !== currentReplyingTo.senderEmpId) {
+              return false;
+            }
+            
+            // Match by message content (exact match)
+            const msgContent = (msg.message || '').trim();
+            if (msgContent === replyContent) {
+              // If timestamps are close (within 30 seconds), it's likely the same message
+              if (msg.timestamp) {
+                const msgTimestamp = new Date(msg.timestamp).getTime();
+                const timeDiff = Math.abs(msgTimestamp - replyTimestamp);
+                if (timeDiff <= 30000) { // Within 30 seconds
+                  return true;
+                }
+              } else {
+                // No timestamp, but content matches - likely the same
+                return true;
+              }
+            }
+            
+            return false;
+          });
+          
+          // If not found, try matching by content only (for recently sent messages)
+          if (!realMessage && replyContent) {
+            // Find the most recent message with matching content from the same sender
+            const matchingMessages = groupMessages
+              .filter(msg => {
+                if (msg.isOptimistic || !msg._id || String(msg._id).startsWith('temp-')) {
+                  return false;
+                }
+                return msg.senderEmpId === currentReplyingTo.senderEmpId &&
+                       (msg.message || '').trim() === replyContent;
+              })
+              .sort((a, b) => {
+                const timeA = new Date(a.timestamp || 0).getTime();
+                const timeB = new Date(b.timestamp || 0).getTime();
+                return timeB - timeA; // Most recent first
+              });
+            
+            if (matchingMessages.length > 0) {
+              realMessage = matchingMessages[0];
+            }
+          }
+          
+          if (realMessage && realMessage._id) {
+            replyToId = realMessage._id;
+            console.log('✅ Found real message ID for replyTo:', replyToId, 'matching message:', realMessage.message);
+          } else {
+            console.warn('⚠️ Could not find real message ID. Message being replied to:', {
+              content: replyContent,
+              sender: currentReplyingTo.senderEmpId,
+              timestamp: currentReplyingTo.timestamp
+            });
+            replyToId = null;
+          }
+        }
+        
+        if (replyToId && replyToId !== 'undefined' && !String(replyToId).startsWith('temp-')) {
+          formData.append('replyTo', String(replyToId));
+          console.log('📤 Sending group message with replyTo:', replyToId);
+        } else if (currentReplyingTo) {
+          console.warn('⚠️ ReplyTo message has invalid or temporary ID, skipping replyTo field. Message:', currentReplyingTo.message);
+        }
+      }
       
       // Add tagged user IDs
       if (usersToTag.length > 0) {
-        formData.append('taggedUserIds', JSON.stringify(usersToTag.map(u => u.empId)));
+        const taggedIds = usersToTag
+          .map(u => u?.empId)
+          .filter(id => id); // Filter out any undefined/null IDs
+        
+        if (taggedIds.length > 0) {
+          formData.append('taggedUserIds', JSON.stringify(taggedIds));
+          console.log('📤 Sending group message with tagged users:', taggedIds);
+        }
       }
+
+      console.log('📤 Sending group message:', {
+        groupId: selectedGroup._id,
+        groupName: selectedGroup.groupName,
+        message: messageToSend.substring(0, 50) + (messageToSend.length > 50 ? '...' : ''),
+        hasReplyTo: !!currentReplyingTo,
+        taggedUsersCount: usersToTag.length
+      });
 
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/send`,
@@ -784,65 +1842,142 @@ const ChatPage = () => {
       );
 
       if (response.data && response.data.success) {
-        const newMessage = {
-          _id: response.data.message?._id || response.data.messageId || Date.now().toString(),
-          senderEmpId: storedUser.empId,
-          senderName: storedUser.employeeName,
-          senderAliasName: storedUser.aliasName,
-          message: messageToSend,
-          timestamp: response.data.message?.timestamp || new Date().toISOString(),
-          isMyMessage: true,
-          seenBy: [],
-          seenCount: 0,
-          taggedUsers: usersToTag // Include tagged users in message
-        };
-        setGroupMessages(prev => [...prev, newMessage]);
+        // Update the optimistic message with real server data
+        const realMessageId = response.data.message?._id || response.data.messageId;
+        const realTimestamp = response.data.message?.timestamp || new Date().toISOString();
+        const serverReplyTo = response.data.message?.replyTo || (currentReplyingTo ? (currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo) : null);
         
-        // Refresh messages after a short delay to get proper server data with correct ID
-        // This ensures the message ID matches what the backend sends in socket events
+        setGroupMessages(prev => prev.map(msg => 
+          msg._id === tempId 
+            ? {
+                ...msg,
+                _id: realMessageId,
+                timestamp: realTimestamp,
+                isOptimistic: false,
+                ...(serverReplyTo ? { replyTo: serverReplyTo } : {})
+              }
+            : msg
+        ));
+        
+        // Don't refetch all messages - socket events will handle new messages
+        // Only refetch if needed for message ID correction (reduced delay)
         setTimeout(async () => {
-          await fetchGroupMessages(selectedGroup._id);
-          setTimeout(scrollToBottom, 100);
-        }, 500);
+          // Only refetch if socket didn't update the message (check after 1 second)
+          const messageStillOptimistic = groupMessages.some(msg => msg._id === tempId);
+          if (messageStillOptimistic) {
+            await fetchGroupMessages(selectedGroup._id);
+          }
+        }, 1000);
       } else {
-        setTimeout(scrollToBottom, 100);
+        setTimeout(() => scrollToBottom(true), 100);
       }
     } catch (err) {
       console.error("❌ Send group message failed:", err);
-      // Restore input on error
+      
+      // Log detailed error information for debugging
+      if (err.response) {
+        console.error("❌ Server error response:", {
+          status: err.response.status,
+          statusText: err.response.statusText,
+          data: err.response.data,
+          headers: err.response.headers
+        });
+      }
+      
+      // Determine error type and message
+      let errorMessage = 'Failed to send message. Please try again.';
+      
+      if (err.response) {
+        // Server responded with error status
+        const status = err.response.status;
+        const errorData = err.response.data;
+        
+        if (status === 401) {
+          errorMessage = 'Session expired. Please refresh the page and try again.';
+        } else if (status === 403) {
+          errorMessage = 'You don\'t have permission to send messages to this group.';
+        } else if (status === 404) {
+          errorMessage = 'Group not found. Please select a valid group.';
+        } else if (status >= 500) {
+          // Include server error details if available
+          const serverErrorMsg = errorData?.message || errorData?.error || errorData?.errorMessage;
+          if (serverErrorMsg) {
+            errorMessage = `Server error: ${serverErrorMsg}. Please try again in a moment.`;
+          } else {
+            errorMessage = 'Server error. Please try again in a moment.';
+          }
+          console.error("🔴 Server error details:", {
+            status,
+            error: errorData,
+            groupId: selectedGroup?._id,
+            messageLength: messageToSend.length
+          });
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        }
+      } else if (err.request) {
+        // Request was made but no response received
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errorMessage = 'Request timed out. Please check your connection and try again.';
+        } else if (err.code === 'ERR_NETWORK') {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = 'No response from server. Please check your connection and try again.';
+        }
+      }
+      
+      // Remove optimistic message on error
+      setGroupMessages(prev => prev.filter(msg => msg._id !== tempId));
+      
+      // Restore input, reply state, and tagged users on error
       setInput(messageToSend);
+      if (currentReplyingTo) {
+        setReplyingTo(currentReplyingTo);
+      }
       setTaggedUsers(usersToTag);
+      
+      // Show error message
+      alert(errorMessage);
     } finally {
       setIsSendingMessage(false);
     }
   };
 
-  const handleGroupFileUpload = async (file) => {
+  // Upload group file with caption (for preview flow)
+  const handleGroupFileUploadWithCaption = async (file, caption = '') => {
     if (!file || !selectedGroup) return;
     
-    // Check file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size should be less than 10MB.');
-      return;
-    }
-    
     try {
-      setUploadingFile(true);
-      
       const formData = new FormData();
       formData.append('file', file);
       formData.append('groupId', selectedGroup._id);
       
-      // Set appropriate message based on file type
+      // Determine file type and create message
       const isAudio = isAudioFile(file);
       const isImage = file.type.startsWith('image/');
-      const messageText = isAudio 
+      const fileTypePrefix = isAudio 
         ? `Sent an audio: ${file.name}` 
         : isImage 
         ? `Sent an image: ${file.name}` 
         : `Sent a file: ${file.name}`;
       
+      // If caption is provided, combine it with file info, otherwise use default
+      // Backend needs the file pattern to recognize it as a file message
+      const messageText = caption.trim() 
+        ? `${fileTypePrefix}\n${caption.trim()}` 
+        : fileTypePrefix;
+      
       formData.append('message', messageText);
+      
+      // Debug: Verify file is in FormData
+      console.log('📤 Sending group file with caption:', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        caption: caption.trim() || 'none',
+        messageText: messageText,
+        groupId: selectedGroup._id
+      });
       
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/send`,
@@ -856,6 +1991,8 @@ const ChatPage = () => {
       );
 
       if (response.data && response.data.success) {
+        const messageText = caption.trim() || defaultMessage;
+        
         // Add message to UI immediately with proper ID
         const newFileMessage = {
           _id: response.data?.message?._id || response.data?.messageId || Date.now().toString(),
@@ -873,13 +2010,38 @@ const ChatPage = () => {
         };
         
         setGroupMessages(prev => [...prev, newFileMessage]);
+        setTimeout(() => scrollToBottom(true), 100);
         
-        // Refresh group messages to get proper server data
+        // Don't refetch all messages - socket events will handle new messages
+        // Only refetch if socket didn't update (check after 1 second)
         setTimeout(async () => {
-          await fetchGroupMessages(selectedGroup._id);
-          setTimeout(scrollToBottom, 100);
-        }, 1500);
+          const messageExists = groupMessages.some(msg => 
+            msg._id === newFileMessage._id || 
+            (msg.fileName === file.name && Math.abs(new Date(msg.timestamp) - new Date(newFileMessage.timestamp)) < 2000)
+          );
+          if (!messageExists) {
+            await fetchGroupMessages(selectedGroup._id);
+          }
+        }, 1000);
       }
+    } catch (error) {
+      console.error('❌ Group file upload failed:', error);
+      throw error;
+    }
+  };
+
+  const handleGroupFileUpload = async (file) => {
+    if (!file || !selectedGroup) return;
+    
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+    
+    try {
+      setUploadingFile(true);
+      await handleGroupFileUploadWithCaption(file);
     } catch (error) {
       console.error('❌ Group file upload failed:', error);
       alert('Failed to upload file. Please try again.');
@@ -891,13 +2053,20 @@ const ChatPage = () => {
   const handleGroupImageUpload = async (file) => {
     if (!file || !selectedGroup) return;
     
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
+    // Validate image file types: JPG, JPEG, PNG only
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isValidImage = allowedImageTypes.includes(file.type) || 
+                         ['jpg', 'jpeg', 'png'].includes(fileExtension);
+    
+    if (!isValidImage) {
+      alert('Please select a valid image file (JPG, JPEG, or PNG).');
       return;
     }
     
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image size should be less than 5MB.');
+    // File size limit: 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
       return;
     }
     
@@ -921,8 +2090,8 @@ const ChatPage = () => {
       );
 
       if (response.data && response.data.success) {
-        await fetchGroupMessages(selectedGroup._id);
-        setTimeout(scrollToBottom, 100);
+        // Don't refetch all messages - socket events will handle new messages
+        // The optimistic message is already added, socket will update it if needed
       }
     } catch (error) {
       console.error('❌ Group image upload failed:', error);
@@ -949,6 +2118,10 @@ const ChatPage = () => {
           );
           if (groupRes.data && groupRes.data.success) {
             setSelectedGroup(groupRes.data.group);
+            // Notify NotificationHandler about chat selection change
+            window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+              detail: { selectedEmpId: null, selectedGroupId: groupRes.data.group._id }
+            }));
           }
         }
         return true;
@@ -975,6 +2148,10 @@ const ChatPage = () => {
           );
           if (groupRes.data && groupRes.data.success) {
             setSelectedGroup(groupRes.data.group);
+            // Notify NotificationHandler about chat selection change
+            window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+              detail: { selectedEmpId: null, selectedGroupId: groupRes.data.group._id }
+            }));
           }
         }
         return true;
@@ -998,6 +2175,10 @@ const ChatPage = () => {
           setSelectedGroup(null);
           setChatType('individual');
           setGroupMessages([]);
+          // Notify NotificationHandler about chat selection change
+          window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+            detail: { selectedEmpId: null, selectedGroupId: null }
+          }));
         }
         return true;
       }
@@ -1019,6 +2200,10 @@ const ChatPage = () => {
           setSelectedGroup(null);
           setChatType('individual');
           setGroupMessages([]);
+          // Notify NotificationHandler about chat selection change
+          window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+            detail: { selectedEmpId: null, selectedGroupId: null }
+          }));
         }
         return true;
       }
@@ -1041,14 +2226,28 @@ const ChatPage = () => {
         res.data.unreadBySender.forEach((item) => {
           if (item.unreadCount > 0 && item.sender && item.sender.empId) {
             unread[item.sender.empId] = item.unreadCount;
-
+            
+            // Notify UnreadCountContext to update sidebar badge
+            window.dispatchEvent(new CustomEvent('setUnreadCount', {
+              detail: {
+                type: 'individual',
+                empId: item.sender.empId,
+                count: item.unreadCount
+              }
+            }));
           }
         });
       }
 
+      console.log('📊 Fetched unread counts:', unread);
+      console.log('📊 Unread counts by empId:', Object.keys(unread).map(empId => `${empId}: ${unread[empId]}`));
+      console.log('📊 Current newMessagesMap before update:', newMessagesMap);
       setNewMessagesMap(unread);
+      console.log('📊 Updated newMessagesMap:', unread);
+      return unread; // Return the unread map for use in fetchChatList
     } catch (err) {
       console.error("❌ Failed to fetch unread counts", err);
+      return {};
     }
   };
 
@@ -1071,6 +2270,103 @@ const ChatPage = () => {
   };
 
 
+  // Handle reply to a message
+  const handleReplyToMessage = (msg) => {
+    console.log('=== Replying to message ===', msg);
+    setReplyingTo(msg);
+    // Focus on input field
+    setTimeout(() => {
+      if (chatType === 'group') {
+        groupTextareaRef.current?.focus();
+      } else {
+        individualTextareaRef.current?.focus();
+      }
+    }, 100);
+  };
+
+  // Cancel reply
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  // Scroll to original message when clicking reply preview
+  const scrollToRepliedMessage = () => {
+    if (!replyingTo) return;
+    
+    const messageId = replyingTo._id || replyingTo.id;
+    if (!messageId) return;
+
+    // Find the message element - check both group and individual message refs
+    const messageElement = groupMessageRefs.current[messageId] || 
+                          document.querySelector(`[data-message-id="${messageId}"]`);
+    
+    if (messageElement) {
+      // Highlight the message briefly
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 2000);
+      
+      // Scroll to the message
+      messageElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    } else {
+      // If message not found, try scrolling and searching after a delay
+      setTimeout(() => {
+        const retryElement = groupMessageRefs.current[messageId] || 
+                            document.querySelector(`[data-message-id="${messageId}"]`);
+        if (retryElement) {
+          setHighlightedMessageId(messageId);
+          setTimeout(() => setHighlightedMessageId(null), 2000);
+          retryElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        } else {
+          console.log('Message not found for scrolling:', messageId);
+        }
+      }, 300);
+    }
+  };
+
+  // Scroll to replied message when clicking on the quoted message in a message bubble
+  const scrollToRepliedMessageFromBubble = (replyToId) => {
+    if (!replyToId) return;
+    
+    const messageId = replyToId._id || replyToId.id || replyToId;
+    if (!messageId) return;
+
+    // Find the message element
+    const messageElement = groupMessageRefs.current[messageId] || 
+                          document.querySelector(`[data-message-id="${messageId}"]`);
+    
+    if (messageElement) {
+      // Highlight the message briefly
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 2000);
+      
+      // Scroll to the message
+      messageElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    } else {
+      // If message not found, try scrolling and searching after a delay
+      setTimeout(() => {
+        const retryElement = groupMessageRefs.current[messageId] || 
+                            document.querySelector(`[data-message-id="${messageId}"]`);
+        if (retryElement) {
+          setHighlightedMessageId(messageId);
+          setTimeout(() => setHighlightedMessageId(null), 2000);
+          retryElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
+      }, 300);
+    }
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || isSendingMessage) return;
     
@@ -1087,13 +2383,139 @@ const ChatPage = () => {
     setIsSendingMessage(true);
     const messageToSend = input.trim();
     
+    // Store reply state before clearing (needed for error recovery)
+    const currentReplyingTo = replyingTo;
+    
     // Clear input immediately to prevent duplicate sends
     setInput("");
+    // Clear reply after sending (will restore on error)
+    setReplyingTo(null);
+
+    // Create temporary ID for optimistic update
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
     
+    // Optimistically add message to UI immediately
+    const optimisticMessage = {
+      _id: tempId,
+      senderEmpId: storedUser.empId,
+      receiverEmpId: selectedUser.empId,
+      message: messageToSend,
+      timestamp: new Date().toISOString(),
+      status: 'sent',
+      isMyMessage: true,
+      seenBy: null,
+      seenAt: null,
+      isSeen: false,
+      isOptimistic: true, // Flag to identify optimistic messages
+      ...(currentReplyingTo ? { replyTo: currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo } : {})
+    };
+    
+    setMessages(prev => [...prev, optimisticMessage]);
+    // Scroll to bottom after message is added - wait for DOM update
+    setTimeout(() => scrollToBottom(true), 100);
+
+    // Emit socket event immediately (server will broadcast with full data including replyTo)
+    // Note: The server's broadcast will include replyTo from the database
+    socketRef.current?.emit("newMessage", {
+      senderEmpId: storedUser.empId,
+      receiverEmpId: selectedUser.empId,
+      message: messageToSend,
+      senderName: storedUser.employeeName,
+      ...(currentReplyingTo && (currentReplyingTo._id || currentReplyingTo.id) && !String(currentReplyingTo._id || currentReplyingTo.id).startsWith('temp-') 
+        ? { replyTo: currentReplyingTo._id || currentReplyingTo.id } 
+        : {})
+    });
+
     try {
+      // Get replyTo ID, ensuring it's not a temporary optimistic ID
+      let replyToId = null;
+      if (currentReplyingTo) {
+        replyToId = currentReplyingTo._id || currentReplyingTo.id;
+        
+        // If ID is missing, undefined, or temporary, try to find the real message
+        if (!replyToId || replyToId === 'undefined' || String(replyToId).startsWith('temp-') || String(replyToId).startsWith('temp-group-')) {
+          console.log('🔍 ReplyTo ID missing or temporary, searching for real message...', {
+            hasId: !!replyToId,
+            id: replyToId,
+            message: currentReplyingTo.message,
+            sender: currentReplyingTo.senderEmpId
+          });
+          
+          // Try to find the real message in messages by matching multiple properties
+          const replyTimestamp = new Date(currentReplyingTo.timestamp || 0).getTime();
+          const replyContent = (currentReplyingTo.message || '').trim();
+          
+          // Search for the message - try exact match first
+          let realMessage = messages.find(msg => {
+            // Skip optimistic messages
+            if (msg.isOptimistic || !msg._id || String(msg._id).startsWith('temp-')) {
+              return false;
+            }
+            
+            // Match by sender
+            if (msg.senderEmpId !== currentReplyingTo.senderEmpId) {
+              return false;
+            }
+            
+            // Match by message content (exact match)
+            const msgContent = (msg.message || '').trim();
+            if (msgContent === replyContent) {
+              // If timestamps are close (within 30 seconds), it's likely the same message
+              if (msg.timestamp) {
+                const msgTimestamp = new Date(msg.timestamp).getTime();
+                const timeDiff = Math.abs(msgTimestamp - replyTimestamp);
+                if (timeDiff <= 30000) { // Within 30 seconds
+                  return true;
+                }
+              } else {
+                // No timestamp, but content matches - likely the same
+                return true;
+              }
+            }
+            
+            return false;
+          });
+          
+          // If not found, try matching by content only (for recently sent messages)
+          if (!realMessage && replyContent) {
+            // Find the most recent message with matching content from the same sender
+            const matchingMessages = messages
+              .filter(msg => {
+                if (msg.isOptimistic || !msg._id || String(msg._id).startsWith('temp-')) {
+                  return false;
+                }
+                return msg.senderEmpId === currentReplyingTo.senderEmpId &&
+                       (msg.message || '').trim() === replyContent;
+              })
+              .sort((a, b) => {
+                const timeA = new Date(a.timestamp || 0).getTime();
+                const timeB = new Date(b.timestamp || 0).getTime();
+                return timeB - timeA; // Most recent first
+              });
+            
+            if (matchingMessages.length > 0) {
+              realMessage = matchingMessages[0];
+            }
+          }
+          
+          if (realMessage && realMessage._id) {
+            replyToId = realMessage._id;
+            console.log('✅ Found real message ID for replyTo:', replyToId, 'matching message:', realMessage.message);
+          } else {
+            console.warn('⚠️ Could not find real message ID. Message being replied to:', {
+              content: replyContent,
+              sender: currentReplyingTo.senderEmpId,
+              timestamp: currentReplyingTo.timestamp
+            });
+            replyToId = null;
+          }
+        }
+      }
+      
       const payload = {
         receiverEmpId: selectedUser.empId,
         message: messageToSend,
+        ...(replyToId && !String(replyToId).startsWith('temp-') ? { replyTo: replyToId } : {})
       };
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
@@ -1101,41 +2523,73 @@ const ChatPage = () => {
         { withCredentials: true }
       );
 
-      // Add the new message to the messages array immediately
+      // Update the optimistic message with real server data
       if (response.data) {
-        const newMessage = {
-          _id: response.data.message?._id || response.data.messageId || Date.now().toString(),
-          senderEmpId: storedUser.empId,
-          receiverEmpId: selectedUser.empId,
-          message: messageToSend,
-          timestamp: response.data.message?.timestamp || new Date().toISOString(),
-          status: 'sent',
-          isMyMessage: true,
-          seenBy: null,
-          seenAt: null,
-          isSeen: false
-        };
-        setMessages(prev => [...prev, newMessage]);
+        const realMessageId = response.data.message?._id || response.data.messageId;
+        const realTimestamp = response.data.message?.timestamp || new Date().toISOString();
+        const serverReplyTo = response.data.message?.replyTo || (currentReplyingTo ? (currentReplyingTo._id || currentReplyingTo.id || currentReplyingTo) : null);
+        
+        setMessages(prev => prev.map(msg => 
+          msg._id === tempId 
+            ? {
+                ...msg,
+                _id: realMessageId,
+                timestamp: realTimestamp,
+                isOptimistic: false,
+                ...(serverReplyTo ? { replyTo: serverReplyTo } : {})
+              }
+            : msg
+        ));
         
         // Refresh messages after a short delay to get proper server data
         setTimeout(async () => {
           await fetchMessages(selectedUser.empId);
-          setTimeout(scrollToBottom, 100);
+          // Ensure scroll to bottom after refetch (user just sent a message)
+          setTimeout(() => scrollToBottom(true), 200);
         }, 500);
       }
-
-      socketRef.current?.emit("newMessage", {
-        senderEmpId: storedUser.empId,
-        receiverEmpId: selectedUser.empId,
-        message: messageToSend,
-        senderName: storedUser.employeeName
-      });
-
-      setTimeout(scrollToBottom, 100);
     } catch (err) {
       console.error("❌ Send message failed:", err);
-      // Restore input on error
+      
+      // Determine error type and message
+      let errorMessage = 'Failed to send message. Please try again.';
+      
+      if (err.response) {
+        // Server responded with error status
+        const status = err.response.status;
+        if (status === 401) {
+          errorMessage = 'Session expired. Please refresh the page and try again.';
+        } else if (status === 403) {
+          errorMessage = 'You don\'t have permission to send messages.';
+        } else if (status === 404) {
+          errorMessage = 'User not found. Please select a valid contact.';
+        } else if (status >= 500) {
+          errorMessage = 'Server error. Please try again in a moment.';
+        } else if (err.response.data?.message) {
+          errorMessage = err.response.data.message;
+        }
+      } else if (err.request) {
+        // Request was made but no response received
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errorMessage = 'Request timed out. Please check your connection and try again.';
+        } else if (err.code === 'ERR_NETWORK') {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = 'No response from server. Please check your connection and try again.';
+        }
+      }
+      
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(msg => msg._id !== tempId));
+      
+      // Restore input and reply state on error
       setInput(messageToSend);
+      if (currentReplyingTo) {
+        setReplyingTo(currentReplyingTo);
+      }
+      
+      // Show error message
+      alert(errorMessage);
     } finally {
       setIsSendingMessage(false);
     }
@@ -1165,6 +2619,30 @@ const ChatPage = () => {
     }
   };
 
+  // Insert emoji into input field
+  const insertEmoji = (emoji) => {
+    const textarea = chatType === 'group' ? groupTextareaRef.current : individualTextareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const currentValue = input;
+      const newValue = currentValue.substring(0, start) + emoji + currentValue.substring(end);
+      setInput(newValue);
+      
+      // Set cursor position after emoji
+      setTimeout(() => {
+        const newCursorPos = start + emoji.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+        autoResizeTextarea(textarea);
+      }, 0);
+    } else {
+      // Fallback if textarea ref not available
+      setInput(input + emoji);
+    }
+    setShowEmojiPicker(false);
+  };
+
   const handleInputChange = (e) => {
     // Use group-specific handler for group chats
     if (chatType === 'group' && selectedGroup) {
@@ -1179,9 +2657,51 @@ const ChatPage = () => {
     autoResizeTextarea(textarea);
   };
 
-  const handlePaste = (e) => {
-    // Get pasted text from clipboard
-    const pastedText = e.clipboardData.getData('text');
+  const handlePaste = async (e) => {
+    const clipboardData = e.clipboardData;
+    
+    // Check if clipboard contains image data
+    const items = Array.from(clipboardData.items);
+    const imageItem = items.find(item => item.type.indexOf('image') !== -1);
+    
+    if (imageItem) {
+      // Handle image paste
+      e.preventDefault();
+      
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      
+      // Validate image file types: JPG, JPEG, PNG only
+      const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      const isValidImage = allowedImageTypes.includes(file.type);
+      
+      if (!isValidImage) {
+        alert('Please paste a valid image file (JPG, JPEG, or PNG).');
+        return;
+      }
+      
+      // File size limit: 10MB
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size should be less than 10MB.');
+        return;
+      }
+      
+      // Generate a filename with timestamp if file doesn't have a name
+      const timestamp = new Date().getTime();
+      const fileExtension = file.type.split('/')[1] || 'png';
+      const fileName = file.name || `pasted-image-${timestamp}.${fileExtension}`;
+      
+      // Create a new File object with the proper name
+      const namedFile = new File([file], fileName, { type: file.type });
+      
+      // Show preview instead of immediate upload
+      await handleImageSelect(namedFile);
+      
+      return;
+    }
+    
+    // Handle text paste (existing behavior)
+    const pastedText = clipboardData.getData('text');
     if (pastedText) {
       e.preventDefault();
       // Get the active textarea (group or individual)
@@ -1217,30 +2737,31 @@ const ChatPage = () => {
     return audioFormats.includes(fileExt || '') || file.type.startsWith('audio/');
   };
 
-  const handleFileUpload = async (file) => {
+  // Upload file with caption (for preview flow)
+  const handleFileUploadWithCaption = async (file, caption = '') => {
     if (!file || !selectedUser) return;
     
-    // Check file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size should be less than 10MB.');
-      return;
-    }
-    
     try {
-      setUploadingFile(true);
-      
       const formData = new FormData();
       formData.append('file', file);
       formData.append('receiverEmpId', selectedUser.empId);
       
-      // Set appropriate message based on file type
-      if (isAudioFile(file)) {
-        formData.append('message', `Sent an audio: ${file.name}`);
-      } else if (file.type.startsWith('image/')) {
-        formData.append('message', `Sent an image: ${file.name}`);
-      } else {
-        formData.append('message', `Sent a file: ${file.name}`);
-      }
+      // Determine file type and create message
+      const isAudio = isAudioFile(file);
+      const isImage = file.type.startsWith('image/');
+      const fileTypePrefix = isAudio 
+        ? `Sent an audio: ${file.name}` 
+        : isImage 
+        ? `Sent an image: ${file.name}` 
+        : `Sent a file: ${file.name}`;
+      
+      // If caption is provided, combine it with file info, otherwise use default
+      // Backend needs the file pattern to recognize it as a file message
+      const messageText = caption.trim() 
+        ? `${fileTypePrefix}\n${caption.trim()}` 
+        : fileTypePrefix;
+      
+      formData.append('message', messageText);
       
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/chat/send`,
@@ -1252,15 +2773,6 @@ const ChatPage = () => {
           },
         }
       );
-
-      // Determine message type and content
-      const isAudio = isAudioFile(file);
-      const isImage = file.type.startsWith('image/');
-      const messageText = isAudio 
-        ? `Sent an audio: ${file.name}` 
-        : isImage 
-        ? `Sent an image: ${file.name}` 
-        : `Sent a file: ${file.name}`;
       
       // Add file message to UI immediately with proper ID
       const newFileMessage = {
@@ -1278,11 +2790,10 @@ const ChatPage = () => {
       };
       
       setMessages(prev => [...prev, newFileMessage]);
+      setTimeout(() => scrollToBottom(true), 100);
       
-      // Refresh messages to get proper server data
       setTimeout(async () => {
         await fetchMessages(selectedUser.empId);
-        setTimeout(scrollToBottom, 100);
       }, 1500);
       
       socketRef.current?.emit("newMessage", {
@@ -1295,7 +2806,39 @@ const ChatPage = () => {
         senderName: storedUser.employeeName
       });
       
-      setTimeout(scrollToBottom, 100);
+      setTimeout(() => scrollToBottom(true), 100);
+    } catch (error) {
+      console.error('❌ File upload failed:', error);
+      throw error;
+    }
+  };
+
+  const handleFileUpload = async (file) => {
+    if (!file || !selectedUser) return;
+    
+    // Validate file types
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = {
+      images: ['jpg', 'jpeg', 'png'],
+      documents: ['pdf', 'xlsx', 'xls', 'xlsm', 'xlsb'],
+      audio: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac']
+    };
+    
+    const allAllowed = [...allowedExtensions.images, ...allowedExtensions.documents, ...allowedExtensions.audio];
+    if (!allAllowed.includes(fileExtension)) {
+      alert('Please select a valid file type:\n- Images: JPG, JPEG, PNG\n- Documents: PDF, XLSX, XLS, XLSM, XLSB\n- Audio: MP3, WAV, M4A, OGG, AAC, WEBM, FLAC');
+      return;
+    }
+    
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+    
+    try {
+      setUploadingFile(true);
+      await handleFileUploadWithCaption(file);
     } catch (error) {
       console.error('❌ File upload failed:', error);
       alert('Failed to upload file. Please try again.');
@@ -1307,13 +2850,20 @@ const ChatPage = () => {
   const handleImageUpload = async (file) => {
     if (!file || !selectedUser) return;
     
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
+    // Validate image file types: JPG, JPEG, PNG only
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isValidImage = allowedImageTypes.includes(file.type) || 
+                         ['jpg', 'jpeg', 'png'].includes(fileExtension);
+    
+    if (!isValidImage) {
+      alert('Please select a valid image file (JPG, JPEG, or PNG).');
       return;
     }
     
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image size should be less than 5MB.');
+    // File size limit: 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
       return;
     }
     
@@ -1349,11 +2899,13 @@ const ChatPage = () => {
       };
       
       setMessages(prev => [...prev, newImageMessage]);
+      // Scroll immediately after adding message
+      setTimeout(() => scrollToBottom(true), 100);
       
       // Refresh messages to get proper server data
       setTimeout(async () => {
         await fetchMessages(selectedUser.empId);
-        setTimeout(scrollToBottom, 100);
+        // Scroll will happen automatically via useEffect when new messages arrive
       }, 1500);
       
       socketRef.current?.emit("newMessage", {
@@ -1362,8 +2914,6 @@ const ChatPage = () => {
         message: `Sent an image: ${file.name}`,
         senderName: storedUser.employeeName
       });
-      
-      setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error('❌ Image upload failed:', error);
       alert('Failed to upload image. Please try again.');
@@ -1372,10 +2922,198 @@ const ChatPage = () => {
     }
   };
 
+  // Helper function to create preview for a file
+  const createFilePreview = (file) => {
+    return new Promise((resolve) => {
+      const fileType = file.type;
+      let preview = null;
+      let type = 'document';
+
+      if (fileType.startsWith('image/')) {
+        type = 'image';
+        preview = URL.createObjectURL(file);
+        resolve({ file, preview, type });
+      } else if (isAudioFile(file)) {
+        type = 'audio';
+        preview = URL.createObjectURL(file);
+        resolve({ file, preview, type });
+      } else {
+        type = 'document';
+        resolve({ file, preview: null, type });
+      }
+    });
+  };
+
+  // Handle file selection - show preview instead of immediate upload
+  const handleFileSelect = async (file) => {
+    if (!file) return;
+
+    // Validate file types - check both extension and MIME type
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = {
+      images: ['jpg', 'jpeg', 'png'],
+      documents: ['pdf', 'xlsx', 'xls', 'xlsm', 'xlsb'],
+      audio: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac']
+    };
+    
+    const allAllowed = [...allowedExtensions.images, ...allowedExtensions.documents, ...allowedExtensions.audio];
+    
+    // Check extension
+    const isValidExtension = allAllowed.includes(fileExtension);
+    // Check MIME type (for audio files especially)
+    const isValidMimeType = file.type.startsWith('audio/') || 
+                           file.type.startsWith('image/') || 
+                           file.type === 'application/pdf' ||
+                           file.type.includes('spreadsheet') ||
+                           file.type.includes('excel');
+    
+    if (!isValidExtension && !isValidMimeType) {
+      alert('Please select a valid file type:\n- Images: JPG, JPEG, PNG\n- Documents: PDF, XLSX, XLS, XLSM, XLSB\n- Audio: MP3, WAV, M4A, OGG, AAC, WEBM, FLAC');
+      return;
+    }
+    
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+
+    // Create preview
+    const previewData = await createFilePreview(file);
+    setPreviewFiles([...previewFiles, { ...previewData, caption: '' }]);
+    setShowFilePreview(true);
+    setPreviewCaption('');
+  };
+
+  // Handle image selection - show preview instead of immediate upload
+  const handleImageSelect = async (file) => {
+    if (!file) return;
+
+    // Validate image file types: JPG, JPEG, PNG only
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isValidImage = allowedImageTypes.includes(file.type) || 
+                         ['jpg', 'jpeg', 'png'].includes(fileExtension);
+    
+    if (!isValidImage) {
+      alert('Please select a valid image file (JPG, JPEG, or PNG).');
+      return;
+    }
+    
+    // File size limit: 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+
+    // Create preview
+    const previewData = await createFilePreview(file);
+    setPreviewFiles([...previewFiles, { ...previewData, caption: '' }]);
+    setShowFilePreview(true);
+    setPreviewCaption('');
+  };
+
+  // Handle audio selection - show preview instead of immediate upload
+  const handleAudioSelect = async (file) => {
+    if (!file) return;
+
+    // Validate audio file types
+    if (!isAudioFile(file)) {
+      alert('Please select a valid audio file (MP3, WAV, M4A, OGG, AAC, WEBM, FLAC).');
+      return;
+    }
+    
+    // File size limit: 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+
+    // Create preview
+    const previewData = await createFilePreview(file);
+    setPreviewFiles([...previewFiles, { ...previewData, caption: '' }]);
+    setShowFilePreview(true);
+    setPreviewCaption('');
+  };
+
+  // Close preview and clear files
+  const closeFilePreview = () => {
+    // Clean up object URLs
+    previewFiles.forEach(({ preview }) => {
+      if (preview && preview.startsWith('blob:')) {
+        URL.revokeObjectURL(preview);
+      }
+    });
+    setPreviewFiles([]);
+    setPreviewCaption('');
+    setShowFilePreview(false);
+  };
+
+  // Remove a file from preview
+  const removePreviewFile = (index) => {
+    const fileToRemove = previewFiles[index];
+    // Clean up object URL
+    if (fileToRemove.preview && fileToRemove.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(fileToRemove.preview);
+    }
+    const newFiles = previewFiles.filter((_, i) => i !== index);
+    setPreviewFiles(newFiles);
+    if (newFiles.length === 0) {
+      setShowFilePreview(false);
+      setPreviewCaption('');
+    }
+  };
+
+  // Send files with captions
+  const sendPreviewFiles = async () => {
+    if (previewFiles.length === 0) return;
+    if (!selectedUser && !selectedGroup) return;
+
+    try {
+      setUploadingFile(true);
+      setShowFilePreview(false);
+
+      // Use the main caption for all files if provided, otherwise use individual captions
+      const mainCaption = previewCaption.trim();
+      
+      // Send each file with its caption
+      for (const previewFile of previewFiles) {
+        const { file, caption } = previewFile;
+        // Use main caption if provided, otherwise use individual caption, otherwise use default
+        const messageText = mainCaption || caption.trim() || (previewFile.type === 'audio' 
+          ? `Sent an audio: ${file.name}` 
+          : previewFile.type === 'image' 
+          ? `Sent an image: ${file.name}` 
+          : `Sent a file: ${file.name}`);
+
+        if (chatType === 'group' && selectedGroup) {
+          await handleGroupFileUploadWithCaption(file, messageText);
+        } else if (selectedUser) {
+          await handleFileUploadWithCaption(file, messageText);
+        }
+      }
+
+      // Clean up
+      previewFiles.forEach(({ preview }) => {
+        if (preview && preview.startsWith('blob:')) {
+          URL.revokeObjectURL(preview);
+        }
+      });
+      setPreviewFiles([]);
+      setPreviewCaption('');
+    } catch (error) {
+      console.error('❌ Failed to send files:', error);
+      alert('Failed to send files. Please try again.');
+      setShowFilePreview(true); // Re-show preview on error
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   const handleFileInputChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      handleFileUpload(file);
+      handleFileSelect(file);
     }
     e.target.value = '';
   };
@@ -1383,7 +3121,7 @@ const ChatPage = () => {
   const handleImageInputChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      handleImageUpload(file);
+      handleImageSelect(file);
     }
     e.target.value = '';
   };
@@ -1422,11 +3160,11 @@ const ChatPage = () => {
       return <CheckCheck size={14} className="text-blue-500" />;
     }
     switch (status) {
-      case 'sent': return <Clock size={14} className="text-gray-400" />;
+      case 'sent': return <Check size={14} className="text-gray-400" />; // Single tick for sent messages in individual chat
       case 'delivered': return <Check size={14} className="text-gray-400" />;
       case 'seen': return <CheckCheck size={14} className="text-blue-500" />;
       case 'read': return <CheckCheck size={14} className="text-blue-500" />;
-      default: return <Clock size={14} className="text-gray-400" />;
+      default: return <Check size={14} className="text-gray-400" />; // Single tick as default for individual chat
     }
   };
 
@@ -1451,6 +3189,7 @@ const ChatPage = () => {
   };
 
   // Mark group message as seen
+  // CRITICAL: Must call this when user views messages in group chat (per guide)
   const markGroupMessageAsSeen = async (groupId, messageId) => {
     if (!groupId || !messageId) return;
     
@@ -1467,6 +3206,7 @@ const ChatPage = () => {
     }
     
     try {
+      // Per docs: PATCH /api/v1/chat/group/:groupId/messages/:messageId/seen
       const res = await axios.patch(
         `${API_CONFIG.BASE_URL}/api/v1/chat/group/${groupId}/messages/${messageId}/seen`,
         {},
@@ -1475,6 +3215,9 @@ const ChatPage = () => {
       
       if (res.data && res.data.success) {
         markedAsSeenRef.current.add(seenKey);
+        console.log(`✅ Marked group message as seen: groupId=${groupId}, messageId=${messageId}`);
+        // Backend will automatically emit groupListUpdated with updated unreadCount
+        // No need to manually update - socket event will handle it (per guide)
       }
     } catch (err) {
       console.error("❌ Failed to mark group message as seen:", err);
@@ -1487,6 +3230,40 @@ const ChatPage = () => {
     if (!message || !storedUser?.empId) return false;
     return message.seenBy?.some(s => s.empId === storedUser.empId || s.seenByEmpId === storedUser.empId);
   };
+
+  // Open image viewer modal
+  const openImageModal = (imageUrl, imageName = null) => {
+    setSelectedImageUrl(imageUrl);
+    setSelectedImageName(imageName);
+    setShowImageModal(true);
+  };
+
+  // Close image viewer modal
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setSelectedImageUrl(null);
+    setSelectedImageName(null);
+  };
+
+  // Handle ESC key to close image modal and file preview
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        if (showImageModal) {
+          closeImageModal();
+        } else if (showFilePreview) {
+          closeFilePreview();
+        }
+      }
+    };
+
+    if (showImageModal || showFilePreview) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [showImageModal, showFilePreview]);
 
   // Update individual message seen status when socket event is received
   const updateIndividualMessageSeenStatus = (messageIds, seenBy, seenAt) => {
@@ -1524,8 +3301,10 @@ const ChatPage = () => {
   };
 
   // Update message seen status when socket event is received
-  const updateGroupMessageSeenStatus = (messageId, seenBy) => {
-    if (!messageId || !seenBy) return;
+  const updateGroupMessageSeenStatus = (messageId, seenByData, isFullArray = false) => {
+    if (!messageId || !seenByData) return;
+    
+    console.log('🔄 Updating group message seen status:', { messageId, seenByData, isFullArray });
     
     setGroupMessages(prevMessages => {
       let messageFound = false;
@@ -1538,25 +3317,37 @@ const ChatPage = () => {
         
         if (msgId === targetId) {
           messageFound = true;
-          // Ensure seenBy array exists
-          const currentSeenBy = msg.seenBy || [];
           
-          // Check if this user already in seenBy array
-          const alreadySeen = currentSeenBy.some(
-            s => {
-              const sEmpId = s.empId || s.seenByEmpId || '';
-              const newEmpId = seenBy.empId || seenBy.seenByEmpId || '';
-              return sEmpId && newEmpId && String(sEmpId) === String(newEmpId);
-            }
-          );
-          
-          if (!alreadySeen) {
+          if (isFullArray && Array.isArray(seenByData)) {
+            // Backend sent full array - replace existing
             updated = true;
             return {
               ...msg,
-              seenBy: [...currentSeenBy, seenBy],
-              seenCount: (msg.seenCount || 0) + 1
+              seenBy: seenByData,
+              seenCount: seenByData.length
             };
+          } else {
+            // Single user addition
+            const currentSeenBy = msg.seenBy || [];
+            
+            // Check if this user already in seenBy array
+            const alreadySeen = currentSeenBy.some(
+              s => {
+                const sEmpId = s.empId || s.seenByEmpId || '';
+                const newEmpId = seenByData.empId || seenByData.seenByEmpId || '';
+                return sEmpId && newEmpId && String(sEmpId) === String(newEmpId);
+              }
+            );
+            
+            if (!alreadySeen) {
+              updated = true;
+              const newSeenBy = [...currentSeenBy, seenByData];
+              return {
+                ...msg,
+                seenBy: newSeenBy,
+                seenCount: newSeenBy.length
+              };
+            }
           }
         }
         return msg;
@@ -1564,6 +3355,7 @@ const ChatPage = () => {
       
       // If message not found, refresh messages to get latest data
       if (!messageFound && selectedGroup?._id) {
+        console.log('⚠️ Message not found in current list, refreshing...');
         setTimeout(() => {
           fetchGroupMessages(selectedGroup._id);
         }, 100);
@@ -1571,9 +3363,20 @@ const ChatPage = () => {
       
       // If message was updated, return new array to trigger re-render
       if (updated) {
+        console.log('✅ Group message seen status updated successfully');
         return updatedMessages;
       }
-      return prevMessages;
+      // Even if not updated, ensure seenCount matches seenBy length
+      const finalMessages = updatedMessages.map(msg => {
+        if (msg.seenBy && Array.isArray(msg.seenBy)) {
+          const calculatedCount = msg.seenBy.length;
+          if (msg.seenCount !== calculatedCount) {
+            return { ...msg, seenCount: calculatedCount };
+          }
+        }
+        return msg;
+      });
+      return finalMessages;
     });
   };
 
@@ -1659,6 +3462,8 @@ const ChatPage = () => {
         // Fetch chat list and groups after user is loaded
         fetchChatList();
         fetchGroups();
+        // DON'T fetch unread counts - only track NEW messages via socket events
+        // This ensures red dots only appear for messages received AFTER user views the chat
       })
       .catch((err) => {
         console.error("❌ Failed to load full stored user profile", err);
@@ -1675,11 +3480,22 @@ const ChatPage = () => {
     }
   }, [selectedUser, storedUser, chatType]);
 
+  // Fetch group messages when group is selected (only if not already loaded)
   useEffect(() => {
     if (storedUser?.empId && selectedGroup?._id && chatType === 'group') {
-      fetchGroupMessages(selectedGroup._id);
+      const currentGroupId = selectedGroup._id;
+      
+      // Only fetch if this is a different group than the last one we fetched
+      if (lastFetchedGroupIdRef.current !== currentGroupId && !loadingGroupMessages) {
+        lastFetchedGroupIdRef.current = currentGroupId;
+        fetchGroupMessages(currentGroupId);
+      }
+    } else if (chatType !== 'group') {
+      // Clear group messages and reset ref when switching away from group chat
+      setGroupMessages([]);
+      lastFetchedGroupIdRef.current = null;
     }
-  }, [selectedGroup, storedUser, chatType]);
+  }, [selectedGroup?._id, storedUser?.empId, chatType]);
 
   // Fetch chat list when storedUser changes
   useEffect(() => {
@@ -1688,12 +3504,16 @@ const ChatPage = () => {
     }
   }, [storedUser]);
 
-  // Fetch unread counts on initial load
-  useEffect(() => {
-    if (storedUser?.empId) {
-      fetchUnreadCounts();
-    }
-  }, [storedUser]);
+  // DON'T fetch unread counts on initial load - only track NEW messages via socket events
+  // This ensures we only show red dots for messages received AFTER user views the chat
+  // useEffect(() => {
+  //   if (storedUser?.empId) {
+  //     fetchUnreadCounts();
+  //   }
+  // }, [storedUser]);
+
+  // Note: Group unread counts are now handled by groupListUpdated socket event (per guide)
+  // No need for this listener - backend sends groupListUpdated with unreadCount
 
   // Auto-resize textarea when input changes or chat type switches
   useEffect(() => {
@@ -1822,20 +3642,50 @@ const ChatPage = () => {
   useEffect(() => {
     if (!storedUser?.empId) return;
 
-    socketRef.current = io(`${API_CONFIG.BASE_URL}`, {
-      withCredentials: true,
-    });
+    console.log('🚀 Chat.jsx: Using SHARED socket service (reduces server load!)');
+    
+    // Get shared socket instance
+    const socket = sharedSocketService.getSocket();
+    
+    if (!socket) {
+      console.warn('⚠️ Chat.jsx: Shared socket not initialized yet. Waiting...');
+      // Wait for socket to be initialized
+      const checkSocket = setInterval(() => {
+        const s = sharedSocketService.getSocket();
+        if (s) {
+          clearInterval(checkSocket);
+          socketRef.current = s;
+          setupSocketListeners(s);
+        }
+      }, 100);
+      
+      return () => clearInterval(checkSocket);
+    }
 
-    socketRef.current.on("connect", () => {
+    socketRef.current = socket;
+    
+    // Handle user online status - using correct event names from backend
+    const handleUserOnline = (empId) => {
+      if (empId && empId !== storedUser.empId) {
+        setOnlineUsers(prev => new Set([...prev, empId]));
+      }
+    };
 
-      socketRef.current.emit("join", storedUser.empId);
-    });
+    const handleUserOffline = (empId) => {
+      if (empId && empId !== storedUser.empId) {
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(empId);
+          return newSet;
+        });
+      }
+    };
 
-    socketRef.current.on("connect_error", (err) => {
-      console.error("❌ Socket connection error:", err);
-    });
-
-    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file }) => {
+    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file, replyTo }) => {
+      // Mark sender as online when they send a message
+      if (senderEmpId && senderEmpId !== storedUser.empId) {
+        setOnlineUsers(prev => new Set([...prev, senderEmpId]));
+      }
 
       // Check if this message is for current user (as receiver)
       const isForMe = receiverEmpId === storedUser.empId;
@@ -1855,16 +3705,15 @@ const ChatPage = () => {
       }
 
       // Show notification if message is for current user and not from current selected user
-
-      if (isForMe && !isFromSelectedUser) {
-
-        // Try browser notification first
-        showNotification("New Message", notificationMessage, senderName || "Someone");
+      // Also show if no chat is currently selected (user is not viewing any chat)
+      if (isForMe && (!selectedUser || !isFromSelectedUser)) {
+        const senderDisplayName = senderName || "Someone";
         
-        // Also show in-app notification as backup
-        displayInAppNotification("New Message", notificationMessage, senderName || "Someone");
-      } else {
-
+        // Always show in-app notification
+        displayInAppNotification(`New Message from ${senderDisplayName}`, notificationMessage, senderDisplayName);
+        
+        // Try browser notification (will only show if permission granted)
+        showNotification(`New Message from ${senderDisplayName}`, notificationMessage, senderDisplayName);
       }
 
       // Update last message time for sorting
@@ -1878,26 +3727,52 @@ const ChatPage = () => {
 
         updateUnreadCount(senderEmpId, 1);
         
-        // Refresh server-side unread counts and re-sort chat list
+        // Re-sort chat list to move unread users to top (don't fetch unread counts from server)
         setTimeout(async () => {
-          await fetchUnreadCounts();
-          // Re-sort chat list to move unread users to top
           await fetchChatList();
-        }, 1000);
+        }, 500);
       }
 
       // If message is for current user OR involves current selected user, refresh messages
       if ((isForMe && isFromSelectedUser) || (isToSelectedUser && senderEmpId === storedUser.empId)) {
-
-        await fetchMessages(selectedUser.empId);
-        setTimeout(scrollToBottom, 100);
+        // Fetch messages to get full data including replyTo from server
+        if (replyTo) {
+          console.log('📥 Received message with replyTo via socket:', replyTo);
+        }
+        
+        // Retry logic to ensure replyTo is fetched correctly
+        // If replyTo is expected, retry fetching with increasing delays to handle server save timing
+        const fetchWithRetry = async (retryCount = 0) => {
+          const maxRetries = replyTo ? 2 : 0; // Only retry if replyTo is expected
+          const delays = [500, 1000, 1500]; // Progressive delays: 500ms, 1000ms, 1500ms
+          const delay = delays[retryCount] || delays[delays.length - 1];
+          
+          setTimeout(async () => {
+            try {
+              console.log(`📥 Fetching messages (attempt ${retryCount + 1}${replyTo ? ' - expecting replyTo' : ''})...`);
+              await fetchMessages(selectedUser.empId);
+              
+              // If replyTo was expected and we haven't exhausted retries, schedule another fetch
+              if (replyTo && retryCount < maxRetries) {
+                console.log(`⏳ Waiting before retry ${retryCount + 2} to ensure replyTo is saved...`);
+                fetchWithRetry(retryCount + 1);
+              } else {
+                console.log('✅ Message fetch completed');
+              }
+              
+              setTimeout(scrollToBottom, 100);
+            } catch (error) {
+              console.error('❌ Error fetching messages:', error);
+            }
+          }, delay);
+        };
+        
+        fetchWithRetry();
       }
 
       // Update chat list to show new message count
       await fetchChatList();
     };
-
-    socketRef.current.on("newMessage", handleNewMessage);
 
     // Handle individual message seen status updates
     const handleMessageSeen = ({ senderEmpId, receiverEmpId, receiverName, receiverAliasName, messageIds, seenAt, seenCount }) => {
@@ -1911,7 +3786,24 @@ const ChatPage = () => {
       }
     };
 
-    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message, audio, image, file }) => {
+    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message, audio, image, file, replyTo }) => {
+      console.log('📥📥📥 NEW GROUP MESSAGE RECEIVED:', {
+        groupId,
+        groupName,
+        senderEmpId,
+        senderName,
+        message: message?.substring(0, 50),
+        hasReplyTo: !!replyTo,
+        replyTo,
+        isForSelectedGroup: selectedGroup?._id === groupId,
+        isFromMe: senderEmpId === storedUser.empId
+      });
+      
+      // Mark sender as online when they send a message
+      if (senderEmpId && senderEmpId !== storedUser.empId) {
+        setOnlineUsers(prev => new Set([...prev, senderEmpId]));
+      }
+
       // Check if this message is for current selected group
       const isForSelectedGroup = selectedGroup?._id === groupId;
       const isFromMe = senderEmpId === storedUser.empId;
@@ -1926,31 +3818,87 @@ const ChatPage = () => {
         notificationMessage = "Sent a file 📎";
       }
 
-      // Show notification if message is not from me and not for selected group
-      if (!isFromMe && !isForSelectedGroup) {
-        showNotification("New Group Message", notificationMessage, `${senderName || "Someone"} in ${groupName || "Group"}`);
-        displayInAppNotification("New Group Message", notificationMessage, `${senderName || "Someone"} in ${groupName || "Group"}`);
+      // Show notification if message is not from me and (not for selected group OR no group is selected)
+      // This ensures notifications show even when user is not viewing the group or viewing a different group
+      if (!isFromMe && (!selectedGroup || !isForSelectedGroup)) {
+        const senderDisplayName = senderName || "Someone";
+        const groupDisplayName = groupName || "Group";
         
-        // Update unread count for the group
-        setNewGroupMessagesMap(prev => {
-          const newCount = (prev[groupId] || 0) + 1;
-          return {
-            ...prev,
-            [groupId]: newCount
-          };
-        });
+        // Always show in-app notification
+        displayInAppNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
+        
+        // Try browser notification (will only show if permission granted)
+        showNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
       }
-
-      // If message is for selected group, refresh messages and clear unread count
+      
+      // If message is for selected group, refresh messages
       if (isForSelectedGroup) {
-        await fetchGroupMessages(groupId);
-        setTimeout(scrollToBottom, 100);
-        // Clear unread count when viewing the group
-        setNewGroupMessagesMap(prev => {
-          const copy = { ...prev };
-          delete copy[groupId];
-          return copy;
+        console.log('✅ Message is for selected group, fetching messages...', {
+          groupId,
+          hasReplyTo: !!replyTo,
+          replyTo
         });
+        
+        // Fetch messages to get full data including replyTo from server
+        if (replyTo) {
+          console.log('📥 Received group message with replyTo via socket:', replyTo);
+        }
+        
+        // Retry logic to ensure replyTo is fetched correctly
+        // If replyTo is expected, retry fetching with increasing delays to handle server save timing
+        const fetchWithRetry = async (retryCount = 0) => {
+          const maxRetries = replyTo ? 2 : 0; // Only retry if replyTo is expected
+          const delays = [500, 1000, 1500]; // Progressive delays: 500ms, 1000ms, 1500ms
+          const delay = delays[retryCount] || delays[delays.length - 1];
+          
+          setTimeout(async () => {
+            try {
+              console.log(`📥 Fetching group messages (attempt ${retryCount + 1}${replyTo ? ' - expecting replyTo: ' + replyTo : ''})...`);
+              await fetchGroupMessages(groupId);
+              
+              // Check if the last message has replyTo after fetch
+              setTimeout(() => {
+                setGroupMessages(currentMessages => {
+                  const lastMessage = currentMessages[currentMessages.length - 1];
+                  if (lastMessage) {
+                    console.log('🔍 Last message after fetch:', {
+                      id: lastMessage._id,
+                      message: lastMessage.message,
+                      hasReplyTo: !!lastMessage.replyTo,
+                      replyTo: lastMessage.replyTo
+                    });
+                    
+                    // If replyTo was expected but not found, retry
+                    if (replyTo && !lastMessage.replyTo && retryCount < maxRetries) {
+                      console.log(`🔄 Retry ${retryCount + 1}/${maxRetries}: replyTo missing, retrying...`);
+                      fetchWithRetry(retryCount + 1);
+                    } else if (lastMessage.replyTo) {
+                      console.log('✅ ReplyTo found in fetched message!');
+                    }
+                  }
+                  return currentMessages; // Return unchanged
+                });
+              }, 200);
+              
+              setTimeout(scrollToBottom, 100);
+            } catch (error) {
+              console.error('❌ Error fetching group messages:', error);
+            }
+          }, delay);
+        };
+        
+        fetchWithRetry();
+        // Backend will automatically mark messages as read and emit groupListUpdated
+        // No need to manually update unread count - socket event handles it
+      } else {
+        console.log('ℹ️ Message is NOT for selected group, skipping fetch', {
+          messageGroupId: groupId,
+          selectedGroupId: selectedGroup?._id,
+          hasReplyTo: !!replyTo
+        });
+        // If message is NOT for selected group, backend will emit groupListUpdated
+        // with updated unreadCount - socket event handler will update the UI
+        // No need to manually recalculate - rely on socket events
       }
 
       // Refresh groups list to update last message
@@ -1958,35 +3906,383 @@ const ChatPage = () => {
     };
 
     // Handle group message seen status updates
+    // Per docs: event structure is { groupId, messageId, seenBy: { empId, employeeName, aliasName, seenAt } }
     const handleGroupMessageSeen = ({ groupId, messageId, seenBy }) => {
+      console.log('🔔 Group message seen event received:', { groupId, messageId, seenBy });
+      
       // Only update if it's for the currently selected group
       if (selectedGroup?._id === groupId && messageId && seenBy) {
-        updateGroupMessageSeenStatus(messageId, seenBy);
+        // Update the message's seenBy list in real-time (per docs example)
+        setGroupMessages(prevMessages => 
+          prevMessages.map(msg => {
+            if (String(msg._id) === String(messageId)) {
+              // Ensure seenBy is an array
+              const currentSeenBy = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+              
+              // Check if user already in seenBy list (per docs)
+              const alreadySeen = currentSeenBy.some(s => s.empId === seenBy.empId);
+              
+              if (!alreadySeen) {
+                // Add new seenBy entry and increment count
+                return {
+                  ...msg,
+                  seenBy: [...currentSeenBy, seenBy],
+                  seenCount: (msg.seenCount || 0) + 1
+                };
+              }
+            }
+            return msg;
+          })
+        );
       }
     };
 
-    socketRef.current.on("newGroupMessage", handleNewGroupMessage);
-    socketRef.current.on("groupMessageSeen", handleGroupMessageSeen);
-    socketRef.current.on("messageSeen", handleMessageSeen);
+    // Handle chat list updates from backend (for unread count changes)
+    const handleChatListUpdated = (updatedChatItem) => {
+      console.log('📬📬📬 CHAT LIST UPDATED EVENT RECEIVED! 📬📬📬');
+      console.log('📬 Chat list updated event received:', updatedChatItem);
+      console.log('📍 Socket ID:', socket?.id);
+      console.log('📍 Socket connected:', socket?.connected);
+      
+      if (!updatedChatItem || !updatedChatItem.empId) {
+        console.warn('⚠️ Invalid chatListUpdated event data:', updatedChatItem);
+        return;
+      }
 
-    // Cleanup
+      const { empId, unreadCount, online, lastMessage, lastMessageTime, employeeName, aliasName } = updatedChatItem;
+
+      // Update online status
+      if (online !== undefined) {
+        if (online && empId !== storedUser?.empId) {
+          setOnlineUsers(prev => new Set([...prev, empId]));
+        } else if (!online) {
+          setOnlineUsers(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(empId);
+            return newSet;
+          });
+        }
+      }
+
+      // Update unread count and chat list item (using functional updates to get latest state)
+      setNewMessagesMap(prevUnreadMap => {
+        const updatedUnreadMap = { ...prevUnreadMap };
+        if (unreadCount > 0) {
+          updatedUnreadMap[empId] = unreadCount;
+        } else {
+          delete updatedUnreadMap[empId];
+        }
+
+        // Notify UnreadCountContext to update sidebar badge
+        window.dispatchEvent(new CustomEvent('setUnreadCount', {
+          detail: {
+            type: 'individual',
+            empId: empId,
+            count: unreadCount
+          }
+        }));
+
+        // Update chat list with the new unread map
+        setChatList(prevList => {
+          const existingIndex = prevList.findIndex(chat => chat.empId === empId);
+          
+          if (existingIndex !== -1) {
+            // Update existing chat item
+            const updatedList = [...prevList];
+            updatedList[existingIndex] = {
+              ...updatedList[existingIndex],
+              ...(lastMessage !== undefined && { lastMessage }),
+              ...(lastMessageTime !== undefined && { lastMessageTime }),
+              ...(employeeName !== undefined && { employeeName }),
+              ...(aliasName !== undefined && { aliasName }),
+              ...(online !== undefined && { online })
+            };
+            
+            return sortChatListWithUnreadPriority(updatedList, updatedUnreadMap);
+          } else {
+            // Chat item doesn't exist in list yet, add it
+            const newChatItem = {
+              empId,
+              employeeName: employeeName || aliasName || 'Unknown',
+              aliasName: aliasName || employeeName || 'Unknown',
+              lastMessage: lastMessage || '',
+              lastMessageTime: lastMessageTime || new Date().toISOString(),
+              online: online || false,
+              unreadCount: unreadCount || 0  // Store unreadCount in chat item (per guide)
+            };
+
+            const updatedList = [newChatItem, ...prevList];
+            return sortChatListWithUnreadPriority(updatedList, updatedUnreadMap);
+          }
+        });
+
+        return updatedUnreadMap;
+      });
+    };
+
+    // Handle group list updates from backend (for unread count changes)
+    // Backend sends unreadCount in the socket event - use it directly (per docs)
+    const handleGroupListUpdated = (updatedGroupItem) => {
+      console.log('📬 Group list updated event received:', updatedGroupItem);
+      
+      if (!updatedGroupItem || !updatedGroupItem._id) {
+        console.warn('⚠️ Invalid groupListUpdated event data:', updatedGroupItem);
+        return;
+      }
+
+      // Normalize groupId to string
+      const groupId = String(updatedGroupItem._id);
+      const { groupName, lastMessage, unreadCount } = updatedGroupItem;
+
+      // Use unreadCount from socket event directly (backend calculates it)
+      // unreadCount: 0 means no red dot, > 0 means show red dot with count
+      const actualUnreadCount = unreadCount || 0;
+
+      // Update unread count map for red dot display
+      setNewGroupMessagesMap(prev => {
+        const updated = { ...prev };
+        if (actualUnreadCount > 0) {
+          updated[groupId] = actualUnreadCount;
+        } else {
+          // Remove from map if unreadCount is 0 (no red dot)
+          delete updated[groupId];
+        }
+
+        // Notify UnreadCountContext to update sidebar badge
+        window.dispatchEvent(new CustomEvent('setUnreadCount', {
+          detail: {
+            type: 'group',
+            groupId: groupId,
+            count: actualUnreadCount
+          }
+        }));
+
+        return updated;
+      });
+
+      // Update group in groups list
+      setGroups(prevGroups => {
+        const groupIndex = prevGroups.findIndex(g => String(g._id) === groupId);
+        if (groupIndex !== -1) {
+          // Update existing group
+          const updated = [...prevGroups];
+          updated[groupIndex] = {
+            ...updated[groupIndex],
+            ...(groupName !== undefined && { groupName }),
+            ...(lastMessage !== undefined && { lastMessage }),
+            unreadCount: actualUnreadCount  // Use unreadCount from socket event
+          };
+          return updated;
+        } else {
+          // Group doesn't exist in list yet, add it
+          return [...prevGroups, {
+            ...updatedGroupItem,
+            _id: groupId,
+            unreadCount: actualUnreadCount
+          }];
+        }
+      });
+    };
+
+    // Set up all socket listeners
+    socket.on("user_online", handleUserOnline);
+    socket.on("user_offline", handleUserOffline);
+    socket.on("newMessage", handleNewMessage);
+    socket.on("newGroupMessage", handleNewGroupMessage);
+    socket.on("groupMessageSeen", handleGroupMessageSeen);
+    // Also listen for alternative event names that backend might use
+    socket.on("groupMessageSeenUpdated", handleGroupMessageSeen);
+    socket.on("groupMessageRead", handleGroupMessageSeen);
+    socket.on("messageSeen", handleMessageSeen);
+    socket.on("chatListUpdated", handleChatListUpdated);
+    socket.on("groupListUpdated", handleGroupListUpdated);  // 🔥 Added per guide
+    
+    // Debug: Listen for ALL events to see what's coming from backend
+    socket.onAny((eventName, ...args) => {
+      console.log('🔔🔔🔔 Chat.jsx - Socket event received:', eventName, args);
+      // If it's a seen-related event, try to handle it
+      if (eventName.includes('seen') || eventName.includes('read')) {
+        console.log('👁️ Seen-related event detected:', eventName, args);
+      }
+    });
+    
+    console.log('✅ Chat.jsx - All socket listeners set up');
+    console.log('📍 Listening for: user_online, user_offline, newMessage, newGroupMessage, groupMessageSeen, messageSeen, chatListUpdated, groupListUpdated');
+
+    // Cleanup - Remove listeners but DON'T disconnect (shared socket stays connected)
     return () => {
       if (socketRef.current) {
+        console.log('🧹 Chat.jsx: Removing socket listeners (socket stays connected)');
         socketRef.current.off("newMessage", handleNewMessage);
         socketRef.current.off("newGroupMessage", handleNewGroupMessage);
         socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
+        socketRef.current.off("groupMessageSeenUpdated", handleGroupMessageSeen);
+        socketRef.current.off("groupMessageRead", handleGroupMessageSeen);
         socketRef.current.off("messageSeen", handleMessageSeen);
+        socketRef.current.off("user_online", handleUserOnline);
+        socketRef.current.off("user_offline", handleUserOffline);
+        socketRef.current.off("chatListUpdated", handleChatListUpdated);
+        socketRef.current.off("groupListUpdated", handleGroupListUpdated);  // 🔥 Added per guide
+      }
+    };
+  }, [storedUser, selectedUser, selectedGroup, groupMessages]);
+
+  // Handle scroll to load older messages for individual chat
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || !selectedUser?.empId || chatType !== 'individual') return;
+
+    let isLoading = false; // Prevent multiple simultaneous loads
+
+    const handleScroll = () => {
+      // Check if user scrolled near the top (within 200px)
+      if (container.scrollTop < 200 && hasMoreMessages && !loadingOlderMessages && !isLoading) {
+        isLoading = true;
+        // Store current scroll position and first message element
+        const previousScrollHeight = container.scrollHeight;
+        const firstMessage = container.querySelector('[data-message-id]');
+        const firstMessageId = firstMessage?.getAttribute('data-message-id');
+        
+        // Load older messages
+        fetchMessages(selectedUser.empId, true).then(() => {
+          // Restore scroll position after new messages are loaded
+          setTimeout(() => {
+            const newScrollHeight = container.scrollHeight;
+            const scrollDiff = newScrollHeight - previousScrollHeight;
+            container.scrollTop = scrollDiff;
+            isLoading = false;
+          }, 100);
+        }).catch(() => {
+          isLoading = false;
+        });
       }
     };
 
+    container.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
-      socketRef.current.off("newMessage", handleNewMessage);
-      socketRef.current.off("newGroupMessage", handleNewGroupMessage);
-      socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
-      socketRef.current.off("messageSeen", handleMessageSeen);
-      socketRef.current.disconnect();
+      container.removeEventListener('scroll', handleScroll);
+      isLoading = false;
     };
-  }, [storedUser, selectedUser, selectedGroup, groupMessages]);
+  }, [selectedGroup?._id, hasMoreGroupMessages, loadingOlderGroupMessages, chatType, groupMessages.length]);
+
+  // Handle scroll to load older messages for group chat
+  useEffect(() => {
+    const container = groupMessagesContainerRef.current;
+    if (!container || !selectedGroup?._id || chatType !== 'group') return;
+
+    let isLoading = false; // Prevent multiple simultaneous loads
+    let autoLoadTimeout = null; // Track auto-load timeout
+
+    const loadOlderMessages = async () => {
+      if (isLoading || loadingOlderGroupMessages || !hasMoreGroupMessages) return;
+      
+      console.log('📜 Loading older messages...', {
+        hasMoreGroupMessages,
+        loadingOlderGroupMessages,
+        currentMessagesCount: groupMessages.length
+      });
+      
+      isLoading = true;
+      setLoadingOlderGroupMessages(true);
+      
+      // Store current scroll position and first message ID for reference
+      const previousScrollHeight = container.scrollHeight;
+      const firstMessageElement = container.querySelector('[data-message-id]');
+      const firstMessageId = firstMessageElement?.getAttribute('data-message-id');
+      
+      try {
+        await fetchGroupMessages(selectedGroup._id, true);
+        
+        // Restore scroll position after new messages are loaded
+        setTimeout(() => {
+          const newScrollHeight = container.scrollHeight;
+          const scrollDiff = newScrollHeight - previousScrollHeight;
+          
+          // Try to maintain position relative to the first message
+          if (firstMessageId) {
+            const newFirstMessageElement = container.querySelector(`[data-message-id="${firstMessageId}"]`);
+            if (newFirstMessageElement) {
+              newFirstMessageElement.scrollIntoView({ block: 'start', behavior: 'auto' });
+            } else {
+              // Fallback: use scroll difference
+              container.scrollTop = scrollDiff;
+            }
+          } else {
+            container.scrollTop = scrollDiff;
+          }
+          
+          isLoading = false;
+          setLoadingOlderGroupMessages(false);
+          
+          // If there are more messages and user is still near the top, continue loading automatically
+          // This ensures ALL previous messages are loaded when scrolling up
+          setTimeout(() => {
+            // Check current state values (they should be updated by now)
+            const currentHasMore = hasMoreGroupMessages;
+            const currentLoading = loadingOlderGroupMessages;
+            const stillNearTop = container.scrollTop < 500;
+            
+            if (stillNearTop && currentHasMore && !currentLoading && !isLoading) {
+              console.log('📜 Still near top after loading, auto-loading more older messages...', {
+                hasMore: currentHasMore,
+                loading: currentLoading,
+                scrollTop: container.scrollTop
+              });
+              // Use a small delay to ensure state is fully updated
+              setTimeout(() => {
+                loadOlderMessages();
+              }, 100);
+            } else {
+              console.log('📜 Stopped auto-loading:', {
+                stillNearTop,
+                hasMore: currentHasMore,
+                loading: currentLoading,
+                isLoading
+              });
+            }
+          }, 300);
+        }, 150);
+      } catch (err) {
+        console.error('❌ Failed to load older messages:', err);
+        isLoading = false;
+        setLoadingOlderGroupMessages(false);
+      }
+    };
+
+    const handleScroll = () => {
+      const { scrollTop } = container;
+      const distanceFromTop = scrollTop;
+      
+      // Clear any pending auto-load timeout
+      if (autoLoadTimeout) {
+        clearTimeout(autoLoadTimeout);
+        autoLoadTimeout = null;
+      }
+      
+      // Check if user scrolled near the top (within 300px) and has more messages to load
+      if (distanceFromTop < 300 && hasMoreGroupMessages && !loadingOlderGroupMessages && !isLoading) {
+        loadOlderMessages();
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (autoLoadTimeout) clearTimeout(autoLoadTimeout);
+      isLoading = false;
+    };
+  }, [selectedGroup?._id, hasMoreGroupMessages, loadingOlderGroupMessages, chatType, groupMessages.length]);
+
+  // Reset pagination when switching chats
+  useEffect(() => {
+    setMessagesPage(0);
+    setHasMoreMessages(true);
+  }, [selectedUser]);
+
+  useEffect(() => {
+    setGroupMessagesPage(0);
+    setHasMoreGroupMessages(true);
+  }, [selectedGroup]);
 
   // Show skeleton loaders during initial load
   if (loading) {
@@ -2048,26 +4344,27 @@ const ChatPage = () => {
   }
 
   return (
-    <div className="h-[87vh] bg-gray-50 flex relative">
+    <div className="h-[87vh] bg-gray-50 flex relative overflow-hidden">
       {/* In-App Notification */}
       {showInAppNotification && inAppNotificationData && (
-        <div className="fixed top-4 right-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm transform transition-all duration-300 ease-in-out">
+        <div className="fixed top-4 right-4 z-[9999] bg-white border-2 border-blue-200 rounded-lg shadow-2xl p-4 max-w-sm transform transition-all duration-300 ease-in-out">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
               <Bell size={20} className="text-white" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h4 className="font-semibold text-gray-800">{inAppNotificationData.title}</h4>
-              <p className="text-sm text-gray-600 mt-1">{inAppNotificationData.senderName}: {inAppNotificationData.body}</p>
+              <p className="text-sm text-gray-600 mt-1 break-words">{inAppNotificationData.body}</p>
             </div>
             <button 
               onClick={() => {
                 setShowInAppNotification(false);
                 setInAppNotificationData(null);
               }}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-2"
+              title="Close"
             >
-              ×
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -2082,8 +4379,22 @@ const ChatPage = () => {
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
                 <User size={20} className="text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-800">Inhouse Chat</h1>
+              <div className="relative">
+                <h1 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  Inhouse Chat
+                  {/* Red dot indicator for new messages */}
+                  {(() => {
+                    const totalUnreadIndividual = Object.values(newMessagesMap).reduce((sum, count) => sum + count, 0);
+                    const totalUnreadGroup = Object.values(newGroupMessagesMap).reduce((sum, count) => sum + count, 0);
+                    const totalUnread = totalUnreadIndividual + totalUnreadGroup;
+                    return totalUnread > 0 ? (
+                      <span className="relative flex items-center justify-center">
+                        <span className="absolute w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                        <span className="relative w-2 h-2 bg-red-500 rounded-full"></span>
+                      </span>
+                    ) : null;
+                  })()}
+                </h1>
                 <p className="text-gray-500 text-sm">{chatList.length} chats, {groups.length} groups</p>
               </div>
             </div>
@@ -2138,6 +4449,15 @@ const ChatPage = () => {
                       setChatType('individual');
                       fetchMessages(fullUser.empId);
                       setSearchTerm("");
+                      
+                      // Notify NotificationHandler about chat selection change
+                      window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                        detail: { selectedEmpId: fullUser.empId, selectedGroupId: null }
+                      }));
+                      
+                      // Mark messages as seen and clear unread count
+                      await markMessagesAsSeen(user.empId);
+                      clearUnreadCount(user.empId);
                     } catch (err) {
                       console.error("❌ Failed to load full user profile", err);
                     }
@@ -2148,10 +4468,25 @@ const ChatPage = () => {
                     <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                       {user.employeeName?.charAt(0).toUpperCase()}
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                    {onlineUsers.has(user.empId) && (
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white z-0"></div>
+                    )}
+                    {/* Red dot indicator for unread messages - positioned at top-right */}
+                    {newMessagesMap[user.empId] && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white z-20 shadow-lg"></div>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 truncate">{formatEmployeeName(user)}</p>
+                    <div className="flex items-center justify-between">
+                      <p className={`font-semibold truncate ${newMessagesMap[user.empId] ? 'text-gray-900 font-bold' : 'text-gray-800'}`}>
+                        {formatEmployeeName(user)}
+                      </p>
+                      {newMessagesMap[user.empId] && (
+                        <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-semibold min-w-[20px] text-center">
+                          {newMessagesMap[user.empId]}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -2186,17 +4521,18 @@ const ChatPage = () => {
                           );
                           if (res.data && res.data.success) {
                             const groupData = res.data.group;
-                            console.log('✅ Group selected:', groupData.groupName, 'Members:', groupData.members?.length || 0, groupData.members);
                             setSelectedGroup(groupData);
                             setChatType('group');
                             setSelectedUser(null);
                             await fetchGroupMessages(group._id);
-                            // Clear unread count when selecting the group
-                            setNewGroupMessagesMap(prev => {
-                              const copy = { ...prev };
-                              delete copy[group._id];
-                              return copy;
-                            });
+                            // Notify NotificationHandler about chat selection change
+                            window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                              detail: { selectedEmpId: null, selectedGroupId: groupData._id }
+                            }));
+                            
+                            // Backend automatically marks messages as read when fetchGroupMessages is called
+                            // Backend emits groupListUpdated socket event with updated unreadCount
+                            // No need to manually recalculate - socket event handler will update UI
                           }
                         } catch (err) {
                           console.error("❌ Failed to load group", err);
@@ -2213,14 +4549,21 @@ const ChatPage = () => {
                           <Users size={20} />
                         </div>
                         {/* Red dot indicator for unread group messages */}
-                        {newGroupMessagesMap[group._id] && (
-                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
+                        {newGroupMessagesMap[group._id] > 0 && (
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white z-20 shadow-lg"></div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`font-semibold truncate ${selectedGroup?._id === group._id && chatType === 'group' ? 'text-blue-600' : 'text-gray-800'}`}>
-                          {group.groupName}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className={`font-semibold truncate ${newGroupMessagesMap[group._id] > 0 ? 'text-gray-900 font-bold' : selectedGroup?._id === group._id && chatType === 'group' ? 'text-blue-600' : 'text-gray-800'}`}>
+                            {group.groupName}
+                          </p>
+                          {newGroupMessagesMap[group._id] > 0 && (
+                            <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-semibold min-w-[20px] text-center ml-2">
+                              {newGroupMessagesMap[group._id]}
+                            </div>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-400 truncate">
                           {group.lastMessage?.message || "No messages yet"}
                         </p>
@@ -2251,7 +4594,14 @@ const ChatPage = () => {
               ) : chatList.length > 0 ? (
                 <div className="p-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3 py-2">Recent Chats</p>
-                  {chatList.map((user) => (
+                  {chatList.map((user) => {
+                    // Debug: Log unread count for each user
+                    const unreadCount = newMessagesMap[user.empId];
+                    console.log(`🔍 Rendering chat: "${user.employeeName || user.aliasName}" (empId: ${user.empId}), unreadCount: ${unreadCount || 0}, newMessagesMap keys:`, Object.keys(newMessagesMap));
+                    if (unreadCount) {
+                      console.log(`🔴 Chat "${user.employeeName || user.aliasName}" (${user.empId}) has ${unreadCount} unread messages`);
+                    }
+                    return (
                     <div
                       key={user.empId}
                       onClick={async () => {
@@ -2265,6 +4615,10 @@ const ChatPage = () => {
                           setSelectedGroup(null);
                           setChatType('individual');
                           fetchMessages(fullUser.empId);
+                          // Notify NotificationHandler about chat selection change
+                          window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                            detail: { selectedEmpId: fullUser.empId, selectedGroupId: null }
+                          }));
                           
                           // Mark messages as seen on server and clear unread count
                           await markMessagesAsSeen(user.empId);
@@ -2284,29 +4638,46 @@ const ChatPage = () => {
                         <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                           {user.employeeName?.charAt(0).toUpperCase()}
                         </div>
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
-                        {/* Red dot indicator for unread messages */}
-                        {newMessagesMap[user.empId] && (
-                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
+                        {onlineUsers.has(user.empId) && (
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white z-0"></div>
                         )}
+                        {/* Red dot indicator for unread messages - positioned at top-right */}
+                        {(() => {
+                          const unreadCount = newMessagesMap[user.empId];
+                          const hasUnread = unreadCount > 0;
+                          if (hasUnread) {
+                            console.log(`✅ Showing red dot for ${user.employeeName} (${user.empId}) - count: ${unreadCount}`);
+                          }
+                          return hasUnread ? (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white z-20 shadow-lg"></div>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <p className={`font-semibold truncate ${newMessagesMap[user.empId] ? 'text-gray-900 font-bold' : 'text-gray-800'}`}>
                             {formatEmployeeName(user)}
                           </p>
-                          {newMessagesMap[user.empId] && (
-                            <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-semibold min-w-[20px] text-center">
-                              {newMessagesMap[user.empId]}
-                            </div>
-                          )}
+                          {(() => {
+                            const unreadCount = newMessagesMap[user.empId];
+                            const hasUnread = unreadCount > 0;
+                            if (hasUnread) {
+                              console.log(`✅ Showing badge for ${user.employeeName} (${user.empId}) - count: ${unreadCount}`);
+                            }
+                            return hasUnread ? (
+                              <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-semibold min-w-[20px] text-center ml-2">
+                                {unreadCount}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                         <p className="text-xs text-gray-400 truncate">
                           {user.lastMessage || "No messages yet"}
                         </p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : null}
 
@@ -2324,7 +4695,7 @@ const ChatPage = () => {
       </div>
 
       {/* Right Side - Chat Area */}
-      <div className="flex-1 flex flex-col bg-white">
+      <div className="flex-1 flex flex-col bg-white min-w-0 overflow-hidden">
         {selectedGroup && chatType === 'group' ? (
           <>
             {/* Group Chat Header */}
@@ -2347,10 +4718,15 @@ const ChatPage = () => {
                 >
                   <MoreVertical size={20} className="text-gray-600" />
                   {showGroupMenu && (
-                    <div className="absolute right-0 top-12 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <div 
+                      className="absolute right-0 top-12 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-[100]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {selectedGroup.adminEmpIds?.includes(storedUser?.empId) && (
                         <button 
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
                             setShowGroupMenu(false);
                             setShowAddMembersModal(true);
                           }}
@@ -2361,9 +4737,22 @@ const ChatPage = () => {
                         </button>
                       )}
                       <button 
-                        onClick={() => {
-                          setShowGroupMenu(false);
-                          setShowGroupInfoModal(true);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          console.log('Group Info clicked, selectedGroup:', selectedGroup);
+                          if (selectedGroup) {
+                            console.log('Opening Group Info Modal');
+                            // Open modal first, then close menu to avoid React batching issues
+                            setShowGroupInfoModal(true);
+                            // Use setTimeout to ensure menu closes after modal state is set
+                            setTimeout(() => {
+                              setShowGroupMenu(false);
+                            }, 10);
+                            console.log('State updated - showGroupInfoModal should be true');
+                          } else {
+                            console.error('selectedGroup is null/undefined');
+                          }
                         }}
                         className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                       >
@@ -2413,8 +4802,42 @@ const ChatPage = () => {
             </div>
 
             {/* Group Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
-              <div className="space-y-2">
+            <div 
+              ref={groupMessagesContainerRef} 
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 relative"
+              style={{
+                backgroundColor: '#EFEAE2',
+                backgroundImage: `
+                  repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px),
+                  repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px)
+                `,
+                backgroundAttachment: 'fixed'
+              }}
+            >
+              {/* WhatsApp-style emoji pattern overlay */}
+              <div 
+                className="absolute inset-0 pointer-events-none z-0"
+                style={{
+                  backgroundImage: `
+                    radial-gradient(circle at 15% 25%, rgba(212,212,212,0.08) 0%, transparent 25%),
+                    radial-gradient(circle at 85% 75%, rgba(212,212,212,0.08) 0%, transparent 25%),
+                    radial-gradient(circle at 50% 50%, rgba(212,212,212,0.06) 0%, transparent 30%),
+                    radial-gradient(circle at 30% 70%, rgba(212,212,212,0.07) 0%, transparent 20%),
+                    radial-gradient(circle at 70% 30%, rgba(212,212,212,0.07) 0%, transparent 20%)
+                  `,
+                  backgroundSize: '400px 400px',
+                  backgroundAttachment: 'fixed'
+                }}
+              />
+              <div className="space-y-2 relative z-10">
+                {loadingOlderGroupMessages && (
+                  <div className="flex justify-center py-2">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading older messages...</span>
+                    </div>
+                  </div>
+                )}
                 {loadingGroupMessages ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <div className="flex flex-col items-center gap-4">
@@ -2450,36 +4873,146 @@ const ChatPage = () => {
                           </div>
                         )}
                         <div 
-                          ref={el => groupMessageRefs.current[msg._id] = el}
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}
+                          ref={el => {
+                            if (el) {
+                              groupMessageRefs.current[msg._id] = el;
+                              el.setAttribute('data-message-id', msg._id || msg.id || '');
+                            }
+                          }}
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 group ${
+                            highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
+                          }`}
                         >
-                          <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
+                          <div className={`flex max-w-[75%] min-w-0 ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
-                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Group profile avatar clicked!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0 cursor-pointer hover:scale-110 transition-transform z-10"
+                                title="Click to reply"
+                              >
                                 {msg.senderName?.charAt(0).toUpperCase() || 'U'}
-                              </div>
+                              </button>
                             )}
-                            <div className="flex flex-col">
+                            {isSentByMe && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Reply button clicked for own group message!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-8 h-8 opacity-0 group-hover:opacity-100 flex items-center justify-center text-gray-500 hover:text-blue-500 hover:bg-gray-100 rounded-full transition-all duration-200 flex-shrink-0 cursor-pointer z-10"
+                                title="Reply to this message"
+                              >
+                                <Reply size={16} />
+                              </button>
+                            )}
+                            <div className="flex flex-col min-w-0 flex-1">
                               {!isSentByMe && (
                                 <span className="text-xs text-gray-600 font-medium mb-1 px-1">
                                   {msg.senderAliasName ? `${msg.senderName}/${msg.senderAliasName}` : (msg.senderName || 'Unknown')}
                                 </span>
                               )}
                               <div
-                                className={`px-4 py-3 rounded-2xl shadow-md ${
+                                className={`px-4 py-3 rounded-2xl shadow-md min-w-0 max-w-full ${
                                   isSentByMe
                                     ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-md"
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
+                                {/* Show replied message if exists - WhatsApp style */}
+                                {msg.replyTo && (() => {
+                                  // Handle replyTo as object with message, object with id, or string ID
+                                  let repliedMsg = null;
+                                  let replyToId = null;
+                                  
+                                  if (typeof msg.replyTo === 'object') {
+                                    if (msg.replyTo.message) {
+                                      // Full message object
+                                      repliedMsg = msg.replyTo;
+                                      replyToId = msg.replyTo._id || msg.replyTo.id;
+                                    } else {
+                                      // Object with just ID
+                                      replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                      repliedMsg = groupMessages.find(m => String(m._id || m.id) === String(replyToId));
+                                    }
+                                  } else {
+                                    // String ID
+                                    replyToId = msg.replyTo;
+                                    repliedMsg = groupMessages.find(m => String(m._id || m.id) === String(replyToId));
+                                  }
+                                  return repliedMsg ? (
+                                    <div 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        scrollToRepliedMessageFromBubble(replyToId);
+                                      }}
+                                      className={`mb-2 pl-3 pr-2 py-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity min-w-0 max-w-full overflow-hidden ${
+                                        isSentByMe 
+                                          ? 'bg-white/15' 
+                                          : 'bg-gray-100'
+                                      }`} 
+                                      style={{
+                                        borderLeft: '3px solid #3b82f6'
+                                      }}
+                                      title="Click to jump to original message"
+                                    >
+                                      <div className={`text-xs font-semibold mb-0.5 truncate ${
+                                        isSentByMe ? 'text-white/90' : 'text-gray-700'
+                                      }`}>
+                                        {repliedMsg.senderEmpId === storedUser?.empId ? 'You' : (repliedMsg.senderName || 'User')}
+                                      </div>
+                                      <div className={`text-xs break-words whitespace-pre-wrap line-clamp-2 ${
+                                        isSentByMe ? 'text-white/70' : 'text-gray-600'
+                                      }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                                        {(() => {
+                                          // Handle different message types
+                                          if (repliedMsg.message) {
+                                            // Check if it's a file/image/audio message
+                                            if (repliedMsg.message.includes('Sent an image:')) {
+                                              return '📷 Image';
+                                            } else if (repliedMsg.message.includes('Sent a file:')) {
+                                              return '📎 File';
+                                            } else if (repliedMsg.message.includes('Sent an audio:')) {
+                                              return '🎤 Audio';
+                                            }
+                                            // Regular text message - show content (may include caption)
+                                            const text = repliedMsg.message.split('\n')[0]; // Get first line (filename or text)
+                                            return text || repliedMsg.text || repliedMsg.content || 'Message';
+                                          }
+                                          return repliedMsg.text || repliedMsg.content || 'Message';
+                                        })()}
+                                      </div>
+                                    </div>
+                                  ) : null;
+                                })()}
                                 {/* Show audio messages FIRST */}
                                 {(msg.audio || (msg.message && msg.message.includes('Sent an audio:'))) && msg._id && (
                                   <div className="mb-2">
                                     <AudioPlayer
                                       src={msg.audio || `${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
                                       isMyMessage={isSentByMe}
-                                      fileName={msg.message?.replace('Sent an audio: ', '') || 'Audio message'}
+                                      fileName={(() => {
+                                        if (!msg.message || !msg.message.includes('Sent an audio: ')) return 'Audio message';
+                                        let fileName = msg.message.split('Sent an audio: ')[1];
+                                        // Get just the filename (before newline if caption exists)
+                                        return fileName.split('\n')[0].trim();
+                                      })()}
                                       messageId={msg._id}
+                                      caption={(() => {
+                                        // Extract caption if it exists in the message (after newline)
+                                        if (msg.message && msg.message.includes('\n')) {
+                                          return msg.message.split('\n').slice(1).join('\n').trim();
+                                        }
+                                        return null;
+                                      })()}
                                     />
                                   </div>
                                 )}
@@ -2487,7 +5020,17 @@ const ChatPage = () => {
                                 {/* Show images - exclude audio messages */}
                                 {!msg.audio && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:') && msg._id && (
                                   (() => {
-                                    const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
+                                    // Extract filename - handle case where caption is on new line
+                                    let fileName = msg.message;
+                                    if (fileName.includes('Sent an image: ')) {
+                                      fileName = fileName.split('Sent an image: ')[1];
+                                    } else if (fileName.includes('Sent a file: ')) {
+                                      fileName = fileName.split('Sent a file: ')[1];
+                                    }
+                                    // Get just the filename (before newline if caption exists)
+                                    fileName = fileName.split('\n')[0].trim();
+                                    // Extract caption if it exists (after newline)
+                                    const caption = msg.message.includes('\n') ? msg.message.split('\n').slice(1).join('\n').trim() : '';
                                     const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
                                     if (isImage) {
                                       return (
@@ -2496,9 +5039,16 @@ const ChatPage = () => {
                                             src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => openImageModal(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, fileName)}
                                           />
-                                          <p className={`text-xs mt-1 ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>{fileName}</p>
+                                          {caption && (
+                                            <p className={`text-sm mt-2 whitespace-pre-wrap font-medium leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-900'}`} style={{
+                                              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                              letterSpacing: '0.01em',
+                                              WebkitFontSmoothing: 'antialiased',
+                                              MozOsxFontSmoothing: 'grayscale'
+                                            }}>{caption}</p>
+                                          )}
                                         </div>
                                       );
                                     } else {
@@ -2521,13 +5071,28 @@ const ChatPage = () => {
                                               </a>
                                             </div>
                                           </div>
+                                          {caption && (
+                                            <p className={`text-sm mt-2 whitespace-pre-wrap font-medium leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-900'}`} style={{
+                                              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                              letterSpacing: '0.01em',
+                                              WebkitFontSmoothing: 'antialiased',
+                                              MozOsxFontSmoothing: 'grayscale'
+                                            }}>{caption}</p>
+                                          )}
                                         </div>
                                       );
                                     }
                                   })()
                                 )}
                                 {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
-                                  <div className={`text-sm leading-relaxed ${isSentByMe ? 'text-white' : 'text-gray-800'}`}>
+                                  <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words font-medium ${isSentByMe ? 'text-white' : 'text-gray-900'}`} style={{ 
+                                    wordBreak: 'break-word', 
+                                    overflowWrap: 'anywhere',
+                                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                    letterSpacing: '0.01em',
+                                    WebkitFontSmoothing: 'antialiased',
+                                    MozOsxFontSmoothing: 'grayscale'
+                                  }}>
                                     {(() => {
                                       // Highlight mentions in message
                                       const message = msg.message || '';
@@ -2586,49 +5151,75 @@ const ChatPage = () => {
                                     ))}
                                   </div>
                                 )}
-                                <div className={`flex items-center justify-end mt-2 gap-1`}>
+                                <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
                                   <span className={`text-xs ${isSentByMe ? 'text-blue-100' : 'text-gray-500'}`}>
                                     {formatTime(msg.timestamp)}
                                   </span>
                                   {isSentByMe && (
-                                    <button
-                                      onClick={() => msg._id && fetchSeenBy(msg._id, true)}
-                                      className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
-                                      title="Click to see who has seen this message"
-                                    >
-                                      <CheckCheck size={12} className="text-blue-100" />
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => msg._id && fetchSeenBy(msg._id, true)}
+                                        className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
+                                        title={msg.seenCount > 0 || (msg.seenBy && msg.seenBy.length > 0) ? `Seen by ${msg.seenCount || msg.seenBy?.length || 0} ${(msg.seenCount || msg.seenBy?.length || 0) === 1 ? 'person' : 'people'}` : "Click to see who has seen this message"}
+                                      >
+                                        <span className="text-xs">
+                                          {(() => {
+                                            // Per docs: check seenBy array and seenCount
+                                            const seenByArray = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+                                            const seenCount = msg.seenCount || seenByArray.length;
+                                            const isSeen = seenCount > 0 || seenByArray.length > 0;
+                                            
+                                            return isSeen ? (
+                                              <CheckCheck size={14} className="text-blue-100" />
+                                            ) : (
+                                              <Check size={14} className="text-blue-100 opacity-70" />
+                                            );
+                                          })()}
+                                        </span>
+                                      </button>
+                                      {/* Show seen status text - per docs: seenBy array with { empId, employeeName, aliasName, seenAt } */}
+                                      {/* Always show status for your messages (like individual chats) */}
+                                      {(() => {
+                                        // Per docs: check seenBy array and seenCount
+                                        const seenByArray = Array.isArray(msg.seenBy) ? msg.seenBy : [];
+                                        const seenCount = msg.seenCount || seenByArray.length;
+                                        const hasSeenBy = seenByArray.length > 0;
+                                        const isSeen = seenCount > 0 || hasSeenBy;
+                                        
+                                        // If message has been seen and we have seenBy array, show names
+                                        if (isSeen && hasSeenBy) {
+                                          return (
+                                            <span className="text-xs italic text-white opacity-90">
+                                              Seen by {seenByArray.slice(0, 2).map((user, idx) => (
+                                                <span key={user.empId || idx}>
+                                                  {user.aliasName || user.employeeName}
+                                                  {idx < Math.min(seenByArray.length, 2) - 1 && ', '}
+                                                </span>
+                                              ))}
+                                              {seenByArray.length > 2 && ` +${seenByArray.length - 2} more`}
+                                            </span>
+                                          );
+                                        }
+                                        
+                                        // If message has been seen but no array, show count
+                                        if (isSeen && seenCount > 0) {
+                                          return (
+                                            <span className="text-xs italic text-white opacity-90">
+                                              Seen by {seenCount} {seenCount === 1 ? 'person' : 'people'}
+                                            </span>
+                                          );
+                                        }
+                                        
+                                        // Always show "Sent" if not seen yet (like individual chats)
+                                        return (
+                                          <span className="text-xs italic text-white opacity-75">
+                                            Sent
+                                          </span>
+                                        );
+                                      })()}
+                                    </div>
                                   )}
                                 </div>
-                                {/* Show seen status for messages sent by current user */}
-                                {isSentByMe && (
-                                  <div className={`mt-2 flex flex-col gap-1 ${isSentByMe ? 'items-end' : 'items-start'}`}>
-                                    {msg.seenCount > 0 ? (
-                                      <div className="flex flex-col items-end gap-1">
-                                        <span className={`text-xs font-semibold ${isSentByMe ? 'text-blue-100' : 'text-gray-600'}`}>
-                                          Seen by {msg.seenCount} {msg.seenCount === 1 ? 'person' : 'people'}
-                                        </span>
-                                        {msg.seenBy && msg.seenBy.length > 0 && (
-                                          <div className={`text-xs ${isSentByMe ? 'text-blue-50' : 'text-gray-500'} flex flex-wrap gap-1 justify-end max-w-full`}>
-                                            {msg.seenBy.slice(0, 3).map((user, idx) => (
-                                              <span key={user.empId || user.seenByEmpId || idx} className="italic">
-                                                {user.aliasName || user.employeeName || user.name}
-                                                {idx < Math.min(msg.seenBy.length, 3) - 1 && ','}
-                                              </span>
-                                            ))}
-                                            {msg.seenBy.length > 3 && (
-                                              <span className="italic">+{msg.seenBy.length - 3} more</span>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <span className={`text-xs italic ${isSentByMe ? 'text-blue-50' : 'text-gray-500'}`}>
-                                        Sent
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </div>
@@ -2643,14 +5234,50 @@ const ChatPage = () => {
 
             {/* Group Message Input */}
             <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
-              <div className="flex items-end gap-3">
-                <div className="flex-1 relative">
-                  <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 transition-all shadow-sm">
+              {/* Reply Preview - WhatsApp style */}
+              {replyingTo && (
+                <div 
+                  className="mb-2 mx-2 px-3 py-2 rounded-lg flex items-start justify-between bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors min-w-0 max-w-full overflow-hidden" 
+                  style={{
+                    borderLeft: '4px solid #25D366'
+                  }}
+                  onClick={(e) => {
+                    // Don't scroll if clicking the X button
+                    if (e.target.closest('button')) return;
+                    scrollToRepliedMessage();
+                  }}
+                >
+                  <div className="flex-1 min-w-0 pr-2 overflow-hidden">
+                    <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                      <span className="text-xs font-semibold truncate" style={{ color: '#075E54' }}>
+                        {replyingTo.senderEmpId === storedUser?.empId ? 'You' : (replyingTo.senderName || replyingTo.senderAliasName || 'User')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed break-words whitespace-pre-wrap line-clamp-3" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                      {replyingTo.message || replyingTo.text || replyingTo.content}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCancelReply();
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 rounded-full hover:bg-gray-200"
+                    type="button"
+                    title="Cancel reply"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-end gap-3 min-w-0">
+                <div className="flex-1 relative min-w-0">
+                  <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 transition-all shadow-sm min-w-0 overflow-hidden">
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile || isSendingMessage}
                       className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Attach file"
+                      title="Attach file or audio"
                     >
                       <Paperclip size={20} className="text-gray-500" />
                     </button>
@@ -2663,8 +5290,15 @@ const ChatPage = () => {
                       onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
-                      style={{ minHeight: '20px', maxHeight: '400px' }}
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-900 disabled:opacity-50 overflow-y-auto overflow-x-hidden min-w-0 font-medium leading-relaxed"
+                      style={{ 
+                        minHeight: '20px', 
+                        maxHeight: '400px',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        letterSpacing: '0.01em',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale'
+                      }}
                     />
                     
                     {/* Mention Dropdown */}
@@ -2732,12 +5366,21 @@ const ChatPage = () => {
                       <Image size={20} className="text-gray-500" />
                     </button>
                     <button 
-                      onClick={() => audioInputRef.current?.click()}
+                      ref={groupEmojiButtonRef}
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                       disabled={uploadingFile || isSendingMessage}
-                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Send audio"
+                      className="relative p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Add emoji"
                     >
-                      <Mic size={20} className="text-gray-500" />
+                      <Smile size={20} className="text-gray-500" />
+                      {showEmojiPicker && (
+                        <EmojiPicker
+                          onEmojiSelect={insertEmoji}
+                          onClose={() => setShowEmojiPicker(false)}
+                          position="top"
+                          buttonRef={groupEmojiButtonRef}
+                        />
+                      )}
                     </button>
                     {input.trim() ? (
                       <button
@@ -2753,11 +5396,11 @@ const ChatPage = () => {
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
-                    accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.ppt,.pptx"
+                    accept=".pdf,.xlsx,.xls,.xlsm,.xlsb,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,audio/*"
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
-                        handleGroupFileUpload(file);
+                        handleFileSelect(file);
                       }
                       e.target.value = '';
                     }}
@@ -2766,11 +5409,11 @@ const ChatPage = () => {
                     ref={imageInputRef}
                     type="file"
                     className="hidden"
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.png,image/jpeg,image/jpg,image/png"
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
-                        handleGroupImageUpload(file);
+                        handleImageSelect(file);
                       }
                       e.target.value = '';
                     }}
@@ -2779,11 +5422,11 @@ const ChatPage = () => {
                     ref={audioInputRef}
                     type="file"
                     className="hidden"
-                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac"
+                    accept=".mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/aac,audio/webm,audio/flac"
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
-                        handleGroupFileUpload(file);
+                        handleAudioSelect(file);
                       }
                       e.target.value = '';
                     }}
@@ -2801,14 +5444,17 @@ const ChatPage = () => {
                   <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                     {selectedUser.employeeName?.charAt(0).toUpperCase()}
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                  {onlineUsers.has(selectedUser.empId) && (
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                  )}
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-800">{formatEmployeeName(selectedUser)}</h2>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  {onlineUsers.has(selectedUser.empId) ? (
                     <p className="text-sm text-gray-500">Online</p>
-                  </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Offline</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -2838,8 +5484,42 @@ const ChatPage = () => {
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
-              <div className="space-y-2">
+            <div 
+              ref={messagesContainerRef} 
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 relative"
+              style={{
+                backgroundColor: '#EFEAE2',
+                backgroundImage: `
+                  repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px),
+                  repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px)
+                `,
+                backgroundAttachment: 'fixed'
+              }}
+            >
+              {/* WhatsApp-style emoji pattern overlay */}
+              <div 
+                className="absolute inset-0 pointer-events-none z-0"
+                style={{
+                  backgroundImage: `
+                    radial-gradient(circle at 15% 25%, rgba(212,212,212,0.08) 0%, transparent 25%),
+                    radial-gradient(circle at 85% 75%, rgba(212,212,212,0.08) 0%, transparent 25%),
+                    radial-gradient(circle at 50% 50%, rgba(212,212,212,0.06) 0%, transparent 30%),
+                    radial-gradient(circle at 30% 70%, rgba(212,212,212,0.07) 0%, transparent 20%),
+                    radial-gradient(circle at 70% 30%, rgba(212,212,212,0.07) 0%, transparent 20%)
+                  `,
+                  backgroundSize: '400px 400px',
+                  backgroundAttachment: 'fixed'
+                }}
+              />
+              <div className="space-y-2 relative z-10">
+                {loadingOlderMessages && (
+                  <div className="flex justify-center py-2">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading older messages...</span>
+                    </div>
+                  </div>
+                )}
                 {loadingMessages ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <div className="flex flex-col items-center gap-4">
@@ -2877,13 +5557,45 @@ const ChatPage = () => {
                           </div>
                         )}
                         <div
-                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3`}
+                          ref={el => {
+                            if (el) {
+                              el.setAttribute('data-message-id', msg._id || msg.id || '');
+                            }
+                          }}
+                          className={`flex ${isSentByMe ? "justify-end" : "justify-start"} mb-3 transition-all duration-300 group ${
+                            highlightedMessageId === (msg._id || msg.id) ? 'ring-2 ring-yellow-400 ring-offset-2 rounded-lg' : ''
+                          }`}
                         >
-                          <div className={`flex max-w-[75%] ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
+                          <div className={`flex max-w-[75%] min-w-0 ${isSentByMe ? "flex-row-reverse" : "flex-row"} items-end gap-2`}>
                             {!isSentByMe && (
-                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Profile avatar clicked!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md flex-shrink-0 cursor-pointer hover:scale-110 transition-transform z-10"
+                                title="Click to reply"
+                              >
                                 {selectedUser.employeeName?.charAt(0).toUpperCase()}
-                              </div>
+                              </button>
+                            )}
+                            {isSentByMe && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Reply button clicked for own message!', msg);
+                                  handleReplyToMessage(msg);
+                                }}
+                                className="w-8 h-8 opacity-0 group-hover:opacity-100 flex items-center justify-center text-gray-500 hover:text-blue-500 hover:bg-gray-100 rounded-full transition-all duration-200 flex-shrink-0 cursor-pointer z-10"
+                                title="Reply to this message"
+                              >
+                                <Reply size={16} />
+                              </button>
                             )}
                             <div className="flex flex-col">
                               {!isSentByMe && (
@@ -2892,161 +5604,276 @@ const ChatPage = () => {
                                 </span>
                               )}
                               <div
-                                className={`px-4 py-3 rounded-2xl shadow-md ${
+                                className={`px-4 py-3 rounded-2xl shadow-md min-w-0 max-w-full ${
                                   isSentByMe
                                     ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-md"
                                     : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                                 }`}
                               >
+                                {/* Show replied message if exists - WhatsApp style */}
+                                {msg.replyTo && (() => {
+                                  // Handle replyTo as object with message, object with id, or string ID
+                                  let repliedMsg = null;
+                                  let replyToId = null;
+                                  
+                                  if (typeof msg.replyTo === 'object') {
+                                    if (msg.replyTo.message) {
+                                      // Full message object
+                                      repliedMsg = msg.replyTo;
+                                      replyToId = msg.replyTo._id || msg.replyTo.id;
+                                    } else {
+                                      // Object with just ID
+                                      replyToId = msg.replyTo._id || msg.replyTo.id || msg.replyTo;
+                                      repliedMsg = messages.find(m => String(m._id || m.id) === String(replyToId));
+                                    }
+                                  } else {
+                                    // String ID
+                                    replyToId = msg.replyTo;
+                                    repliedMsg = messages.find(m => String(m._id || m.id) === String(replyToId));
+                                  }
+                                  return repliedMsg ? (
+                                    <div 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        scrollToRepliedMessageFromBubble(replyToId);
+                                      }}
+                                      className={`mb-2 pl-3 pr-2 py-1.5 rounded cursor-pointer hover:opacity-80 transition-opacity min-w-0 max-w-full overflow-hidden ${
+                                        isSentByMe 
+                                          ? 'bg-white/15' 
+                                          : 'bg-gray-100'
+                                      }`} 
+                                      style={{
+                                        borderLeft: '3px solid #3b82f6'
+                                      }}
+                                      title="Click to jump to original message"
+                                    >
+                                      <div className={`text-xs font-semibold mb-0.5 truncate ${
+                                        isSentByMe ? 'text-white/90' : 'text-gray-700'
+                                      }`}>
+                                        {repliedMsg.senderEmpId === storedUser?.empId ? 'You' : (repliedMsg.senderName || 'User')}
+                                      </div>
+                                      <div className={`text-xs break-words whitespace-pre-wrap line-clamp-2 ${
+                                        isSentByMe ? 'text-white/70' : 'text-gray-600'
+                                      }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                                        {(() => {
+                                          // Handle different message types
+                                          if (repliedMsg.message) {
+                                            // Check if it's a file/image/audio message
+                                            if (repliedMsg.message.includes('Sent an image:')) {
+                                              return '📷 Image';
+                                            } else if (repliedMsg.message.includes('Sent a file:')) {
+                                              return '📎 File';
+                                            } else if (repliedMsg.message.includes('Sent an audio:')) {
+                                              return '🎤 Audio';
+                                            }
+                                            // Regular text message - show content (may include caption)
+                                            const text = repliedMsg.message.split('\n')[0]; // Get first line (filename or text)
+                                            return text || repliedMsg.text || repliedMsg.content || 'Message';
+                                          }
+                                          return repliedMsg.text || repliedMsg.content || 'Message';
+                                        })()}
+                                      </div>
+                                    </div>
+                                  ) : null;
+                                })()}
                                 {/* Show audio messages FIRST */}
                                 {(msg.audio || (msg.message && msg.message.includes('Sent an audio:'))) && msg._id && (
                                   <div className="mb-2">
                                     <AudioPlayer
                                       src={msg.audio || `${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
                                       isMyMessage={isSentByMe}
-                                      fileName={msg.message?.replace('Sent an audio: ', '') || 'Audio message'}
+                                      fileName={(() => {
+                                        if (!msg.message || !msg.message.includes('Sent an audio: ')) return 'Audio message';
+                                        let fileName = msg.message.split('Sent an audio: ')[1];
+                                        // Get just the filename (before newline if caption exists)
+                                        return fileName.split('\n')[0].trim();
+                                      })()}
                                       messageId={msg._id}
+                                      caption={(() => {
+                                        // Extract caption if it exists in the message (after newline)
+                                        if (msg.message && msg.message.includes('\n')) {
+                                          return msg.message.split('\n').slice(1).join('\n').trim();
+                                        }
+                                        return null;
+                                      })()}
                                     />
                                   </div>
                                 )}
                                 
-                                {msg.imageUrl && (
-                                  <div className="mb-2">
-                                    <img 
-                                      src={msg.imageUrl} 
-                                      alt="Shared image" 
-                                      className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                      onClick={() => window.open(msg.imageUrl, '_blank')}
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">{msg.fileName}</p>
-                                  </div>
-                                )}
-                                {/* Show images using message ID if no imageUrl - exclude audio messages */}
-                                {!msg.imageUrl && !msg.audio && msg.message && msg.message.includes('Sent a file:') && !msg.message.includes('Sent an audio:') && msg._id && (
+                                {/* Show images - consolidated to prevent duplicates */}
+                                {!msg.audio && msg._id && (
                                   (() => {
-                                    const fileName = msg.message.replace('Sent a file: ', '');
-                                    const file = files.find(f => f.originalName === fileName || f.fileName === fileName);
-                                    if (file && file.fileType === 'image') {
+                                    // First priority: use imageUrl if available
+                                    if (msg.imageUrl) {
                                       return (
                                         <div className="mb-2">
                                           <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                            src={msg.imageUrl} 
                                             alt="Shared image" 
                                             className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
+                                            onClick={() => openImageModal(msg.imageUrl, msg.fileName)}
                                           />
-                                          <p className="text-xs text-gray-500 mt-1">{fileName}</p>
+                                          <p className="text-xs text-gray-500 mt-1">{msg.fileName}</p>
                                         </div>
                                       );
                                     }
-                                    return null;
-                                  })()
-                                )}
-                                
-                                {/* Show images for any file message with _id */}
-                                {!msg.imageUrl && !msg.audio && msg._id && msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:') && (
-                                  (() => {
-                                    const fileName = msg.message.replace('Sent an image: ', '').replace('Sent a file: ', '');
-                                    // Check if it's an image based on file extension
-                                    const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
-                                    if (isImage) {
-                                      return (
-                                        <div className="mb-2">
-                                          <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
-                                            alt="Shared image" 
-                                            className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
-                                          />
-                                          <p className="text-xs text-gray-500 mt-1">{fileName}</p>
-                                        </div>
-                                      );
+                                    
+                                    // Second priority: check if message indicates an image/file
+                                    if (msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:')) && !msg.message.includes('Sent an audio:')) {
+                                      // Extract filename - handle case where caption is on new line
+                                      let fileName = msg.message;
+                                      if (fileName.includes('Sent an image: ')) {
+                                        fileName = fileName.split('Sent an image: ')[1];
+                                      } else if (fileName.includes('Sent a file: ')) {
+                                        fileName = fileName.split('Sent a file: ')[1];
+                                      }
+                                      // Get just the filename (before newline if caption exists)
+                                      fileName = fileName.split('\n')[0].trim();
+                                      // Extract caption if it exists (after newline)
+                                      const caption = msg.message.includes('\n') ? msg.message.split('\n').slice(1).join('\n').trim() : '';
+                                      
+                                      // Check if it's an image by file extension
+                                      const isImageByExtension = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
+                                      
+                                      // Also check files array if available
+                                      const file = files?.find(f => (f.originalName === fileName || f.fileName === fileName) && f.fileType === 'image');
+
+                                      if (isImageByExtension || file) {
+                                        return (
+                                          <div className="mb-2">
+                                            <img
+                                              src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
+                                              alt="Shared image"
+                                              className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                              onClick={() => openImageModal(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, fileName)}
+                                            />
+                                            {caption && (
+                                              <p className="text-sm mt-2 whitespace-pre-wrap text-gray-900 font-medium leading-relaxed" style={{
+                                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                                letterSpacing: '0.01em',
+                                                WebkitFontSmoothing: 'antialiased',
+                                                MozOsxFontSmoothing: 'grayscale'
+                                              }}>{caption}</p>
+                                            )}
+                                          </div>
+                                        );
+                                      }
                                     }
-                                    return null;
-                                  })()
-                                )}
-                                {/* Show images from API if no imageUrl in message */}
-                                {!msg.imageUrl && !msg.fileUrl && msg.message && msg.message.includes('Sent a file:') && (
-                                  (() => {
-                                    const fileName = msg.message.replace('Sent a file: ', '');
-                                    const file = files.find(f => f.originalName === fileName || f.fileName === fileName);
-                                    if (file && file.fileType === 'image') {
-                                      return (
-                                        <div className="mb-2">
-                                          <img 
-                                            src={`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`}
-                                            alt="Shared image" 
-                                            className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank')}
-                                          />
-                                          <p className="text-xs text-gray-500 mt-1">{file.originalName}</p>
-                                        </div>
-                                      );
-                                    }
+                                    
                                     return null;
                                   })()
                                 )}
                                 {msg.fileUrl && !msg.imageUrl && (
-                                  <div className="mb-2 p-3 bg-gray-100 rounded-lg border border-gray-200">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                                        <Paperclip size={20} className="text-white" />
+                                  <div className="mb-2">
+                                    <div className="p-3 bg-gray-100 rounded-lg border border-gray-200">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                                          <Paperclip size={20} className="text-white" />
+                                        </div>
+                                        <div className="flex-1">
+                                          <p className="text-sm font-medium text-gray-800">{msg.fileName || 'Download file'}</p>
+                                          <p className="text-xs text-gray-500">Click to download</p>
+                                        </div>
+                                        <a 
+                                          href={msg.fileUrl} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                          download
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                            <polyline points="7,10 12,15 17,10"></polyline>
+                                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                                          </svg>
+                                        </a>
                                       </div>
-                                      <div className="flex-1">
-                                        <p className="text-sm font-medium text-gray-800">{msg.fileName || 'Download file'}</p>
-                                        <p className="text-xs text-gray-500">Click to download</p>
-                                      </div>
-                                      <a 
-                                        href={msg.fileUrl} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                                        download
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                          <polyline points="7,10 12,15 17,10"></polyline>
-                                          <line x1="12" y1="15" x2="12" y2="3"></line>
-                                        </svg>
-                                      </a>
                                     </div>
+                                    {(() => {
+                                      // Extract caption if it exists in the message
+                                      if (msg.message && msg.message.includes('\n')) {
+                                        const caption = msg.message.split('\n').slice(1).join('\n').trim();
+                                        if (caption) {
+                                          return <p className="text-sm mt-2 whitespace-pre-wrap text-gray-900 font-medium leading-relaxed" style={{
+                                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                            letterSpacing: '0.01em',
+                                            WebkitFontSmoothing: 'antialiased',
+                                            MozOsxFontSmoothing: 'grayscale'
+                                          }}>{caption}</p>;
+                                        }
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 )}
                                 
                                 {/* Show files from API if no fileUrl in message */}
                                 {!msg.fileUrl && !msg.imageUrl && !msg.audio && msg.message && msg.message.includes('Sent a file:') && !msg.message.includes('Sent an audio:') && (
-                                  <div className="mb-2 p-3 bg-gray-100 rounded-lg border border-gray-200">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                                        <Paperclip size={20} className="text-white" />
-                                      </div>
-                                      <div className="flex-1">
-                                        <p className="text-sm font-medium text-gray-800">{msg.message.replace('Sent a file: ', '')}</p>
-                                        <p className="text-xs text-gray-500">File available for download</p>
-                                      </div>
-                                      <button 
-                                        onClick={() => {
-                                          // Download using message ID
-                                          if (msg._id) {
+                                  <div className="mb-2">
+                                    <div className="p-3 bg-gray-100 rounded-lg border border-gray-200">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                                          <Paperclip size={20} className="text-white" />
+                                        </div>
+                                        <div className="flex-1">
+                                          {(() => {
+                                            // Extract filename - handle case where caption is on new line
+                                            let fileName = msg.message;
+                                            if (fileName.includes('Sent a file: ')) {
+                                              fileName = fileName.split('Sent a file: ')[1];
+                                            }
+                                            // Get just the filename (before newline if caption exists)
+                                            fileName = fileName.split('\n')[0].trim();
+                                            return <p className="text-sm font-medium text-gray-800">{fileName}</p>;
+                                          })()}
+                                          <p className="text-xs text-gray-500">File available for download</p>
+                                        </div>
+                                        <button 
+                                          onClick={() => {
+                                            // Download using message ID
+                                            if (msg._id) {
 
-                                            window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank');
-                                          } else {
+                                              window.open(`${API_CONFIG.BASE_URL}/api/v1/chat/download/${msg._id}`, '_blank');
+                                            } else {
 
                                           }
                                         }}
                                         className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                                       >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                           <polyline points="7,10 12,15 17,10"></polyline>
                                           <line x1="12" y1="15" x2="12" y2="3"></line>
                                         </svg>
                                       </button>
                                     </div>
+                                    </div>
+                                    {(() => {
+                                      // Extract caption if it exists in the message
+                                      if (msg.message && msg.message.includes('\n')) {
+                                        const caption = msg.message.split('\n').slice(1).join('\n').trim();
+                                        if (caption) {
+                                          return <p className="text-sm mt-2 whitespace-pre-wrap text-gray-900 font-medium leading-relaxed" style={{
+                                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                            letterSpacing: '0.01em',
+                                            WebkitFontSmoothing: 'antialiased',
+                                            MozOsxFontSmoothing: 'grayscale'
+                                          }}>{caption}</p>;
+                                        }
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 )}
                                 {!(msg.message && (msg.message.includes('Sent an image:') || msg.message.includes('Sent a file:') || msg.message.includes('Sent an audio:'))) && !msg.audio && (
-                                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                                  <p className="text-sm whitespace-pre-wrap break-words font-medium leading-relaxed" style={{ 
+                                    wordBreak: 'break-word', 
+                                    overflowWrap: 'anywhere',
+                                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                    letterSpacing: '0.01em',
+                                    WebkitFontSmoothing: 'antialiased',
+                                    MozOsxFontSmoothing: 'grayscale'
+                                  }}>{msg.message}</p>
                                 )}
                               </div>
                               <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
@@ -3090,7 +5917,43 @@ const ChatPage = () => {
             </div>
 
             {/* Message Input */}
-            <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
+            <div className="p-4 border-t border-gray-200 bg-white shadow-lg min-w-0 overflow-hidden">
+              {/* Reply Preview - WhatsApp style */}
+              {replyingTo && (
+                <div 
+                  className="mb-2 mx-2 px-3 py-2 rounded-lg flex items-start justify-between bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors min-w-0 max-w-full overflow-hidden" 
+                  style={{
+                    borderLeft: '4px solid #25D366'
+                  }}
+                  onClick={(e) => {
+                    // Don't scroll if clicking the X button
+                    if (e.target.closest('button')) return;
+                    scrollToRepliedMessage();
+                  }}
+                >
+                  <div className="flex-1 min-w-0 pr-2 overflow-hidden">
+                    <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                      <span className="text-xs font-semibold truncate" style={{ color: '#075E54' }}>
+                        {replyingTo.senderEmpId === storedUser?.empId ? 'You' : (replyingTo.senderName || replyingTo.senderAliasName || 'User')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed break-words whitespace-pre-wrap line-clamp-3" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                      {replyingTo.message || replyingTo.text || replyingTo.content}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCancelReply();
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 rounded-full hover:bg-gray-200"
+                    type="button"
+                    title="Cancel reply"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-3">
                 <div className="flex-1 relative">
                   <div className="flex items-end gap-2 p-3 bg-gray-50 rounded-2xl border-2 border-gray-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all shadow-sm">
@@ -3098,7 +5961,7 @@ const ChatPage = () => {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile || isSendingMessage}
                       className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Attach file"
+                      title="Attach file or audio"
                     >
                       <Paperclip size={20} className="text-gray-500" />
                     </button>
@@ -3111,8 +5974,15 @@ const ChatPage = () => {
                       onPaste={handlePaste}
                       disabled={uploadingFile || isSendingMessage}
                       rows={1}
-                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-800 disabled:opacity-50 overflow-y-auto"
-                      style={{ minHeight: '20px', maxHeight: '400px' }}
+                      className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 text-gray-900 disabled:opacity-50 overflow-y-auto overflow-x-hidden min-w-0 font-medium leading-relaxed"
+                      style={{ 
+                        minHeight: '20px', 
+                        maxHeight: '400px',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        letterSpacing: '0.01em',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale'
+                      }}
                     />
                     <button 
                       onClick={() => imageInputRef.current?.click()}
@@ -3123,12 +5993,21 @@ const ChatPage = () => {
                       <Image size={20} className="text-gray-500" />
                     </button>
                     <button 
-                      onClick={() => audioInputRef.current?.click()}
+                      ref={individualEmojiButtonRef}
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                       disabled={uploadingFile || isSendingMessage}
-                      className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Send audio"
+                      className="relative p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Add emoji"
                     >
-                      <Mic size={20} className="text-gray-500" />
+                      <Smile size={20} className="text-gray-500" />
+                      {showEmojiPicker && (
+                        <EmojiPicker
+                          onEmojiSelect={insertEmoji}
+                          onClose={() => setShowEmojiPicker(false)}
+                          position="top"
+                          buttonRef={individualEmojiButtonRef}
+                        />
+                      )}
                     </button>
                     {input.trim() && (
                       <button
@@ -3144,25 +6023,25 @@ const ChatPage = () => {
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
-                    accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.ppt,.pptx"
+                    accept=".pdf,.xlsx,.xls,.xlsm,.xlsb,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,audio/*"
                     onChange={handleFileInputChange}
                   />
                   <input
                     ref={imageInputRef}
                     type="file"
                     className="hidden"
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.png,image/jpeg,image/jpg,image/png"
                     onChange={handleImageInputChange}
                   />
                   <input
                     ref={audioInputRef}
                     type="file"
                     className="hidden"
-                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac"
+                    accept=".mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/aac,audio/webm,audio/flac"
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
-                        handleFileUpload(file);
+                        handleAudioSelect(file);
                       }
                       e.target.value = '';
                     }}
@@ -3271,6 +6150,272 @@ const ChatPage = () => {
                   <p>No one has seen this message yet</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {showImageModal && selectedImageUrl && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4 overflow-y-auto"
+          onClick={closeImageModal}
+        >
+          <div className="relative max-w-[90vw] w-full flex flex-col items-center justify-center min-h-0 my-auto">
+            <button
+              onClick={closeImageModal}
+              className="absolute top-2 right-2 md:top-4 md:right-4 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-70 rounded-full p-2"
+              aria-label="Close image viewer"
+            >
+              <X size={24} />
+            </button>
+            <div className="flex flex-col items-center w-full max-h-[calc(100vh-120px)]">
+              <img 
+                src={selectedImageUrl} 
+                alt={selectedImageName || "Shared image"} 
+                className="max-w-full max-h-[calc(100vh-180px)] object-contain rounded-lg shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+              {selectedImageName && (
+                <p className="text-white mt-3 text-sm bg-black bg-opacity-70 px-4 py-2 rounded-lg max-w-full truncate">
+                  {selectedImageName}
+                </p>
+              )}
+              <div className="mt-3 flex gap-4">
+                <a
+                  href={selectedImageUrl}
+                  download={selectedImageName || "image"}
+                  onClick={(e) => e.stopPropagation()}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 shadow-lg"
+                >
+                  <Download size={18} />
+                  Download
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* File Preview Modal - WhatsApp Style */}
+      {showFilePreview && previewFiles.length > 0 && (
+        <div 
+          className="fixed inset-0 bg-white z-50 flex flex-col"
+          onClick={(e) => {
+            // Don't close on clicking the modal itself, only on close button
+            if (e.target === e.currentTarget) {
+              closeFilePreview();
+            }
+          }}
+        >
+          {/* Header - WhatsApp Style */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white shadow-sm">
+            <button
+              onClick={closeFilePreview}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Close preview"
+            >
+              <X size={20} className="text-gray-600" />
+            </button>
+            <h3 className="text-lg font-semibold text-gray-800">Send Media</h3>
+            <div className="w-10"></div> {/* Spacer for centering */}
+          </div>
+
+          {/* Preview Area - WhatsApp Style Background */}
+          <div className="flex-1 overflow-y-auto bg-gray-50 flex flex-col" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e5e5e5' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+          }}>
+            {/* File Preview Container */}
+            <div className="flex-1 flex items-center justify-center p-6">
+              <div className="w-full max-w-2xl">
+                {previewFiles.map((previewFile, index) => (
+                  <div key={index} className="mb-4">
+                    {previewFile.type === 'image' && previewFile.preview && (
+                      <div className="relative bg-white rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '300px' }}>
+                        <img
+                          src={previewFile.preview}
+                          alt={previewFile.file.name}
+                          className="w-full h-auto max-h-[60vh] object-contain"
+                        />
+                        {previewFiles.length > 1 && (
+                          <button
+                            onClick={() => removePreviewFile(index)}
+                            className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-colors shadow-lg"
+                            aria-label="Remove file"
+                          >
+                            <X size={16} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {previewFile.type === 'audio' && previewFile.preview && (
+                      <div className="bg-white rounded-lg p-5 shadow-lg">
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="w-14 h-14 bg-[#25D366] rounded-full flex items-center justify-center shadow-md flex-shrink-0">
+                            <Mic size={22} className="text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 truncate">{previewFile.file.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Audio file</p>
+                          </div>
+                          {previewFiles.length > 1 && (
+                            <button
+                              onClick={() => removePreviewFile(index)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
+                              aria-label="Remove file"
+                            >
+                              <X size={18} />
+                            </button>
+                          )}
+                        </div>
+                        <audio src={previewFile.preview} controls className="w-full h-10" />
+                      </div>
+                    )}
+                    {previewFile.type === 'document' && (
+                      <div className="bg-white rounded-lg p-5 shadow-lg">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 bg-[#0084ff] rounded-lg flex items-center justify-center shadow-md flex-shrink-0">
+                            <Paperclip size={22} className="text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 truncate">{previewFile.file.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Document file</p>
+                          </div>
+                          {previewFiles.length > 1 && (
+                            <button
+                              onClick={() => removePreviewFile(index)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
+                              aria-label="Remove file"
+                            >
+                              <X size={18} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Caption Input Area - WhatsApp Style */}
+            <div className="border-t border-gray-200 bg-white px-4 py-3">
+              <div className="flex items-end gap-2 mb-3">
+                <div className="flex items-center gap-1.5 flex-1">
+                  {previewFiles.map((previewFile, index) => (
+                    <div
+                      key={index}
+                      className={`w-14 h-14 rounded-lg border-2 overflow-hidden flex-shrink-0 ${
+                        index === 0 ? 'border-[#25D366]' : 'border-gray-300'
+                      }`}
+                    >
+                      {previewFile.type === 'image' && previewFile.preview ? (
+                        <img
+                          src={previewFile.preview}
+                          alt={previewFile.file.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className={`w-full h-full flex items-center justify-center ${
+                          previewFile.type === 'audio' ? 'bg-[#25D366]' : 'bg-[#0084ff]'
+                        }`}>
+                          {previewFile.type === 'audio' ? (
+                            <Mic size={18} className="text-white" />
+                          ) : (
+                            <Paperclip size={18} className="text-white" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => allFilesInputRef.current?.click()}
+                    className="w-14 h-14 rounded-lg border-2 border-gray-300 border-dashed flex items-center justify-center hover:bg-gray-50 transition-colors flex-shrink-0"
+                    aria-label="Add more files"
+                  >
+                    <Plus size={20} className="text-gray-400" />
+                  </button>
+                  <input
+                    ref={allFilesInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".jpg,.jpeg,.png,.pdf,.xlsx,.xls,.xlsm,.xlsb,.mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,image/*,audio/*"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        // Determine file type and route to appropriate handler
+                        if (file.type.startsWith('image/')) {
+                          handleImageSelect(file);
+                        } else if (isAudioFile(file)) {
+                          handleAudioSelect(file);
+                        } else {
+                          handleFileSelect(file);
+                        }
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={sendPreviewFiles}
+                  disabled={uploadingFile}
+                  className="bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-full p-3 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                  aria-label="Send"
+                  style={{ minWidth: '48px', minHeight: '48px' }}
+                >
+                  {uploadingFile ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send size={20} className="text-white" />
+                  )}
+                </button>
+              </div>
+              
+              {/* Caption Input */}
+              <div className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-[#25D366] focus-within:bg-white transition-all">
+                <textarea
+                  placeholder="Add a caption..."
+                  value={previewCaption}
+                  onChange={(e) => setPreviewCaption(e.target.value)}
+                  className="flex-1 bg-transparent border-none outline-none resize-none text-sm placeholder-gray-400 text-gray-900 min-h-[36px] max-h-[100px] overflow-y-auto font-medium leading-relaxed"
+                  rows={1}
+                  style={{ 
+                    minHeight: '36px',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                    letterSpacing: '0.01em',
+                    WebkitFontSmoothing: 'antialiased',
+                    MozOsxFontSmoothing: 'grayscale'
+                  }}
+                />
+                {previewCaption && (
+                  <button
+                    onClick={() => setPreviewCaption('')}
+                    className="p-1.5 hover:bg-gray-200 rounded-full transition-colors flex-shrink-0"
+                    aria-label="Clear caption"
+                  >
+                    <X size={16} className="text-gray-500" />
+                  </button>
+                )}
+                <button
+                  ref={previewEmojiButtonRef}
+                  onClick={() => setShowPreviewEmojiPicker(!showPreviewEmojiPicker)}
+                  className="relative p-1.5 hover:bg-gray-200 rounded-full transition-colors flex-shrink-0"
+                  aria-label="Add emoji"
+                >
+                  <Smile size={18} className="text-gray-500" />
+                  {showPreviewEmojiPicker && (
+                    <EmojiPicker
+                      onEmojiSelect={(emoji) => {
+                        setPreviewCaption(previewCaption + emoji);
+                        setShowPreviewEmojiPicker(false);
+                      }}
+                      onClose={() => setShowPreviewEmojiPicker(false)}
+                      position="top"
+                      buttonRef={previewEmojiButtonRef}
+                    />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3834,7 +6979,11 @@ const AddMembersModal = ({ isOpen, onClose, group, onAddMembers, onRemoveMembers
 
 // Group Info Modal Component
 const GroupInfoModal = ({ isOpen, onClose, group, storedUser }) => {
-  if (!isOpen) return null;
+  console.log('GroupInfoModal render - isOpen:', isOpen, 'group:', group);
+  if (!isOpen || !group) {
+    console.log('GroupInfoModal returning null - isOpen:', isOpen, 'group:', group);
+    return null;
+  }
 
   return (
     <div 

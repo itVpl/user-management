@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
+import API_CONFIG from "../../config/api";
 import {
   FileText,
   Upload,
@@ -238,6 +239,19 @@ export default function AddTruckerForm({ onSuccess }) {
     email: "",
     password: "",
     confirmPassword: "",
+    onboardCompany: "", // Onboard Company
+    // Banking Details
+    paymentType: "",
+    factoringName: "",
+    bankName: "",
+    accountNumber: "",
+    routingNumber: "",
+    accountHolderName: "",
+    accountType: "",
+    bankAddress: "",
+    bankCity: "",
+    bankState: "",
+    bankZipcode: "",
     // Working Address (array of {state, city, attachment})
     workingAddress: [],
     // docs
@@ -597,8 +611,28 @@ React.useEffect(() => {
     truckerData.append("zipcode", formData.zipcode.trim());
     truckerData.append("phoneNo", formData.phoneNo.trim());
     truckerData.append("secondaryPhoneNo", formData.secondaryPhoneNo?.trim() || "");
+    truckerData.append("assignedCompany", formData.onboardCompany?.trim() || "");
     truckerData.append("email", formData.email.trim());
     truckerData.append("password", formData.password);
+    // Banking Details
+    truckerData.append("paymentType", formData.paymentType?.trim() || "");
+    if (formData.paymentType === 'Factoring' && formData.factoringName?.trim()) {
+      truckerData.append("factoringName", formData.factoringName.trim());
+    }
+    if (formData.paymentType && (formData.bankName?.trim() || formData.accountNumber?.trim())) {
+      const bankDetails = {
+        bankName: formData.bankName?.trim() || "",
+        accountNumber: formData.accountNumber?.trim() || "",
+        routingNumber: formData.routingNumber?.trim() || "",
+        accountHolderName: formData.accountHolderName?.trim() || "",
+        accountType: formData.accountType?.trim() || "",
+        address: formData.bankAddress?.trim() || "",
+        city: formData.bankCity?.trim() || "",
+        state: formData.bankState?.trim() || "",
+        zipcode: formData.bankZipcode?.trim() || ""
+      };
+      truckerData.append("bankDetails", JSON.stringify(bankDetails));
+    }
 
     // Working Address (optional - send as JSON string, attachments separately)
     if (formData.workingAddress && formData.workingAddress.length > 0) {
@@ -631,7 +665,7 @@ React.useEffect(() => {
 
     try {
       const res = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/shipper_driver/cmt/add-trucker",
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/cmt/add-trucker`,
         truckerData,
         {
           headers: { "Content-Type": "multipart/form-data" },
@@ -651,6 +685,18 @@ React.useEffect(() => {
           zipcode: "",
           phoneNo: "",
           secondaryPhoneNo: "",
+          onboardCompany: "",
+          paymentType: "",
+          factoringName: "",
+          bankName: "",
+          accountNumber: "",
+          routingNumber: "",
+          accountHolderName: "",
+          accountType: "",
+          bankAddress: "",
+          bankCity: "",
+          bankState: "",
+          bankZipcode: "",
           mc_dot_no: "",
           carrierType: "",
           fleetsize: "",
@@ -836,21 +882,225 @@ React.useEffect(() => {
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Secondary Phone Number
-              </label>
-              <input
-                type="text"
-                name="secondaryPhoneNo"
-                placeholder="Secondary Phone Number (Optional)"
-                value={formData.secondaryPhoneNo}
-                onChange={handleChange}
-                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-                inputMode="numeric"
-              />
-              {renderError("secondaryPhoneNo")}
+            {/* Secondary Phone Number | Onboard Company */}
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Secondary Phone Number
+                </label>
+                <input
+                  type="text"
+                  name="secondaryPhoneNo"
+                  placeholder="Secondary Phone Number (Optional)"
+                  value={formData.secondaryPhoneNo}
+                  onChange={handleChange}
+                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                  inputMode="numeric"
+                />
+                {renderError("secondaryPhoneNo")}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Onboard Company
+                </label>
+                <SearchableSelect
+                  label=""
+                  name="onboardCompany"
+                  value={formData.onboardCompany}
+                  onChange={(value) => {
+                    setFormData(prev => ({ ...prev, onboardCompany: value }));
+                    setErrors(prev => {
+                      const copy = { ...prev };
+                      delete copy.onboardCompany;
+                      return copy;
+                    });
+                  }}
+                  options={[
+                    { label: 'V Power Logistics', value: 'V Power Logistics' },
+                    { label: 'Quick Logistics', value: 'Quick Logistics' }
+                  ]}
+                  placeholder="Select Company..."
+                  disabled={isSubmitting}
+                />
+                {renderError("onboardCompany")}
+              </div>
             </div>
+          </div>
+        </div>
+
+        {/* Banking Details */}
+        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
+          <h4 className="text-2xl font-bold mb-4 text-center">Banking Details</h4>
+          <div className="w-full flex flex-col gap-4">
+            {/* Payment Type */}
+            <div>
+              <label className="text-sm font-medium text-gray-700">Payment Type</label>
+              <select
+                name="paymentType"
+                value={formData.paymentType}
+                onChange={handleChange}
+                className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+              >
+                <option value="">Select Payment Type...</option>
+                <option value="ACH">ACH</option>
+                <option value="Factoring">Factoring</option>
+              </select>
+              {renderError("paymentType")}
+            </div>
+
+            {/* Conditional Fields for Factoring */}
+            {formData.paymentType === 'Factoring' && (
+              <>
+                {/* Factoring Name */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Factoring Name</label>
+                  <input
+                    type="text"
+                    name="factoringName"
+                    placeholder="Factoring Name"
+                    value={formData.factoringName}
+                    onChange={handleChange}
+                    className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                  />
+                  {renderError("factoringName")}
+                </div>
+
+                {/* Bank Details Grid */}
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  {/* Bank Name */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Bank Name</label>
+                    <input
+                      type="text"
+                      name="bankName"
+                      placeholder="Bank Name"
+                      value={formData.bankName}
+                      onChange={handleChange}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                    {renderError("bankName")}
+                  </div>
+
+                  {/* Account Number */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Account Number</label>
+                    <input
+                      type="text"
+                      name="accountNumber"
+                      placeholder="Account Number"
+                      value={formData.accountNumber}
+                      onChange={handleChange}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                    {renderError("accountNumber")}
+                  </div>
+
+                  {/* Routing Number */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Routing Number</label>
+                    <input
+                      type="text"
+                      name="routingNumber"
+                      placeholder="Routing Number"
+                      value={formData.routingNumber}
+                      onChange={handleChange}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                    {renderError("routingNumber")}
+                  </div>
+
+                  {/* Account Holder Name */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Account Holder Name</label>
+                    <input
+                      type="text"
+                      name="accountHolderName"
+                      placeholder="Account Holder Name"
+                      value={formData.accountHolderName}
+                      onChange={handleChange}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                    {renderError("accountHolderName")}
+                  </div>
+
+                  {/* Account Type */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Account Type</label>
+                    <select
+                      name="accountType"
+                      value={formData.accountType}
+                      onChange={handleChange}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    >
+                      <option value="">Select Account Type...</option>
+                      <option value="Checking">Checking</option>
+                      <option value="Savings">Savings</option>
+                    </select>
+                    {renderError("accountType")}
+                  </div>
+
+                  {/* Bank Address */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Address</label>
+                    <input
+                      type="text"
+                      name="bankAddress"
+                      placeholder="Bank Address"
+                      value={formData.bankAddress}
+                      onChange={handleChange}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                    {renderError("bankAddress")}
+                  </div>
+
+                  {/* Bank City */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">City</label>
+                    <input
+                      type="text"
+                      name="bankCity"
+                      placeholder="City"
+                      value={formData.bankCity}
+                      onChange={handleChange}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                    {renderError("bankCity")}
+                  </div>
+
+                  {/* Bank State */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">State</label>
+                    <input
+                      type="text"
+                      name="bankState"
+                      placeholder="State"
+                      value={formData.bankState}
+                      onChange={handleChange}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                    {renderError("bankState")}
+                  </div>
+
+                  {/* Bank Zipcode */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Zipcode</label>
+                    <input
+                      type="text"
+                      name="bankZipcode"
+                      placeholder="Zipcode"
+                      value={formData.bankZipcode}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^0-9-]/g, '').slice(0, 10);
+                        setFormData(prev => ({ ...prev, bankZipcode: v }));
+                      }}
+                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    />
+                    {renderError("bankZipcode")}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

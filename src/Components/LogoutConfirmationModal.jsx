@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { AlertTriangle, X } from 'lucide-react';
+import API_CONFIG from '../config/api';
 
 const LogoutConfirmationModal = ({ isOpen, onClose, onConfirmLogout }) => {
   const [targetStatus, setTargetStatus] = useState(null);
@@ -44,7 +45,7 @@ const LogoutConfirmationModal = ({ isOpen, onClose, onConfirmLogout }) => {
       }
 
       const api = axios.create({
-        baseURL: "https://vpl-liveproject-1.onrender.com",
+        baseURL: API_CONFIG.BASE_URL,
         withCredentials: false,
       });
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { X, Send, MessageCircle, RefreshCw, User } from 'lucide-react';
+import { X, Send, MessageCircle, RefreshCw, User, Paperclip, Image, Mic } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 
 const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName }) => {
@@ -8,10 +8,14 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const messagesEndRef = useRef(null);
   const isInitialLoadRef = useRef(true);
   const pollingIntervalRef = useRef(null);
   const lastFetchTimeRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const audioInputRef = useRef(null);
   
   const currentUserEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
   
@@ -44,12 +48,12 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
       clearInterval(pollingIntervalRef.current);
     }
     
-    // Poll every 2 seconds for real-time updates
+    // Poll every 5 seconds for real-time updates (reduced from 2s to prevent 429 errors)
     pollingIntervalRef.current = setInterval(() => {
       if (isOpen && loadId) {
         fetchChatMessages(false, true); // Silent background fetch
       }
-    }, 2000);
+    }, 5000);
   }, [isOpen, loadId]);
 
   // Stop polling when modal closes
@@ -351,6 +355,91 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
     return finalSenderId === currentUserId;
   };
 
+  // Helper function to detect audio files
+  const isAudioFile = (file) => {
+    const audioFormats = ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac'];
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    return audioFormats.includes(fileExt || '') || file.type.startsWith('audio/');
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (file) => {
+    if (!file || !receiverEmpId || !loadId || uploadingFile) return;
+
+    // Validate file types
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = {
+      images: ['jpg', 'jpeg', 'png'],
+      documents: ['pdf', 'xlsx', 'xls', 'xlsm', 'xlsb'],
+      audio: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac']
+    };
+    
+    const allAllowed = [...allowedExtensions.images, ...allowedExtensions.documents, ...allowedExtensions.audio];
+    if (!allAllowed.includes(fileExtension)) {
+      alert('Please select a valid file type:\n- Images: JPG, JPEG, PNG\n- Documents: PDF, XLSX, XLS, XLSM, XLSB\n- Audio: MP3, WAV, M4A, OGG, AAC, WEBM, FLAC');
+      return;
+    }
+
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size should be less than 10MB.');
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const token = sessionStorage.getItem('authToken') || 
+                    localStorage.getItem('authToken') || 
+                    sessionStorage.getItem('token') || 
+                    localStorage.getItem('token');
+      
+      if (!token) {
+        alert('Authentication required. Please login again.');
+        setUploadingFile(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('receiverEmpId', receiverEmpId);
+      formData.append('loadId', loadId);
+
+      // Set appropriate message based on file type
+      const isAudio = isAudioFile(file);
+      const isImage = ['jpg', 'jpeg', 'png'].includes(fileExtension);
+      const messageText = isAudio 
+        ? `Sent an audio: ${file.name}` 
+        : isImage 
+        ? `Sent an image: ${file.name}` 
+        : `Sent a file: ${file.name}`;
+      
+      formData.append('message', messageText);
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/chat/load/send`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      if (response.data && (response.data.success || response.status === 200 || response.status === 201)) {
+        // Refresh messages to show the uploaded file
+        setTimeout(() => {
+          fetchChatMessages(false, false);
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   const getSenderName = (msg) => {
     if (!msg) return 'Unknown';
     
@@ -540,13 +629,45 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
           boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.3)'
         }}>
           <form onSubmit={handleSendMessage} className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {/* File Upload Button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-gray-300 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+                title="Attach file (PDF, Excel)"
+                disabled={uploadingFile || sending || !receiverEmpId}
+              >
+                <Paperclip size={20} />
+              </button>
+              {/* Image Upload Button */}
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className="text-gray-300 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+                title="Attach image (JPG, PNG)"
+                disabled={uploadingFile || sending || !receiverEmpId}
+              >
+                <Image size={20} />
+              </button>
+              {/* Audio Upload Button */}
+              <button
+                type="button"
+                onClick={() => audioInputRef.current?.click()}
+                className="text-gray-300 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+                title="Attach audio"
+                disabled={uploadingFile || sending || !receiverEmpId}
+              >
+                <Mic size={20} />
+              </button>
+            </div>
             <div className="flex-1 relative">
               <input
                 type="text"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Type your message..."
+                placeholder={uploadingFile ? "Uploading..." : "Type your message..."}
                 className="w-full px-6 py-4 rounded-2xl text-gray-200 placeholder-gray-500 focus:outline-none transition-all duration-200"
                 style={{
                   background: 'rgba(255, 255, 255, 0.05)',
@@ -554,30 +675,30 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.2)'
                 }}
-                disabled={sending || !receiverEmpId}
+                disabled={sending || uploadingFile || !receiverEmpId}
               />
             </div>
             <button
               type="submit"
-              disabled={!message.trim() || sending || !receiverEmpId}
+              disabled={!message.trim() || sending || uploadingFile || !receiverEmpId}
               className={`px-8 py-4 rounded-2xl transition-all duration-300 flex items-center gap-3 font-semibold ${
-                message.trim() && !sending && receiverEmpId
+                message.trim() && !sending && !uploadingFile && receiverEmpId
                   ? 'hover:scale-105 shadow-lg'
                   : 'opacity-50 cursor-not-allowed'
               }`}
               style={{
-                background: message.trim() && !sending && receiverEmpId
+                background: message.trim() && !sending && !uploadingFile && receiverEmpId
                   ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
                   : 'rgba(255, 255, 255, 0.1)',
-                boxShadow: message.trim() && !sending && receiverEmpId
+                boxShadow: message.trim() && !sending && !uploadingFile && receiverEmpId
                   ? '0 8px 24px rgba(139, 92, 246, 0.4)'
                   : 'none'
               }}
             >
-              {sending ? (
+              {sending || uploadingFile ? (
                 <>
                   <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-white">Sending</span>
+                  <span className="text-white">{uploadingFile ? 'Uploading' : 'Sending'}</span>
                 </>
               ) : (
                 <>
@@ -586,6 +707,46 @@ const LoadChatModal = ({ isOpen, onClose, loadId, receiverEmpId, receiverName })
                 </>
               )}
             </button>
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.xlsx,.xls,.xlsm,.xlsb"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  handleFileUpload(file);
+                }
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={imageInputRef}
+              type="file"
+              className="hidden"
+              accept=".jpg,.jpeg,.png,image/jpeg,image/jpg,image/png"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  handleFileUpload(file);
+                }
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={audioInputRef}
+              type="file"
+              className="hidden"
+              accept=".mp3,.wav,.m4a,.ogg,.aac,.webm,.flac,audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/aac,audio/webm,audio/flac"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  handleFileUpload(file);
+                }
+                e.target.value = '';
+              }}
+            />
           </form>
         </div>
       </div>

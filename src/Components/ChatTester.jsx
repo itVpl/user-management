@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import API_CONFIG from '../config/api';
 
 const ChatTester = () => {
   const [testResults, setTestResults] = useState([]);
@@ -21,7 +22,7 @@ const ChatTester = () => {
       // Test load ID (you can change this)
       const testLoadId = 'L-12345';
       
-      const response = await fetch(`https://vpl-liveproject-1.onrender.com/api/v1/chat/public/load/${testLoadId}`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/chat/public/load/${testLoadId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -56,7 +57,7 @@ const ChatTester = () => {
         loadId: 'L-12345'
       };
 
-      const response = await fetch('https://vpl-liveproject-1.onrender.com/api/v1/chat/load/send', {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/chat/load/send`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -47,7 +47,7 @@ const HRDashboard = () => {
           setNewJoinersData({ totalNewJoiners: 1, newJoiners: [] }); // Fallback to 1
         }
 
-        // const leaveRes = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/all");
+        // const leaveRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/leave/all`);
         // const leaveData = Array.isArray(leaveRes.data) ? leaveRes.data : leaveRes.data.leaves || [];
         // setLeaves(leaveData);
 

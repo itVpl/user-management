@@ -3,7 +3,9 @@ import axios from "axios";
 import { Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import Logo from '../../assets/LogoFinal.png';
-import { Search, CheckCircle, XCircle, Clock, FileText, RefreshCw, Eye, Edit, Download, User, Truck, DollarSign, MapPin, Calendar, Send } from 'lucide-react';
+import IdentificaLogo from '../../assets/identifica_logo.png';
+import MtPoconoLogo from '../../assets/mtPocono.png';
+import { Search, CheckCircle, XCircle, Clock, FileText, RefreshCw, Eye, Edit, Download, User, Truck, DollarSign, MapPin, Calendar, Send, PlusCircle } from 'lucide-react';
 
 import {
   Box,
@@ -61,8 +63,9 @@ import {
 } from "@mui/icons-material";
 
 // ========= Config =========
+import API_CONFIG_IMPORT from "../../config/api";
 const API_CONFIG = {
-  BASE_URL: "https://vpl-liveproject-1.onrender.com",
+  BASE_URL: API_CONFIG_IMPORT.BASE_URL,
 };
 const BRAND = "#16A34A"; // Tailwind green-600 type
 const theme = createTheme({
@@ -125,9 +128,35 @@ const theme = createTheme({
 // ========= Utils =========
 const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : "—");
 const shortId = (id = "") => (id?.length > 8 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id);
 const isImageUrl = (url = "") => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url);
 const isPdfUrl = (url = "") => /\.pdf$/i.test(url);
+
+// Due Date Helper Functions
+const getDueDateInfo = (row) => {
+  return row?.paymentSummary?.shipperPayment?.dueDateInfo || null;
+};
+
+const getDueDateStatusColor = (dueDateInfo) => {
+  if (!dueDateInfo) return '#666';
+  if (dueDateInfo.isOverdue) return '#dc3545'; // Red for overdue
+  if (dueDateInfo.status === 'due_soon') return '#ffc107'; // Yellow for due soon
+  return '#28a745'; // Green for pending
+};
+
+const formatDueDate = (dueDateInfo) => {
+  if (!dueDateInfo || !dueDateInfo.dueDate) return 'Not set';
+  return fmtDate(dueDateInfo.dueDate);
+};
+
+const getDueDateStatusBadge = (dueDateInfo) => {
+  if (!dueDateInfo) return { text: 'Pending Email', color: '#999', bgColor: 'transparent' };
+  if (dueDateInfo.isOverdue) return { text: 'OVERDUE', color: '#dc3545', bgColor: '#ffebee' };
+  if (dueDateInfo.status === 'due_soon') return { text: 'DUE SOON', color: '#ffc107', bgColor: '#fff8e1' };
+  return { text: 'PENDING', color: '#28a745', bgColor: '#e8f5e9' };
+};
+
 const uniqueById = (arr = []) => {
   const seen = new Set();
   return (arr || []).filter((it) => {
@@ -219,6 +248,12 @@ function TabPanel({ value, index, children }) {
 
 // Edit Form Component
 function EditForm({ data, onSubmit, loading, onClose }) {
+  // Helper function for number conversion
+  const toNum2 = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  };
+
   // Initialize form data with calculated totals
   const initializeFormData = (data) => {
     const customers = (data?.customers || []).map(customer => {
@@ -233,11 +268,26 @@ function EditForm({ data, onSubmit, loading, onClose }) {
         otherValue = customer.other || customer.otherTotal || 0;
       }
       
+      // Calculate FSC as percentage of Line Haul
+      const lineHaul = toNum2(customer.lineHaul || 0);
+      const fscPercent = toNum2(customer.fsc || 0);
+      const fscAmount = lineHaul * (fscPercent / 100);
+      const totalAmount = lineHaul + fscAmount + otherValue;
+      
+      // Preserve chargeRows if available
+      const chargeRows = Array.isArray(customer.other) ? customer.other.map(item => ({
+        name: item?.name || '',
+        quantity: String(item?.quantity || 0),
+        amt: String(item?.amount || 0),
+        total: Number(item?.total || 0)
+      })) : [];
+      
       return {
         ...customer,
         billTo: billTo,
         other: otherValue,
-        totalAmount: (customer.lineHaul || 0) + (customer.fsc || 0) + otherValue
+        chargeRows: chargeRows,
+        totalAmount: totalAmount
       };
     });
     
@@ -260,10 +310,25 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   const [formData, setFormData] = useState(initializeFormData(data));
 
+  // Charges popup state
+  const [showChargesPopup, setShowChargesPopup] = useState(false);
+  const [customerCharges, setCustomerCharges] = useState([
+    { name: '', quantity: '', amt: '', total: 0 }
+  ]);
+  const [currentCustomerIndex, setCurrentCustomerIndex] = useState(null);
+  const [customerChargeErrors, setCustomerChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
+
   // Update form data when data prop changes
   React.useEffect(() => {
     setFormData(initializeFormData(data));
   }, [data]);
+
+  // Keep errors array size in sync with charges rows
+  React.useEffect(() => {
+    setCustomerChargeErrors(prev =>
+      (customerCharges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
+    );
+  }, [customerCharges]);
 
   const handleCustomerChange = (index, field, value) => {
     const newCustomers = [...formData.customers];
@@ -271,13 +336,184 @@ function EditForm({ data, onSubmit, loading, onClose }) {
     
     // Auto-calculate total amount when line haul, FSC, or other changes
     if (field === 'lineHaul' || field === 'fsc' || field === 'other') {
-      const lineHaul = field === 'lineHaul' ? value : (newCustomers[index].lineHaul || 0);
-      const fsc = field === 'fsc' ? value : (newCustomers[index].fsc || 0);
-      const other = field === 'other' ? value : (newCustomers[index].other || 0);
-      newCustomers[index].totalAmount = lineHaul + fsc + other;
+      const lineHaul = toNum2(field === 'lineHaul' ? value : (newCustomers[index].lineHaul || 0));
+      const fscPercent = toNum2(field === 'fsc' ? value : (newCustomers[index].fsc || 0));
+      const fscAmount = lineHaul * (fscPercent / 100); // FSC is percentage of Line Haul
+      const other = toNum2(field === 'other' ? value : (newCustomers[index].other || 0));
+      newCustomers[index].totalAmount = lineHaul + fscAmount + other;
     }
     
     setFormData({ ...formData, customers: newCustomers });
+  };
+
+  // Helper functions for charges validation
+  const onlyAlpha = (s = '') => s.replace(/[^A-Za-z ]/g, '');
+  const clampPosInt = (s = '') => s.replace(/[^\d]/g, '');
+  const blockIntNoSign = (e) => {
+    if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+  };
+
+  // Handle charges input change
+  const handleChargeChange = (index, field, value) => {
+    const updated = [...customerCharges];
+
+    if (field === 'name') value = onlyAlpha(value);
+    if (field === 'quantity') value = clampPosInt(value);
+    if (field === 'amt') {
+      // Allow decimal points for amounts (max 2 decimal places)
+      value = value.replace(/[^\d.]/g, '');
+      // Ensure only one decimal point
+      const parts = value.split('.');
+      if (parts.length > 2) {
+        value = parts[0] + '.' + parts.slice(1).join('');
+      }
+      // Limit to 2 decimal places
+      if (parts[1] && parts[1].length > 2) {
+        value = parts[0] + '.' + parts[1].substring(0, 2);
+      }
+    }
+
+    updated[index] = { ...updated[index], [field]: value };
+
+    // total = quantity * amount
+    const q = parseInt(updated[index].quantity, 10) || 0;
+    const a = parseFloat(updated[index].amt) || 0;
+    updated[index].total = q * a;
+
+    setCustomerCharges(updated);
+
+    // clear inline error as user fixes the field
+    setCustomerChargeErrors(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index] };
+      if (field === 'name') next[index].name = '';
+      if (field === 'quantity') next[index].quantity = '';
+      if (field === 'amt') next[index].amt = '';
+      return next;
+    });
+  };
+
+  // Add charge row
+  const addCharge = () => {
+    setCustomerCharges(prev => [...prev, { name: '', quantity: '', amt: '', total: 0 }]);
+    setCustomerChargeErrors(prev => [...prev, { name: '', quantity: '', amt: '' }]);
+  };
+
+  // Remove charge row
+  const removeCharge = (index) => {
+    if (customerCharges.length > 1) {
+      setCustomerCharges(prev => prev.filter((_, i) => i !== index));
+      setCustomerChargeErrors(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  // Handle customer charges click
+  const handleCustomerChargesClick = (customerIndex) => {
+    setCurrentCustomerIndex(customerIndex);
+    // Load existing customer charges if available
+    const customer = formData.customers[customerIndex];
+    const existingCharges = customer?.chargeRows || [];
+    if (existingCharges.length > 0 && Array.isArray(existingCharges)) {
+      setCustomerCharges(existingCharges.map(ch => ({
+        name: ch.name || '',
+        quantity: String(ch.quantity || ''),
+        amt: String(ch.amount || ch.amt || ''),
+        total: ch.total || 0
+      })));
+    } else {
+      setCustomerCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+    }
+    setShowChargesPopup(true);
+  };
+
+  // Close charges popup
+  const closeChargesPopup = () => {
+    setShowChargesPopup(false);
+    setCurrentCustomerIndex(null);
+  };
+
+  // Apply charges
+  const applyCharges = () => {
+    // 1) Check if all rows are empty
+    const allEmpty = (customerCharges || []).every(
+      ch => !(ch?.name?.trim()) &&
+        !(String(ch?.quantity ?? '') !== '') &&
+        !(String(ch?.amt ?? '') !== '')
+    );
+
+    if (allEmpty) {
+      // Show errors on row 0
+      const errs = (customerCharges || []).map((_, i) =>
+        i === 0
+          ? {
+            name: 'Please enter the charge name',
+            quantity: 'Please enter the Quantity',
+            amt: 'Please enter the amount',
+          }
+          : { name: '', quantity: '', amt: '' }
+      );
+      setCustomerChargeErrors(errs);
+      return;
+    }
+
+    // 2) Row-by-row validation
+    const nextErrs = (customerCharges || []).map((ch) => {
+      const row = { name: '', quantity: '', amt: '' };
+      const hasAny = (ch?.name || ch?.quantity || ch?.amt);
+
+      if (hasAny) {
+        const nm = (ch?.name || '').trim();
+        if (!nm) row.name = 'Please enter the charge name';
+        else if (!/^[A-Za-z ]+$/.test(nm)) row.name = 'Name should contain only alphabets';
+
+        const qRaw = String(ch?.quantity ?? '');
+        if (qRaw === '') row.quantity = 'Please enter the Quantity';
+        else if (!/^[1-9]\d*$/.test(qRaw)) row.quantity = 'Quantity must be a positive integer';
+
+        const aRaw = String(ch?.amt ?? '');
+        if (aRaw === '') row.amt = 'Please enter the amount';
+        else if (!/^\d+(\.\d{1,2})?$/.test(aRaw)) row.amt = 'Amount must be a positive number (max 2 decimal places)';
+      }
+      return row;
+    });
+
+    const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
+    setCustomerChargeErrors(nextErrs);
+
+    if (hasErrors) {
+      return;
+    }
+
+    // 3) Valid -> apply totals
+    const totalCharges = (customerCharges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
+    
+    // Apply to customer
+    if (currentCustomerIndex !== null) {
+      setFormData(prev => {
+        const updatedCustomers = [...prev.customers];
+        if (updatedCustomers[currentCustomerIndex]) {
+          const lh = toNum2(updatedCustomers[currentCustomerIndex].lineHaul || 0);
+          const fscPercent = toNum2(updatedCustomers[currentCustomerIndex].fsc || 0);
+          const fscAmount = lh * (fscPercent / 100);
+          
+          updatedCustomers[currentCustomerIndex] = {
+            ...updatedCustomers[currentCustomerIndex],
+            other: String(totalCharges),
+            chargeRows: customerCharges.map(ch => ({
+              name: ch.name.trim(),
+              quantity: parseInt(ch.quantity, 10) || 0,
+              amount: parseFloat(ch.amt) || 0,
+              total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
+            })),
+            totalAmount: toNum2(lh + fscAmount + totalCharges)
+          };
+        }
+        return { ...prev, customers: updatedCustomers };
+      });
+      setCurrentCustomerIndex(null);
+    }
+    
+    setShowChargesPopup(false);
   };
 
   const handleCarrierChange = (field, value) => {
@@ -313,7 +549,43 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    // Transform formData to match API expectations
+    const transformedData = {
+      ...formData,
+      customers: formData.customers.map(c => {
+        const lh = toNum2(c.lineHaul || 0);
+        const fscPercent = toNum2(c.fsc || 0);
+        const fscAmount = lh * (fscPercent / 100);
+        const oth = toNum2(c.other || 0);
+        
+        // Convert chargeRows to array format expected by API
+        const otherArray = (c.chargeRows && c.chargeRows.length > 0)
+          ? c.chargeRows.map(r => ({
+              name: r.name,
+              quantity: parseInt(r.quantity) || 0,
+              amount: parseFloat(r.amount || r.amt) || 0,
+              total: parseFloat(r.total) || 0
+            }))
+          : (oth > 0 ? [{
+              name: "Other Charges",
+              quantity: 1,
+              amount: oth,
+              total: oth
+            }] : []);
+        
+        return {
+          ...c,
+          lineHaul: lh,
+          fsc: fscPercent, // Store percentage value
+          other: otherArray,
+          otherTotal: oth,
+          totalAmount: toNum2(lh + fscAmount + oth)
+        };
+      })
+    };
+    
+    onSubmit(transformedData);
   };
 
   return (
@@ -405,9 +677,21 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                 <TextField
                   fullWidth
                   label="Other"
-                  type="number"
                   value={customer.other || ""}
-                  onChange={(e) => handleCustomerChange(index, 'other', parseFloat(e.target.value) || 0)}
+                  onClick={() => handleCustomerChargesClick(index)}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      backgroundColor: '#f5f5f5',
+                      cursor: 'pointer'
+                    },
+                    '& .MuiInputBase-root': {
+                      cursor: 'pointer'
+                    }
+                  }}
+                  placeholder="Click to add charges"
                 />
                 <TextField
                   fullWidth
@@ -569,6 +853,238 @@ function EditForm({ data, onSubmit, loading, onClose }) {
           )}
         </button>
       </div>
+
+      {/* Charges Popup */}
+      {showChargesPopup && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60]" onClick={closeChargesPopup}>
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 -m-8 mb-6 p-6 rounded-t-xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                    <DollarSign className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">
+                      Customer Charges Calculator
+                    </h2>
+                    {currentCustomerIndex !== null && (
+                      <p className="text-white/80 text-sm mt-1">Customer {currentCustomerIndex + 1}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={closeChargesPopup}
+                  className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Table header */}
+              <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  <span>Name <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">#</span>
+                  <span>Quantity <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  <span>Amount <span className="text-red-500">*</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold">$</span>
+                  <span>Total</span>
+                </div>
+                <div className="text-center">Action</div>
+              </div>
+
+              {/* Rows */}
+              {customerCharges.map((charge, index) => (
+                <div key={index} className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  {/* Name */}
+                  <div>
+                    <input
+                      type="text"
+                      value={charge.name}
+                      onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
+                      onKeyDown={(e) => {
+                        const ctrl = e.ctrlKey || e.metaKey;
+                        const allow = ['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+                        if (allow.includes(e.key) || (ctrl && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) return;
+                        if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
+                      }}
+                      onBlur={() => {
+                        setCustomerChargeErrors((prev) => {
+                          const next = [...prev];
+                          const v = (charge.name || '').trim();
+                          next[index] = { ...(next[index] || {}) };
+                          if (!v) next[index].name = 'Please enter the charge name';
+                          else if (!/^[A-Za-z ]+$/.test(v)) next[index].name = 'Name should contain only alphabets';
+                          else next[index].name = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(customerChargeErrors[index]?.name)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.name
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="Enter charge name"
+                    />
+                    {customerChargeErrors[index]?.name && (
+                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].name}</p>
+                    )}
+                  </div>
+
+                  {/* Quantity */}
+                  <div>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      onKeyDown={blockIntNoSign}
+                      value={charge.quantity}
+                      onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
+                      onBlur={() => {
+                        setCustomerChargeErrors((prev) => {
+                          const next = [...prev];
+                          const raw = String(charge.quantity ?? '');
+                          next[index] = { ...(next[index] || {}) };
+                          if (raw === '') next[index].quantity = 'Please enter the Quantity';
+                          else if (!/^[1-9]\d*$/.test(raw)) next[index].quantity = 'Quantity must be a positive integer';
+                          else next[index].quantity = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(customerChargeErrors[index]?.quantity)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.quantity
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="0"
+                    />
+                    {customerChargeErrors[index]?.quantity && (
+                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].quantity}</p>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      onKeyDown={(e) => {
+                        if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                      }}
+                      value={charge.amt}
+                      onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
+                      onBlur={() => {
+                        setCustomerChargeErrors((prev) => {
+                          const next = [...prev];
+                          const raw = String(charge.amt ?? '');
+                          next[index] = { ...(next[index] || {}) };
+                          if (raw === '') next[index].amt = 'Please enter the amount';
+                          else if (!/^\d+(\.\d{1,2})?$/.test(raw)) next[index].amt = 'Amount must be a positive number (max 2 decimal places)';
+                          else next[index].amt = '';
+                          return next;
+                        });
+                      }}
+                      aria-invalid={Boolean(customerChargeErrors[index]?.amt)}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.amt
+                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                        }`}
+                      placeholder="0.00"
+                    />
+                    {customerChargeErrors[index]?.amt && (
+                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].amt}</p>
+                    )}
+                  </div>
+
+                  {/* Row total */}
+                  <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg font-semibold text-gray-800 border border-green-200">
+                    ${Number(charge.total || 0).toFixed(2)}
+                  </div>
+
+                  {/* Delete */}
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => removeCharge(index)}
+                      disabled={customerCharges.length === 1}
+                      className={`p-2 rounded-full transition-all ${customerCharges.length === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
+                        }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add row */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={addCharge}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                  <span className="font-semibold">Add New Charge</span>
+                </button>
+              </div>
+
+              {/* Total & Apply */}
+              <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-xl border border-gray-200">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-green-500 p-3 rounded-lg">
+                      <DollarSign className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 font-medium">Total Charges</div>
+                      <div className="text-2xl font-bold text-gray-800">
+                        ${(customerCharges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={closeChargesPopup}
+                      className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyCharges}
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                    >
+                      Apply to Customer Charges
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
@@ -591,6 +1107,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
   // toasts
   const [toast, setToast] = useState({ open: false, severity: "success", msg: "" });
+
+  // Email modal state
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailData, setEmailData] = useState(null);
+  const [emailForm, setEmailForm] = useState({
+    pdfFile: null
+  });
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [pdfUploading, setPdfUploading] = useState(false);
 
   // === TAB 0: Assigned to Accountant ===
   const [loading, setLoading] = useState(false);
@@ -664,11 +1189,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [approvalAction, setApprovalAction] = useState("approve"); // "approve" | "reject"
   const [approvalRemarks, setApprovalRemarks] = useState("");
   const [posting, setPosting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [rejectingToCMT, setRejectingToCMT] = useState(false);
 
   // Resubmit form state
   const [resubmitCorrections, setResubmitCorrections] = useState("");
   const [resubmitRemarks, setResubmitRemarks] = useState("");
   const [resubmitPosting, setResubmitPosting] = useState(false);
+  
+  // Resubmit to CMT form state
+  const [resubmitCMTRemarks, setResubmitCMTRemarks] = useState("");
+  const [resubmitCMTPosting, setResubmitCMTPosting] = useState(false);
 
   // PDF generation state
   const [pdfLoading, setPdfLoading] = useState({ invoice: false, rate: false, bol: false });
@@ -719,6 +1250,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // Generate Rate Load Confirmation PDF function
   const generateRateLoadConfirmationPDF = async (order) => {
     try {
+      // Get company info based on addDispature
+      const orderCompanyName = order?.addDispature || order?.company || '';
+      let pdfLogo = Logo;
+      if (orderCompanyName === 'IDENTIFICA LLC') {
+        pdfLogo = IdentificaLogo;
+      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC') {
+        pdfLogo = MtPoconoLogo;
+      }
+      
       // 1) Dispatcher info
       let dispatcherPhone = 'N/A';
       let dispatcherEmail = 'N/A';
@@ -941,7 +1481,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     <!-- Header -->
     <div class="header">
       <div style="width:120px; height:90px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; border:1px solid #ddd;">
-        <img src="${logoSrc}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
+        <img src="${pdfLogo}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
              onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/>
         <div style="display:none; text-align:center; color:#666; font-size:12px;">
           <div style="font-weight:bold;">COMPANY</div>
@@ -1119,6 +1659,31 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
       const printWindow = window.open('', '_blank');
 
+      // Get company info based on addDispature
+      const orderCompanyName = order?.addDispature || order?.company || '';
+      let pdfLogo = Logo;
+      let companyDisplayName = '';
+      let companyDisplayAddress = '';
+      
+      // Determine logo based on company name
+      if (orderCompanyName === 'IDENTIFICA LLC') {
+        pdfLogo = IdentificaLogo;
+        companyDisplayName = 'IDENTIFICA LLC';
+        companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
+      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC') {
+        pdfLogo = MtPoconoLogo;
+        companyDisplayName = 'MT. POCONO TRANSPORTATION INC';
+        companyDisplayAddress = '1900 CORPORATE CENTER DRIVE EAST TOBYHANNA, PA 18466';
+      } else if (orderCompanyName === 'V Power Logistics') {
+        pdfLogo = Logo;
+        companyDisplayName = 'V Power Logistics';
+        companyDisplayAddress = '7945 14TH AVE SW SEATTLE, WA 98106';
+      } else if (orderCompanyName) {
+        pdfLogo = Logo;
+        companyDisplayName = orderCompanyName;
+        companyDisplayAddress = '7945 14TH AVE SW SEATTLE, WA 98106';
+      }
+
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
       const companyName = (cust.billTo || '').trim();
@@ -1170,7 +1735,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   body{font-family:Arial,sans-serif;line-height:1.4;color:#333;background:#fff;font-size:12px}
   .invoice{max-width:800px;margin:0 auto;background:#fff;padding:20px}
   .header{display:flex;gap:16px;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px}
-  .logo{width:140px;height:90px;object-fit:contain;flex:0 0 auto}
+  .logo{width:200px;height:120px;object-fit:contain;flex:0 0 auto}
+  .logo-container{margin-bottom:12px;width:100%}
+  .company-table{border-collapse:collapse;width:150%;max-width:350px;font-size:12px;margin-top:8px}
+  .company-table th,.company-table td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
+  .company-table th{background:#f5f5f5;font-weight:bold}
+  .company-table th:first-child{width:25%}
+  .company-table th:last-child{width:75%}
   .header-right{flex:1 1 auto}
   .billto{border-collapse:collapse;width:65%;font-size:12px;margin-left:auto}
   .billto th,.billto td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
@@ -1199,13 +1770,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   <div class="invoice">
     <!-- HEADER: logo (left) + Bill To table (right) -->
     <div class="header">
-      <div style="width:140px; height:90px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; border:1px solid #ddd;">
-        <img src="${logoSrc}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
-             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/>
-        <div style="display:none; text-align:center; color:#666; font-size:12px;">
-          <div style="font-weight:bold;">COMPANY</div>
-          <div>LOGO</div>
+      <div>
+        <div class="logo-container" style="width:200px; height:120px; display:flex; align-items:center; justify-content:center; background:#f0f0f0; border:1px solid #ddd;">
+          <img src="${pdfLogo}" alt="Company Logo" class="logo" style="max-width:100%; max-height:100%; object-fit:contain;" 
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"/>
+          <div style="display:none; text-align:center; color:#666; font-size:12px;">
+            <div style="font-weight:bold;">COMPANY</div>
+            <div>LOGO</div>
+          </div>
         </div>
+        ${companyDisplayName ? `<table class="company-table">
+          <tr><th style="width: 25%;">Bill From</th><td style="width: 75%;">${companyDisplayName}<br>${companyDisplayAddress}</td></tr>
+        </table>` : ''}
       </div>
       <div class="header-right">
         <table class="billto">
@@ -1468,8 +2044,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
     })();
 
-    // Use your actual logo
-    const safeLogo = logoSrc;
+    // Get company info based on addDispature
+    const companyName = order?.addDispature || order?.company || '';
+    let pdfLogo = Logo;
+    if (companyName === 'IDENTIFICA LLC') {
+      pdfLogo = IdentificaLogo;
+    } else if (companyName === 'MT. POCONO TRANSPORTATION INC') {
+      pdfLogo = MtPoconoLogo;
+    }
+    const safeLogo = pdfLogo;
 
     // ---------- HELPERS ----------
     const fmtDate = (d) => {
@@ -2005,6 +2588,52 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
   };
 
+  // ===== POST: Reject Load and Send to CMT (from Final Approval) =====
+  const postRejectToCMT = async () => {
+    if (!selected?._id) {
+      setToast({ open: true, severity: "error", msg: "No DO selected." });
+      return;
+    }
+
+    if (!rejectionReason.trim()) {
+      setToast({ open: true, severity: "error", msg: "Please provide a reason for rejection." });
+      return;
+    }
+
+    setRejectingToCMT(true);
+    try {
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/approval`;
+      const body = {
+        doId: selected._id,
+        accountantEmpId: empId,
+        action: "reject",
+        remarks: rejectionReason.trim(),
+      };
+      const resp = await axios.post(url, body, { headers });
+
+      const msg = resp?.data?.message || "Load rejected and sent to CMT successfully";
+      setToast({ open: true, severity: "success", msg });
+
+      // reset form
+      setRejectionReason("");
+      
+      // refresh assigned tab immediately
+      if (activeTab === 0) {
+        fetchData(page);
+      }
+      
+      // close modal after refresh
+      setTimeout(() => {
+        setDetailsOpen(false);
+      }, 300);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Failed to reject and send to CMT";
+      setToast({ open: true, severity: "error", msg });
+    } finally {
+      setRejectingToCMT(false);
+    }
+  };
+
   // ===== POST: Resubmit to Sales =====
   const postResubmitToSales = async () => {
     if (!selected?._id) {
@@ -2026,16 +2655,66 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const msg = resp?.data?.message || "DO resubmitted to sales successfully";
       setToast({ open: true, severity: "success", msg });
 
-      // refresh rejected tab silently
+      // reset form
+      setResubmitCorrections("");
+      setResubmitRemarks("");
+      
+      // refresh rejected tab immediately
       fetchRejected(rejectedPage);
       
-      // close modal
-      setDetailsOpen(false);
+      // close modal after refresh
+      setTimeout(() => {
+        setDetailsOpen(false);
+      }, 300);
     } catch (e) {
       const msg = e?.response?.data?.message || e?.message || "Failed to resubmit to sales";
       setToast({ open: true, severity: "error", msg });
     } finally {
       setResubmitPosting(false);
+    }
+  };
+
+  // ===== POST: Resubmit to CMT =====
+  const postResubmitToCMT = async () => {
+    if (!selected?._id) {
+      setToast({ open: true, severity: "error", msg: "No DO selected." });
+      return;
+    }
+
+    if (!resubmitCMTRemarks.trim()) {
+      setToast({ open: true, severity: "error", msg: "Please provide remarks for rejection." });
+      return;
+    }
+
+    setResubmitCMTPosting(true);
+    try {
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/approval`;
+      const body = {
+        doId: selected._id,
+        accountantEmpId: empId,
+        action: "reject",
+        remarks: resubmitCMTRemarks.trim(),
+      };
+      const resp = await axios.post(url, body, { headers });
+
+      const msg = resp?.data?.message || "DO rejected and sent to CMT successfully";
+      setToast({ open: true, severity: "success", msg });
+
+      // reset form
+      setResubmitCMTRemarks("");
+      
+      // refresh rejected tab immediately
+      fetchRejected(rejectedPage);
+      
+      // close modal after refresh
+      setTimeout(() => {
+        setDetailsOpen(false);
+      }, 300);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Failed to resubmit to CMT";
+      setToast({ open: true, severity: "error", msg });
+    } finally {
+      setResubmitCMTPosting(false);
     }
   };
 
@@ -2115,6 +2794,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       carrierPaymentProof: null
     });
     setShortPayModalOpen(true);
+  };
+
+  const openEmailModal = (row) => {
+    setEmailData(row);
+    setEmailForm({
+      pdfFile: null
+    });
+    setEmailModalOpen(true);
   };
 
   // Helper function to emit payment notification via BroadcastChannel
@@ -2401,6 +3088,105 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
   };
 
+  // Send email to customer function
+  const handleEmailSubmit = async () => {
+    if (!emailData?._id) {
+      setToast({ open: true, severity: "error", msg: "DO ID is required" });
+      return;
+    }
+
+    // Validate PDF file is uploaded
+    if (!emailForm.pdfFile) {
+      setToast({ open: true, severity: "error", msg: "Please upload a PDF file before sending email" });
+      return;
+    }
+
+    const token = getStored("token");
+    if (!token) {
+      setToast({ open: true, severity: "error", msg: "Authentication required. Please login again." });
+      return;
+    }
+
+    const doId = emailData._id;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Step 1: Upload PDF to attachments API first
+    setPdfUploading(true);
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('invoicePDF', emailForm.pdfFile);
+
+      const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${doId}/pdf-attachments`;
+      const uploadResp = await axios.post(uploadUrl, uploadFormData, { headers });
+
+      if (!uploadResp?.data?.success) {
+        const uploadErrorMsg = uploadResp?.data?.message || "Failed to upload PDF";
+        setToast({ open: true, severity: "error", msg: uploadErrorMsg });
+        setPdfUploading(false);
+        return;
+      }
+
+      // PDF uploaded successfully, now send email
+      setPdfUploading(false);
+      setEmailLoading(true);
+
+      // Step 2: Send email to customer (JSON body with doId only, as per API docs)
+      const emailUrl = `${API_CONFIG.BASE_URL}/api/v1/accountant/send-to-customer`;
+      const emailHeaders = {
+        ...headers,
+        'Content-Type': 'application/json',
+      };
+      const emailResp = await axios.post(emailUrl, { doId }, { headers: emailHeaders });
+
+      if (emailResp?.data?.success) {
+        const data = emailResp?.data?.data || {};
+        const shipperName = data.shipperName || "customer";
+        const shipperEmail = data.shipperEmail || "";
+        const pdfsAttached = data.frontendPDFsAttached || 0;
+        const paymentDueDate = data.paymentDueDate ? new Date(data.paymentDueDate).toLocaleDateString() : '';
+        const dueDateReset = data.dueDateReset !== undefined ? data.dueDateReset : true;
+        
+        let message = '';
+        if (dueDateReset) {
+          // First email send - due date was set/reset
+          message = `Email sent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ''} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ''}${paymentDueDate ? `. Payment due date set to: ${paymentDueDate}` : ''}`;
+        } else {
+          // Email resent - due date unchanged
+          message = `Email resent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ''} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ''}. Due date remains unchanged${paymentDueDate ? `: ${paymentDueDate}` : ''}`;
+        }
+        
+        setToast({ open: true, severity: "success", msg: message });
+        setEmailModalOpen(false);
+        setEmailForm({ pdfFile: null });
+        // Refresh the accepted rows to show updated email status and due date
+        fetchAccepted(acceptedPage);
+      } else {
+        setToast({ open: true, severity: "error", msg: emailResp?.data?.message || "Failed to send email" });
+      }
+    } catch (error) {
+      let errorMsg = error?.response?.data?.message || error?.message || "Failed to process request";
+      
+      // Handle specific error codes with user-friendly messages
+      if (errorMsg.includes('MESSAGE_SIZE_EXCEEDED') || errorMsg.includes('Mail size too large')) {
+        errorMsg = "Email size exceeds 20MB limit. Please upload a smaller PDF file or remove other attachments. The backend-generated invoice PDF and other uploaded PDFs are included in the total size.";
+      } else if (errorMsg.includes('INVALID_SENDER')) {
+        errorMsg = "Email sending failed: Sender email not verified. Please contact support.";
+      } else if (errorMsg.includes('INVALID_RECIPIENT')) {
+        errorMsg = "Email sending failed: Invalid recipient email address. Please check the shipper's email.";
+      } else if (pdfUploading) {
+        errorMsg = `Failed to upload PDF: ${errorMsg}`;
+      }
+      
+      setToast({ open: true, severity: "error", msg: errorMsg });
+      console.error('Error:', error);
+    } finally {
+      setPdfUploading(false);
+      setEmailLoading(false);
+    }
+  };
+
   // initial loads
   useEffect(() => {
     fetchData(page);
@@ -2593,8 +3379,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setDetailsOpen(true);
     setApprovalAction("approve");
     setApprovalRemarks("");
+    setRejectionReason("");
     setResubmitCorrections("");
     setResubmitRemarks("");
+    setResubmitCMTRemarks("");
     const shipmentNo = row?.loadReference?.shipmentNumber;
     fetchShipmentImages(shipmentNo);
     fetchAdditionalDocs(row?._id);
@@ -2701,7 +3489,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       });
     } else if (activeTab === 2) {
       // Approved By Sales tab
-      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Payment Status", "Approved By", "Approved At"];
+      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Payment Status", "Approved By", "Approved At", "Payment Due Date", "Days Remaining"];
       rows = data.map((row) => {
         const cust = row?.customers?.[0] || {};
         const totals = computeTotals(row);
@@ -2717,6 +3505,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
         const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
         const carrierIsPaid = carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+        const dueDateInfo = getDueDateInfo(row);
+        const dueDateFormatted = dueDateInfo ? formatDueDate(dueDateInfo) : "—";
+        const daysValue = dueDateInfo 
+          ? (dueDateInfo.isOverdue ? `-${dueDateInfo.daysOverdue}` : dueDateInfo.daysRemaining)
+          : "—";
         return [
           row?._id || "",
           cust?.loadNo || "",
@@ -2726,7 +3519,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           `$${fmtMoney(totals.carrierTotal)}`,
           carrierIsPaid ? "Paid" : "Unpaid/Partial",
           apprBy,
-          fmtDateTime(apprAt)
+          fmtDateTime(apprAt),
+          dueDateFormatted,
+          daysValue
         ];
       });
     }
@@ -2895,6 +3690,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
@@ -2908,6 +3704,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           const cust = row?.customers?.[0] || {};
                           const totals = computeTotals(row);
                           const fwBy = row?.forwardedToAccountant?.forwardedBy?.employeeName || "—";
+                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
                           return (
                             <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                               <td className="py-2 px-3">
@@ -2921,6 +3718,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{agentName}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
@@ -3158,6 +3958,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
@@ -3179,6 +3980,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             || row?.accountantApproval?.assignedTo?.empId
                             || "—";
                           const apprAt = row?.accountantApproval?.approvedAt || row?.updatedAt;
+                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
                           return (
                             <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                               <td className="py-2 px-3">
@@ -3192,6 +3994,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{agentName}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
@@ -3521,10 +4326,12 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved By</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved At</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
                           <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
                           <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pay</th>
                         </tr>
@@ -3537,6 +4344,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             || row?.salesApproval?.approvedBy?.empId
                             || "—";
                           const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
+                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
                           // Check both paymentStatus (for bill payment) and carrierPaymentStatus (for carrier payment)
                           const isPaid = row?.paymentStatus?.status === 'paid';
                           const carrierPaymentStatus = row?.carrierPaymentStatus || {};
@@ -3557,6 +4365,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           const carrierIsPartiallyPaid = carrierStatus === 'pending' && carrierTotalPaid > 0 && carrierTotalPaid < carrierTotal - 0.01 && remainingAmount > 0.01;
                           const carrierRemaining = Math.max(0, carrierTotal - carrierTotalPaid);
                           const isSelected = selectedDOs.has(row._id);
+                          const dueDateInfo = getDueDateInfo(row);
+                          const isOverdue = dueDateInfo?.isOverdue || false;
                           
                           // Debug logging for all DOs to understand data structure
                           if (!carrierIsPaid && carrierTotal > 0) {
@@ -3574,7 +4384,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             });
                           }
                           return (
-                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} ${isSelected ? 'bg-blue-50' : ''}`}>
+                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} ${isSelected ? 'bg-blue-50' : ''} ${isOverdue ? 'bg-red-50/50 hover:bg-red-100/50' : ''}`}>
                               <td className="py-2 px-3 text-center">
                                 <Checkbox
                                   checked={isSelected}
@@ -3603,6 +4413,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
                               </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{agentName}</span>
+                              </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
                               </td>
@@ -3616,7 +4429,54 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 <span className="font-medium text-gray-700">{fmtDateTime(apprAt)}</span>
                               </td>
                               <td className="py-2 px-3">
-                                <div className="flex items-center justify-center gap-2">
+                                {(() => {
+                                  const dueDateInfo = getDueDateInfo(row);
+                                  
+                                  if (!dueDateInfo) {
+                                    return (
+                                      <div className="flex items-center justify-center">
+                                        <span className="text-gray-400">—</span>
+                                      </div>
+                                    );
+                                  }
+                                  
+                                  const statusColor = getDueDateStatusColor(dueDateInfo);
+                                  const daysValue = dueDateInfo.isOverdue 
+                                    ? `-${dueDateInfo.daysOverdue}` 
+                                    : dueDateInfo.daysRemaining;
+                                  const dueDateFormatted = formatDueDate(dueDateInfo);
+                                  
+                                  return (
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span 
+                                        className="font-semibold text-sm"
+                                        style={{ color: statusColor }}
+                                      >
+                                        {dueDateFormatted}
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <span 
+                                          className="font-bold text-base"
+                                          style={{ color: statusColor }}
+                                          title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
+                                        >
+                                          {daysValue}
+                                        </span>
+                                        <span className="text-xs font-medium" style={{ color: statusColor }}>
+                                          {dueDateInfo.isOverdue ? 'days overdue' : 'days left'}
+                                        </span>
+                                        <CheckCircle 
+                                          size={16} 
+                                          style={{ color: statusColor }}
+                                          className="flex-shrink-0"
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center justify-center gap-2 flex-wrap">
                                   <button
                                     onClick={() => openDetails(row)}
                                     className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -3624,6 +4484,30 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   >
                                     <Eye size={16} />
                                   </button>
+                                  {row?.emailNotification?.sentToShipper ? (
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
+                                        <CheckCircle size={12} />
+                                        Email Sent {row?.emailNotification?.sentAt ? `(${fmtDate(row.emailNotification.sentAt)})` : ''}
+                                      </span>
+                                      <button
+                                        onClick={() => openEmailModal(row)}
+                                        className="px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-xs font-semibold rounded-lg hover:from-yellow-600 hover:to-yellow-700 transition-all shadow-md hover:shadow-lg whitespace-nowrap flex items-center gap-1"
+                                        title="Resend email to customer (due date will not be reset)"
+                                      >
+                                        <RefreshCw size={14} />
+                                        Resend Email
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => openEmailModal(row)}
+                                      className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all shadow-md hover:shadow-lg whitespace-nowrap"
+                                      title="Send email to customer"
+                                    >
+                                      Mail Send to Customer
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                               <td className="py-2 px-3">
@@ -3823,6 +4707,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
                           <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
@@ -3837,6 +4722,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           const totals = computeTotals(row);
                           const rejectedBy = row?.salesApproval?.rejectedBy?.employeeName || "—";
                           const rejectedAt = row?.salesApproval?.rejectedAt || row?.updatedAt;
+                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
                           return (
                             <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                               <td className="py-2 px-3">
@@ -3850,6 +4736,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-medium text-gray-700">{agentName}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
@@ -4043,6 +4932,66 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Company Information */}
+              {selected?.addDispature && (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                      <Truck className="text-indigo-600" size={20} />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800">Company Information</h3>
+                  </div>
+
+                  <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Company Name</p>
+                        <p className="font-semibold text-gray-800 text-lg">
+                          {selected.addDispature || selected?.company || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Agent Information */}
+              {selected?.loadReference?.createdBySalesUser && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <User className="text-blue-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">Agent Information</h3>
+                  </div>
+
+                  <div className="bg-white rounded-xl p-4 border border-blue-200">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Agent Name</p>
+                        <p className="font-semibold text-gray-800">
+                          {selected?.loadReference?.createdBySalesUser?.empName || 'N/A'}
+                        </p>
+                      </div>
+                      {selected?.loadReference?.createdBySalesUser?.empId && (
+                        <div>
+                          <p className="text-sm text-gray-600">Employee ID</p>
+                          <p className="font-semibold text-gray-800">
+                            {selected?.loadReference?.createdBySalesUser?.empId}
+                          </p>
+                        </div>
+                      )}
+                      {selected?.loadReference?.createdBySalesUser?.department && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-600">Department</p>
+                          <p className="font-semibold text-gray-800">
+                            {selected?.loadReference?.createdBySalesUser?.department}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -4761,6 +5710,60 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     )}
                   </CardContent>
                 </Card>
+              
+              {/* Corrections and Resubmission Information - Show for Assigned to Accountant tab (tab 0) and Accountant Approved tab (tab 1) */}
+              {(activeTab === 0 || activeTab === 1) && (selected?.accountantApproval?.corrections || selected?.accountantApproval?.resubmissionRemarks) && (
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <FileText className="text-blue-600" size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-800">Corrections & Resubmission Details</h3>
+                      <p className="text-sm text-gray-600">Information from previous resubmission</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Corrections */}
+                    {selected?.accountantApproval?.corrections && (
+                      <div className="bg-white rounded-xl p-4 border border-blue-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle className="text-blue-600" size={16} />
+                          <h4 className="font-semibold text-gray-800">Corrections Made</h4>
+                        </div>
+                        <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                          {selected.accountantApproval.corrections}
+                        </p>
+                        {selected?.accountantApproval?.resubmittedAt && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Resubmitted at: {fmtDateTime(selected.accountantApproval.resubmittedAt)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Resubmission Remarks */}
+                    {selected?.accountantApproval?.resubmissionRemarks && (
+                      <div className="bg-white rounded-xl p-4 border border-cyan-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="text-cyan-600" size={16} />
+                          <h4 className="font-semibold text-gray-800">Resubmission Remarks</h4>
+                        </div>
+                        <p className="text-sm text-gray-700 bg-cyan-50 p-3 rounded-lg border border-cyan-100">
+                          {selected.accountantApproval.resubmissionRemarks}
+                        </p>
+                        {selected?.accountantApproval?.resubmittedBy && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Resubmitted by: {selected.accountantApproval.resubmittedBy?.employeeName || selected.accountantApproval.resubmittedBy?.empId || 'N/A'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Final Approval - Only show for Assigned to Accountant tab (tab 0) */}
               {activeTab === 0 && (
                 <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
@@ -4792,7 +5795,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   <div className="space-y-4">
                     <button
                       onClick={postAccountantApproval}
-                      disabled={posting}
+                      disabled={posting || rejectingToCMT}
                       className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {posting ? (
@@ -4804,6 +5807,56 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <>
                           <Send size={18} />
                           <span>Send to Sales</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="my-6 flex items-center">
+                    <div className="flex-1 border-t border-orange-300"></div>
+                    <span className="px-4 text-sm text-gray-500 font-medium">OR</span>
+                    <div className="flex-1 border-t border-orange-300"></div>
+                  </div>
+
+                  {/* Rejection Section */}
+                  <div className="mt-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                        <XCircle className="text-red-600" size={16} />
+                      </div>
+                      <h4 className="text-md font-bold text-gray-800">Reject Load</h4>
+                    </div>
+
+                    {/* Rejection Reason */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Rejection Reason <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        placeholder="Enter reason for rejecting this load (e.g., Incorrect rates, missing documents, etc.)"
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        rows={4}
+                        className="w-full px-4 py-3 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                      />
+                    </div>
+
+                    {/* Reject to CMT Button */}
+                    <button
+                      onClick={postRejectToCMT}
+                      disabled={rejectingToCMT || posting || !rejectionReason.trim()}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {rejectingToCMT ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Rejecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={18} />
+                          <span>Rejected Load with reason</span>
                         </>
                       )}
                     </button>
@@ -4922,6 +5975,49 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
                         This will resubmit the DO back to sales with your corrections and remarks.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Resubmit to CMT - Only show for rejected DOs */}
+                {activeTab === 3 && (
+                  <Card variant="outlined" sx={{ mt: 2 }}>
+                    <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#f59e0b", 0.05) }}>
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        Resubmit to CMT
+                      </Typography>
+                    </Box>
+                    <CardContent>
+                      {/* Remarks */}
+                      <TextField
+                        label="Rejection Remarks"
+                        placeholder="Enter reason for rejecting to CMT (e.g., CMT needs to correct rates, provide additional documents, etc.)"
+                        fullWidth
+                        multiline
+                        minRows={3}
+                        maxRows={6}
+                        value={resubmitCMTRemarks}
+                        onChange={(e) => setResubmitCMTRemarks(e.target.value)}
+                        required
+                        sx={{ mb: 2 }}
+                      />
+
+                      {/* Submit Button */}
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        startIcon={<SendIcon />}
+                        onClick={postResubmitToCMT}
+                        disabled={resubmitCMTPosting || !resubmitCMTRemarks.trim()}
+                        fullWidth
+                        size="large"
+                      >
+                        {resubmitCMTPosting ? "Resubmitting..." : "Resubmit to CMT"}
+                      </Button>
+
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
+                        This will reject the DO and send it back to the assigned CMT user for corrections. The CMT user will receive an email notification with your remarks.
                       </Typography>
                     </CardContent>
                   </Card>
@@ -5146,6 +6242,140 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                     >
                       {paymentLoading ? "Processing..." : "Mark as Paid"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Email Modal */}
+      {emailModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setEmailModalOpen(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <Send size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Send Email to Customer</h2>
+                      <p className="text-white/80 text-sm">DO ID: {emailData?._id ? shortId(emailData._id) : 'N/A'}</p>
+                      {emailData?.customers?.[0]?.loadNo && (
+                        <p className="text-white/80 text-sm">Load No: {emailData.customers[0].loadNo}</p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEmailModalOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                    disabled={emailLoading}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <div className="p-6">
+                <div className="space-y-4">
+                  {/* PDF Upload */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      PDF File <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-500 transition-colors">
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            if (file.type !== 'application/pdf') {
+                              setToast({ open: true, severity: "error", msg: "Please upload a PDF file only" });
+                              return;
+                            }
+                            setEmailForm({ ...emailForm, pdfFile: file });
+                          }
+                        }}
+                        className="hidden"
+                        id="email-pdf-upload"
+                      />
+                      <label
+                        htmlFor="email-pdf-upload"
+                        className="cursor-pointer flex flex-col items-center justify-center"
+                      >
+                        {emailForm.pdfFile ? (
+                          <div className="text-center">
+                            <FileText size={32} className="text-purple-500 mx-auto mb-2" />
+                            <p className="text-sm font-medium text-gray-700">{emailForm.pdfFile.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(emailForm.pdfFile.size / 1024).toFixed(2)} KB
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEmailForm({ ...emailForm, pdfFile: null });
+                                document.getElementById('email-pdf-upload').value = '';
+                              }}
+                              className="mt-2 text-sm text-red-500 hover:text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <AttachFileIcon className="text-gray-400 mb-2" style={{ fontSize: 40 }} />
+                            <p className="text-sm font-medium text-gray-700">Click to upload PDF file</p>
+                            <p className="text-xs text-gray-500 mt-1">PDF only</p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => setEmailModalOpen(false)}
+                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                      disabled={emailLoading || pdfUploading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleEmailSubmit}
+                      disabled={emailLoading || pdfUploading || !emailForm.pdfFile}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                    >
+                      {pdfUploading ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>Uploading PDF...</span>
+                        </>
+                      ) : emailLoading ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>Sending Email...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={16} />
+                          <span>Send Email</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

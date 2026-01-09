@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import diningTableImage from '../assets/dinnerChaIT.png';
+import API_CONFIG from '../config/api';
 
 const DinnerStatus = () => {
   // Initialize seats state
@@ -59,7 +60,7 @@ const DinnerStatus = () => {
       setError(null);
       
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-      const response = await axios.get('https://vpl-liveproject-1.onrender.com/api/v1/dinner-seats/status', {
+      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/dinner-seats/status`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -141,7 +142,7 @@ const DinnerStatus = () => {
         return;
       }
 
-      const response = await axios.post('https://vpl-liveproject-1.onrender.com/api/v1/dinner-seats/reserve', {
+      const response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/dinner-seats/reserve`, {
         seatNumber: seatNumber,
         empId: userData.empId,
         department: userDepartment
@@ -191,7 +192,7 @@ const DinnerStatus = () => {
         return;
       }
 
-      const response = await axios.post('https://vpl-liveproject-1.onrender.com/api/v1/dinner-seats/cancel', {
+      const response = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/dinner-seats/cancel`, {
         empId: userData.empId
       }, {
         headers: {

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import TermsAndConditions from "../Components/TermsAndConditions";
+import API_CONFIG from "../config/api";
 
 /* ---------- Helpers ---------- */
 const todayISO = () => new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -107,7 +108,7 @@ const ProfilePage = () => {
 
   const fetchLeaveHistory = async () => {
     try {
-      const res = await axios.get("https://vpl-liveproject-1.onrender.com/api/v1/leave/my", authHeader());
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/leave/my`, authHeader());
       if (res.data.success) setLeaveHistory(res.data.leaves || []);
       else setLeaveHistory([]);
     } catch (err) {
@@ -118,7 +119,7 @@ const ProfilePage = () => {
   const fetchLeaveBalance = async () => {
     if (!empId) return;
     try {
-      const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/leave/balance/${empId}`, authHeader());
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/leave/balance/${empId}`, authHeader());
       if (res.data.success) setLeaveBalance(res.data);
       else setLeaveBalance(null);
     } catch (err) {
@@ -130,7 +131,7 @@ const ProfilePage = () => {
     const d = date || attendanceDate;
     if (!d || !empId) return;
     try {
-      const res = await axios.get(`https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/activity/user/${empId}?date=${d}`, authHeader());
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/activity/user/${empId}?date=${d}`, authHeader());
       if (res.data.success) setAttendanceRecord(res.data);
       else setAttendanceRecord(null);
     } catch {
@@ -142,7 +143,7 @@ const ProfilePage = () => {
     try {
       if (!date) return;
       const res = await axios.get(
-        `https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/date?date=${date}`,
+        `${API_CONFIG.BASE_URL}/api/v1/hr-activity/call/date?date=${date}`,
         authHeader()
       );
       if (res.data.success && Array.isArray(res.data.data)) setCallLogs(res.data.data);
@@ -162,7 +163,7 @@ const ProfilePage = () => {
   useEffect(() => {
     if (!empId) return;
     axios
-      .get(`https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/${empId}`, authHeader())
+      .get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${empId}`, authHeader())
       .then((res) => {
         if (res.data.success) setEmployee(res.data.employee);
       })
@@ -301,7 +302,7 @@ const ProfilePage = () => {
       };
 
       const res = await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/leave/apply-with-balance",
+        `${API_CONFIG.BASE_URL}/api/v1/leave/apply-with-balance`,
         payload,
         authHeader()
       );
@@ -356,7 +357,7 @@ const ProfilePage = () => {
       };
 
       await axios.post(
-        "https://vpl-liveproject-1.onrender.com/api/v1/hr-activity/call/create",
+        `${API_CONFIG.BASE_URL}/api/v1/hr-activity/call/create`,
         payload,
         authHeader()
       );

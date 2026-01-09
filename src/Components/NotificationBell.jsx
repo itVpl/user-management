@@ -264,11 +264,11 @@ const NotificationBell = () => {
                             </button>
                           </div>
                         )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
             )}
           </div>
 
@@ -291,5 +291,4 @@ const NotificationBell = () => {
     </div>
   );
 };
-
 export default NotificationBell;

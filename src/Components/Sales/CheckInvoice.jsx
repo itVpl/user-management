@@ -42,9 +42,7 @@ import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 
 /* ================= Config ================ */
-const API_CONFIG = {
-  BASE_URL: "https://vpl-liveproject-1.onrender.com",
-};
+import API_CONFIG from '../../config/api';
 
 /* ================= Utils ================= */
 const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
@@ -133,7 +131,22 @@ export default function CheckInvoice({ salesEmpId: propSalesId, defaultStatus = 
   });
 
   const token = getStored("token");
-  const salesEmpId = propSalesId || getStored("salesEmpId") || "1234";
+  // Get logged-in user's empId from storage (try direct empId first, then from user object)
+  const getLoggedInEmpId = () => {
+    const directEmpId = getStored("empId");
+    if (directEmpId) return directEmpId;
+    const userString = getStored("user");
+    if (userString) {
+      try {
+        const user = JSON.parse(userString);
+        return user?.empId || null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+  const salesEmpId = propSalesId || getStored("salesEmpId") || getLoggedInEmpId();
 
   const fetchList = async (targetPage = 1) => {
     setLoading(true);

@@ -1,6 +1,7 @@
 // Utility functions for fetching load details
+import API_CONFIG from '../config/api';
 
-const API_BASE_URL = 'https://vpl-liveproject-1.onrender.com/api/v1';
+const API_BASE_URL = `${API_CONFIG.BASE_URL}/api/v1`;
 
 // Get authentication token
 const getAuthToken = () => {

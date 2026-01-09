@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
+import API_CONFIG from '../config/api.js';
 
 // Chat Message Context
 const ChatMessageContext = createContext();
@@ -163,10 +164,11 @@ export function ChatMessageProvider({ children }) {
       return;
     }
 
-    // Get socket URL from environment variables (Vite uses import.meta.env)
+    // Get socket URL from environment variables or API config (Vite uses import.meta.env)
     const socketUrl = import.meta.env.VITE_SOCKET_URL || 
                      import.meta.env.REACT_APP_SOCKET_URL || 
-                     'http://localhost:3001';
+                     API_CONFIG.BASE_URL || 
+                     'https://vpl-liveproject-1.onrender.com';
 
     try {
       // Initialize socket connection
