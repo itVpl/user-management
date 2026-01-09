@@ -45,7 +45,7 @@ const IndustrySection = () => {
       };
   
       try {
-        const response = await fetch("https://formsubmit.co/ajax/jsnikhil11@gmail.com", {
+        const response = await fetch("https://formsubmit.co/ajax/contact@vpower-logistics.com", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Accept": "application/json" },
           body: JSON.stringify(dataToSend)

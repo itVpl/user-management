@@ -5,15 +5,16 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import TermsAndConditions from '../../../Components/TermsAndConditions';
 
-// Simple inline icons (no extra libs)
-const Eye = (props) => (
-  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
+// Eye Icons
+const Eye = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
-const EyeOff = (props) => (
-  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
+
+const EyeOff = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M3 3l18 18" />
     <path d="M10.58 10.58a3 3 0 104.24 4.24" />
     <path d="M9.88 4.24A10.94 10.94 0 0112 4c7 0 11 8 11 8a18.19 18.19 0 01-4.22 5.56" />
@@ -21,18 +22,20 @@ const EyeOff = (props) => (
   </svg>
 );
 
+// Arrow Icon
+const ArrowLeft = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M15 18l-6-6 6-6" />
+  </svg>
+);
+
 function Login({ setIsAuthenticated }) {
   const [empId, setEmpId] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // 👁️ default hidden (eye closed)
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // Inline validation errors
-  const [fieldErrors, setFieldErrors] = useState({ empId: '', password: '' });
-  // Auth error (invalid id/password)
+  const [errors, setErrors] = useState({});
   const [authError, setAuthError] = useState('');
-
-  // Terms and conditions state
   const [showTerms, setShowTerms] = useState(false);
   const [userData, setUserData] = useState(null);
 
@@ -40,24 +43,22 @@ function Login({ setIsAuthenticated }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setAuthError('');
-    setFieldErrors({ empId: '', password: '' });
+    setErrors({});
 
-    // Frontend required-field validation
-    const nextErrors = { empId: '', password: '' };
-    if (!empId.trim()) nextErrors.empId = 'Please enter the employee id.';
-    if (!password.trim()) nextErrors.password = 'Please enter the password.';
-    if (nextErrors.empId || nextErrors.password) {
-      setFieldErrors(nextErrors);
-      setLoading(false);
+    if (!empId.trim() || !password.trim()) {
+      setErrors({
+        empId: !empId ? 'Employee ID required' : '',
+        password: !password ? 'Password required' : '',
+      });
       return;
     }
 
     try {
+      setLoading(true);
       const res = await axios.post(
         'https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/login',
-        { empId: empId.trim(), password },
+        { empId, password },
         { withCredentials: true }
       );
 
@@ -65,169 +66,110 @@ function Login({ setIsAuthenticated }) {
         const user = res.data.employee;
         const token = res.data.token;
 
-        // Store user data and token
-        sessionStorage.setItem('token', token);
-        sessionStorage.setItem('empId', user.empId);
-        sessionStorage.setItem('user', JSON.stringify(user));
         sessionStorage.setItem('authToken', token);
-        
-        // Store emailAccountId if present in login response
-        if (user.emailAccountId) {
-          sessionStorage.setItem('emailAccountId', user.emailAccountId);
-        }
+        sessionStorage.setItem('user', JSON.stringify(user));
 
-        // Check if terms are accepted
-        if (user.termsAccepted === false || user.termsAccepted === undefined) {
-          // Show terms and conditions modal
+        if (!user.termsAccepted) {
           setUserData(user);
           setShowTerms(true);
         } else {
-          // Terms already accepted, proceed to dashboard
           setIsAuthenticated?.(true);
           navigate('/dashboard');
         }
       } else {
-        // Generic auth error message (no backend phrasing like "Employee not found this id")
-        setAuthError('Please enter the valid employee id or password.');
-        // Clear fields on wrong creds
-        setEmpId('');
-        setPassword('');
-        setShowPassword(false);
+        setAuthError('Invalid employee id or password');
       }
-    } catch (err) {
-      // Always show generic message for any login failure
-      setAuthError('Please enter the valid employee id or password.');
-      // Clear fields on wrong creds
-      setEmpId('');
-      setPassword('');
-      setShowPassword(false);
+    } catch {
+      setAuthError('Invalid employee id or password');
     } finally {
       setLoading(false);
     }
   };
 
-  // Clear per-field error while typing
-  useEffect(() => {
-    if (empId) setFieldErrors((e) => ({ ...e, empId: '' }));
-    if (authError && empId) setAuthError('');
-  }, [empId]);
-
-  useEffect(() => {
-    if (password) setFieldErrors((e) => ({ ...e, password: '' }));
-    if (authError && password) setAuthError('');
-  }, [password]);
-
-  // Handle terms acceptance
-  const handleTermsAccepted = (termsData) => {
-    setShowTerms(false);
-    setIsAuthenticated?.(true);
-    navigate('/dashboard');
-  };
-
   return (
-    <div className="relative flex justify-center items-center min-h-screen px-4 overflow-hidden">
-      {/* Background video */}
-      <div className="absolute top-0 left-0 w-full h-full z-0 overflow-hidden">
-        <video
-          className="w-full h-full object-cover"
-          src={VideoBg}
-          autoPlay
-          loop
-          muted
-          playsInline
-        />
-        <div className="absolute inset-0 backdrop-blur-sm bg-black/20" />
-      </div>
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      {/* Background */}
+      <video
+        className="absolute inset-0 w-full h-full object-cover"
+        src={VideoBg}
+        autoPlay
+        loop
+        muted
+        playsInline
+      />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
-      {/* Card */}
-      <div className="relative z-20 w-full max-w-md p-8 sm:p-10 bg-white/90 backdrop-blur-md rounded-xl shadow-lg">
-        <form method="post" className="space-y-6" onSubmit={handleLogin} noValidate>
-          <div className="flex justify-center mb-2">
-            <img src={logo} alt="Company Logo" className="h-16 object-contain" />
+      {/* 🔙 Back To Home Button (IMAGE STYLE) */}
+      <button
+        onClick={() => navigate('/')}
+        className="fixed top-6 left-6 z-50 flex items-center gap-2 px-4 py-2
+                   text-white text-sm font-medium
+                   border border-white/80
+                   bg-black/30 backdrop-blur-md
+                   rounded-md
+                   hover:bg-white hover:text-black
+                   transition-all duration-200"
+      >
+        <ArrowLeft />
+        BACK TO HOME
+      </button>
+
+      {/* Login Card */}
+      <div className="relative z-10 bg-white/95 backdrop-blur-md rounded-xl shadow-xl p-8 w-full max-w-md">
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div className="flex justify-center">
+            <img src={logo} alt="logo" className="h-14" />
           </div>
 
-          {/* Employee ID */}
           <div>
             <input
               type="text"
-              placeholder="Employee ID *"
+              placeholder="Employee ID"
               value={empId}
               onChange={(e) => setEmpId(e.target.value)}
-              className={`w-full py-2 border-b bg-transparent focus:outline-none transition ${
-                fieldErrors.empId ? 'border-red-500 focus:border-red-600' : 'border-gray-400 focus:border-black'
-              }`}
-              aria-invalid={!!fieldErrors.empId}
-              aria-describedby="empId-error"
-              autoComplete="username"
+              className="w-full border-b py-2 outline-none"
             />
-            {fieldErrors.empId && (
-              <p id="empId-error" className="text-red-600 text-sm mt-1">
-                {fieldErrors.empId}
-              </p>
-            )}
+            {errors.empId && <p className="text-red-500 text-sm">{errors.empId}</p>}
           </div>
 
-          {/* Password */}
           <div>
-            <div className={`relative`}>
+            <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
+                placeholder="Password"
                 value={password}
-                placeholder="Password *"
                 onChange={(e) => setPassword(e.target.value)}
-                className={`w-full py-2 pr-10 border-b bg-transparent focus:outline-none transition ${
-                  fieldErrors.password ? 'border-red-500 focus:border-red-600' : 'border-gray-400 focus:border-black'
-                }`}
-                aria-invalid={!!fieldErrors.password}
-                aria-describedby="password-error"
-                autoComplete="current-password"
+                className="w-full border-b py-2 pr-10 outline-none"
               />
               <button
                 type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                className="absolute right-1 top-1.5 p-1 text-gray-700 hover:text-black"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                title={showPassword ? 'Hide password' : 'Show password'}
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-2 text-gray-600"
               >
-                {showPassword ? <Eye /> : <EyeOff />} {/* Default: closed icon (password hidden) */}
+                {showPassword ? <Eye /> : <EyeOff />}
               </button>
             </div>
-            {fieldErrors.password && (
-              <p id="password-error" className="text-red-600 text-sm mt-1">
-                {fieldErrors.password}
-              </p>
-            )}
+            {errors.password && <p className="text-red-500 text-sm">{errors.password}</p>}
           </div>
 
-          {/* Auth error (invalid creds) */}
           {authError && (
-            <div className="rounded-md bg-red-50 border border-red-200 p-3">
-              <p className="text-red-700 text-sm">{authError}</p>
+            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded text-sm">
+              {authError}
             </div>
           )}
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className={`w-full flex justify-center items-center gap-2 bg-blue-500 text-white py-2 rounded-md transition ${
-              loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-600'
-            }`}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition"
           >
-            {loading && (
-              <span className="inline-block w-5 h-5 border-2 border-b-transparent rounded-full animate-spin" />
-            )}
             {loading ? 'Logging in...' : 'Log In'}
           </button>
         </form>
       </div>
 
-      {/* Terms and Conditions Modal */}
       {showTerms && userData && (
-        <TermsAndConditions 
-          onAccept={handleTermsAccepted} 
-          user={userData} 
-        />
+        <TermsAndConditions user={userData} onAccept={() => navigate('/dashboard')} />
       )}
     </div>
   );
