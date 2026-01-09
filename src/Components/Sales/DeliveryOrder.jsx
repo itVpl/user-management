@@ -4649,29 +4649,31 @@ const handleUpdateOrder = async (e) => {
     <!-- Charges: ONLY customer information rates -->
     <div class="section">
       <table class="tbl">
-        <thead><tr><th>Description</th><th>Amount</th></tr></thead>
+        <thead><tr><th>Description</th><th>Quantity</th><th>Amount</th></tr></thead>
         <tbody>
-          ${LH > 0 ? `<tr><td>Line Haul</td><td class="amount">$${LH.toLocaleString()}</td></tr>` : ''}
-          ${FSC > 0 ? `<tr><td>FSC</td><td class="amount">$${FSC.toLocaleString()}</td></tr>` : ''}
+          ${LH > 0 ? `<tr><td>Line Haul</td><td>1</td><td class="amount">$${LH.toLocaleString()}</td></tr>` : ''}
+          ${FSC > 0 ? `<tr><td>FSC</td><td>1</td><td class="amount">$${FSC.toLocaleString()}</td></tr>` : ''}
           ${(() => {
             if (Array.isArray(cust.chargeRows) && cust.chargeRows.length > 0) {
               return cust.chargeRows.map(r => {
                 const rowName = r.name || 'Other';
+                const rowQuantity = r.quantity || 'N/A';
                 const rowAmt = Number(r.total || r.amt || 0);
                 if (rowAmt === 0 && !r.name) return '';
-                return `<tr><td>${rowName}</td><td class="amount">$${rowAmt.toLocaleString()}</td></tr>`;
+                return `<tr><td>${rowName}</td><td>${rowQuantity}</td><td class="amount">$${rowAmt.toLocaleString()}</td></tr>`;
               }).join('');
             }
             if (Array.isArray(cust.other) && cust.other.length > 0) {
-              return cust.other.map(ch => `<tr><td>${ch.name}</td><td class="amount">$${Number(ch.total || 0).toLocaleString()}</td></tr>`).join('');
+              return cust.other.map(ch => `<tr><td>${ch.name}</td><td>${ch.quantity || 'N/A'}</td><td class="amount">$${Number(ch.total || 0).toLocaleString()}</td></tr>`).join('');
             }
             if (OTH > 0) {
-              return `<tr><td>Other</td><td class="amount">$${OTH.toLocaleString()}</td></tr>`;
+              return `<tr><td>Other</td><td>N/A</td><td class="amount">$${OTH.toLocaleString()}</td></tr>`;
             }
             return '';
           })()}
           <tr class="total-row">
             <td><strong>TOTAL</strong></td>
+            <td></td>
             <td class="amount"><strong>$${CUSTOMER_TOTAL.toLocaleString()} USD</strong></td>
           </tr>
         </tbody>
