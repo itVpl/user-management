@@ -596,15 +596,27 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className={`fixed top-0 left-0 h-screen bg-white shadow-md z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-35"}`}>
-        <div>
+      <div className={`fixed top-0 left-0 h-screen bg-white shadow-md z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-35"}`}>
+        <div className="flex-none">
           <div className="p-4 relative flex items-center justify-between">
             <img src={logo} alt="Logo" className={`${isExpanded ? "w-24 h-10" : "w-23 h-10 mx-auto"}`} />
             <button onClick={toggleSidebar} className="absolute -right-3 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-full p-1 shadow-md z-10">
               <img src={isExpanded ? BackButtonLeft : BackButtonRight} alt="Toggle" className="w-6 h-6" />
             </button>
           </div>
+        </div>
 
+        {/* Scrollable Menu Section */}
+        <div className="flex-1 overflow-y-auto px-1 pr-2 scrollbar-hide">
+          <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
+              {filteredMenuItems.length > 0 ? (
+                filteredMenuItems.map((item, idx) => (
+                  <NavLink
+                    to={item.path}
+                    key={idx}
+                    title={!isExpanded ? item.name : ""}
+                    className={({ isActive }) =>
+                      `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
           {/* Scrollable Menu Section */}
           <div className="overflow-y-auto h-[calc(100vh-160px)] px-1 pr-2 scrollbar-hide">
             <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
@@ -800,9 +812,17 @@ const Sidebar = () => {
               )}
             </nav>
           </div>
-        </div>
 
-        <div className="px-4 py-4 border-t border-gray-200">
+        <div className="flex-none px-4 py-4 border-t border-gray-200">
+          <NavLink
+            to="/"
+            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors mb-1"
+          >
+            <img src={DashboardImage} alt="Back to Home" className="w-5 h-5" />
+            <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
+              Back to Home
+            </span>
+          </NavLink>
           <div 
             className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors"
             onClick={handleLogoutClick}
