@@ -606,17 +606,6 @@ const Sidebar = () => {
           </div>
         </div>
 
-        {/* Scrollable Menu Section */}
-        <div className="flex-1 overflow-y-auto px-1 pr-2 scrollbar-hide">
-          <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
-              {filteredMenuItems.length > 0 ? (
-                filteredMenuItems.map((item, idx) => (
-                  <NavLink
-                    to={item.path}
-                    key={idx}
-                    title={!isExpanded ? item.name : ""}
-                    className={({ isActive }) =>
-                      `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
           {/* Scrollable Menu Section */}
           <div className="overflow-y-auto h-[calc(100vh-160px)] px-1 pr-2 scrollbar-hide">
             <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
