@@ -2022,17 +2022,26 @@ export default function DeliveryOrder() {
 
     setChargesPopupType('carrier');
     setCurrentCustomerIndex(null);
-    // Load existing carrier charges if available
-    const existingCharges = formData.carrier?.carrierFees || [];
-    if (existingCharges.length > 0 && Array.isArray(existingCharges)) {
-      setCarrierCharges(existingCharges.map(ch => ({
-        name: ch.name || '',
-        quantity: String(ch.quantity || ''),
-        amt: String(ch.amt || ch.amount || ''),
-        total: ch.total || 0
-      })));
+    
+    // In edit mode, carrierCharges state is already loaded, so use it directly
+    // In add mode, load from formData if available
+    if (formMode === 'edit' && carrierCharges && carrierCharges.length > 0) {
+      // Edit mode: use existing carrierCharges state (already loaded)
+      // No need to reload, just open popup
     } else {
-      setCarrierCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+      // Add mode or edit mode with empty state: load from formData
+      const existingCharges = formData.carrier?.carrierFees || [];
+      if (existingCharges.length > 0 && Array.isArray(existingCharges)) {
+        setCarrierCharges(existingCharges.map(ch => ({
+          name: ch.name || '',
+          quantity: String(ch.quantity || ''),
+          amt: String(ch.amt || ch.amount || ''),
+          total: ch.total || 0
+        })));
+      } else if (!carrierCharges || carrierCharges.length === 0) {
+        // Set empty if no data found
+        setCarrierCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+      }
     }
     setShowChargesPopup(true);
   };
