@@ -198,6 +198,3 @@ export const useUnreadCount = () => {
   }
   return context;
 };
-
-export default UnreadCountContext;
-

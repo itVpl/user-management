@@ -331,5 +331,3 @@ export function useChatMessages() {
   }
   return context;
 }
-
-export default ChatMessageContext;

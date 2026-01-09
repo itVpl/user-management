@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import TermsAndConditions from '../../../Components/TermsAndConditions';
 import { ArrowLeft } from 'lucide-react';
+import API_CONFIG from '../../../config/api.js';
 
 // Simple inline icons (no extra libs)
 const Eye = (props) => (
@@ -56,8 +57,9 @@ function Login({ setIsAuthenticated }) {
     }
 
     try {
+      const loginUrl = API_CONFIG.getFullUrl(API_CONFIG.ENDPOINTS.INHOUSE_USER_LOGIN);
       const res = await axios.post(
-        'https://vpl-liveproject-1.onrender.com/api/v1/inhouseUser/login',
+        loginUrl,
         { empId: empId.trim(), password },
         { withCredentials: true }
       );

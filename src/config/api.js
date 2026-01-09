@@ -34,6 +34,7 @@ const API_CONFIG = {
     TRUCKERS: '/api/v1/truckers',
     UPDATE_TRUCKER_STATUS: '/api/v1/truckers',
     CMT_USERS: '/api/v1/inhouseUser/department/CMT',
+    INHOUSE_USER_LOGIN: '/api/v1/inhouseUser/login',
     ACCEPT_TERMS: '/api/v1/inhouseUser/terms/accept',
     GET_LOAD_BY_ID: '/api/v1/load',
     
