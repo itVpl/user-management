@@ -5022,176 +5022,186 @@ const handleUpdateOrder = async (e) => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <Truck className="text-green-600" size={20} />
+    <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+      {/* Header Section with Stats and Filters */}
+      <div className="mb-6">
+        {/* Stats Card */}
+        <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-6 mb-6 border border-green-400/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg">
+                <Truck className="text-white" size={28} />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total Orders</p>
-                <p className="text-xl font-bold text-gray-800">{totalOrdersExcludingShyam.length}</p>
+                <p className="text-green-100 text-sm font-medium mb-1">Total Delivery Orders</p>
+                <p className="text-4xl font-bold text-white drop-shadow-lg">{totalOrdersExcludingShyam.length}</p>
               </div>
             </div>
+            <div className="hidden md:flex items-center gap-2 text-green-100">
+              <div className="w-2 h-2 bg-green-200 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">Live Data</span>
+            </div>
           </div>
-          {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <CheckCircle className="text-blue-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Approved</p>
-                  <p className="text-xl font-bold text-blue-600">{orders.filter(order => order.status === 'approved').length}</p>
-                </div>
-              </div>
-            </div> */}
-          {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                  <Clock className="text-yellow-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Pending</p>
-                  <p className="text-xl font-bold text-yellow-600">{orders.filter(order => order.status === 'pending').length}</p>
-                </div>
-              </div>
-            </div> */}
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search orders..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
-          {/* Range dropdown (like screenshot) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowPresetMenu(v => !v)}
-              className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
-            >
-              <span>
-                {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
-              </span>
-              <span className="ml-3">▼</span>
-            </button>
 
-            {showPresetMenu && (
-              <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
-                {Object.keys(presets).map((lbl) => (
-                  <button
-                    key={lbl}
-                    onClick={() => applyPreset(lbl)}
-                    className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                  >
-                    {lbl}
-                  </button>
-                ))}
-                <div className="my-1 border-t" />
-                <button
-                  onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
-                  className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                >
-                  Custom Range
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
-          {showCustomRange && (
-            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
-                <DateRange
-                  ranges={[range]}
-                  onChange={(item) => setRange(item.selection)}
-                  moveRangeOnFirstSelection={false}
-                  months={2}
-                  direction="horizontal"
+        {/* Filters and Actions Bar */}
+        <div className="bg-white rounded-2xl shadow-xl p-5 border border-gray-200">
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            {/* Left Side - Search and Filters */}
+            <div className="flex flex-wrap items-center gap-3 flex-1">
+              {/* Search Input */}
+              <div className="relative flex-1 min-w-[250px]">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Search orders by load number, customer, carrier..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-gray-50 focus:bg-white text-gray-700 placeholder-gray-400"
                 />
-                <div className="flex justify-end gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomRange(false)}
-                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomRange(false)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    OK
-                  </button>
-                </div>
+              </div>
+
+              {/* Date Range */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowPresetMenu(v => !v)}
+                  className="w-[280px] text-left px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Calendar className="text-gray-400 group-hover:text-green-600 transition-colors" size={18} />
+                    <span className="text-gray-700 font-medium">
+                      {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
+                    </span>
+                  </div>
+                  <span className="text-gray-400 group-hover:text-green-600 transition-colors">▼</span>
+                </button>
+
+                {showPresetMenu && (
+                  <div className="absolute z-50 mt-2 w-64 rounded-xl border-2 border-gray-200 bg-white shadow-2xl overflow-hidden">
+                    {Object.keys(presets).map((lbl) => (
+                      <button
+                        key={lbl}
+                        onClick={() => applyPreset(lbl)}
+                        className="block w-full text-left px-4 py-3 hover:bg-green-50 hover:text-green-700 transition-colors font-medium text-gray-700"
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                    <div className="my-1 border-t border-gray-200" />
+                    <button
+                      onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                      className="block w-full text-left px-4 py-3 hover:bg-green-50 hover:text-green-700 transition-colors font-medium text-gray-700"
+                    >
+                      Custom Range
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Created By Filter */}
+              <div className="relative">
+                <SearchableDropdown
+                  value={selectedCreatedBy}
+                  onChange={(value) => setSelectedCreatedBy(value)}
+                  options={[
+                    { value: '', label: 'All Created By' },
+                    ...uniqueCreatedBy
+                  ]}
+                  placeholder="Select Created By"
+                  searchPlaceholder="Search created by..."
+                  className="w-[220px] border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
+                />
+              </div>
+
+              {/* Company Filter */}
+              <div className="relative">
+                <SearchableDropdown
+                  value={selectedCompany}
+                  onChange={(value) => setSelectedCompany(value)}
+                  options={[
+                    { value: '', label: 'All Companies' },
+                    ...companyOptions
+                  ]}
+                  placeholder="Select Company"
+                  searchPlaceholder="Search company..."
+                  className="w-[220px] border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
+                />
               </div>
             </div>
-          )}
 
-          {/* Created By Filter */}
-          <div className="relative">
-            <SearchableDropdown
-              value={selectedCreatedBy}
-              onChange={(value) => setSelectedCreatedBy(value)}
-              options={[
-                { value: '', label: 'All Created By' },
-                ...uniqueCreatedBy
-              ]}
-              placeholder="Select Created By"
-              searchPlaceholder="Search created by..."
-              className="w-[250px]"
-            />
+            {/* Right Side - Action Buttons */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {/* Export CSV Button */}
+              <button
+                onClick={exportToCSV}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-5 py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                <FaDownload size={18} />
+                <span className="hidden sm:inline">Export CSV</span>
+                <span className="sm:hidden">Export</span>
+              </button>
+
+              {/* Import Excel Button */}
+              <button
+                onClick={() => {
+                  setShowExcelImportModal(true);
+                  setImportStep(1);
+                  setColumnMapping({});
+                  setPreviewData(null);
+                  setFileReference(null);
+                  setImportResult(null);
+                }}
+                className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-5 py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                <FileSpreadsheet size={20} />
+                <span className="hidden sm:inline">Import Excel</span>
+                <span className="sm:hidden">Import</span>
+              </button>
+            </div>
           </div>
-
-          {/* Company Filter */}
-          <div className="relative">
-            <SearchableDropdown
-              value={selectedCompany}
-              onChange={(value) => setSelectedCompany(value)}
-              options={[
-                { value: '', label: 'All Companies' },
-                ...companyOptions
-              ]}
-              placeholder="Select Company"
-              searchPlaceholder="Search company..."
-              className="w-[250px]"
-            />
-          </div>
-
-          {/* Export to CSV Button */}
-          <button
-            onClick={exportToCSV}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
-          >
-            <FaDownload size={16} />
-            Export CSV
-          </button>
-
-          {/* Import Excel Button */}
-          <button
-            onClick={() => {
-              setShowExcelImportModal(true);
-              setImportStep(1);
-              setColumnMapping({});
-              setPreviewData(null);
-              setFileReference(null);
-              setImportResult(null);
-            }}
-            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white font-semibold shadow hover:from-green-600 hover:to-green-700 transition"
-          >
-            <FileSpreadsheet size={20} /> Import Excel File
-          </button>
-
         </div>
       </div>
+
+      {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
+      {showCustomRange && (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 border-2 border-gray-200" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-800">Select Date Range</h3>
+              <button
+                onClick={() => setShowCustomRange(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            <DateRange
+              ranges={[range]}
+              onChange={(item) => setRange(item.selection)}
+              moveRangeOnFirstSelection={false}
+              months={2}
+              direction="horizontal"
+            />
+            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setShowCustomRange(false)}
+                className="px-5 py-2 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-medium text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCustomRange(false)}
+                className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all font-semibold shadow-lg"
+              >
+                Apply Range
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* API Error Display */}
       {/* The custom error box UI for API errors is removed as per the edit hint. */}
