@@ -956,6 +956,26 @@ export default function DOReport() {
       'origin': ['origin', 'origin city', 'pickup city', 'pickupcity'],
       'destination': ['destination', 'destination city', 'drop city', 'dropcity'],
       'bolinformation': ['bolinformation', 'bol', 'bill of lading'],
+      // Pickup Location Fields (Origin)
+      'originname': ['originname', 'origin name', 'pickup name', 'pickup location name'],
+      'originaddress': ['originaddress', 'origin address', 'pickup address', 'pickup location address'],
+      'origincity': ['origincity', 'origin city', 'pickup city', 'pickup location city'],
+      'originstate': ['originstate', 'origin state', 'pickup state', 'pickup location state'],
+      'originzipcode': ['originzipcode', 'origin zipcode', 'origin zip', 'pickup zipcode', 'pickup zip', 'pickup location zipcode'],
+      'originweight': ['originweight', 'origin weight', 'pickup weight', 'pickup location weight'],
+      'origincommodity': ['origincommodity', 'origin commodity', 'pickup commodity', 'pickup location commodity'],
+      'originpickupdate': ['originpickupdate', 'origin pickup date', 'origin pickupdate', 'pickup date', 'pickup location date'],
+      'originremarks': ['originremarks', 'origin remarks', 'pickup remarks', 'pickup location remarks'],
+      // Drop Location Fields (Destination)
+      'destinationname': ['destinationname', 'destination name', 'drop name', 'drop location name'],
+      'destinationaddress': ['destinationaddress', 'destination address', 'drop address', 'drop location address'],
+      'destinationcity': ['destinationcity', 'destination city', 'drop city', 'drop location city'],
+      'destinationstate': ['destinationstate', 'destination state', 'drop state', 'drop location state'],
+      'destinationzipcode': ['destinationzipcode', 'destination zipcode', 'destination zip', 'drop zipcode', 'drop zip', 'drop location zipcode'],
+      'destinationweight': ['destinationweight', 'destination weight', 'drop weight', 'drop location weight'],
+      'destinationcommodity': ['destinationcommodity', 'destination commodity', 'drop commodity', 'drop location commodity'],
+      'destinationdropdate': ['destinationdropdate', 'destination drop date', 'destination dropdate', 'drop date', 'drop location date'],
+      'destinationremarks': ['destinationremarks', 'destination remarks', 'drop remarks', 'drop location remarks'],
     };
 
     excelHeaders.forEach((header) => {
@@ -1052,6 +1072,142 @@ export default function DOReport() {
           );
           if (woField) {
             bestMatch = woField.field;
+          }
+        }
+
+        // Pickup Location (Origin) field matching
+        if (excelColName.includes('origin') || excelColName.includes('pickup')) {
+          if (excelColName.includes('name') && !excelColName.includes('company')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'originname' || 
+              normalize(f.label).includes('origin name') ||
+              normalize(f.label).includes('pickup name')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('address')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'originaddress' || 
+              normalize(f.label).includes('origin address') ||
+              normalize(f.label).includes('pickup address')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('city')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'origincity' || 
+              normalize(f.label).includes('origin city') ||
+              normalize(f.label).includes('pickup city')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('state')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'originstate' || 
+              normalize(f.label).includes('origin state') ||
+              normalize(f.label).includes('pickup state')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('zip')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'originzipcode' || 
+              normalize(f.label).includes('origin zip') ||
+              normalize(f.label).includes('pickup zip')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('weight')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'originweight' || 
+              normalize(f.label).includes('origin weight') ||
+              normalize(f.label).includes('pickup weight')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('commodity')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'origincommodity' || 
+              normalize(f.label).includes('origin commodity') ||
+              normalize(f.label).includes('pickup commodity')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('pickup') && excelColName.includes('date')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'originpickupdate' || 
+              normalize(f.label).includes('origin pickup date') ||
+              normalize(f.label).includes('pickup date')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('remark')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'originremarks' || 
+              normalize(f.label).includes('origin remark') ||
+              normalize(f.label).includes('pickup remark')
+            );
+            if (field) bestMatch = field.field;
+          }
+        }
+
+        // Drop Location (Destination) field matching
+        if (excelColName.includes('destination') || excelColName.includes('drop')) {
+          if (excelColName.includes('name') && !excelColName.includes('company')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationname' || 
+              normalize(f.label).includes('destination name') ||
+              normalize(f.label).includes('drop name')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('address')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationaddress' || 
+              normalize(f.label).includes('destination address') ||
+              normalize(f.label).includes('drop address')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('city')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationcity' || 
+              normalize(f.label).includes('destination city') ||
+              normalize(f.label).includes('drop city')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('state')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationstate' || 
+              normalize(f.label).includes('destination state') ||
+              normalize(f.label).includes('drop state')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('zip')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationzipcode' || 
+              normalize(f.label).includes('destination zip') ||
+              normalize(f.label).includes('drop zip')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('weight')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationweight' || 
+              normalize(f.label).includes('destination weight') ||
+              normalize(f.label).includes('drop weight')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('commodity')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationcommodity' || 
+              normalize(f.label).includes('destination commodity') ||
+              normalize(f.label).includes('drop commodity')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('drop') && excelColName.includes('date')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationdropdate' || 
+              normalize(f.label).includes('destination drop date') ||
+              normalize(f.label).includes('drop date')
+            );
+            if (field) bestMatch = field.field;
+          } else if (excelColName.includes('remark')) {
+            const field = dbFields.find(f => 
+              normalize(f.field) === 'destinationremarks' || 
+              normalize(f.label).includes('destination remark') ||
+              normalize(f.label).includes('drop remark')
+            );
+            if (field) bestMatch = field.field;
           }
         }
         
@@ -1237,6 +1393,38 @@ export default function DOReport() {
           totalRows: rows.length || sampleData.length
         };
       };
+
+      // Log values for Location Fields
+      console.log('=== PICKUP LOCATION (ORIGIN) FIELDS ===');
+      const originFields = ['Origin Name', 'Origin Address', 'Origin City', 'Origin State', 'Origin ZipCode', 
+                            'Origin Weight', 'Origin Commodity', 'Origin Pickup Date', 'Origin Remarks'];
+      originFields.forEach(fieldName => {
+        const fieldData = findColumnValues(fieldName);
+        if (fieldData) {
+          console.log(`${fieldName}:`, {
+            mappedTo: fieldData.mappedToField,
+            values: fieldData.values.slice(0, 3), // Show first 3 values
+            totalRows: fieldData.totalRows
+          });
+        }
+      });
+      console.log('========================================');
+
+      console.log('=== DROP LOCATION (DESTINATION) FIELDS ===');
+      const destinationFields = ['Destination Name', 'Destination Address', 'Destination City', 'Destination State', 
+                                'Destination ZipCode', 'Destination Weight', 'Destination Commodity', 
+                                'Destination Drop Date', 'Destination Remarks'];
+      destinationFields.forEach(fieldName => {
+        const fieldData = findColumnValues(fieldName);
+        if (fieldData) {
+          console.log(`${fieldName}:`, {
+            mappedTo: fieldData.mappedToField,
+            values: fieldData.values.slice(0, 3), // Show first 3 values
+            totalRows: fieldData.totalRows
+          });
+        }
+      });
+      console.log('==========================================');
 
       // Log values for "Total (Carrier)"
       console.log('=== VALUES FOR "Total (Carrier)" HEADER ===');
