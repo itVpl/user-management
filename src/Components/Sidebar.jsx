@@ -221,6 +221,35 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "System Administration": [
       "Manage Module"
     ]
+  },
+  "QA": {
+    "Communication": [
+      "Chat",
+      "Email"
+    ],
+    "Reports": [
+      "Break Report",
+      "Target Reports",
+      "CMT Dept Report",
+      "Sales Dept Report",
+      "DO Report",
+      "Follow Up Report",
+      "Trucker Report",
+      "Rate Request Report",
+      "Call Records (Id)",
+      "Call Data",
+      "Report Analysis"
+    ],
+    "Quality Assurance": [
+      "Daily Task"
+    ],
+    "Team Management": [
+      "Team",
+      "Team Rating"
+    ],
+    "System Administration": [
+      "Manage Module"
+    ]
   }
 };
 
@@ -231,6 +260,7 @@ const getDepartmentCategories = (department) => {
   if (dept === "sales") return DEPARTMENT_MODULE_CATEGORIES["Sales"];
   if (dept === "finance") return DEPARTMENT_MODULE_CATEGORIES["Finance"];
   if (dept === "cmt") return DEPARTMENT_MODULE_CATEGORIES["CMT"];
+  if (dept === "qa") return DEPARTMENT_MODULE_CATEGORIES["QA"];
   return null;
 };
 
@@ -261,6 +291,7 @@ const getDepartmentDropdownName = (department) => {
   if (dept === "sales") return "Sales";
   if (dept === "finance") return "Finance";
   if (dept === "cmt") return "CMT";
+  if (dept === "qa") return "QA";
   return department || "Modules";
 };
 

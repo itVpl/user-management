@@ -29,3 +29,6 @@ dist-ssr
 *.sw?
 src/assets/BackgroundVideo.gif
 src/assets/BackgroundVideo.gif
+
+# Markdown files
+*.md

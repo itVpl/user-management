@@ -644,8 +644,6 @@ const Dashboard = () => {
                 </div>
               </div>
            </div>
-
-
         </>
       ) : department === 'Sales' ? (
         // --- Sales Dashboard (Same design as CMT) ---
