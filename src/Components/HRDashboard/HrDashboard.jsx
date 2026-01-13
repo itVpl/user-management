@@ -34,7 +34,11 @@ const HRDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const empRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser`);
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+        const empRes = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser`, {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        });
         const empData = empRes.data?.employees || [];
         setEmployees(empData);
 
