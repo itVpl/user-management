@@ -601,12 +601,6 @@ export default function DeliveryOrder() {
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
-  
-  // API Pagination states
-  const [apiPage, setApiPage] = useState(1);
-  const [apiLimit] = useState(50); // Fetch 50 items per API call
-  const [totalApiPages, setTotalApiPages] = useState(1);
-  const [totalApiRecords, setTotalApiRecords] = useState(0);
 
   // Monitor customers array to ensure it's never empty
   useEffect(() => {
@@ -630,7 +624,7 @@ export default function DeliveryOrder() {
   // Fetch data from API
   // REPLACE THIS BLOCK: fetchOrders() (quantity ko locations ke weight se lo)
   // REPLACE your fetchOrders with this version
-  const fetchOrders = async (page = apiPage) => {
+  const fetchOrders = async () => {
     try {
       setLoading(true);
 
@@ -642,9 +636,8 @@ export default function DeliveryOrder() {
 
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
-      // Add pagination query parameters
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}?page=${page}&limit=${apiLimit}`,
+        `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`,
         {
           timeout: 10000,
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
@@ -652,26 +645,7 @@ export default function DeliveryOrder() {
       );
 
       if (response.data && response.data.success) {
-        // Handle pagination metadata from API response
-        // API might return: { success: true, data: [...], total: 100, totalPages: 2, currentPage: 1 }
         const apiData = response.data.data || [];
-        const paginationInfo = response.data.pagination || {};
-        
-        // Update pagination metadata if available
-        if (paginationInfo.totalPages !== undefined) {
-          setTotalApiPages(paginationInfo.totalPages);
-        } else if (paginationInfo.total !== undefined) {
-          // Calculate totalPages from total and limit
-          setTotalApiPages(Math.ceil(paginationInfo.total / apiLimit));
-          setTotalApiRecords(paginationInfo.total);
-        } else if (response.data.total !== undefined) {
-          // Alternative response structure
-          setTotalApiPages(Math.ceil(response.data.total / apiLimit));
-          setTotalApiRecords(response.data.total);
-        }
-        
-        // Update current API page
-        setApiPage(page);
         
         const transformedOrders = (Array.isArray(apiData) ? apiData : []).map(order => {
           // Handle new API response format
@@ -873,7 +847,7 @@ export default function DeliveryOrder() {
   };
 
   useEffect(() => {
-    fetchOrders(1); // Fetch first page on mount
+    fetchOrders(); // Fetch all orders on mount
     // Removed: fetchDispatchers, fetchShippersList, fetchTruckersList, fetchLoads
     // These will now be called on-demand when dropdowns are clicked
   }, []);
@@ -1140,21 +1114,9 @@ export default function DeliveryOrder() {
   const endIndex = startIndex + itemsPerPage;
   const currentOrders = filteredOrders.slice(startIndex, endIndex);
 
-  // Handle page change - check if we need to fetch new data from API
+  // Handle page change
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    
-    // Calculate which API page we need based on frontend page
-    // If itemsPerPage = 9 and apiLimit = 50:
-    // Frontend page 1-5 (45 items) = API page 1
-    // Frontend page 6-11 (99 items) = API page 2
-    const itemsNeeded = page * itemsPerPage;
-    const requiredApiPage = Math.ceil(itemsNeeded / apiLimit);
-    
-    // If we need a different API page, fetch it
-    if (requiredApiPage !== apiPage && requiredApiPage <= totalApiPages) {
-      fetchOrders(requiredApiPage);
-    }
   };
 
   // Generate smart pagination page numbers
@@ -2367,8 +2329,7 @@ export default function DeliveryOrder() {
         // reset form
         setShowAddOrderForm(false);
         setCurrentPage(1); // Reset to first page
-        setApiPage(1); // Reset API page
-        await fetchOrders(1); // Refresh first page
+        await fetchOrders(); // Refresh orders
         setFormData({
           customers: [{
             billTo: '', dispatcherName: '', workOrderNo: '',
@@ -3397,8 +3358,7 @@ const handleUpdateOrder = async (e) => {
     
     // Refresh the orders list
     setCurrentPage(1); // Reset to first page
-    setApiPage(1); // Reset API page
-    await fetchOrders(1); // Refresh first page
+    await fetchOrders(); // Refresh orders
     
   } catch (error) {
     console.error('Update error:', error);
@@ -3482,7 +3442,7 @@ const handleUpdateOrder = async (e) => {
 
       if (response.data && response.data.success) {
         alertify.success('Carrier fees updated successfully!');
-        fetchOrders(apiPage); // Refresh current API page (keep current view)
+        fetchOrders(); // Refresh orders
         return response.data;
       } else {
         console.error('Server response:', response.data);
