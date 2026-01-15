@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Notification from "./assets/Icons super admin/Nav Bar/Blue/Notification.png";
 import ProfileIcon from "./assets/Icons super admin/ProfileIcon.png";
-import { Search } from "lucide-react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import API_CONFIG from "./config/api.js";
@@ -416,18 +415,6 @@ const Topbar = () => {
     <div
       className="fixed w-full top-0 right-0 h-20 shadow z-10 px-6 flex items-center pl-[220px] bg-white"
     >
-      {/* Left Section - Search Bar */}
-      <div className="flex-1 flex items-center pr-8 ml-30">
-        <div className="relative w-full max-w-2xl group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            className="block w-full pl-11 pr-4 py-3 border border-blue-300 rounded-2xl leading-5 bg-gray-50/50 text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-4 focus:ring-blue-50/50 focus:border-blue-300 sm:text-sm transition-all duration-300 ease-in-out shadow-sm hover:shadow-md hover:bg-white"
-            placeholder="Search for anything..."
-          />
-        </div>
-      </div>
-      
       {/* Center Section - Checklist (Only for Sales and CMT) */}
       {/* Debug Info - Remove after testing */}
       {process.env.NODE_ENV === 'development' && (

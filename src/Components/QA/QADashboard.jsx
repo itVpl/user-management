@@ -14,6 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import qaService from '../../services/qaService';
 import { format } from 'date-fns';
+import UpcomingBirthdays from '../UpcomingBirthdays';
 
 const QADashboard = () => {
   const navigate = useNavigate();
@@ -88,13 +89,11 @@ const QADashboard = () => {
 
   const StatCard = ({ title, value, icon: Icon, color, subtitle }) => (
     <div className={`${color} rounded-lg p-6 text-white shadow-lg`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-white/80 text-sm font-medium">{title}</p>
-          <p className="text-3xl font-bold mt-2">{value}</p>
-          {subtitle && <p className="text-white/70 text-xs mt-1">{subtitle}</p>}
-        </div>
-        <Icon className="w-12 h-12 text-white/30" />
+      <div className="flex flex-col items-center justify-center text-center h-full">
+        <Icon className="w-12 h-12 text-white/30 mb-3" />
+        <p className="text-white/80 text-sm font-medium">{title}</p>
+        <p className="text-3xl font-bold mt-2">{value}</p>
+        {subtitle && <p className="text-white/70 text-xs mt-1">{subtitle}</p>}
       </div>
     </div>
   );
@@ -196,9 +195,16 @@ const QADashboard = () => {
       )}
 
       {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* Pending Recordings */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="grid lg:grid-cols-3 gap-8">
+        {/* Employee Birthdays Section */}
+        <div className="lg:col-span-1">
+          <UpcomingBirthdays limit={5} showAllDepartments={true} />
+        </div>
+
+        {/* Right Side - Two Column Grid */}
+        <div className="lg:col-span-2 grid grid-cols-1 gap-8">
+          {/* Pending Recordings */}
+          <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
               <Headphones className="w-6 h-6" />
@@ -295,6 +301,7 @@ const QADashboard = () => {
               ))
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>
