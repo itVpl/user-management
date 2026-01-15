@@ -10,6 +10,13 @@ import Layout from "./Layout/Layout";
 import PrivateRoute from "./Components/Dashboard/Private.jsx";
 import ErrorBoundary from "./Components/ErrorBoundary";
 import PaymentNotificationPopup from "./Components/PaymentNotificationPopup.jsx";
+import QADashboard from "./Components/QA/QADashboard.jsx";
+import CallRecordingReview from "./Components/QA/CallRecordingReview.jsx";
+import ManagerReview from "./Components/QA/ManagerReview.jsx";
+import CombinedReview from "./Components/QA/CombinedReview.jsx";
+import EmployeeReviewHistory from "./Components/QA/EmployeeReviewHistory.jsx";
+import PendingReviews from "./Components/QA/PendingReviews.jsx";
+import QACallReport from "./Components/QA/QACallReport.jsx";
 
 // Lazy load all route components for code splitting
 const Login = lazy(() => import("./Pages/Auth/Login/Login"));
@@ -675,6 +682,15 @@ function App() {
           <Route path="trucker-reassign" element={<TruckerReassign />} />
           <Route path="followUpReport" element={<FollowUpReport />} />
           <Route path="RateRequestReport" element={<RateRequestReport />} />
+          
+          {/* QA (Quality Assurance) Routes */}
+          <Route path="qa/dashboard" element={<QADashboard />} />
+          <Route path="qa/pending-reviews" element={<PendingReviews />} />
+          <Route path="qa/call-recording-review/:id" element={<CallRecordingReview />} />
+          <Route path="qa/manager-review" element={<ManagerReview />} />
+          <Route path="qa/review/:id" element={<CombinedReview />} />
+          <Route path="qa/my-reviews" element={<EmployeeReviewHistory />} />
+          <Route path="qa/call-report" element={<QACallReport />} />
           
           {/* Catch-all for nested protected routes */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

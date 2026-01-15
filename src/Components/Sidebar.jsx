@@ -241,7 +241,11 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Report Analysis"
     ],
     "Quality Assurance": [
-      "Daily Task"
+      "QA Dashboard",
+      "Pending Reviews",
+      "Manager Review",
+      "My Reviews",
+      "QA Call Report"
     ],
     "Team Management": [
       "Team",
@@ -367,6 +371,11 @@ const menuItems = [
   { name: "Add Fleet", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddFleet" },
   { name: "Inventry", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/inventory-management" },
   { name: "Rate Request Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequestReport" },
+  { name: "QA Dashboard", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/dashboard" },
+  { name: "Pending Reviews", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/pending-reviews" },
+  { name: "Manager Review", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/manager-review" },
+  { name: "My Reviews", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/my-reviews" },
+  { name: "QA Call Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/call-report" },
   
   
 ];
@@ -448,7 +457,8 @@ const Sidebar = () => {
         const hasDepartmentCategories = getDepartmentCategories(department) !== null;
 
         const allowedModuleIds = user?.allowedModules?.map(String) || [];
-        console.log("👤 User allowed modules:", allowedModuleIds);
+        console.log("👤 User allowed modules (IDs):", allowedModuleIds);
+        console.log("👤 User allowed modules (count):", allowedModuleIds.length);
         console.log("👤 User department:", department, "Has categories:", hasDepartmentCategories);
 
         const res = await fetch(`${API_CONFIG.BASE_URL}/api/v1/module`, {
@@ -462,38 +472,102 @@ const Sidebar = () => {
         const data = await res.json();
 
         if (data.success && data.modules) {
+          console.log("📦 Total modules from API:", data.modules.length);
+          console.log("📦 All modules:", data.modules.map(m => ({ name: m.name, id: m._id, isActive: m.isActive })));
+          
           const activeModules = data.modules.filter((mod) => 
             mod.isActive === true && 
             (allowedModuleIds.length === 0 || allowedModuleIds.includes(mod._id.toString()))
           );
 
-          console.log("✅ Active modules:", activeModules.map(m => ({ name: m.name, id: m._id })));
-          console.log("📋 All menu items:", menuItems.map(m => m.name));
+          console.log("✅ Active modules (filtered by allowedModuleIds):", activeModules.map(m => ({ name: m.name, id: m._id })));
+          console.log("✅ Active modules count:", activeModules.length);
+          
+          // Check if any allowedModuleIds don't have matching modules
+          const missingModuleIds = allowedModuleIds.filter(id => 
+            !data.modules.some(mod => mod._id.toString() === id)
+          );
+          if (missingModuleIds.length > 0) {
+            console.warn("⚠️ Some allowedModuleIds not found in API response:", missingModuleIds);
+          }
+          
+          // Check if any allowedModuleIds have inactive modules
+          const inactiveModuleIds = allowedModuleIds.filter(id => {
+            const mod = data.modules.find(m => m._id.toString() === id);
+            return mod && !mod.isActive;
+          });
+          if (inactiveModuleIds.length > 0) {
+            console.warn("⚠️ Some allowedModuleIds are inactive:", inactiveModuleIds);
+          }
+          console.log("📋 All menu items:", menuItems.map(m => ({ name: m.name, path: m.path })));
 
           // Match menu items with active modules by name (case insensitive)
           // Also normalize multiple spaces to single space for matching
-          const matchedMenus = menuItems.filter((item) =>
-            activeModules.some((mod) => {
+          const matchedMenus = menuItems.filter((item) => {
+            const match = activeModules.some((mod) => {
+              const modName = mod.name.trim().replace(/\s+/g, ' ').toLowerCase();
+              const itemName = item.name.trim().replace(/\s+/g, ' ').toLowerCase();
+              const isMatch = modName === itemName;
+              if (isMatch) {
+                console.log(`✅ Matched: "${mod.name}" (ID: ${mod._id}) with menu item "${item.name}"`);
+              }
+              return isMatch;
+            });
+            if (!match) {
+              console.log(`❌ No match found for menu item: "${item.name}"`);
+            }
+            return match;
+          });
+
+          console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
+          console.log("❌ Unmatched active modules:", activeModules.filter(mod => 
+            !matchedMenus.some(item => {
               const modName = mod.name.trim().replace(/\s+/g, ' ').toLowerCase();
               const itemName = item.name.trim().replace(/\s+/g, ' ').toLowerCase();
               return modName === itemName;
             })
-          );
-
-          console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
+          ).map(m => ({ name: m.name, id: m._id })));
           
           // Always include Companies menu item
           const companiesMenuItem = menuItems.find(item => item.name === 'Companies');
           
-          // If no modules matched, show basic menus as fallback
+          // If no modules matched but user has allowedModules, try to show department modules
           if (matchedMenus.length === 0) {
-            console.warn("⚠️ No modules matched, showing basic menus");
-            const basicMenus = menuItems.filter(item => 
-              ['Dashboard', 'Tracking'].includes(item.name)
-            );
-            setFilteredMenuItems(basicMenus);
-            setDepartmentMenuItems([]);
-            setDepartmentCategories({});
+            if (allowedModuleIds.length > 0 && hasDepartmentCategories) {
+              console.warn("⚠️ No modules matched by name, but user has allowedModules. Showing department modules as fallback.");
+              // Get all department module names
+              const allDeptModuleNames = getAllDepartmentModules(department);
+              // Show menu items that are in department categories
+              const deptMenus = menuItems.filter(item => 
+                allDeptModuleNames.includes(item.name)
+              );
+              const otherMenus = menuItems.filter(item => 
+                !allDeptModuleNames.includes(item.name) && 
+                ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
+              );
+              
+              // Categorize department modules
+              const categorized = {};
+              deptMenus.forEach(item => {
+                const category = getModuleCategory(item.name, department);
+                if (!categorized[category]) {
+                  categorized[category] = [];
+                }
+                categorized[category].push(item);
+              });
+              
+              setDepartmentMenuItems(deptMenus);
+              setDepartmentCategories(categorized);
+              setFilteredMenuItems(otherMenus);
+            } else {
+              console.warn("⚠️ No modules matched, showing basic menus");
+              const basicMenus = menuItems.filter(item => 
+                ['Dashboard', 'Tracking'].includes(item.name)
+              );
+              setFilteredMenuItems(basicMenus);
+              setDepartmentMenuItems([]);
+              setDepartmentCategories({});
+            }
           } else {
             // For users with department categories, separate department modules and categorize them
             if (hasDepartmentCategories) {
