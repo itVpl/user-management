@@ -11,6 +11,7 @@ import CMTDashboard from "./CMT/CMTDashbaord";
 import CMTMDashboard from "./CMT-Manager/CMT-MDashboard";
 import AccountantDashboard from "./Accountant/AccountantDashboard";
 import FinanceDashboard from "./Finance/FinanceDashboard";
+import QADashboard from "./QA/QADashboard";
 
 const RoleBasedDashboard = () => {
   const userData = sessionStorage.getItem("user");
@@ -50,6 +51,11 @@ const RoleBasedDashboard = () => {
   if (department === "Finance" || department === "finance") {
 
     return <FinanceDashboard />;
+  }
+
+  // QA department should show QADashboard
+  if (department === "QA" || department === "qa") {
+    return <QADashboard />;
   }
 
   switch (role) {

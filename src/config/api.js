@@ -52,6 +52,15 @@ const API_CONFIG = {
     EMPTY_TRUCK_CMT_ALL: '/api/v1/empty-truck-location/cmt/all',
     EMPTY_TRUCK_CMT_BY_TRUCKER: '/api/v1/empty-truck-location/cmt/trucker',
     EMPTY_TRUCK_CMT_BY_VEHICLE: '/api/v1/empty-truck-location/cmt/vehicle',
+    
+    // QA (Quality Assurance) endpoints
+    QA_CALL_RECORDINGS: '/api/v1/qa/call-recordings',
+    QA_AUTO_ASSIGN: '/api/v1/qa/call-recordings/auto-assign',
+    QA_ASSIGNMENT_STATS: '/api/v1/qa/assignment-stats',
+    QA_DASHBOARD: '/api/v1/qa/dashboard',
+    QA_PENDING_MANAGER_REVIEW: '/api/v1/qa/pending-manager-review',
+    QA_REPORTS: '/api/v1/qa/reports',
+    QA_DAILY_REVIEW: '/api/v1/qa/daily-review',
   },
   
   // Helper function to get full URL

@@ -831,7 +831,6 @@ const Dashboard = () => {
             <UpcomingBirthdays limit={3} />
             <DailyFollowNotification limit={3} />
           </div>
-
           {/* DO Data Table */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
             <div className="flex items-center justify-between mb-6">
