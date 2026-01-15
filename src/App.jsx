@@ -1,107 +1,105 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import "./App.css";
-import Login from "./Pages/Auth/Login/Login";
-import Signup from "./Pages/Auth/Login/Signup";
+
+// Essential components - keep as regular imports (needed immediately)
 import Layout from "./Layout/Layout";
 import PrivateRoute from "./Components/Dashboard/Private.jsx";
-import RoleBasedDashboard from "./Components/RolebasedLogin.jsx";
-import ConsignmentTracker from "./Components/Dashboard/LiveTracker1";
-import UserPermission from "./Components/Dashboard/UserPermission";
-import ManageUser from "./Components/Dashboard/ManageUser.jsx";
-import LoadBoard from "./Components/Dashboard/LoadBoard.jsx";
-import ProfilePage from "./Pages/ProfilePage.jsx";
-import UserCallDashboard from "./Pages/UserCallerData.jsx";
-import FleetTable from "./Components/Dashboard/Fleet.jsx";
-import AnalyticsReport from "./Components/Dashboard/AnalyticsReport.jsx";
-import CallDashboard from "./Components/Dashboard/CallDashboard.jsx";
-import ChatPage from "./Components/AgentDashboard/Chat.jsx";
-import Inbox from "./Components/Email/index.jsx";
-import AgentRevenueStatistics from "./Components/AgentDashboard/AgentRevenueStatistics.jsx";
-import EmployeeHygiene from "./Components/AgentDashboard/EmployeeHygine.jsx";
-import ShippersLDocuments from "./Components/AgentDashboard/Shipper-L-Document.jsx";
-import PayrollPage from "./Components/HRDashboard/payroll.jsx";
-import ShiperLoadData from "./Components/AgentDashboard/ShiperLoadData.jsx";
-import HrDocumentsVerification from "./Components/HRDashboard/DocumentVerifcation.jsx";
-import Attendanceleave from "./Components/HRDashboard/Attendance-leave.jsx";
-import TLTeams from "./Components/TLDashboard/Team.jsx";
-import TruckerDocuments from "./Components/CMT/TruckerDocuments.jsx";
-import HREmployeeHygine from "./Components/HRDashboard/HrEmployeeHygine.jsx";
-import ManagerShippersLDocuments from "./Components/Agent-Manager/Manager-Shipper-L-Documents.jsx";
-import TruckerLDocuments from "./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx";
-import HrCreateTask from "./Components/HRDashboard/HrCreateTask.jsx";
-import RateRequest from "./Components/CMT-Manager/RateRequest.jsx";
-import LeaveApproval from "./Components/HRDashboard/LeaveApproval.jsx";
-import RateApproved from "./Components/CMT/RateApproved.jsx";
-import ManagerPendingBids from "./Components/CMT/ManagerPendingBids.jsx";
-import Loads from "./Components/CMT/Loads.jsx";
-import CarrierApproval from "./Components/CMT/CarrierApproval.jsx";
-import DeliveryOrder from "./Components/Sales/DeliveryOrder.jsx";
-import DOReport from "./Components/Sales/DOReport.jsx";
-import TeamRating from "./Components/Sales/TeamRating.jsx";
-import DailyFollowUp from "./Pages/DailyFollowUp.jsx";
-import AddCustomer from "./Components/Sales/AddCustomer.jsx";
-import AssignAgent from "./Components/Dashboard/AssignAgent.jsx";
-import CarrierDocs from "./Components/CMT/CarrierDocs.jsx";
-import DoDetails from "./Components/CMT/DODetails.jsx";
-import CandidateShortlist from "./Components/HRDashboard/CandidateShortlist.jsx";
-import TargetReports from "./Components/HRDashboard/TargetReports.jsx";
-import Consignment from "./Pages/Consignment.jsx";
-import CustomerLoads from "./Pages/CustomerLoads.jsx";
-import DailyRateRequest from "./Components/CMT-Manager/DailyRateRequest.jsx";
-import OfficeInventory from "./Components/HRDashboard/OfficeInventory.jsx";
-import DinnerStatus from "./Pages/DinnerStatus.jsx";
-import TruckerReport from "./Components/CMT/TruckerReport.jsx";
-import AllLeads from "./Components/AllLeads.jsx";
-import TaskScheduling from "./Components/TaskScheduling/TaskScheduling.jsx";
-import CmtDeptReport from "./Components/CMT/cmtDeptReport.jsx";
-import SalesDeptReport from "./Components/Sales/salesDeptReport.jsx";
-import Invoices from "./Components/Accountant/Invoices.jsx";
-import CheckInvoice from "./Components/Sales/CheckInvoice.jsx";
-import AssignLoad from "./Components/CMT-Manager/AssignLoad.jsx";
-import FinanceDashboard from "./Components/Finance/FinanceDashboard.jsx";
-import CallingReport from "./Pages/IddCallingReport.jsx";
-import TermsAndConditions from "./Components/TermsAndConditions.jsx";
-import AddFleet from "./Components/CMT-Manager/addFleet.jsx";
-import OfficeExpenses from "./Components/HRDashboard/OfficeExpenses.jsx";
-import EmpLeaves from "./Components/HRDashboard/EmpLeaves.jsx";
-import AddTruckerDriver from "./Components/CMT/AddTruckerDriver.jsx";
-import  AssignDo  from "./Components/CMT-Manager/AssignDo.jsx";
-import TruckerReassign from "./Components/CMT-Manager/TruckerReassign.jsx";
-import CompanyList from "./Components/Accountant/Company/CompanyList.jsx";
-import TallyManagement from "./Components/Finance/TallyManagement.jsx";
-import LedgerManagement from "./Components/Finance/LedgerManagement.jsx";
-import InventoryManagement from "./Components/Finance/InventoryManagement.jsx";
-import AcountentPayable from "./Components/Finance/AcountentPayable.jsx";
-import AllCustomer from "./Components/Sales/AllCustomer.jsx";
-import EmptyTruckLocation from "./Components/CMT/EmptyTruckLocation.jsx";
-import RateRequestReport from "./Components/CMT/RateRequestReport.jsx";
-import TruckerEmptyLocation from "./Components/Dashboard/TruckerEmptyLocation.jsx";
-import BreakReport from "./Components/HRDashboard/BreakReport.jsx";
-import FollowUpReport from "./Components/Sales/FollowUpReport.jsx";
+import ErrorBoundary from "./Components/ErrorBoundary";
 import PaymentNotificationPopup from "./Components/PaymentNotificationPopup.jsx";
 
-// Chat Message System Imports
+// Lazy load all route components for code splitting
+const Login = lazy(() => import("./Pages/Auth/Login/Login"));
+const Signup = lazy(() => import("./Pages/Auth/Login/Signup"));
+const RoleBasedDashboard = lazy(() => import("./Components/RolebasedLogin.jsx"));
+const ConsignmentTracker = lazy(() => import("./Components/Dashboard/LiveTracker1"));
+const UserPermission = lazy(() => import("./Components/Dashboard/UserPermission"));
+const ManageUser = lazy(() => import("./Components/Dashboard/ManageUser.jsx"));
+const LoadBoard = lazy(() => import("./Components/Dashboard/LoadBoard.jsx"));
+const ProfilePage = lazy(() => import("./Pages/ProfilePage.jsx"));
+const UserCallDashboard = lazy(() => import("./Pages/UserCallerData.jsx"));
+const FleetTable = lazy(() => import("./Components/Dashboard/Fleet.jsx"));
+const AnalyticsReport = lazy(() => import("./Components/Dashboard/AnalyticsReport.jsx"));
+const CallDashboard = lazy(() => import("./Components/Dashboard/CallDashboard.jsx"));
+const ChatPage = lazy(() => import("./Components/AgentDashboard/Chat.jsx"));
+const Inbox = lazy(() => import("./Components/Email/index.jsx"));
+const AgentRevenueStatistics = lazy(() => import("./Components/AgentDashboard/AgentRevenueStatistics.jsx"));
+const EmployeeHygiene = lazy(() => import("./Components/AgentDashboard/EmployeeHygine.jsx"));
+const ShippersLDocuments = lazy(() => import("./Components/AgentDashboard/Shipper-L-Document.jsx"));
+const PayrollPage = lazy(() => import("./Components/HRDashboard/payroll.jsx"));
+const ShiperLoadData = lazy(() => import("./Components/AgentDashboard/ShiperLoadData.jsx"));
+const HrDocumentsVerification = lazy(() => import("./Components/HRDashboard/DocumentVerifcation.jsx"));
+const Attendanceleave = lazy(() => import("./Components/HRDashboard/Attendance-leave.jsx"));
+const TLTeams = lazy(() => import("./Components/TLDashboard/Team.jsx"));
+const TruckerDocuments = lazy(() => import("./Components/CMT/TruckerDocuments.jsx"));
+const HREmployeeHygine = lazy(() => import("./Components/HRDashboard/HrEmployeeHygine.jsx"));
+const ManagerShippersLDocuments = lazy(() => import("./Components/Agent-Manager/Manager-Shipper-L-Documents.jsx"));
+const TruckerLDocuments = lazy(() => import("./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx"));
+const HrCreateTask = lazy(() => import("./Components/HRDashboard/HrCreateTask.jsx"));
+const RateRequest = lazy(() => import("./Components/CMT-Manager/RateRequest.jsx"));
+const LeaveApproval = lazy(() => import("./Components/HRDashboard/LeaveApproval.jsx"));
+const RateApproved = lazy(() => import("./Components/CMT/RateApproved.jsx"));
+const ManagerPendingBids = lazy(() => import("./Components/CMT/ManagerPendingBids.jsx"));
+const Loads = lazy(() => import("./Components/CMT/Loads.jsx"));
+const CarrierApproval = lazy(() => import("./Components/CMT/CarrierApproval.jsx"));
+const DeliveryOrder = lazy(() => import("./Components/Sales/DeliveryOrder.jsx"));
+const DOReport = lazy(() => import("./Components/Sales/DOReport.jsx"));
+const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
+const DailyFollowUp = lazy(() => import("./Pages/DailyFollowUp.jsx"));
+const AddCustomer = lazy(() => import("./Components/Sales/AddCustomer.jsx"));
+const AssignAgent = lazy(() => import("./Components/Dashboard/AssignAgent.jsx"));
+const CarrierDocs = lazy(() => import("./Components/CMT/CarrierDocs.jsx"));
+const DoDetails = lazy(() => import("./Components/CMT/DODetails.jsx"));
+const CandidateShortlist = lazy(() => import("./Components/HRDashboard/CandidateShortlist.jsx"));
+const TargetReports = lazy(() => import("./Components/HRDashboard/TargetReports.jsx"));
+const Consignment = lazy(() => import("./Pages/Consignment.jsx"));
+const CustomerLoads = lazy(() => import("./Pages/CustomerLoads.jsx"));
+const DailyRateRequest = lazy(() => import("./Components/CMT-Manager/DailyRateRequest.jsx"));
+const OfficeInventory = lazy(() => import("./Components/HRDashboard/OfficeInventory.jsx"));
+const DinnerStatus = lazy(() => import("./Pages/DinnerStatus.jsx"));
+const TruckerReport = lazy(() => import("./Components/CMT/TruckerReport.jsx"));
+const AllLeads = lazy(() => import("./Components/AllLeads.jsx"));
+const TaskScheduling = lazy(() => import("./Components/TaskScheduling/TaskScheduling.jsx"));
+const CmtDeptReport = lazy(() => import("./Components/CMT/cmtDeptReport.jsx"));
+const SalesDeptReport = lazy(() => import("./Components/Sales/salesDeptReport.jsx"));
+const Invoices = lazy(() => import("./Components/Accountant/Invoices.jsx"));
+const CheckInvoice = lazy(() => import("./Components/Sales/CheckInvoice.jsx"));
+const AssignLoad = lazy(() => import("./Components/CMT-Manager/AssignLoad.jsx"));
+const FinanceDashboard = lazy(() => import("./Components/Finance/FinanceDashboard.jsx"));
+const CallingReport = lazy(() => import("./Pages/IddCallingReport.jsx"));
+const TermsAndConditions = lazy(() => import("./Components/TermsAndConditions.jsx"));
+const AddFleet = lazy(() => import("./Components/CMT-Manager/addFleet.jsx"));
+const OfficeExpenses = lazy(() => import("./Components/HRDashboard/OfficeExpenses.jsx"));
+const EmpLeaves = lazy(() => import("./Components/HRDashboard/EmpLeaves.jsx"));
+const AddTruckerDriver = lazy(() => import("./Components/CMT/AddTruckerDriver.jsx"));
+const AssignDo = lazy(() => import("./Components/CMT-Manager/AssignDo.jsx"));
+const TruckerReassign = lazy(() => import("./Components/CMT-Manager/TruckerReassign.jsx"));
+const CompanyList = lazy(() => import("./Components/Accountant/Company/CompanyList.jsx"));
+const TallyManagement = lazy(() => import("./Components/Finance/TallyManagement.jsx"));
+const LedgerManagement = lazy(() => import("./Components/Finance/LedgerManagement.jsx"));
+const InventoryManagement = lazy(() => import("./Components/Finance/InventoryManagement.jsx"));
+const AcountentPayable = lazy(() => import("./Components/Finance/AcountentPayable.jsx"));
+const AllCustomer = lazy(() => import("./Components/Sales/AllCustomer.jsx"));
+const EmptyTruckLocation = lazy(() => import("./Components/CMT/EmptyTruckLocation.jsx"));
+const RateRequestReport = lazy(() => import("./Components/CMT/RateRequestReport.jsx"));
+const TruckerEmptyLocation = lazy(() => import("./Components/Dashboard/TruckerEmptyLocation.jsx"));
+const BreakReport = lazy(() => import("./Components/HRDashboard/BreakReport.jsx"));
+const FollowUpReport = lazy(() => import("./Components/Sales/FollowUpReport.jsx"));
+const LandingPage = lazy(() => import("./Pages/LandingPage.jsx"));
+
+// Chat Message System Imports - keep as regular imports (needed globally)
 import { ChatMessageProvider } from "./contexts/ChatMessageContext";
 import ChatMessagePopup from "./Components/ChatMessagePopup/ChatMessagePopup";
-import TestChatPopup from "./Components/TestChatPopup";
-import ErrorBoundary from "./Components/ErrorBoundary";
-import ChatSystemStatus from "./Components/ChatSystemStatus";
 import { fetchLoadAddresses } from "./utils/loadUtils";
 import globalNegotiationService from "./services/globalNegotiationService";
-import SocketTest from "./Components/SocketTest";
 import globalNegotiationSocketService from "./services/globalNegotiationSocketFixed";
-import NegotiationTestButton from "./Components/NegotiationTestButton";
 import NotificationHandler from "./Components/NotificationHandler";
 import sharedSocketService from "./services/sharedSocketService";
 import { OnlineStatusProvider } from "./contexts/OnlineStatusContext";
 import { UnreadCountProvider } from "./contexts/UnreadCountContext";
-// import GlobalNegotiationNotifications from "./components/GlobalNegotiationNotifications";
-// import NegotiationSocketTester from "./components/NegotiationSocketTester";
-import LandingPage from "./Pages/LandingPage.jsx";
 
 
 
@@ -517,14 +515,17 @@ function App() {
     }
   }, []);
 
+  // Loading component for Suspense fallback
+  const LoadingFallback = () => (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+      <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p className="text-gray-600 text-lg">Loading...</p>
+    </div>
+  );
+
   // Show loading spinner
   if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-gray-600 text-lg">Loading...</p>
-      </div>
-    );
+    return <LoadingFallback />;
   }
 
   return (
@@ -575,20 +576,21 @@ function App() {
 
       {/* Routes */}
 
-      <Routes>
-        {/* Public Routes */}
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
+          {/* Public Routes */}
 
-        <Route path="/" element={<LandingPage />} />
-        <Route 
-          path="/login" 
-          element={
-            <Login 
-              setIsAuthenticated={setIsAuthenticated} 
-              setUserData={setUserData}
-            />
-          } 
-        />
-        <Route path="/signup" element={<Signup />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route 
+            path="/login" 
+            element={
+              <Login 
+                setIsAuthenticated={setIsAuthenticated} 
+                setUserData={setUserData}
+              />
+            } 
+          />
+          <Route path="/signup" element={<Signup />} />
 
         {/* Protected Routes */}
         <Route
@@ -681,13 +683,16 @@ function App() {
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
 
       {/* Terms and Conditions Modal */}
       {showTerms && userData && (
-        <TermsAndConditions 
-          onAccept={handleTermsAccepted} 
-          user={userData} 
-        />
+        <Suspense fallback={<LoadingFallback />}>
+          <TermsAndConditions 
+            onAccept={handleTermsAccepted} 
+            user={userData} 
+          />
+        </Suspense>
       )}
           </ChatMessageProvider>
         </UnreadCountProvider>
