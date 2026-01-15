@@ -232,15 +232,28 @@ const Dashboard = () => {
         );
         
         if (response.data.success) {
-          // Filter today's DOs
+          // Filter today's DOs - check createdAt or date field
           const today = new Date().toISOString().split('T')[0];
-          const todayDOs = response.data.data.filter(deliveryOrder => 
-            new Date(deliveryOrder.date).toISOString().split('T')[0] === today
-          );
+          const todayDOs = response.data.data.filter(deliveryOrder => {
+            // Check multiple possible date fields
+            const orderDate = deliveryOrder.date || 
+                            deliveryOrder.createdAt || 
+                            deliveryOrder.createdDate ||
+                            deliveryOrder.assignedToCMT?.assignedAt;
+            
+            if (!orderDate) return true; // If no date, include it
+            
+            try {
+              const dateStr = new Date(orderDate).toISOString().split('T')[0];
+              return dateStr === today;
+            } catch {
+              return true; // If date parsing fails, include it
+            }
+          });
 
-          // Calculate stats
+          // Calculate stats based on status field
           const totalAdded = todayDOs.length;
-          const approved = todayDOs.filter(deliveryOrder => deliveryOrder.status === 'approved').length;
+          const approved = todayDOs.filter(deliveryOrder => deliveryOrder.status === 'approved' || deliveryOrder.status === 'open').length;
           const pending = todayDOs.filter(deliveryOrder => deliveryOrder.status === 'pending').length;
           const rejected = todayDOs.filter(deliveryOrder => deliveryOrder.status === 'rejected').length;
 
@@ -790,16 +803,15 @@ const Dashboard = () => {
                 <div className="max-h-64 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                   <div className="space-y-2 pr-2">
                     {doData.todayDOs.map((deliveryOrder, index) => {
-                      // Extract data from nested structure for Recent DO section
-                      const firstCustomer = deliveryOrder.customers && deliveryOrder.customers.length > 0 ? deliveryOrder.customers[0] : null;
-                      const loadNo = firstCustomer ? firstCustomer.loadNo : 'N/A';
-                      const billTo = firstCustomer ? firstCustomer.billTo : 'N/A';
-                      const shipperName = deliveryOrder.shipper ? deliveryOrder.shipper.name : 'N/A';
+                      // Extract data from API response structure (new format)
+                      const loadNo = deliveryOrder.loadNo || 'N/A';
+                      const billTo = deliveryOrder.billTo || 'N/A';
+                      const shipperName = deliveryOrder.shipper?.compName || 'N/A';
                       
                       return (
                         <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-100 hover:shadow-sm transition-all duration-200">
                           <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                            {loadNo ? loadNo.slice(-2) : (deliveryOrder._id || '').slice(-2)}
+                            {loadNo !== 'N/A' ? loadNo.slice(-2) : (deliveryOrder._id || '').slice(-2)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-gray-800 text-sm truncate">{loadNo}</p>
@@ -858,13 +870,19 @@ const Dashboard = () => {
                 <tbody>
                   {doData.todayDOs.length > 0 ? (
                     doData.todayDOs.map((deliveryOrder, index) => {
-                      // Extract data from nested structure
-                      const firstCustomer = deliveryOrder.customers && deliveryOrder.customers.length > 0 ? deliveryOrder.customers[0] : null;
-                      const loadNo = firstCustomer ? firstCustomer.loadNo : 'N/A';
-                      const billTo = firstCustomer ? firstCustomer.billTo : 'N/A';
-                      const shipperName = deliveryOrder.shipper ? deliveryOrder.shipper.name : 'N/A';
-                      const carrierName = deliveryOrder.carrier ? deliveryOrder.carrier.carrierName : 'N/A';
-                      const carrierFees = deliveryOrder.carrier ? deliveryOrder.carrier.totalCarrierFees : 0;
+                      // Extract data from API response structure (new format)
+                      const loadNo = deliveryOrder.loadNo || 'N/A';
+                      const billTo = deliveryOrder.billTo || 'N/A';
+                      const shipperName = deliveryOrder.shipper?.compName || 'N/A';
+                      const carrierName = deliveryOrder.carrier?.compName || 'N/A';
+                      
+                      // Calculate total carrier fees from lineHaul, fsc, and other charges
+                      const lineHaul = Number(deliveryOrder.lineHaul) || 0;
+                      const fsc = Number(deliveryOrder.fsc) || 0;
+                      const otherTotal = Array.isArray(deliveryOrder.other) 
+                        ? deliveryOrder.other.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
+                        : 0;
+                      const carrierFees = lineHaul + fsc + otherTotal;
                       
                       return (
                         <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>

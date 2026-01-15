@@ -23,7 +23,8 @@ const SearchableDropdown = ({
   disabled = false,
   loading = false,
   className = "",
-  searchPlaceholder = "Search..."
+  searchPlaceholder = "Search...",
+  onOpen = null // Callback when dropdown is opened
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -82,7 +83,16 @@ const SearchableDropdown = ({
       <div
         className={`w-full px-4 py-3 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent cursor-pointer ${hasError ? 'border-red-500 bg-red-50' : 'border-gray-300'} ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:border-gray-400'
           }`}
-        onClick={() => !disabled && !loading && setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!disabled && !loading) {
+            const willOpen = !isOpen;
+            setIsOpen(willOpen);
+            // Call onOpen callback when opening the dropdown
+            if (willOpen && onOpen && typeof onOpen === 'function') {
+              onOpen();
+            }
+          }
+        }}
       >
         <div className="flex items-center justify-between">
           <span className={selectedOption ? 'text-gray-900' : 'text-gray-500'}>
@@ -403,6 +413,9 @@ export default function DeliveryOrder() {
   
   // ADD: get approved truckers (for Carrier Name dropdown)
   const fetchTruckersList = async () => {
+    // Skip if already loading
+    if (loadingTruckers) return;
+    
     try {
       setLoadingTruckers(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -424,6 +437,9 @@ export default function DeliveryOrder() {
   
   // ADD: get approved shippers (company names for Bill To)
   const fetchShippersList = async () => {
+    // Skip if already loading
+    if (loadingShippers) return;
+    
     try {
       setLoadingShippers(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -626,52 +642,119 @@ export default function DeliveryOrder() {
 
       if (response.data && response.data.success) {
         const transformedOrders = (response.data.data || []).map(order => {
-          // --------- PATCH: robust casing + fallbacks ----------
-          const puLocs =
-            order.shipper?.pickUpLocations ||
-            order.shipper?.pickupLocations || // some APIs use lowercase 'u'
-            [];
-          const drLocs =
-            order.shipper?.dropLocations ||
-            order.shipper?.deliveryLocations ||
-            [];
+          // Handle new API response format
+          // Check if it's the new format (has loadNo at top level) or old format
+          const isNewFormat = order.loadNo !== undefined;
+          
+          let loadNo, billTo, dispatcherName, workOrderNo, lineHaul, fsc, otherCharges;
+          let carrierData, shipperData;
+          let puLocs = [], drLocs = [];
+          let customers = [];
+          
+          if (isNewFormat) {
+            // New API format
+            loadNo = order.loadNo || 'N/A';
+            billTo = order.billTo || 'N/A';
+            dispatcherName = order.dispatureName || order.dispatcherName || 'N/A'; // Handle typo in API
+            workOrderNo = order.workOrderNo || 'N/A';
+            lineHaul = order.lineHaul || 0;
+            fsc = order.fsc || 0;
+            // Ensure otherCharges is always an array
+            otherCharges = Array.isArray(order.other) ? order.other : [];
+            carrierData = order.carrier || {};
+            shipperData = order.shipper || {};
+            
+            // Build customers array from new format
+            const otherTotal = otherCharges.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+            const totalAmount = (lineHaul || 0) + (fsc || 0) + otherTotal;
+            
+            customers = [{
+              billTo: billTo,
+              dispatcherName: dispatcherName,
+              workOrderNo: workOrderNo,
+              lineHaul: lineHaul,
+              fsc: fsc,
+              other: otherCharges,
+              totalAmount: totalAmount,
+              loadNo: loadNo
+            }];
+            
+            // Try to get locations from shipper if available (for backward compatibility)
+            puLocs = shipperData.pickUpLocations || shipperData.pickupLocations || [];
+            drLocs = shipperData.dropLocations || shipperData.deliveryLocations || [];
+            
+            // Store containerNo in shipper object for backward compatibility if not already present
+            if (order.containerNo && !shipperData.containerNo) {
+              shipperData.containerNo = order.containerNo;
+            }
+          } else {
+            // Old API format (backward compatibility)
+            puLocs =
+              order.shipper?.pickUpLocations ||
+              order.shipper?.pickupLocations || [];
+            drLocs =
+              order.shipper?.dropLocations ||
+              order.shipper?.deliveryLocations || [];
+            
+            loadNo = order.customers?.[0]?.loadNo || 'N/A';
+            billTo = order.customers?.[0]?.billTo || 'N/A';
+            customers = order.customers || [];
+            carrierData = order.carrier || {};
+            shipperData = order.shipper || {};
+          }
 
           const puW = puLocs[0]?.weight;
           const drW = drLocs[0]?.weight;
-          // -----------------------------------------------------
 
-          const loadNo = order.customers?.[0]?.loadNo || 'N/A';
+          // Calculate assignment status from assignedToCMT
+          const assignmentStatus = order.assignedToCMT?.employeeName 
+            ? 'assigned' 
+            : (order.assignmentStatus || 'unassigned');
+
+          // Generate a unique ID if _id is not present
+          const orderId = order._id || order.id || `temp-${Date.now()}-${Math.random()}`;
+          const idSuffix = String(orderId).slice(-6);
+
+          // Handle createdBy - new format is an object with empId, employeeName, department
+          const createdByData = order.createdBy || {};
+          const createdByName = createdByData.employeeName 
+            ? `${createdByData.employeeName} (${createdByData.empId || 'N/A'})`
+            : `Employee ${order.empId || createdByData.empId || empId || 'N/A'}`;
+          const createdByEmpId = createdByData.empId || order.empId || empId || 'N/A';
 
           return {
-            id: `DO-${String(order._id).slice(-6)}`,
-            originalId: order._id,
+            id: `DO-${idSuffix}`,
+            originalId: orderId,
             doNum: loadNo,
-            clientName: order.customers?.[0]?.billTo || 'N/A',
-            clientEmail: `${(order.customers?.[0]?.billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
-            pickupLocation: puLocs[0]?.name || 'Pickup Location',
+            clientName: billTo,
+            clientEmail: `${(billTo || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
+            pickupLocation: puLocs[0]?.name || shipperData?.compAdd || 'Pickup Location',
             deliveryLocation: drLocs[0]?.name || 'Delivery Location',
-            amount: order.customers?.[0]?.totalAmount || 0,
+            amount: customers[0]?.totalAmount || 0,
             description: `Load: ${loadNo}`,
             priority: 'normal',
             status: order.status || 'open',
-            assignmentStatus: order.assignmentStatus || 'unassigned',
-            createdAt: new Date(order.date).toISOString().split('T')[0],
-            createdBy: `Employee ${order.empId || 'N/A'}`,
-            createdByEmpId: order.empId || 'N/A', // Store empId separately for filter
+            assignmentStatus: assignmentStatus,
+            assignedToCMT: order.assignedToCMT || null,
+            createdAt: order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            createdBy: createdByName,
+            createdByEmpId: createdByEmpId,
+            createdByData: createdByData, // Store full createdBy object
+            containerNo: order.containerNo || 'N/A', // Add containerNo
             docUpload: 'sample-doc.jpg',
-            productName: order.shipper?.containerType || 'N/A',
-            // --------- PATCH: quantity fallback includes top-level shipper.weight if any ----------
-            quantity: (puW ?? drW ?? order.shipper?.weight ?? 0),
-            // --------------------------------------------------------------------------------------
+            productName: shipperData?.containerType || 'N/A',
+            quantity: (puW ?? drW ?? shipperData?.weight ?? 0),
             remarks: order.remarks || '',
-            shipperName: order.shipper?.name || 'N/A',
-            carrierName: order.carrier?.carrierName || 'N/A',
-            carrierFees: order.carrier?.totalCarrierFees || 0,
+            shipperName: shipperData?.compName || shipperData?.name || 'N/A',
+            carrierName: carrierData?.compName || carrierData?.carrierName || 'N/A',
+            carrierFees: carrierData?.totalCarrierFees || 0,
             createdBySalesUser: order.createdBySalesUser || 'N/A',
             supportingDocs: order.supportingDocs || [],
+            addDispature: order.addDispature || '',
             // Store customers and shipper data for table display
-            customers: order.customers || [],
-            shipper: order.shipper || {},
+            customers: customers,
+            shipper: shipperData,
+            carrier: carrierData,
             // Store full order data for view modal
             _fullOrderData: order
           };
@@ -691,6 +774,9 @@ export default function DeliveryOrder() {
 
   // Fetch dispatchers from CMT department
   const fetchDispatchers = async () => {
+    // Skip if already loading
+    if (loadingDispatchers) return;
+    
     try {
       setLoadingDispatchers(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -722,6 +808,9 @@ export default function DeliveryOrder() {
 
   // Fetch loads for load reference dropdown
   const fetchLoads = async () => {
+    // Skip if already loading
+    if (loadingLoads) return;
+    
     try {
       setLoadingLoads(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -753,10 +842,8 @@ export default function DeliveryOrder() {
 
   useEffect(() => {
     fetchOrders();
-    fetchDispatchers();
-    fetchShippersList();         // ADD: load companies for Bill To dropdown
-    fetchTruckersList();         // ADD: load truckers for Carrier Name dropdown
-    fetchLoads();                // ADD: load loads for load reference dropdown
+    // Removed: fetchDispatchers, fetchShippersList, fetchTruckersList, fetchLoads
+    // These will now be called on-demand when dropdowns are clicked
   }, []);
 
 
@@ -2466,7 +2553,7 @@ const validateForm = (mode = formMode) => {
   // Reset form when modal closes
   const handleCloseModal = async () => {
     setShowAddOrderForm(false);
-    await fetchOrders();
+    // Removed unnecessary fetchOrders() call - only refresh if data was actually changed
     setSelectedLoadType('OTR');
     setFormData({
       customers: [
@@ -4952,7 +5039,12 @@ const handleUpdateOrder = async (e) => {
                 {currentOrders.map((order, index) => {
                   const workOrderNo = order.customers?.[0]?.workOrderNo || 'N/A';
                   const shipmentNo = order.shipper?.shipmentNo || 'N/A';
-                  const containerNo = order.shipper?.containerNo || 'N/A';
+                  // Check for containerNo at top level (new format) or in shipper (old format)
+                  const containerNo = order.containerNo || order.shipper?.containerNo || 'N/A';
+                  // Handle createdBy - check for new format (createdByData object) or old format
+                  const createdByDisplay = order.createdByData?.employeeName 
+                    ? `${order.createdByData.employeeName} (${order.createdByData.empId || ''})`
+                    : (order.createdBySalesUser?.employeeName || order.createdBySalesUser || order.createdBy || 'N/A');
                   
                   return (
                     <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
@@ -4975,7 +5067,7 @@ const handleUpdateOrder = async (e) => {
                         <span className="font-medium text-gray-700">{containerNo}</span>
                       </td>
                       <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>
+                        <span className="font-medium text-gray-700">{createdByDisplay}</span>
                       </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-2">
@@ -5193,6 +5285,7 @@ const handleUpdateOrder = async (e) => {
                       disabled={loadingLoads || loadingSelectedLoad}
                       loading={loadingLoads || loadingSelectedLoad}
                       searchPlaceholder="Search loads..."
+                      onOpen={fetchLoads}
                     />
                     {/* Unselect button - shows only when a load is selected */}
                     {formData.selectedLoad && (
@@ -5688,63 +5781,47 @@ const handleUpdateOrder = async (e) => {
                       <div className="grid grid-cols-4 gap-4">
                         {/* Select Company * */}
                         <div>
-                          {shippers.length > 0 ? (
-                            <SearchableDropdown
-                              value={customer.billTo || ''}
-                              onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
-                              options={[
-                                ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
-                                  ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
-                                  : []),
-                                ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
-                              ]}
-                              placeholder="Select Company *"
-                              disabled={loadingShippers}
-                              loading={loadingShippers}
-                              searchPlaceholder="Search companies..."
-                            />
-                          ) : (
-                            <input
-                              type="text"
-                              value={customer.billTo}
-                              onChange={(e) => handleCustomerChange(customerIndex, 'billTo', e.target.value)}
-                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.billTo ? 'border-red-400' : 'border-gray-300'}`}
-                              placeholder={loadingShippers ? "Loading companies..." : "Select Company *"}
-                            />
-                          )}
+                          <SearchableDropdown
+                            value={customer.billTo || ''}
+                            onChange={(value) => handleCustomerChange(customerIndex, 'billTo', value)}
+                            options={[
+                              ...(customer.billTo && !shippers.some(s => (s.compName || '') === customer.billTo)
+                                ? [{ value: customer.billTo, label: `${customer.billTo} (custom)` }]
+                                : []),
+                              ...shippers.map(s => ({ value: s.compName || '', label: s.compName || '(No name)' }))
+                            ]}
+                            placeholder={loadingShippers ? "Loading companies..." : "Select Company *"}
+                            disabled={loadingShippers}
+                            loading={loadingShippers}
+                            searchPlaceholder="Search companies..."
+                            onOpen={fetchShippersList}
+                            className={cErr.billTo ? errBox(true) : ''}
+                          />
                           {cErr.billTo && <p className="text-red-600 text-xs mt-1">{cErr.billTo}</p>}
                         </div>
 
                         {/* Dispatcher * */}
                         <div>
-                          {dispatchers.length > 0 ? (
-                            <SearchableDropdown
-                              value={customer.dispatcherName || ''}
-                              onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
-                              options={[
-                                ...(customer.dispatcherName &&
-                                  !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
-                                  ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
-                                  : []),
-                                ...dispatchers
-                                  .filter(d => (d.status || '').toLowerCase() === 'active')
-                                  .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
-                                  .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
-                              ]}
-                              placeholder="Select Dispatcher *"
-                              disabled={loadingDispatchers}
-                              loading={loadingDispatchers}
-                              searchPlaceholder="Search dispatchers..."
-                            />
-                          ) : (
-                            <input
-                              type="text"
-                              value={customer.dispatcherName}
-                              onChange={(e) => handleCustomerChange(customerIndex, 'dispatcherName', e.target.value)}
-                              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${cErr.dispatcherName ? 'border-red-400' : 'border-gray-300'}`}
-                              placeholder="Select Dispatcher *"
-                            />
-                          )}
+                          <SearchableDropdown
+                            value={customer.dispatcherName || ''}
+                            onChange={(value) => handleCustomerChange(customerIndex, 'dispatcherName', value)}
+                            options={[
+                              ...(customer.dispatcherName &&
+                                !dispatchers.some(d => (d.aliasName || d.employeeName || '') === customer.dispatcherName)
+                                ? [{ value: customer.dispatcherName, label: `${customer.dispatcherName} (custom)` }]
+                                : []),
+                              ...dispatchers
+                                .filter(d => (d.status || '').toLowerCase() === 'active')
+                                .sort((a, b) => (a.aliasName || a.employeeName || '').localeCompare(b.aliasName || b.employeeName || ''))
+                                .map(d => ({ value: d.aliasName || d.employeeName, label: `${d.aliasName || d.employeeName}${d.empId ? ` (${d.empId})` : ''}` }))
+                            ]}
+                            placeholder={loadingDispatchers ? "Loading dispatchers..." : "Select Dispatcher *"}
+                            disabled={loadingDispatchers}
+                            loading={loadingDispatchers}
+                            searchPlaceholder="Search dispatchers..."
+                            onOpen={fetchDispatchers}
+                            className={cErr.dispatcherName ? errBox(true) : ''}
+                          />
                           {cErr.dispatcherName && <p className="text-red-600 text-xs mt-1">{cErr.dispatcherName}</p>}
                         </div>
 
@@ -5830,37 +5907,27 @@ const handleUpdateOrder = async (e) => {
                 <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    {truckers.length > 0 ? (
-                      <SearchableDropdown
-                        value={formData.carrierName || ''}
-                        onChange={(value) => {
-                          const selectedCarrier = truckers.find(t => t.compName === value);
-                          setFormData(prev => ({ 
-                            ...prev, 
-                            carrierName: value,
-                            carrierId: selectedCarrier?._id || ''
-                          }));
-                        }}
-                        options={truckers.map(t => ({ 
-                          value: t.compName || '', 
-                          label: `${t.compName || ''}${t.mc_dot_no ? ` (${t.mc_dot_no})` : ''}` 
-                        }))}
-                        placeholder={loadingTruckers ? "Loading carriers..." : "Select Carrier Name *"}
-                        disabled={loadingTruckers}
-                        loading={loadingTruckers}
-                        searchPlaceholder="Search carriers..."
-                        className={errors.carrier?.carrierName ? errBox(true) : ''}
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        name="carrierName"
-                        value={formData.carrierName}
-                        onChange={handleInputChange}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.carrier?.carrierName ? 'border-red-400' : 'border-gray-300'}`}
-                        placeholder={loadingTruckers ? "Loading carriers..." : "Carrier Name *"}
-                      />
-                    )}
+                    <SearchableDropdown
+                      value={formData.carrierName || ''}
+                      onChange={(value) => {
+                        const selectedCarrier = truckers.find(t => t.compName === value);
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          carrierName: value,
+                          carrierId: selectedCarrier?._id || ''
+                        }));
+                      }}
+                      options={truckers.map(t => ({ 
+                        value: t.compName || '', 
+                        label: `${t.compName || ''}${t.mc_dot_no ? ` (${t.mc_dot_no})` : ''}` 
+                      }))}
+                      placeholder={loadingTruckers ? "Loading carriers..." : "Select Carrier Name *"}
+                      disabled={loadingTruckers}
+                      loading={loadingTruckers}
+                      searchPlaceholder="Search carriers..."
+                      className={errors.carrier?.carrierName ? errBox(true) : ''}
+                      onOpen={fetchTruckersList}
+                    />
                     {errors.carrier?.carrierName && <p className="text-red-600 text-xs mt-1">{errors.carrier.carrierName}</p>}
                   </div>
 
