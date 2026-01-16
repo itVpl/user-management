@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
-import { MapPin, Truck, Filter, Search, Calendar, FileText, DollarSign, Users, TrendingUp, X, Eye, Package, Building, User } from 'lucide-react';
+import { MapPin, Truck, Filter, Search, Calendar, FileText, DollarSign, Users, TrendingUp, X, Eye, Package, Building, User, Phone } from 'lucide-react';
 import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
@@ -944,6 +944,66 @@ const RateRequestReport = () => {
                           <div>
                             <p className="text-sm text-gray-600">Department</p>
                             <p className="font-semibold text-gray-800">{selectedLoad.postedBy.department || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Assigned By */}
+                {selectedLoad.assignedCMTUser && (
+                  <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <User className="text-cyan-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">Assigned By</h3>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 border border-cyan-200">
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center">
+                            <FileText className="text-cyan-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Employee ID</p>
+                            <p className="font-semibold text-gray-800">
+                              {selectedLoad.assignedCMTUser.empId || 'N/A'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <User className="text-blue-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Name</p>
+                            <p className="font-semibold text-gray-800">
+                              {selectedLoad.assignedCMTUser.employeeName || 'N/A'}
+                            </p>
+                          </div>
+                        </div>
+                        {selectedLoad.assignedCMTUser.displayName && (
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                              <User className="text-purple-600" size={16} />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Display Name</p>
+                              <p className="font-semibold text-gray-800">
+                                {selectedLoad.assignedCMTUser.displayName || selectedLoad.assignedCMTUser.aliasName || 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center">
+                            <Building className="text-teal-600" size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Department</p>
+                            <p className="font-semibold text-gray-800">
+                              {selectedLoad.assignedCMTUser.department || 'N/A'}
+                            </p>
                           </div>
                         </div>
                       </div>
