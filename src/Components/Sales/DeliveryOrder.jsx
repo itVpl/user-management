@@ -694,7 +694,7 @@ export default function DeliveryOrder() {
               shipperData.containerNo = order.containerNo;
             }
           } else {
-            // Old API format (backward compatibility)
+            // Old API format (backward compatibility).
             puLocs =
               order.shipper?.pickUpLocations ||
               order.shipper?.pickupLocations || [];
