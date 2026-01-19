@@ -80,6 +80,14 @@ export default function AssignLoad() {
 
         if (Array.isArray(loadsData)) {
           const transformedData = loadsData.map((load, index) => {
+            // Debug: Log sales person data from API
+            if (index === 0) { // Log first load for debugging
+              console.log('📦 API Load Data Sample:', {
+                customerAddedBy: load.customerAddedBy,
+                addedBy: load.addedBy,
+                createdBy: load.createdBy
+              });
+            }
             // Log CMT assignment data for debugging
             if (load.cmtAssignment) {
 
@@ -135,8 +143,9 @@ export default function AssignLoad() {
               // CMT Assignment details
               assignedTo: load.assignedTo,
               cmtAssignment: load.cmtAssignment || null,
-              customerAddedBy: load.customerAddedBy || {},
+              customerAddedBy: load.customerAddedBy || load.addedBy || {},
               createdBy: load.customerAddedBy || load.addedBy || {},
+              addedBy: load.addedBy || load.customerAddedBy || {}, // Preserve addedBy directly
               loadApprovalStatus: load.loadApprovalStatus || 'N/A',
               cmtApprovals: load.cmtApprovals || [],
               approvalExpiry: load.approvalExpiry,
@@ -248,6 +257,13 @@ export default function AssignLoad() {
 
   // Handle Re-Assign
   const handleReAssign = (load) => {
+    // Debug: Log the load data to see what's available
+    console.log('🔍 Re-Assign Load Data:', {
+      customerAddedBy: load?.customerAddedBy,
+      createdBy: load?.createdBy,
+      addedBy: load?.addedBy,
+      fullLoad: load
+    });
     setReassignModal({ visible: true, load });
     setSelectedCmtUser('');
     setReassignDescription('');
@@ -835,6 +851,17 @@ export default function AssignLoad() {
                 <strong>Status:</strong>
                 <br />
                 {reassignModal.load?.status || 'N/A'}
+              </div>
+              <div>
+                <strong>Agent:</strong>
+                <br />
+                {reassignModal.load?.customerAddedBy?.empName || 
+                 reassignModal.load?.customerAddedBy?.employeeName || 
+                 reassignModal.load?.createdBy?.empName || 
+                 reassignModal.load?.createdBy?.employeeName ||
+                 reassignModal.load?.addedBy?.empName ||
+                 reassignModal.load?.addedBy?.employeeName ||
+                 'N/A'}
               </div>
             </div>
 
