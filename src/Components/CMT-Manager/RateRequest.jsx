@@ -212,8 +212,8 @@ const autoAcceptingRef = useRef(new Set());
             loadId,
             shipmentNumber: null,
             weight: 0,
-            origin: { city: 'N/A', state: 'N/A', zipcode: 'N/A' },
-            destination: { city: 'N/A', state: 'N/A', zipcode: 'N/A' },
+            origin: { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' },
+            destination: { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' },
             vehicleType: 'N/A',
             rate: 0,
             commodity: 'N/A',
@@ -234,39 +234,57 @@ const autoAcceptingRef = useRef(new Set());
         // Helper function to get origin data (check both single object and array)
         const getOriginData = () => {
           if (approval.loadId.origin && approval.loadId.origin.city) {
+            const address = approval.loadId.origin.addressLine1 || approval.loadId.origin.address || '';
+            const addressLine2 = approval.loadId.origin.addressLine2 || '';
+            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
             return { 
+              address: fullAddress,
               city: approval.loadId.origin.city, 
               state: approval.loadId.origin.state,
               zipcode: approval.loadId.origin.zipcode || approval.loadId.origin.zip || 'N/A'
             };
           }
           if (approval.loadId.origins && approval.loadId.origins.length > 0) {
+            const origin = approval.loadId.origins[0];
+            const address = origin.addressLine1 || origin.address || '';
+            const addressLine2 = origin.addressLine2 || '';
+            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
             return { 
-              city: approval.loadId.origins[0].city, 
-              state: approval.loadId.origins[0].state,
-              zipcode: approval.loadId.origins[0].zipcode || approval.loadId.origins[0].zip || 'N/A'
+              address: fullAddress,
+              city: origin.city, 
+              state: origin.state,
+              zipcode: origin.zipcode || origin.zip || 'N/A'
             };
           }
-          return { city: 'N/A', state: 'N/A', zipcode: 'N/A' };
+          return { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' };
         };
 
         // Helper function to get destination data (check both single object and array)
         const getDestinationData = () => {
           if (approval.loadId.destination && approval.loadId.destination.city) {
+            const address = approval.loadId.destination.addressLine1 || approval.loadId.destination.address || '';
+            const addressLine2 = approval.loadId.destination.addressLine2 || '';
+            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
             return { 
+              address: fullAddress,
               city: approval.loadId.destination.city, 
               state: approval.loadId.destination.state,
               zipcode: approval.loadId.destination.zipcode || approval.loadId.destination.zip || 'N/A'
             };
           }
           if (approval.loadId.destinations && approval.loadId.destinations.length > 0) {
+            const destination = approval.loadId.destinations[0];
+            const address = destination.addressLine1 || destination.address || '';
+            const addressLine2 = destination.addressLine2 || '';
+            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
             return { 
-              city: approval.loadId.destinations[0].city, 
-              state: approval.loadId.destinations[0].state,
-              zipcode: approval.loadId.destinations[0].zipcode || approval.loadId.destinations[0].zip || 'N/A'
+              address: fullAddress,
+              city: destination.city, 
+              state: destination.state,
+              zipcode: destination.zipcode || destination.zip || 'N/A'
             };
           }
-          return { city: 'N/A', state: 'N/A', zipcode: 'N/A' };
+          return { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' };
         };
 
         const originData = getOriginData();
@@ -338,8 +356,8 @@ const autoAcceptingRef = useRef(new Set());
             loadId,
             shipmentNumber: null,
             weight: 0,
-            origin: { city: 'N/A', state: 'N/A', zipcode: 'N/A' },
-            destination: { city: 'N/A', state: 'N/A', zipcode: 'N/A' },
+            origin: { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' },
+            destination: { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' },
             vehicleType: 'N/A',
             rate: 0,
             commodity: 'N/A',
@@ -365,39 +383,57 @@ const autoAcceptingRef = useRef(new Set());
         // Helper function to get origin data (check both single object and array)
         const getOriginData = () => {
           if (approval.loadId.origin && approval.loadId.origin.city) {
+            const address = approval.loadId.origin.addressLine1 || approval.loadId.origin.address || '';
+            const addressLine2 = approval.loadId.origin.addressLine2 || '';
+            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
             return { 
+              address: fullAddress,
               city: approval.loadId.origin.city, 
               state: approval.loadId.origin.state,
               zipcode: approval.loadId.origin.zipcode || approval.loadId.origin.zip || 'N/A'
             };
           }
           if (approval.loadId.origins && approval.loadId.origins.length > 0) {
+            const origin = approval.loadId.origins[0];
+            const address = origin.addressLine1 || origin.address || '';
+            const addressLine2 = origin.addressLine2 || '';
+            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
             return { 
-              city: approval.loadId.origins[0].city, 
-              state: approval.loadId.origins[0].state,
-              zipcode: approval.loadId.origins[0].zipcode || approval.loadId.origins[0].zip || 'N/A'
+              address: fullAddress,
+              city: origin.city, 
+              state: origin.state,
+              zipcode: origin.zipcode || origin.zip || 'N/A'
             };
           }
-          return { city: 'N/A', state: 'N/A', zipcode: 'N/A' };
+          return { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' };
         };
 
         // Helper function to get destination data (check both single object and array)
         const getDestinationData = () => {
           if (approval.loadId.destination && approval.loadId.destination.city) {
+            const address = approval.loadId.destination.addressLine1 || approval.loadId.destination.address || '';
+            const addressLine2 = approval.loadId.destination.addressLine2 || '';
+            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
             return { 
+              address: fullAddress,
               city: approval.loadId.destination.city, 
               state: approval.loadId.destination.state,
               zipcode: approval.loadId.destination.zipcode || approval.loadId.destination.zip || 'N/A'
             };
           }
           if (approval.loadId.destinations && approval.loadId.destinations.length > 0) {
+            const destination = approval.loadId.destinations[0];
+            const address = destination.addressLine1 || destination.address || '';
+            const addressLine2 = destination.addressLine2 || '';
+            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
             return { 
-              city: approval.loadId.destinations[0].city, 
-              state: approval.loadId.destinations[0].state,
-              zipcode: approval.loadId.destinations[0].zipcode || approval.loadId.destinations[0].zip || 'N/A'
+              address: fullAddress,
+              city: destination.city, 
+              state: destination.state,
+              zipcode: destination.zipcode || destination.zip || 'N/A'
             };
           }
-          return { city: 'N/A', state: 'N/A', zipcode: 'N/A' };
+          return { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' };
         };
 
         const originData = getOriginData();
@@ -2394,12 +2430,18 @@ useEffect(() => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pickup Location</div>
+                      {selectedRequest?.origin?.address && (
+                        <div className="text-sm font-semibold text-gray-800">{selectedRequest.origin.address}</div>
+                      )}
                       <div className="text-sm font-semibold text-gray-800">{selectedRequest?.origin?.city || '—'}</div>
                       <div className="text-xs text-gray-500">{selectedRequest?.origin?.state || ''}</div>
                       <div className="text-xs text-gray-400">ZIP: {selectedRequest?.origin?.zipcode || 'N/A'}</div>
                     </div>
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Delivery Location</div>
+                      {selectedRequest?.destination?.address && (
+                        <div className="text-sm font-semibold text-gray-800">{selectedRequest.destination.address}</div>
+                      )}
                       <div className="text-sm font-semibold text-gray-800">{selectedRequest?.destination?.city || '—'}</div>
                       <div className="text-xs text-gray-500">{selectedRequest?.destination?.state || ''}</div>
                       <div className="text-xs text-gray-400">ZIP: {selectedRequest?.destination?.zipcode || 'N/A'}</div>
