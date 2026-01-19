@@ -2226,17 +2226,23 @@ const ChatPage = () => {
         res.data.unreadBySender.forEach((item) => {
           if (item.unreadCount > 0 && item.sender && item.sender.empId) {
             unread[item.sender.empId] = item.unreadCount;
-            
-            // Notify UnreadCountContext to update sidebar badge
-            window.dispatchEvent(new CustomEvent('setUnreadCount', {
-              detail: {
-                type: 'individual',
-                empId: item.sender.empId,
-                count: item.unreadCount
-              }
-            }));
           }
         });
+
+        // Notify UnreadCountContext to update sidebar badge (deferred to avoid setState during render)
+        setTimeout(() => {
+          res.data.unreadBySender.forEach((item) => {
+            if (item.unreadCount > 0 && item.sender && item.sender.empId) {
+              window.dispatchEvent(new CustomEvent('setUnreadCount', {
+                detail: {
+                  type: 'individual',
+                  empId: item.sender.empId,
+                  count: item.unreadCount
+                }
+              }));
+            }
+          });
+        }, 0);
       }
 
       console.log('📊 Fetched unread counts:', unread);
@@ -3682,6 +3688,14 @@ const ChatPage = () => {
     };
 
     const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file, replyTo }) => {
+      console.log('🔔🔔🔔 handleNewMessage called:', {
+        senderEmpId,
+        receiverEmpId,
+        storedUserEmpId: storedUser?.empId,
+        selectedUserEmpId: selectedUser?.empId,
+        message: message?.substring(0, 50)
+      });
+      
       // Mark sender as online when they send a message
       if (senderEmpId && senderEmpId !== storedUser.empId) {
         setOnlineUsers(prev => new Set([...prev, senderEmpId]));
@@ -3693,6 +3707,13 @@ const ChatPage = () => {
       const isFromSelectedUser = senderEmpId === selectedUser?.empId;
       // Check if this message is to current selected user
       const isToSelectedUser = receiverEmpId === selectedUser?.empId;
+      
+      console.log('🔔 Message conditions:', {
+        isForMe,
+        isFromSelectedUser,
+        isToSelectedUser,
+        hasSelectedUser: !!selectedUser
+      });
 
       // Determine notification message based on content type
       let notificationMessage = message || "Sent you a message";
@@ -3733,41 +3754,101 @@ const ChatPage = () => {
         }, 500);
       }
 
-      // If message is for current user OR involves current selected user, refresh messages
-      if ((isForMe && isFromSelectedUser) || (isToSelectedUser && senderEmpId === storedUser.empId)) {
-        // Fetch messages to get full data including replyTo from server
+      // If message is for current user AND from current selected user, add it immediately to state
+      if (isForMe && isFromSelectedUser) {
+        console.log('📥📥📥 Adding message immediately to state (selected chat):', { 
+          senderEmpId, 
+          selectedUserEmpId: selectedUser?.empId,
+          message: message?.substring(0, 50),
+          isForMe,
+          isFromSelectedUser
+        });
+        
+        // Create message object immediately from socket data
+        const newMessage = {
+          _id: `temp_${Date.now()}_${Math.random()}`, // Temporary ID, will be replaced when fetched from server
+          sender: senderEmpId,
+          message: message || '',
+          timestamp: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          isMyMessage: false,
+          isSeen: false,
+          audio: audio || null,
+          image: image || null,
+          file: file || null,
+          replyTo: replyTo || null,
+          isOptimistic: true // Mark as optimistic so it can be replaced with server data
+        };
+        
+        // Add message immediately to state
+        setMessages(prev => {
+          // Check if message already exists (prevent duplicates)
+          const existingMessage = prev.find(msg => 
+            msg.message === newMessage.message && 
+            msg.sender === newMessage.sender &&
+            Math.abs(new Date(msg.timestamp || msg.createdAt).getTime() - new Date(newMessage.timestamp).getTime()) < 5000 // Within 5 seconds
+          );
+          
+          if (existingMessage) {
+            console.log('⚠️ Message already exists, skipping duplicate');
+            return prev;
+          }
+          
+          console.log('✅ Adding new message to state, current count:', prev.length);
+          
+          // Add new message and sort by timestamp
+          const updated = [...prev, newMessage];
+          updated.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+            const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+            return timeA - timeB;
+          });
+          
+          console.log('✅ Message added, new count:', updated.length);
+          return updated;
+        });
+        
+        // Scroll to bottom immediately
+        setTimeout(() => {
+          console.log('📜 Scrolling to bottom');
+          scrollToBottom(true);
+        }, 100);
+        
+        // Then fetch from server to get full data including replyTo and proper _id
         if (replyTo) {
           console.log('📥 Received message with replyTo via socket:', replyTo);
         }
         
-        // Retry logic to ensure replyTo is fetched correctly
-        // If replyTo is expected, retry fetching with increasing delays to handle server save timing
-        const fetchWithRetry = async (retryCount = 0) => {
-          const maxRetries = replyTo ? 2 : 0; // Only retry if replyTo is expected
-          const delays = [500, 1000, 1500]; // Progressive delays: 500ms, 1000ms, 1500ms
-          const delay = delays[retryCount] || delays[delays.length - 1];
-          
-          setTimeout(async () => {
-            try {
-              console.log(`📥 Fetching messages (attempt ${retryCount + 1}${replyTo ? ' - expecting replyTo' : ''})...`);
-              await fetchMessages(selectedUser.empId);
-              
-              // If replyTo was expected and we haven't exhausted retries, schedule another fetch
-              if (replyTo && retryCount < maxRetries) {
-                console.log(`⏳ Waiting before retry ${retryCount + 2} to ensure replyTo is saved...`);
-                fetchWithRetry(retryCount + 1);
-              } else {
-                console.log('✅ Message fetch completed');
-              }
-              
-              setTimeout(scrollToBottom, 100);
-            } catch (error) {
-              console.error('❌ Error fetching messages:', error);
-            }
-          }, delay);
-        };
-        
-        fetchWithRetry();
+        // Fetch from server to get proper message data (with delay to ensure server has saved it)
+        setTimeout(async () => {
+          try {
+            console.log('📥 Fetching messages from server to get full data...');
+            await fetchMessages(selectedUser.empId);
+            setTimeout(scrollToBottom, 100);
+          } catch (error) {
+            console.error('❌ Error fetching messages:', error);
+          }
+        }, replyTo ? 1000 : 500); // Longer delay if replyTo is present
+      } else if (isForMe) {
+        // Message is for current user but not from selected chat - still log it
+        console.log('📥 Message received but not for selected chat:', {
+          senderEmpId,
+          selectedUserEmpId: selectedUser?.empId,
+          message: message?.substring(0, 50)
+        });
+      }
+      
+      // If message is sent by current user to selected user, refresh to get server data
+      if (isToSelectedUser && senderEmpId === storedUser.empId) {
+        // Fetch messages to get full data including replyTo from server
+        setTimeout(async () => {
+          try {
+            await fetchMessages(selectedUser.empId);
+            setTimeout(scrollToBottom, 100);
+          } catch (error) {
+            console.error('❌ Error fetching messages:', error);
+          }
+        }, 500);
       }
 
       // Update chat list to show new message count
@@ -3831,63 +3912,78 @@ const ChatPage = () => {
         showNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
       }
       
-      // If message is for selected group, refresh messages
+      // If message is for selected group, add it immediately to state
       if (isForSelectedGroup) {
-        console.log('✅ Message is for selected group, fetching messages...', {
+        console.log('✅ Message is for selected group, adding immediately to state:', {
           groupId,
-          hasReplyTo: !!replyTo,
-          replyTo
+          senderEmpId,
+          message: message?.substring(0, 50),
+          hasReplyTo: !!replyTo
         });
         
-        // Fetch messages to get full data including replyTo from server
+        // Create group message object immediately from socket data
+        const newGroupMessage = {
+          _id: `temp_${Date.now()}_${Math.random()}`, // Temporary ID, will be replaced when fetched from server
+          groupId: groupId,
+          sender: senderEmpId,
+          senderName: senderName || senderAliasName || 'Unknown',
+          senderAliasName: senderAliasName || senderName || 'Unknown',
+          message: message || '',
+          timestamp: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          isMyMessage: isFromMe,
+          isSeen: false,
+          audio: audio || null,
+          image: image || null,
+          file: file || null,
+          replyTo: replyTo || null,
+          isOptimistic: true // Mark as optimistic so it can be replaced with server data
+        };
+        
+        // Add message immediately to state
+        setGroupMessages(prev => {
+          // Check if message already exists (prevent duplicates)
+          const existingMessage = prev.find(msg => 
+            msg.message === newGroupMessage.message && 
+            msg.sender === newGroupMessage.sender &&
+            Math.abs(new Date(msg.timestamp || msg.createdAt).getTime() - new Date(newGroupMessage.timestamp).getTime()) < 5000 // Within 5 seconds
+          );
+          
+          if (existingMessage) {
+            console.log('⚠️ Group message already exists, skipping duplicate');
+            return prev;
+          }
+          
+          // Add new message and sort by timestamp
+          const updated = [...prev, newGroupMessage];
+          updated.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+            const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+            return timeA - timeB;
+          });
+          
+          return updated;
+        });
+        
+        // Scroll to bottom immediately
+        setTimeout(() => scrollToBottom(true), 100);
+        
+        // Then fetch from server to get full data including replyTo and proper _id
         if (replyTo) {
           console.log('📥 Received group message with replyTo via socket:', replyTo);
         }
         
-        // Retry logic to ensure replyTo is fetched correctly
-        // If replyTo is expected, retry fetching with increasing delays to handle server save timing
-        const fetchWithRetry = async (retryCount = 0) => {
-          const maxRetries = replyTo ? 2 : 0; // Only retry if replyTo is expected
-          const delays = [500, 1000, 1500]; // Progressive delays: 500ms, 1000ms, 1500ms
-          const delay = delays[retryCount] || delays[delays.length - 1];
-          
-          setTimeout(async () => {
-            try {
-              console.log(`📥 Fetching group messages (attempt ${retryCount + 1}${replyTo ? ' - expecting replyTo: ' + replyTo : ''})...`);
-              await fetchGroupMessages(groupId);
-              
-              // Check if the last message has replyTo after fetch
-              setTimeout(() => {
-                setGroupMessages(currentMessages => {
-                  const lastMessage = currentMessages[currentMessages.length - 1];
-                  if (lastMessage) {
-                    console.log('🔍 Last message after fetch:', {
-                      id: lastMessage._id,
-                      message: lastMessage.message,
-                      hasReplyTo: !!lastMessage.replyTo,
-                      replyTo: lastMessage.replyTo
-                    });
-                    
-                    // If replyTo was expected but not found, retry
-                    if (replyTo && !lastMessage.replyTo && retryCount < maxRetries) {
-                      console.log(`🔄 Retry ${retryCount + 1}/${maxRetries}: replyTo missing, retrying...`);
-                      fetchWithRetry(retryCount + 1);
-                    } else if (lastMessage.replyTo) {
-                      console.log('✅ ReplyTo found in fetched message!');
-                    }
-                  }
-                  return currentMessages; // Return unchanged
-                });
-              }, 200);
-              
-              setTimeout(scrollToBottom, 100);
-            } catch (error) {
-              console.error('❌ Error fetching group messages:', error);
-            }
-          }, delay);
-        };
+        // Fetch from server to get proper message data (with delay to ensure server has saved it)
+        setTimeout(async () => {
+          try {
+            console.log('📥 Fetching group messages from server to get full data...');
+            await fetchGroupMessages(groupId);
+            setTimeout(scrollToBottom, 100);
+          } catch (error) {
+            console.error('❌ Error fetching group messages:', error);
+          }
+        }, replyTo ? 1000 : 500); // Longer delay if replyTo is present
         
-        fetchWithRetry();
         // Backend will automatically mark messages as read and emit groupListUpdated
         // No need to manually update unread count - socket event handles it
       } else {
@@ -3973,15 +4069,6 @@ const ChatPage = () => {
           delete updatedUnreadMap[empId];
         }
 
-        // Notify UnreadCountContext to update sidebar badge
-        window.dispatchEvent(new CustomEvent('setUnreadCount', {
-          detail: {
-            type: 'individual',
-            empId: empId,
-            count: unreadCount
-          }
-        }));
-
         // Update chat list with the new unread map
         setChatList(prevList => {
           const existingIndex = prevList.findIndex(chat => chat.empId === empId);
@@ -4018,6 +4105,17 @@ const ChatPage = () => {
 
         return updatedUnreadMap;
       });
+
+      // Notify UnreadCountContext to update sidebar badge (deferred to avoid setState during render)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('setUnreadCount', {
+          detail: {
+            type: 'individual',
+            empId: empId,
+            count: unreadCount
+          }
+        }));
+      }, 0);
     };
 
     // Handle group list updates from backend (for unread count changes)
@@ -4048,7 +4146,11 @@ const ChatPage = () => {
           delete updated[groupId];
         }
 
-        // Notify UnreadCountContext to update sidebar badge
+        return updated;
+      });
+
+      // Notify UnreadCountContext to update sidebar badge (deferred to avoid setState during render)
+      setTimeout(() => {
         window.dispatchEvent(new CustomEvent('setUnreadCount', {
           detail: {
             type: 'group',
@@ -4056,9 +4158,7 @@ const ChatPage = () => {
             count: actualUnreadCount
           }
         }));
-
-        return updated;
-      });
+      }, 0);
 
       // Update group in groups list
       setGroups(prevGroups => {
@@ -4087,7 +4187,18 @@ const ChatPage = () => {
     // Set up all socket listeners
     socket.on("user_online", handleUserOnline);
     socket.on("user_offline", handleUserOffline);
-    socket.on("newMessage", handleNewMessage);
+    
+    // Listen for individual messages - try multiple event names in case backend uses different ones
+    const handleIndividualMessage = (data) => {
+      console.log('🔔🔔🔔 Socket individual message event received:', data);
+      handleNewMessage(data);
+    };
+    
+    socket.on("newMessage", handleIndividualMessage);
+    socket.on("new_message", handleIndividualMessage); // Alternative event name
+    socket.on("private_message", handleIndividualMessage); // Another alternative
+    socket.on("message", handleIndividualMessage); // Generic message event
+    
     socket.on("newGroupMessage", handleNewGroupMessage);
     socket.on("groupMessageSeen", handleGroupMessageSeen);
     // Also listen for alternative event names that backend might use
@@ -4100,10 +4211,23 @@ const ChatPage = () => {
     // Debug: Listen for ALL events to see what's coming from backend
     socket.onAny((eventName, ...args) => {
       console.log('🔔🔔🔔 Chat.jsx - Socket event received:', eventName, args);
+      // If it's a message-related event, log it prominently
+      if (eventName.toLowerCase().includes('message') && !eventName.toLowerCase().includes('seen') && !eventName.toLowerCase().includes('read')) {
+        console.log('📨📨📨 MESSAGE EVENT DETECTED:', eventName, args);
+      }
       // If it's a seen-related event, try to handle it
       if (eventName.includes('seen') || eventName.includes('read')) {
         console.log('👁️ Seen-related event detected:', eventName, args);
       }
+    });
+    
+    // Log socket connection status
+    console.log('✅ Socket listeners set up. Socket connected:', socket.connected);
+    socket.on('connect', () => {
+      console.log('✅✅✅ Socket connected successfully!');
+    });
+    socket.on('disconnect', () => {
+      console.log('❌❌❌ Socket disconnected!');
     });
     
     console.log('✅ Chat.jsx - All socket listeners set up');

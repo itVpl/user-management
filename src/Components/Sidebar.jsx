@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -395,9 +395,18 @@ const Sidebar = () => {
   const [loading, setLoading] = useState(true);
   const [userDepartment, setUserDepartment] = useState(null);
   const location = useLocation();
-  const { getTotalUnreadCount, hasUnreadMessages } = useUnreadCount();
-  const totalUnreadCount = getTotalUnreadCount();
-  const hasUnread = hasUnreadMessages();
+  const { getTotalUnreadCount, hasUnreadMessages, unreadCounts, groupUnreadCounts } = useUnreadCount();
+  // Make these reactive by recalculating when unreadCounts or groupUnreadCounts change
+  const totalUnreadCount = useMemo(() => {
+    const count = getTotalUnreadCount();
+    console.log('🔴 Sidebar: Total unread count:', count, 'unreadCounts:', unreadCounts, 'groupUnreadCounts:', groupUnreadCounts);
+    return count;
+  }, [unreadCounts, groupUnreadCounts, getTotalUnreadCount]);
+  const hasUnread = useMemo(() => {
+    const has = hasUnreadMessages();
+    console.log('🔴 Sidebar: Has unread:', has);
+    return has;
+  }, [unreadCounts, groupUnreadCounts, hasUnreadMessages]);
   const [activeBgColor, setActiveBgColor] = useState(() => {
     try {
       const saved = localStorage.getItem("themePrefs");
@@ -810,8 +819,18 @@ const Sidebar = () => {
                                             alt={isCategoryOpen ? "Collapse" : "Expand"}
                                             className="w-3 h-3"
                                           />
-                                          <span className="text-sm font-semibold">
+                                          <span className="text-sm font-semibold relative inline-block">
                                             {category}
+                                            {/* Red dot badge for Communication when there are unread messages */}
+                                            {category === "Communication" && hasUnread && (
+                                              <span
+                                                className="absolute -top-1 -right-4 w-3 h-3 bg-red-500 rounded-full border-2 border-white"
+                                                style={{
+                                                  boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
+                                                }}
+                                                title={`${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`}
+                                              />
+                                            )}
                                           </span>
                                         </button>
                                         {isCategoryOpen && (
@@ -829,11 +848,23 @@ const Sidebar = () => {
                                               >
                                                 {({ isActive }) => (
                                                   <>
-                                                    <img
-                                                      src={isActive ? deptItem.whiteIcon || deptItem.icon : deptItem.icon}
-                                                      alt={deptItem.name}
-                                                      className="w-4 h-4"
-                                                    />
+                                                    <div className="relative">
+                                                      <img
+                                                        src={isActive ? deptItem.whiteIcon || deptItem.icon : deptItem.icon}
+                                                        alt={deptItem.name}
+                                                        className="w-4 h-4"
+                                                      />
+                                                      {/* Red dot badge for Chat when there are unread messages */}
+                                                      {deptItem.name === "Chat" && hasUnread && (
+                                                        <span
+                                                          className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"
+                                                          style={{
+                                                            boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
+                                                          }}
+                                                          title={`${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`}
+                                                        />
+                                                      )}
+                                                    </div>
                                                     <span className="text-xs font-medium">
                                                       {deptItem.name}
                                                     </span>
