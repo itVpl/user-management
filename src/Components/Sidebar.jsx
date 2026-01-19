@@ -142,6 +142,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Financial Management": [
       "Accounts Receivable",
       "Accounts Payable",
+      "Receivable Report",
+      "Payable Report",
       "Finance Dashboard"
     ],
     "Communication": [
@@ -362,6 +364,8 @@ const menuItems = [
   { name: "Break Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/break-report" },
   { name: "Accounts Receivable", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/Invoices" },
   { name: "Accounts Payable", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/acountent-payable" },
+  { name: "Receivable Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/invoices-report" },
+  { name: "Payable Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/payable-report" },
   { name: "Check Invoice", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CheckInvoice" },
   { name: "Assign Load", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignLoad" },
   { name: "DO Reassign", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigndo" },

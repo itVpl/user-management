@@ -89,6 +89,8 @@ const TallyManagement = lazy(() => import("./Components/Finance/TallyManagement.
 const LedgerManagement = lazy(() => import("./Components/Finance/LedgerManagement.jsx"));
 const InventoryManagement = lazy(() => import("./Components/Finance/InventoryManagement.jsx"));
 const AcountentPayable = lazy(() => import("./Components/Finance/AcountentPayable.jsx"));
+const InvoicesReport = lazy(() => import("./Components/Finance/InvoicesReport.jsx"));
+const PayableReport = lazy(() => import("./Components/Finance/PayableReport.jsx"));
 const AllCustomer = lazy(() => import("./Components/Sales/AllCustomer.jsx"));
 const EmptyTruckLocation = lazy(() => import("./Components/CMT/EmptyTruckLocation.jsx"));
 const RateRequestReport = lazy(() => import("./Components/CMT/RateRequestReport.jsx"));
@@ -96,6 +98,7 @@ const TruckerEmptyLocation = lazy(() => import("./Components/Dashboard/TruckerEm
 const BreakReport = lazy(() => import("./Components/HRDashboard/BreakReport.jsx"));
 const FollowUpReport = lazy(() => import("./Components/Sales/FollowUpReport.jsx"));
 const LandingPage = lazy(() => import("./Pages/LandingPage.jsx"));
+
 
 // Chat Message System Imports - keep as regular imports (needed globally)
 import { ChatMessageProvider } from "./contexts/ChatMessageContext";
@@ -674,6 +677,8 @@ function App() {
           <Route path="ladger" element={<LedgerManagement />} />
           <Route path="inventory-management" element={<InventoryManagement />} />
           <Route path="acountent-payable" element={<AcountentPayable />} />
+          <Route path="invoices-report" element={<InvoicesReport />} />
+          <Route path="payable-report" element={<PayableReport />} />
           <Route path="empty-truck-location" element={<EmptyTruckLocation />} />
           <Route path="rate-request-report" element={<RateRequestReport />} />
           <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
