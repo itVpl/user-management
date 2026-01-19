@@ -15,7 +15,7 @@ const ManagerShippersLDocuments = () => {
               <tr className="text-blue-500 font-medium">
                 <th>Date - L Doc</th>
                 <th>Load ID</th>
-                <th>Employee ID</th>
+                <th>Employee ID</th>  
                 <th>Designation</th>
                 <th>Status</th>
                 <th>Remarks</th>
