@@ -4034,11 +4034,17 @@ const ChatPage = () => {
     };
 
     // Handle chat list updates from backend (for unread count changes)
+    // 🔴 RED DOT INDICATOR: This handler controls the red dot badge
+    // Backend should emit 'chatListUpdated' to BOTH sender and receiver when message is sent
+    // - For receiver: unreadCount > 0 (they received a new message)
+    // - For sender: unreadCount > 0 (indicates recent activity/sent message)
+    // Frontend will display red dot whenever unreadCount > 0, regardless of sender/receiver
     const handleChatListUpdated = (updatedChatItem) => {
       console.log('📬📬📬 CHAT LIST UPDATED EVENT RECEIVED! 📬📬📬');
       console.log('📬 Chat list updated event received:', updatedChatItem);
       console.log('📍 Socket ID:', socket?.id);
       console.log('📍 Socket connected:', socket?.connected);
+      console.log('🔴 Unread count from backend:', updatedChatItem?.unreadCount);
       
       if (!updatedChatItem || !updatedChatItem.empId) {
         console.warn('⚠️ Invalid chatListUpdated event data:', updatedChatItem);
@@ -4046,6 +4052,14 @@ const ChatPage = () => {
       }
 
       const { empId, unreadCount, online, lastMessage, lastMessageTime, employeeName, aliasName } = updatedChatItem;
+      
+      // Log if this is for sender (current user sent message) or receiver (current user received message)
+      const isForCurrentUser = empId === storedUser?.empId;
+      if (isForCurrentUser) {
+        console.log('ℹ️ chatListUpdated is for current user (self) - this should not happen');
+      } else {
+        console.log(`🔴 Updating red dot for ${employeeName || aliasName || empId}: unreadCount = ${unreadCount}`);
+      }
 
       // Update online status
       if (online !== undefined) {
