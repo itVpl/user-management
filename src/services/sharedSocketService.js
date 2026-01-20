@@ -53,6 +53,7 @@ class SharedSocketService {
     console.log('📍 Environment check - NODE_ENV:', import.meta.env.MODE);
 
     // Create socket connection with persistent reconnection
+    // Keep connection alive even when tab is hidden (for background notifications)
     this.socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
@@ -62,7 +63,12 @@ class SharedSocketService {
       reconnectionDelayMax: 10000, // Max 10 seconds between attempts
       timeout: 20000,
       forceNew: false, // Allow sharing connection if possible
-      autoConnect: true // Automatically connect
+      autoConnect: true, // Automatically connect
+      // Keep connection alive even when page is hidden
+      closeOnBeforeunload: false, // Don't close on page unload (allows background notifications)
+      // Ensure connection persists across tab switches
+      upgrade: true, // Allow upgrading transport
+      rememberUpgrade: true // Remember transport upgrade
     });
 
     // Connection events
