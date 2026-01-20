@@ -24,9 +24,10 @@ export const SocketProvider = ({ children, userId }) => {
 
     console.log('🚀 Initializing WebSocket connection for user:', userId);
 
-    // Get backend URL from environment or use API config
-    // Import API_CONFIG dynamically to avoid circular dependencies
+    // Get socket URL - Socket.io needs base URL WITHOUT /api/v1
+    // Priority: VITE_SOCKET_URL > VITE_BACKEND_URL > VITE_API_BASE_URL (with /api/v1 removed) > fallback
     const getBackendUrl = () => {
+      if (import.meta.env.VITE_SOCKET_URL) return import.meta.env.VITE_SOCKET_URL;
       if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
       if (import.meta.env.VITE_API_BASE_URL) {
         return import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');

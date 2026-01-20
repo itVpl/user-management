@@ -19,8 +19,9 @@ class SocketService {
     }
 
     this.token = token;
-    // Get socket URL from API config (uses VITE_API_BASE_URL from .env)
-    const socketUrl = API_CONFIG.BASE_URL;
+    // Get socket URL - Socket.io needs base URL WITHOUT /api/v1
+    // Priority: VITE_SOCKET_URL > API_CONFIG.BASE_URL > fallback
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || API_CONFIG.BASE_URL || 'https://vpl-liveproject-1.onrender.com';
 
     this.socket = io(socketUrl, {
       auth: { token },

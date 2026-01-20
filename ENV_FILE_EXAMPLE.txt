@@ -1,0 +1,38 @@
+# ============================================
+# .env FILE EXAMPLE - Copy this to your .env
+# ============================================
+
+# REST API URL (includes /api/v1)
+# Used for HTTP requests like POST /api/v1/chat/send
+VITE_API_BASE_URL=https://vpl-liveproject-1.onrender.com/api/v1
+
+# Socket.io URL (base URL only, NO /api/v1)
+# Used for WebSocket connections - Socket.io needs base URL without /api/v1
+VITE_SOCKET_URL=https://vpl-liveproject-1.onrender.com
+
+# ============================================
+# IMPORTANT NOTES:
+# ============================================
+# 1. VITE_API_BASE_URL = REST API (includes /api/v1)
+# 2. VITE_SOCKET_URL = Socket.io (base URL only, NO /api/v1)
+# 3. Both are REQUIRED for the app to work correctly
+# 4. After adding/changing .env, RESTART your dev server!
+# ============================================
+
+# ============================================
+# FOR LOCAL DEVELOPMENT:
+# ============================================
+# VITE_API_BASE_URL=http://localhost:4000/api/v1
+# VITE_SOCKET_URL=http://localhost:4000
+
+# ============================================
+# FOR PRODUCTION (Render):
+# ============================================
+# VITE_API_BASE_URL=https://vpl-liveproject-1.onrender.com/api/v1
+# VITE_SOCKET_URL=https://vpl-liveproject-1.onrender.com
+
+# ============================================
+# FOR CUSTOM DOMAIN:
+# ============================================
+# VITE_API_BASE_URL=https://vpllogisticsllc.com/api/v1
+# VITE_SOCKET_URL=https://vpllogisticsllc.com
