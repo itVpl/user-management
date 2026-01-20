@@ -132,6 +132,36 @@ const NotificationHandler = () => {
     requestNotificationPermission();
   }, [requestNotificationPermission]);
 
+  // Monitor page visibility to ensure notifications work when tab is hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const isVisible = !document.hidden && document.visibilityState === 'visible';
+      console.log('👁️ Page visibility changed:', {
+        visible: isVisible,
+        hidden: document.hidden,
+        visibilityState: document.visibilityState
+      });
+      
+      // When page becomes visible again, check for missed notifications
+      if (isVisible) {
+        console.log('✅ Page is now visible - socket should still be connected');
+        const currentSocket = sharedSocketService.getSocket();
+        if (currentSocket) {
+          console.log('📍 Socket status:', {
+            connected: currentSocket.connected,
+            id: currentSocket.id
+          });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   // Track currently selected chat user/group from Chat component
   const [selectedChatEmpId, setSelectedChatEmpId] = useState(null);
   const [selectedChatGroupId, setSelectedChatGroupId] = useState(null);
@@ -283,15 +313,29 @@ const NotificationHandler = () => {
     return 'New message';
   }, []);
 
+  // Check if page is visible (using Page Visibility API)
+  const isPageVisible = useCallback(() => {
+    if (typeof document === 'undefined') return true;
+    return !document.hidden && document.visibilityState === 'visible';
+  }, []);
+
   // Show browser notification
   const showBrowserNotification = useCallback((notificationData) => {
     if (!('Notification' in window) || notificationPermission !== 'granted') {
       return;
     }
 
-    // Don't show notification if user is viewing that chat
-    if (!shouldShowNotification(notificationData)) {
-      return;
+    // Always show notification if page is hidden (user is on different tab or app is minimized)
+    const pageVisible = isPageVisible();
+    
+    // If page is hidden, always show notification (user is not viewing the app)
+    if (!pageVisible) {
+      console.log('🌍 Page is hidden - showing notification regardless of chat view');
+    } else {
+      // If page is visible, check if user is viewing that chat
+      if (!shouldShowNotification(notificationData)) {
+        return;
+      }
     }
 
     // Prevent duplicate browser notifications (browser API handles this with tag, but we check too)
@@ -330,7 +374,12 @@ const NotificationHandler = () => {
         tag: notificationData.messageId, // Prevent duplicates
         data: notificationData, // Store notification data
         requireInteraction: false, // Auto-close after a few seconds
-        silent: false // Play sound
+        silent: false, // Play sound
+        // Make notification more persistent when page is hidden
+        ...(pageVisible ? {} : { 
+          requireInteraction: true, // Keep notification visible when page is hidden
+          vibrate: [200, 100, 200] // Vibrate pattern (if device supports it)
+        })
       });
 
       // Handle notification click
@@ -340,14 +389,16 @@ const NotificationHandler = () => {
         notification.close();
       };
 
-      // Auto-close after 5 seconds
+      // Auto-close after 5 seconds (only if page is visible)
+      // If page is hidden, keep notification longer (10 seconds) so user can see it when they return
+      const closeDelay = pageVisible ? 5000 : 10000;
       setTimeout(() => {
         notification.close();
-      }, 5000);
+      }, closeDelay);
     } catch (error) {
       console.error('Error showing browser notification:', error);
     }
-  }, [notificationPermission, shouldShowNotification, getNotificationBody, handleNotificationClick]);
+  }, [notificationPermission, shouldShowNotification, getNotificationBody, handleNotificationClick, isPageVisible]);
 
   // Show in-app notification
   const showInAppNotification = useCallback((notificationData) => {
