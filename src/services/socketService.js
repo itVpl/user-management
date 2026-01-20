@@ -35,7 +35,8 @@ class SocketService {
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: this.reconnectDelay,
         timeout: 20000,
-        forceNew: true
+        forceNew: true,
+        withCredentials: true // Important for CORS with credentials
       });
 
       this.setupEventListeners();

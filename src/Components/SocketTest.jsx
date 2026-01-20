@@ -15,7 +15,9 @@ const SocketTest = () => {
         console.log('✅ socket.io-client is working');
         
         // Test connection (but don't actually connect)
-        const testSocket = io(API_CONFIG.BASE_URL, {
+        // Get socket URL - Socket.io needs base URL WITHOUT /api/v1
+        const socketUrl = import.meta.env.VITE_SOCKET_URL || API_CONFIG.BASE_URL || 'https://vpl-liveproject-1.onrender.com';
+        const testSocket = io(socketUrl, {
           autoConnect: false // Don't auto-connect for test
         });
         
