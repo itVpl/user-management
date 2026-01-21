@@ -13,6 +13,17 @@ import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
 import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { 
+  fetchDOReport, 
+  setCurrentPage,
+  setAddDispature,
+  selectDOReportOrders,
+  selectDOReportPagination,
+  selectDOReportLoading,
+  selectDOReportError,
+  selectCurrentAddDispature
+} from '../../store/slices/doReportSlice';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -362,14 +373,20 @@ export default function DOReport() {
 
 
 
-  const [orders, setOrders] = useState([]);
+  const dispatch = useAppDispatch();
+  const orders = useAppSelector(selectDOReportOrders);
+  const pagination = useAppSelector(selectDOReportPagination);
+  const loading = useAppSelector(selectDOReportLoading);
+  const error = useAppSelector(selectDOReportError);
+  const currentPage = pagination.currentPage;
+  const itemsPerPage = pagination.itemsPerPage || 15;
+  
   const [viewDoc, setViewDoc] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
   const [modalType, setModalType] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [reason, setReason] = useState('');
   const [showAddOrderForm, setShowAddOrderForm] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [loadingOrderId, setLoadingOrderId] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -472,7 +489,7 @@ export default function DOReport() {
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [selectedCreatedBy, setSelectedCreatedBy] = useState('');
-  const [selectedCompany, setSelectedCompany] = useState('');
+  const selectedCompany = useAppSelector(selectCurrentAddDispature);
   const [employeeMap, setEmployeeMap] = useState(new Map()); // Map empId -> employeeName
 
   // Presets
@@ -598,9 +615,7 @@ export default function DOReport() {
 
 
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  // Pagination is now managed by Redux
 
   // Monitor customers array to ensure it's never empty
   useEffect(() => {
@@ -621,93 +636,14 @@ export default function DOReport() {
     }
   }, [formData.customers]);
 
-  // Fetch data from API
-  // REPLACE THIS BLOCK: fetchOrders() (quantity ko locations ke weight se lo)
-  // REPLACE your fetchOrders with this version
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      
-      // Build API URL with addDispature parameter if company is selected
-      let apiUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/report`;
-      if (selectedCompany) {
-        apiUrl += `?addDispature=${encodeURIComponent(selectedCompany)}`;
-      }
-      
-      const response = await axios.get(apiUrl, {
-        timeout: 10000,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.data && response.data.success) {
-        // API response structure: { success: true, data: { dos: [...] } }
-        const ordersArray = response.data.data?.dos || [];
-        
-        const transformedOrders = ordersArray.map(order => {
-          // --------- PATCH: robust casing + fallbacks ----------
-          const puLocs =
-            order.shipper?.pickUpLocations ||
-            order.shipper?.pickupLocations || // some APIs use lowercase 'u'
-            [];
-          const drLocs =
-            order.shipper?.dropLocations ||
-            order.shipper?.deliveryLocations ||
-            [];
-
-          const puW = puLocs[0]?.weight;
-          const drW = drLocs[0]?.weight;
-          // -----------------------------------------------------
-
-          const loadNo = order.customers?.[0]?.loadNo || 'N/A';
-          // Use doId if available, otherwise fallback to _id
-          const orderId = order.doId || order._id;
-
-          return {
-            id: `DO-${String(orderId).slice(-6)}`,
-            originalId: orderId,
-            doNum: loadNo,
-            clientName: order.customers?.[0]?.billTo || order.customerName || 'N/A',
-            clientEmail: `${(order.customers?.[0]?.billTo || order.customerName || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
-            pickupLocation: puLocs[0]?.name || 'Pickup Location',
-            deliveryLocation: drLocs[0]?.name || 'Delivery Location',
-            amount: order.customers?.[0]?.totalAmount || 0,
-            description: `Load: ${loadNo}`,
-            priority: 'normal',
-            status: order.status || 'open',
-            assignmentStatus: order.assignmentStatus || 'unassigned',
-            createdAt: order.date ? new Date(order.date).toISOString().split('T')[0] : '',
-            createdBy: `Employee ${order.empId || 'N/A'}`,
-            createdByEmpId: order.empId || 'N/A', // Store empId separately for filter
-            docUpload: 'sample-doc.jpg',
-            productName: order.shipper?.containerType || 'N/A',
-            // --------- PATCH: quantity fallback includes top-level shipper.weight if any ----------
-            quantity: (puW ?? drW ?? order.shipper?.weight ?? 0),
-            // --------------------------------------------------------------------------------------
-            remarks: order.remarks || '',
-            shipperName: order.shipper?.name || 'N/A',
-            carrierName: order.carrier?.carrierName || 'N/A',
-            carrierFees: order.carrier?.totalCarrierFees || 0,
-            createdBySalesUser: order.createdBySalesUser || 'N/A',
-            supportingDocs: order.supportingDocs || [],
-            // Store customers and shipper data for table display
-            customers: order.customers || [],
-            shipper: order.shipper || {},
-            // Store full order data for view modal
-            _fullOrderData: order
-          };
-        });
-
-        console.log('Transformed orders:', transformedOrders);
-        setOrders(transformedOrders);
-      }
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      alertify.error(`Failed to load orders: ${error.response?.status || 'Network Error'}`);
-    } finally {
-      setLoading(false);
-    }
+  // Fetch data from API using Redux
+  const fetchOrders = () => {
+    dispatch(fetchDOReport({ 
+      page: currentPage, 
+      limit: itemsPerPage, 
+      addDispature: selectedCompany || null,
+      forceRefresh: false 
+    }));
   };
 
   // Excel Import Functions
@@ -1554,7 +1490,7 @@ export default function DOReport() {
       }
       
       // Refresh orders list
-      await fetchOrders();
+      await dispatch(fetchDOReport({ page: currentPage, limit: itemsPerPage, addDispature: selectedCompany || null, forceRefresh: true }));
     } catch (error) {
       console.error('Import error:', error);
       alertify.error(error.message || 'Failed to import data');
@@ -1685,15 +1621,17 @@ export default function DOReport() {
     fetchAllEmployees();          // Fetch employees for Created By filter
   }, []);
 
-  // Refetch orders when company filter changes (skip initial mount)
-  const isInitialMount = React.useRef(true);
+  // Fetch orders when page or company filter changes
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
     fetchOrders();
-  }, [selectedCompany]);
+  }, [currentPage, selectedCompany, dispatch]);
+
+  // Show error messages
+  useEffect(() => {
+    if (error) {
+      alertify.error(error);
+    }
+  }, [error]);
 
 
   const handleStatusUpdate = async (status) => {
@@ -1976,15 +1914,15 @@ export default function DOReport() {
   });
 
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+  // Pagination calculations (server-side pagination - no client-side slicing needed)
+  const totalPages = pagination.totalPages || 1;
+  const currentOrders = filteredOrders; // Already filtered by server, just apply client-side search/filter
 
   // Handle page change
   const handlePageChange = (page) => {
-    setCurrentPage(page);
+    if (page < 1 || page > totalPages) return;
+    dispatch(setCurrentPage(page));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Export to CSV function
@@ -2060,7 +1998,7 @@ export default function DOReport() {
   // Generate smart pagination page numbers
   const getPaginationPages = () => {
     const pages = [];
-    const maxVisible = 7; // Maximum visible page numbers
+    const maxVisible = 5; // Maximum visible page numbers
     
     if (totalPages <= maxVisible) {
       // If total pages are less than maxVisible, show all
@@ -2068,40 +2006,31 @@ export default function DOReport() {
         pages.push(i);
       }
     } else {
-      // Always show first page
-      pages.push(1);
-      
-      if (currentPage <= 4) {
-        // Near the beginning
-        for (let i = 2; i <= 5; i++) {
+      // Show pages around current page
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 5; i++) {
           pages.push(i);
         }
-        pages.push('ellipsis');
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 3) {
-        // Near the end
-        pages.push('ellipsis');
+      } else if (currentPage >= totalPages - 2) {
         for (let i = totalPages - 4; i <= totalPages; i++) {
           pages.push(i);
         }
       } else {
-        // In the middle
-        pages.push('ellipsis');
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+        for (let i = currentPage - 2; i <= currentPage + 2; i++) {
           pages.push(i);
         }
-        pages.push('ellipsis');
-        pages.push(totalPages);
       }
     }
     
     return pages;
   };
 
-  // Reset to first page when search term or filters change
+  // Reset to first page when search term or filters change (client-side filters only)
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, range, selectedCreatedBy, selectedCompany]);
+    if (searchTerm || range || selectedCreatedBy) {
+      dispatch(setCurrentPage(1));
+    }
+  }, [searchTerm, range, selectedCreatedBy, dispatch]);
 
   // Get unique Created By values from orders (Name + empId format)
   const uniqueCreatedBy = React.useMemo(() => {
@@ -4189,7 +4118,7 @@ const handleUpdateOrder = async (e) => {
     setEditingOrder(null);
     
     // Refresh the orders list
-    await fetchOrders();
+    await dispatch(fetchDOReport({ page: currentPage, limit: itemsPerPage, addDispature: selectedCompany || null, forceRefresh: true }));
     
   } catch (error) {
     console.error('Update error:', error);
@@ -4273,7 +4202,7 @@ const handleUpdateOrder = async (e) => {
 
       if (response.data && response.data.success) {
         alertify.success('Carrier fees updated successfully!');
-        fetchOrders(); // Refresh the orders list
+        dispatch(fetchDOReport({ page: currentPage, limit: itemsPerPage, addDispature: selectedCompany || null, forceRefresh: true })); // Refresh the orders list
         return response.data;
       } else {
         console.error('Server response:', response.data);
@@ -5437,8 +5366,8 @@ const handleUpdateOrder = async (e) => {
 
 
 
-  // Loading state
-  if (loading) {
+  // Initial loading state (only when no orders)
+  if (loading && orders.length === 0) {
     return (
       <div className="p-6">
         <div className="flex justify-center items-center h-64">
@@ -5491,59 +5420,59 @@ const handleUpdateOrder = async (e) => {
   }
 
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div className="p-4 md:p-6 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen max-w-full overflow-x-hidden">
       {/* Header Section with Stats and Filters */}
       <div className="mb-6">
         {/* Stats Card */}
-        <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-6 mb-6 border border-green-400/20">
+        <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl md:rounded-2xl shadow-2xl p-4 md:p-6 mb-4 md:mb-6 border border-green-400/20">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg">
-                <Truck className="text-white" size={28} />
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-white/20 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg">
+                <Truck className="text-white" size={24} />
               </div>
               <div>
-                <p className="text-green-100 text-sm font-medium mb-1">Total Delivery Orders</p>
-                <p className="text-4xl font-bold text-white drop-shadow-lg">{totalOrdersExcludingShyam.length}</p>
+                <p className="text-green-100 text-xs md:text-sm font-medium mb-1">Total Delivery Orders</p>
+                <p className="text-2xl md:text-4xl font-bold text-white drop-shadow-lg">{totalOrdersExcludingShyam.length}</p>
               </div>
             </div>
-            <div className="hidden md:flex items-center gap-2 text-green-100">
+            <div className="hidden sm:flex items-center gap-2 text-green-100">
               <div className="w-2 h-2 bg-green-200 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Live Data</span>
+              <span className="text-xs md:text-sm font-medium">Live Data</span>
             </div>
           </div>
         </div>
 
         {/* Filters and Actions Bar */}
-        <div className="bg-white rounded-2xl shadow-xl p-5 border border-gray-200">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+        <div className="bg-white rounded-2xl shadow-xl p-4 md:p-5 border border-gray-200">
+          <div className="flex flex-col lg:flex-row gap-3 md:gap-4 items-start lg:items-center">
             {/* Left Side - Search and Filters */}
-            <div className="flex flex-wrap items-center gap-3 flex-1">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1 w-full">
               {/* Search Input */}
-              <div className="relative flex-1 min-w-[250px]">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <div className="relative flex-1 min-w-[200px] md:min-w-[250px] w-full md:w-auto">
+                <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  placeholder="Search orders by load number, customer, carrier..."
+                  placeholder="Search orders..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-gray-50 focus:bg-white text-gray-700 placeholder-gray-400"
+                  className="w-full pl-10 md:pl-12 pr-3 md:pr-4 py-2 md:py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-gray-50 focus:bg-white text-gray-700 placeholder-gray-400 text-sm md:text-base"
                 />
               </div>
 
               {/* Date Range */}
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setShowPresetMenu(v => !v)}
-                  className="w-[280px] text-left px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all flex items-center justify-between group"
+                  className="w-full sm:w-[240px] md:w-[280px] text-left px-3 md:px-4 py-2 md:py-3 border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all flex items-center justify-between group text-sm md:text-base"
                 >
-                  <div className="flex items-center gap-2">
-                    <Calendar className="text-gray-400 group-hover:text-green-600 transition-colors" size={18} />
-                    <span className="text-gray-700 font-medium">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Calendar className="text-gray-400 group-hover:text-green-600 transition-colors flex-shrink-0" size={16} />
+                    <span className="text-gray-700 font-medium truncate">
                       {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
                     </span>
                   </div>
-                  <span className="text-gray-400 group-hover:text-green-600 transition-colors">▼</span>
+                  <span className="text-gray-400 group-hover:text-green-600 transition-colors flex-shrink-0 ml-2">▼</span>
                 </button>
 
                 {showPresetMenu && (
@@ -5569,7 +5498,7 @@ const handleUpdateOrder = async (e) => {
               </div>
 
               {/* Created By Filter */}
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <SearchableDropdown
                   value={selectedCreatedBy}
                   onChange={(value) => setSelectedCreatedBy(value)}
@@ -5579,34 +5508,36 @@ const handleUpdateOrder = async (e) => {
                   ]}
                   placeholder="Select Created By"
                   searchPlaceholder="Search created by..."
-                  className="w-[220px] border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
+                  className="w-full sm:w-[200px] md:w-[220px] border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
                 />
               </div>
 
               {/* Company Filter */}
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <SearchableDropdown
                   value={selectedCompany}
-                  onChange={(value) => setSelectedCompany(value)}
+                  onChange={(value) => {
+                    dispatch(setAddDispature(value || null));
+                  }}
                   options={[
                     { value: '', label: 'All Companies' },
                     ...companyOptions
                   ]}
                   placeholder="Select Company"
                   searchPlaceholder="Search company..."
-                  className="w-[220px] border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
+                  className="w-full sm:w-[200px] md:w-[220px] border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Right Side - Action Buttons */}
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0 w-full sm:w-auto">
               {/* Export CSV Button */}
               <button
                 onClick={exportToCSV}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-5 py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                className="flex items-center gap-1 md:gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 md:px-5 py-2 md:py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 text-sm md:text-base flex-1 sm:flex-none justify-center"
               >
-                <FaDownload size={18} />
+                <FaDownload size={16} />
                 <span className="hidden sm:inline">Export CSV</span>
                 <span className="sm:hidden">Export</span>
               </button>
@@ -5621,9 +5552,9 @@ const handleUpdateOrder = async (e) => {
                   setFileReference(null);
                   setImportResult(null);
                 }}
-                className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-5 py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                className="flex items-center gap-1 md:gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-3 md:px-5 py-2 md:py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 text-sm md:text-base flex-1 sm:flex-none justify-center"
               >
-                <FileSpreadsheet size={20} />
+                <FileSpreadsheet size={16} />
                 <span className="hidden sm:inline">Import Excel</span>
                 <span className="sm:hidden">Import</span>
               </button>
@@ -5634,7 +5565,7 @@ const handleUpdateOrder = async (e) => {
 
       {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
       {showCustomRange && (
-        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+        <div className="fixed inset-0 z-[60] bg-black/50  flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
           <div className="bg-white rounded-2xl shadow-2xl p-6 border-2 border-gray-200" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-bold text-gray-800">Select Date Range</h3>
@@ -5793,21 +5724,21 @@ const handleUpdateOrder = async (e) => {
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+          <div className="overflow-x-auto max-w-full">
+            <table className="w-full min-w-[1200px]">
+              <thead className="bg-gradient-to-r from-gray-100 to-gray-200 sticky top-0 z-10">
                 <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">WORK ORDER NO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPMENT NO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CONTAINER NO</th>
-                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CUSTOMER FEE</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER FEE</th>
-                     <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">MARGIN</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap">Load Num</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[150px]">Bill To</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[140px]">Carrier Name</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[120px]">Work Order No</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[120px]">Shipment No</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[120px]">Container No</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[100px]">Customer Fee</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[100px]">Carrier Fee</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[120px]">Margin</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[120px]">Created By</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-3 text-gray-800 font-bold text-xs md:text-sm uppercase tracking-wide whitespace-nowrap min-w-[80px]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -5817,37 +5748,37 @@ const handleUpdateOrder = async (e) => {
                   const containerNo = order.shipper?.containerNo || 'N/A';
                   
                   return (
-                    <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-mono text-base font-semibold text-gray-700">{order.doNum}</span>
+                    <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50/50 transition-colors`}>
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-mono text-sm md:text-base font-semibold text-gray-700">{order.doNum}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.clientName}</span>
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm truncate block max-w-[150px]" title={order.clientName}>{order.clientName}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.carrierName}</span>
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm truncate block max-w-[140px]" title={order.carrierName}>{order.carrierName}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{workOrderNo}</span>
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm truncate block max-w-[120px]" title={workOrderNo}>{workOrderNo}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{shipmentNo}</span>
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm truncate block max-w-[120px]" title={shipmentNo}>{shipmentNo}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{containerNo}</span>
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm truncate block max-w-[120px]" title={containerNo}>{containerNo}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order?.customers?.[0]?.totalAmount || 'N/A'}</span>
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm">{order?.customers?.[0]?.totalAmount || 'N/A'}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm">
                           {order?.carrierFees !== undefined && order?.carrierFees !== null 
                             ? order.carrierFees 
                             : 0}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm">
                           {(() => {
                             const customerFee = order?.customers?.[0]?.totalAmount || 0;
                             const carrierFee = order?.carrierFees || 0;
@@ -5858,14 +5789,16 @@ const handleUpdateOrder = async (e) => {
                           })()}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}</span>
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <span className="font-medium text-gray-700 text-xs md:text-sm truncate block max-w-[120px]" title={order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}>
+                          {order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}
+                        </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <div className="flex gap-2">
+                      <td className="py-2 md:py-3 px-2 md:px-3">
+                        <div className="flex gap-1 md:gap-2">
                           <button
                             onClick={() => handleViewOrder(order)}
-                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-2 md:px-3 py-1 rounded-lg text-xs md:text-sm font-medium transition-colors whitespace-nowrap"
                           >
                             View
                           </button>
@@ -5891,25 +5824,37 @@ const handleUpdateOrder = async (e) => {
         </div>
       )}
 
+      {/* Loading overlay for pagination (no blur) */}
+      {loading && orders.length > 0 && (
+        <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-700 font-semibold">Loading...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pagination */}
       {totalPages > 1 && filteredOrders.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
-            {searchTerm && ` (filtered from ${orders.length} total)`}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 mt-4 md:mt-6 bg-white rounded-2xl shadow-xl p-3 md:p-4 border border-gray-100">
+          <div className="text-xs md:text-sm text-gray-600 whitespace-nowrap">
+            Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalItems} total orders)
+            {searchTerm && <span className="block sm:inline sm:ml-1">({filteredOrders.length} filtered)</span>}
           </div>
-          <div className="flex gap-2 items-center flex-wrap">
+          <div className="flex gap-1 md:gap-2 items-center flex-wrap w-full sm:w-auto justify-center sm:justify-end">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="px-2 md:px-3 py-1.5 md:py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-xs md:text-sm font-medium"
             >
               Previous
             </button>
             {getPaginationPages().map((page, index) => {
               if (page === 'ellipsis') {
                 return (
-                  <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                  <span key={`ellipsis-${index}`} className="px-1 md:px-2 text-gray-500 text-xs md:text-sm">
                     ...
                   </span>
                 );
@@ -5918,7 +5863,7 @@ const handleUpdateOrder = async (e) => {
                 <button
                   key={page}
                   onClick={() => handlePageChange(page)}
-                  className={`px-3 py-2 border rounded-lg transition-colors text-sm font-medium min-w-[40px] ${
+                  className={`px-2 md:px-3 py-1.5 md:py-2 border rounded-lg transition-colors text-xs md:text-sm font-medium min-w-[32px] md:min-w-[40px] ${
                     currentPage === page
                       ? 'bg-blue-500 text-white border-blue-500'
                       : 'border-gray-300 hover:bg-gray-50 text-gray-700'
@@ -5931,7 +5876,7 @@ const handleUpdateOrder = async (e) => {
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="px-2 md:px-3 py-1.5 md:py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-xs md:text-sm font-medium"
             >
               Next
             </button>
@@ -5941,7 +5886,7 @@ const handleUpdateOrder = async (e) => {
 
       {/* Add Delivery Order Modal - Removed for DO Report */}
       {false && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div className="fixed inset-0  bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
           {/* Hide scrollbar for modal content */}
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -7376,7 +7321,7 @@ const handleUpdateOrder = async (e) => {
       {showOrderModal && selectedOrder && (
         <>
           {loadingOrderId && (
-            <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center">
+            <div className="fixed inset-0  bg-black/30 z-50 flex justify-center items-center">
               <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4">
                 <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                 <p className="text-lg font-semibold text-gray-800">Loading Order Details...</p>
@@ -7385,7 +7330,7 @@ const handleUpdateOrder = async (e) => {
             </div>
           )}
 
-          <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => setShowOrderModal(false)}>
+          <div className="fixed inset-0  bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => setShowOrderModal(false)}>
             <div
               className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -8343,7 +8288,7 @@ const handleUpdateOrder = async (e) => {
 
       {/* Delete Order Modal - Removed for DO Report */}
       {false && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={closeDeleteModal}>
+        <div className="fixed inset-0  bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={closeDeleteModal}>
           <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 rounded-t-2xl">
@@ -8430,7 +8375,7 @@ const handleUpdateOrder = async (e) => {
 
       {/* Delete Order Modal - Removed for DO Report */}
       {false && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={closeDeleteModal}>
+        <div className="fixed inset-0  bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={closeDeleteModal}>
           <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-6 rounded-t-2xl">
@@ -8517,7 +8462,7 @@ const handleUpdateOrder = async (e) => {
 
       {/* Assign Order Modal - Removed for DO Report */}
       {false && orderToAssign && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => { setShowAssignModal(false); setOrderToAssign(null); }}>
+        <div className="fixed inset-0  bg-transparent bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => { setShowAssignModal(false); setOrderToAssign(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl w-[500px] relative" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-2xl">
@@ -8608,7 +8553,7 @@ const handleUpdateOrder = async (e) => {
 
       {/* Excel Import Modal */}
       {showExcelImportModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
+        <div className="fixed inset-0  bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}

@@ -5,33 +5,37 @@ import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, Plu
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { 
+  fetchTruckers, 
+  setCurrentPage,
+  selectTruckers,
+  selectStatistics,
+  selectPagination,
+  selectLoading,
+  selectError
+} from '../../store/slices/carrierApprovalSlice';
 
 
 export default function CarrierApproval() {
-  const [carriers, setCarriers] = useState([]);
-  const [statistics, setStatistics] = useState({
-    totalTruckers: 0,
-    pendingTruckers: 0,
-    approvedTruckers: 0,
-    accountantApprovedTruckers: 0,
-    rejectedTruckers: 0
-  });
-
+  const dispatch = useAppDispatch();
+  const carriers = useAppSelector(selectTruckers);
+  const statistics = useAppSelector(selectStatistics);
+  const pagination = useAppSelector(selectPagination);
+  const loading = useAppSelector(selectLoading);
+  const error = useAppSelector(selectError);
 
   const [viewDoc, setViewDoc] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
   const [modalType, setModalType] = useState(null); // 'approval' | 'rejection' | null
   const [selectedCarrier, setSelectedCarrier] = useState(null);
   const [reason, setReason] = useState('');
-  const [loading, setLoading] = useState(true);
   const [showCarrierModal, setShowCarrierModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const currentPage = pagination.currentPage;
+  const itemsPerPage = pagination.itemsPerPage || 15;
 
 
   // Get current user's department
@@ -51,35 +55,17 @@ export default function CarrierApproval() {
 
   const currentUserDepartment = useMemo(() => getCurrentUserDepartment(), []);
 
+  // Fetch carriers when page changes
+  useEffect(() => {
+    dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: false }));
+  }, [dispatch, currentPage]);
 
-  useEffect(() => { fetchCarriers(); }, []);
-
-
-  const fetchCarriers = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/all-truckers`, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-
-      if (res.data && res.data.success) {
-        setCarriers(res.data.truckers || []);
-        setStatistics(res.data.statistics || {
-          totalTruckers: 0, pendingTruckers: 0, approvedTruckers: 0, accountantApprovedTruckers: 0, rejectedTruckers: 0
-        });
-      } else {
-        setCarriers([]);
-        setStatistics({ totalTruckers: 0, pendingTruckers: 0, approvedTruckers: 0, accountantApprovedTruckers: 0, rejectedTruckers: 0 });
-      }
-    } catch (err) {
-      console.error('Error fetching carriers:', err);
-      setCarriers([]);
-      setStatistics({ totalTruckers: 0, pendingTruckers: 0, approvedTruckers: 0, accountantApprovedTruckers: 0, rejectedTruckers: 0 });
-    } finally {
-      setLoading(false);
+  // Show error messages
+  useEffect(() => {
+    if (error) {
+      alertify.error(error);
     }
-  };
+  }, [error]);
 
 
   // --- Helpers ---
@@ -115,7 +101,7 @@ export default function CarrierApproval() {
   const isImageFile = (fileType) => ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes((fileType || '').toUpperCase());
 
 
-  // --- Search / Filter ---
+  // --- Search / Filter (client-side filtering on current page) ---
   const filteredCarriers = useMemo(() => {
     if (!searchTerm) return carriers;
     const q = norm(searchTerm);
@@ -126,34 +112,31 @@ export default function CarrierApproval() {
     );
   }, [carriers, searchTerm]);
 
-
-  // Reset page on search change
-  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
-
-
-  // --- Pagination computed from filtered list (fix) ---
-  const totalPages = Math.ceil(filteredCarriers.length / itemsPerPage) || 1;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentCarriers = filteredCarriers.slice(startIndex, endIndex);
-
+  // Use filtered carriers for display
+  const currentCarriers = filteredCarriers;
 
   const handlePageChange = (page) => {
-    if (page < 1 || page > totalPages) return;
-    setCurrentPage(page);
+    if (page < 1 || page > pagination.totalPages) return;
+    dispatch(setCurrentPage(page));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
 
-  // --- Computed accurate counters from carriers (not API) ---
+  // --- Computed accurate counters from carriers (client-side for current page) ---
   const todayCount = useMemo(() => {
     const today = new Date().toDateString();
     return carriers.filter(c => c?.addedAt && new Date(c.addedAt).toDateString() === today).length;
   }, [carriers]);
 
+  // Computed counts for current page (fallback)
+  const computedApproved = useMemo(() => carriers.filter(c => isApproved(c.status)).length, [carriers]);
+  const computedRejected = useMemo(() => carriers.filter(c => isRejected(c.status)).length, [carriers]);
+  const computedPending = useMemo(() => carriers.filter(c => isPending(c.status)).length, [carriers]);
 
-  const approvedCount = useMemo(() => carriers.filter(c => isApproved(c.status)).length, [carriers]);
-  const rejectedCount = useMemo(() => carriers.filter(c => isRejected(c.status)).length, [carriers]);
-  const pendingCount  = useMemo(() => carriers.filter(c => isPending(c.status)).length, [carriers]);
+  // Use statistics from Redux for overall counts, fallback to computed for current page
+  const approvedCount = statistics.approvedTruckers || computedApproved;
+  const rejectedCount = statistics.rejectedTruckers || computedRejected;
+  const pendingCount = statistics.pendingTruckers || computedPending;
 
 
   const handleViewCarrier = (carrier) => {
@@ -257,7 +240,8 @@ export default function CarrierApproval() {
       setSelectedCarrier(null);
       setViewDoc(false);
       setShowCarrierModal(false);
-      fetchCarriers();
+      // Refresh current page data
+      dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: true }));
     } catch (err) {
       console.error('Status update failed:', err);
       alertify.error(`❌ Error: ${err.response?.data?.message || err.message}`);
@@ -265,7 +249,8 @@ export default function CarrierApproval() {
   };
 
 
-  if (loading) {
+  // Initial loading state
+  if (loading && carriers.length === 0) {
     return (
       <div className="p-6">
         <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
@@ -281,6 +266,9 @@ export default function CarrierApproval() {
       </div>
     );
   }
+
+  // Loading overlay for pagination (no blur)
+  const showLoadingOverlay = loading && carriers.length > 0;
 
 
   if (previewImg) {
@@ -311,7 +299,7 @@ export default function CarrierApproval() {
     const label = modalType === 'rejection' ? 'Reason *' : 'Reason (optional)';
     return (
       <div
-        className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center"
+        className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center"
         onClick={() => setModalType(null)}
       >
         <div
@@ -341,12 +329,23 @@ export default function CarrierApproval() {
   }
 
 
-  // Card counters (computed for accuracy)
-  const totalCarriers = carriers.length;
+  // Card counters (use statistics from Redux)
+  const totalCarriers = statistics.totalTruckers || carriers.length;
 
 
   return (
     <div className="p-6">
+      {/* Loading overlay for pagination (no blur) */}
+      {showLoadingOverlay && (
+        <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-700 font-semibold">Loading...</p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-6">
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
@@ -564,13 +563,12 @@ export default function CarrierApproval() {
 
 
       {/* Pagination */}
-      {totalPages > 1 && filteredCarriers.length > 0 && (
+      {pagination.totalPages > 1 && currentCarriers.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredCarriers.length)} of {filteredCarriers.length} carriers
-            {searchTerm && ` (filtered from ${carriers.length} total)`}
+            Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalItems} total carriers)
+            {searchTerm && ` (${currentCarriers.length} filtered on this page)`}
           </div>
-
 
           <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
             <button
@@ -584,60 +582,78 @@ export default function CarrierApproval() {
               Previous
             </button>
 
-
             <div className="flex items-center gap-1">
-              {currentPage > 3 && (
+              {/* Always show first page if not near the beginning */}
+              {currentPage > 4 && pagination.totalPages > 7 && (
                 <>
                   <button
                     onClick={() => handlePageChange(1)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                    className="px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
                   >
                     1
                   </button>
-                  {currentPage > 4 && <span className="px-2 text-gray-400">...</span>}
+                  {currentPage > 5 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
                 </>
               )}
 
+              {/* Show page numbers around current page */}
+              {(() => {
+                const pages = [];
+                let startPage = Math.max(1, currentPage - 2);
+                let endPage = Math.min(pagination.totalPages, currentPage + 2);
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(page => {
-                  if (totalPages <= 7) return true;
-                  if (currentPage <= 4) return page <= 5;
-                  if (currentPage >= totalPages - 3) return page >= totalPages - 4;
-                  return page >= currentPage - 2 && page <= currentPage + 2;
-                })
-                .map((page) => (
+                // Adjust if we're near the beginning
+                if (currentPage <= 3) {
+                  startPage = 1;
+                  endPage = Math.min(5, pagination.totalPages);
+                }
+
+                // Adjust if we're near the end
+                if (currentPage >= pagination.totalPages - 2) {
+                  startPage = Math.max(1, pagination.totalPages - 4);
+                  endPage = pagination.totalPages;
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(i);
+                }
+
+                return pages.map((pageNum) => (
                   <button
-                    key={page}
-                    onClick={() => handlePageChange(page)}
+                    key={pageNum}
+                    onClick={() => handlePageChange(pageNum)}
                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                      currentPage === page
+                      currentPage === pageNum
                         ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
                         : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
                     }`}
                   >
-                    {page}
+                    {pageNum}
                   </button>
-                ))}
+                ));
+              })()}
 
-
-              {currentPage < totalPages - 2 && totalPages > 7 && (
+              {/* Always show last page if not near the end */}
+              {currentPage < pagination.totalPages - 3 && pagination.totalPages > 7 && (
                 <>
-                  {currentPage < totalPages - 3 && <span className="px-2 text-gray-400">...</span>}
+                  {currentPage < pagination.totalPages - 4 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
                   <button
-                    onClick={() => handlePageChange(totalPages)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                    onClick={() => handlePageChange(pagination.totalPages)}
+                    className="px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
                   >
-                    {totalPages}
+                    {pagination.totalPages}
                   </button>
                 </>
               )}
             </div>
 
-
             <button
               onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
+              disabled={currentPage === pagination.totalPages}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               Next
@@ -653,7 +669,7 @@ export default function CarrierApproval() {
       {/* Carrier Details Modal (primary) */}
       {showCarrierModal && selectedCarrier && (
         <div
-          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          className="fixed inset-0 bg-black/30 z-50 flex justify-center items-center p-4"
           onClick={() => setShowCarrierModal(false)}
         >
           <div
