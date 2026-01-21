@@ -1,10 +1,25 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, memo } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaUpload, FaTimes } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Paperclip, Eye } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { 
+  fetchDOs, 
+  markCarrierAsPaid,
+  setCurrentPage,
+  setSelectedStatus,
+  setPaymentStatus,
+  selectDOs,
+  selectStatistics,
+  selectPagination,
+  selectPaymentStatus,
+  selectLoading,
+  selectError,
+  selectSelectedStatus
+} from '../../store/slices/accountsPayableSlice';
 
 // Utility functions
 const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
@@ -130,26 +145,30 @@ const SearchableDropdown = ({
 };
 
 const AcountentPayable = () => {
-  const [dos, setDos] = useState([]);
+  // Redux hooks
+  const dispatch = useAppDispatch();
+  const dos = useAppSelector(selectDOs);
+  const statistics = useAppSelector(selectStatistics);
+  const pagination = useAppSelector(selectPagination);
+  const paymentStatus = useAppSelector(selectPaymentStatus);
+  const loading = useAppSelector(selectLoading);
+  const error = useAppSelector(selectError);
+  const selectedStatus = useAppSelector(selectSelectedStatus);
+  const currentPage = pagination?.currentPage || 1;
+  const itemsPerPage = 15; // Server-side pagination limit
+
+  // Local component state
   const [selectedDoId, setSelectedDoId] = useState('');
   const [selectedDoDetails, setSelectedDoDetails] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState({}); // { doId: 'paid' | 'unpaid' | 'pending' }
   const [attachments, setAttachments] = useState({}); // { doId: [files] }
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false); // For DO selection modal
   const [markAsPaidChecked, setMarkAsPaidChecked] = useState({}); // { doId: boolean }
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15; // Client-side pagination
-  const apiLimit = 1000; // Fetch more data from API for better client-side search
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'paid', 'unpaid', 'pending'
   const [remarks, setRemarks] = useState({}); // { doId: 'remark text' }
-  const [statistics, setStatistics] = useState({});
-  const [pagination, setPagination] = useState({});
-  const [selectedStatus, setSelectedStatus] = useState('all'); // 'all', 'sales_verified', 'cmt_verified', 'sales_rejected', 'accountant_rejected' // '', 'true'
   
   // Payment modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -170,111 +189,18 @@ const AcountentPayable = () => {
   const [addDocsLoading, setAddDocsLoading] = useState(false);
   const [addDocsErr, setAddDocsErr] = useState("");
 
+  // Fetch DOs using Redux - smart caching
   useEffect(() => {
-    fetchAllDOs();
-  }, [currentPage, selectedStatus]);
+    // Always dispatch - Redux will handle cache check internally
+    dispatch(fetchDOs({ page: currentPage, limit: itemsPerPage, status: selectedStatus, forceRefresh: false }));
+  }, [dispatch, currentPage, selectedStatus]);
 
-  const fetchAllDOs = async () => {
-    try {
-      setLoading(true);
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      
-      // Build query parameters
-      // Fetch more data for client-side filtering (like DO Details module)
-      const params = {
-        page: 1, // Always fetch first page with large limit for client-side filtering
-        limit: apiLimit
-      };
-      
-      // Add status filter if not 'all'
-      if (selectedStatus !== 'all') {
-        params.status = selectedStatus;
-      }
-      
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/accountant/dos-by-statuses`, {
-        params,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.data && response.data.success) {
-        const transformedDOs = (response.data.data?.doDocuments || []).map(order => {
-          // Handle both new API structure (shipperId/carrierId) and old structure (shipper/carrier)
-          const shipper = order.shipperId || order.shipper || {};
-          const carrier = order.carrierId || order.carrier || {};
-          
-          const puLocs = shipper.pickUpLocations || shipper.pickupLocations || [];
-          const drLocs = shipper.dropLocations || shipper.deliveryLocations || [];
-          const loadNo = order.customers?.[0]?.loadNo || order.loadReference?.loadId || 'N/A';
-
-          // Debug: Log invoice data if present
-          if (order.invoice) {
-            console.log(`Invoice found for DO ${order._id}:`, {
-              invoiceUrl: order.invoice.invoiceUrl,
-              dueDate: order.invoice.dueDate,
-              uploadedAt: order.invoice.uploadedAt,
-              dueDateInfo: order.invoice.dueDateInfo
-            });
-          }
-
-          return {
-            id: `DO-${String(order._id).slice(-6)}`,
-            originalId: order._id,
-            doNum: loadNo,
-            clientName: order.customers?.[0]?.billTo || order.customers?.[0]?.customerName || order.customerName || 'N/A',
-            carrierName: carrier.compName || carrier.carrierName || 'N/A',
-            carrierFees: carrier.totalCarrierFees || order.carrier?.totalCarrierFees || 0,
-            createdAt: new Date(order.createdAt || order.date).toISOString().split('T')[0],
-            createdBySalesUser: order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A',
-            status: order.assignmentStatus || order.status || 'open',
-            // Invoice information (if uploaded) - includes invoiceUrl, dueDate, uploadedAt, uploadedBy, dueDateInfo
-            invoice: order.invoice || null,
-            // Full order data for details
-            fullData: order
-          };
-        });
-
-        setDos(transformedDOs);
-        
-        // Set statistics from API response
-        if (response.data.data?.statistics) {
-          setStatistics(response.data.data.statistics);
-        }
-        
-        // Set pagination from API response
-        if (response.data.data?.pagination) {
-          console.log('Pagination from API:', response.data.data.pagination);
-          setPagination(response.data.data.pagination);
-        } else {
-          // Fallback: calculate pagination from data length
-          const totalItems = response.data.data?.totalItems || transformedDOs.length;
-          const calculatedTotalPages = Math.ceil(totalItems / itemsPerPage);
-          const fallbackPagination = {
-            currentPage: currentPage || 1,
-            totalPages: calculatedTotalPages,
-            totalItems: totalItems,
-            itemsPerPage: itemsPerPage
-          };
-          console.log('Calculated pagination:', fallbackPagination);
-          setPagination(fallbackPagination);
-        }
-        
-        // Initialize carrier payment statuses from API response
-        const initialStatus = {};
-        transformedDOs.forEach(deliveryOrder => {
-          initialStatus[deliveryOrder.originalId] = deliveryOrder.fullData?.carrierPaymentStatus?.status || 'pending';
-        });
-        setPaymentStatus(initialStatus);
-      }
-    } catch (error) {
-      console.error('Error fetching DOs:', error);
-      alertify.error(`Failed to load delivery orders: ${error.response?.data?.message || error.response?.status || 'Network Error'}`);
-    } finally {
-      setLoading(false);
+  // Show error alerts
+  useEffect(() => {
+    if (error) {
+      alertify.error(`Failed to load delivery orders: ${error}`);
     }
-  };
+  }, [error]);
 
   const handleDoSelect = async (doId) => {
     if (!doId) {
@@ -398,10 +324,11 @@ const AcountentPayable = () => {
       [doId]: !isChecked
     }));
 
+    // Update payment status using Redux
     if (!isChecked) {
-      handlePaymentStatusChange(doId, 'paid');
+      dispatch(setPaymentStatus({ doId, status: 'paid' }));
     } else {
-      handlePaymentStatusChange(doId, 'unpaid');
+      dispatch(setPaymentStatus({ doId, status: 'unpaid' }));
     }
   };
 
@@ -464,8 +391,7 @@ const AcountentPayable = () => {
     }
   };
 
-  // Filter DOs based on search and active tab (payment status)
-  // Client-side filtering like DO Details module
+  // Filter DOs based on search and active tab (payment status) - client-side only for display
   const filteredDOs = useMemo(() => {
     const term = (searchTerm || '').toLowerCase().trim();
     const base = dos.filter((deliveryOrder) => {
@@ -488,20 +414,20 @@ const AcountentPayable = () => {
     return base;
   }, [dos, searchTerm, activeTab, paymentStatus]);
 
-  // Client-side pagination (like DO Details module)
-  const totalPages = Math.ceil(filteredDOs.length / itemsPerPage) || 1;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentDOs = filteredDOs.slice(startIndex, endIndex);
+  // Use server-side pagination data
+  const totalPages = pagination?.totalPages || 1;
+  const startIndex = ((pagination?.currentPage || currentPage) - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, pagination?.totalItems || dos.length);
+  const currentDOs = filteredDOs; // Display all fetched DOs (already paginated by server)
 
   // Reset to page 1 when search term or active tab changes
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, activeTab]);
+    dispatch(setCurrentPage(1));
+  }, [searchTerm, activeTab, dispatch]);
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
+      dispatch(setCurrentPage(page));
       // Scroll to top when page changes
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -509,8 +435,8 @@ const AcountentPayable = () => {
 
   // Reset to page 1 when status filter changes
   useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedStatus]);
+    dispatch(setCurrentPage(1));
+  }, [selectedStatus, dispatch]);
 
   // DO options for dropdown
   const doOptions = dos.map(deliveryOrder => ({
@@ -562,22 +488,20 @@ const AcountentPayable = () => {
       }
       formData.append('carrierPaymentProof', paymentForm.carrierPaymentProof);
 
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/mark-carrier-as-paid`;
-      const resp = await axios.post(url, formData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      // Use Redux action
+      const result = await dispatch(markCarrierAsPaid({
+        doId: paymentData.originalId,
+        paymentData: paymentData,
+        formData: formData
+      }));
 
-      if (resp?.data?.success) {
+      if (markCarrierAsPaid.fulfilled.match(result)) {
         alertify.success('Carrier payment marked as paid successfully!');
         setPaymentModalOpen(false);
-        // Refresh the data
-        fetchAllDOs();
+        // Refresh the data with force refresh
+        dispatch(fetchDOs({ page: currentPage, limit: itemsPerPage, status: selectedStatus, forceRefresh: true }));
       } else {
-        alertify.error(resp?.data?.message || 'Failed to mark carrier as paid');
+        alertify.error(result.payload || 'Failed to mark carrier as paid');
       }
     } catch (error) {
       const errorMsg = error?.response?.data?.message || error?.message || 'Failed to mark carrier as paid';
@@ -586,19 +510,6 @@ const AcountentPayable = () => {
       setPaymentLoading(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="p-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading delivery orders...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6">
@@ -659,7 +570,7 @@ const AcountentPayable = () => {
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  setCurrentPage(1);
+                  dispatch(setCurrentPage(1));
                 }}
                 className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
@@ -673,8 +584,7 @@ const AcountentPayable = () => {
           <select
             value={selectedStatus}
             onChange={(e) => {
-              setSelectedStatus(e.target.value);
-              setCurrentPage(1);
+              dispatch(setSelectedStatus(e.target.value));
             }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
@@ -1310,6 +1220,18 @@ const AcountentPayable = () => {
         </div>
       )}
 
+      {/* Loading overlay for pagination changes */}
+      {loading && dos.length > 0 && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-700 font-semibold">Loading...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* DOs Table */}
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -1329,159 +1251,18 @@ const AcountentPayable = () => {
               </tr>
             </thead>
             <tbody>
-              {currentDOs.map((deliveryOrder, index) => {
-                const isPaid = deliveryOrder.fullData?.carrierPaymentStatus?.status === 'paid';
-                const invoice = deliveryOrder.invoice;
-                const invoiceDueDateInfo = invoice?.dueDateInfo;
-                
-                // Helper function to format date
-                const formatDate = (dateString) => {
-                  if (!dateString) return 'N/A';
-                  return new Date(dateString).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric',
-                    year: 'numeric'
-                  });
-                };
-
-                return (
-                  <tr key={deliveryOrder.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{deliveryOrder.id}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-base font-semibold text-gray-700">{deliveryOrder.doNum}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{deliveryOrder.clientName}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{deliveryOrder.carrierName}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">${deliveryOrder.carrierFees || 0}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">
-                        {deliveryOrder.createdBySalesUser?.employeeName || deliveryOrder.createdBySalesUser || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex items-center justify-center">
-                        {invoice ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <a
-                              href={invoice.invoiceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
-                              title="View Invoice"
-                            >
-                              <FileText size={16} />
-                              <span className="text-xs">View</span>
-                            </a>
-                            <div className="text-xs text-gray-500">
-                              {formatDate(invoice.uploadedAt)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">No Invoice</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      {(() => {
-                        if (!invoice || !invoice.dueDate) {
-                          return <span className="text-gray-400">—</span>;
-                        }
-                        
-                        const dueDateInfo = invoice.dueDateInfo;
-                        if (!dueDateInfo) {
-                          return (
-                            <div className="flex flex-col gap-1 items-center">
-                              <span className="text-sm font-semibold text-gray-600">{formatDate(invoice.dueDate)}</span>
-                            </div>
-                          );
-                        }
-                        
-                        // Get status color
-                        const statusColor = dueDateInfo.isOverdue 
-                          ? '#dc3545' // Red for overdue
-                          : dueDateInfo.status === 'due_soon' || dueDateInfo.isDueToday
-                            ? '#ffc107' // Yellow/Orange for due soon
-                            : '#28a745'; // Green for pending
-                        
-                        // Calculate days value
-                        const daysValue = dueDateInfo.isOverdue 
-                          ? `-${dueDateInfo.daysOverdue}` 
-                          : dueDateInfo.daysRemaining;
-                        
-                        const dueDateFormatted = formatDate(invoice.dueDate);
-                        
-                        return (
-                          <div className="flex flex-col gap-1 items-center">
-                            <span 
-                              className="font-semibold text-sm"
-                              style={{ color: statusColor }}
-                            >
-                              {dueDateFormatted}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <span 
-                                className="font-bold text-base"
-                                style={{ color: statusColor }}
-                                title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
-                              >
-                                {daysValue}
-                              </span>
-                              <span className="text-xs font-medium" style={{ color: statusColor }}>
-                                {dueDateInfo.isOverdue ? 'days overdue' : 'days left'}
-                              </span>
-                              <CheckCircle 
-                                size={16} 
-                                style={{ color: statusColor }}
-                                className="flex-shrink-0"
-                              />
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex items-center justify-center">
-                        {isPaid ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700">
-                            <CheckCircle size={14} />
-                            Paid
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleOpenPaymentModal(deliveryOrder)}
-                            className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Pay to Carrier"
-                          >
-                            Pay
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex items-center justify-center">
-                        <button
-                          onClick={() => {
-                            setSelectedDoId(deliveryOrder.originalId);
-                            handleDoSelect(deliveryOrder.originalId);
-                          }}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="View Details"
-                        >
-                          <Eye size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {currentDOs.map((deliveryOrder, index) => (
+                <TableRow 
+                  key={deliveryOrder.id} 
+                  deliveryOrder={deliveryOrder} 
+                  index={index}
+                  onViewDetails={(doId) => {
+                    setSelectedDoId(doId);
+                    handleDoSelect(doId);
+                  }}
+                  onPayClick={handleOpenPaymentModal}
+                />
+              ))}
             </tbody>
           </table>
         </div>
@@ -1499,8 +1280,8 @@ const AcountentPayable = () => {
       {(currentDOs.length > 0 || dos.length > 0) && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {endIndex} of {pagination?.totalItems || dos.length} DOs
-            {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+            Showing {startIndex + 1} to {Math.min(startIndex + currentDOs.length, pagination?.totalItems || dos.length)} of {pagination?.totalItems || dos.length} DOs
+            {totalPages > 1 && ` (Page ${pagination?.currentPage || currentPage} of ${totalPages})`}
           </div>
           {totalPages > 1 && (
             <div className="flex gap-2">
@@ -1714,5 +1495,159 @@ const AcountentPayable = () => {
     </div>
   );
 };
+
+// Memoized Table Row Component for better performance
+const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
+  const isPaid = deliveryOrder.fullData?.carrierPaymentStatus?.status === 'paid';
+  const invoice = deliveryOrder.invoice;
+  const invoiceDueDateInfo = invoice?.dueDateInfo;
+  
+  // Helper function to format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  return (
+    <tr className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+      <td className="py-2 px-3">
+        <span className="font-medium text-gray-700">{deliveryOrder.id}</span>
+      </td>
+      <td className="py-2 px-3">
+        <span className="font-mono text-base font-semibold text-gray-700">{deliveryOrder.doNum}</span>
+      </td>
+      <td className="py-2 px-3">
+        <span className="font-medium text-gray-700">{deliveryOrder.clientName}</span>
+      </td>
+      <td className="py-2 px-3">
+        <span className="font-medium text-gray-700">{deliveryOrder.carrierName}</span>
+      </td>
+      <td className="py-2 px-3">
+        <span className="font-medium text-gray-700">${deliveryOrder.carrierFees || 0}</span>
+      </td>
+      <td className="py-2 px-3">
+        <span className="font-medium text-gray-700">
+          {deliveryOrder.createdBySalesUser?.employeeName || deliveryOrder.createdBySalesUser || 'N/A'}
+        </span>
+      </td>
+      <td className="py-2 px-3">
+        <div className="flex items-center justify-center">
+          {invoice ? (
+            <div className="flex flex-col items-center gap-1">
+              <a
+                href={invoice.invoiceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+                title="View Invoice"
+              >
+                <FileText size={16} />
+                <span className="text-xs">View</span>
+              </a>
+              <div className="text-xs text-gray-500">
+                {formatDate(invoice.uploadedAt)}
+              </div>
+            </div>
+          ) : (
+            <span className="text-xs text-gray-400 italic">No Invoice</span>
+          )}
+        </div>
+      </td>
+      <td className="py-2 px-3">
+        {(() => {
+          if (!invoice || !invoice.dueDate) {
+            return <span className="text-gray-400">—</span>;
+          }
+          
+          const dueDateInfo = invoice.dueDateInfo;
+          if (!dueDateInfo) {
+            return (
+              <div className="flex flex-col gap-1 items-center">
+                <span className="text-sm font-semibold text-gray-600">{formatDate(invoice.dueDate)}</span>
+              </div>
+            );
+          }
+          
+          // Get status color
+          const statusColor = dueDateInfo.isOverdue 
+            ? '#dc3545' // Red for overdue
+            : dueDateInfo.status === 'due_soon' || dueDateInfo.isDueToday
+              ? '#ffc107' // Yellow/Orange for due soon
+              : '#28a745'; // Green for pending
+          
+          // Calculate days value
+          const daysValue = dueDateInfo.isOverdue 
+            ? `-${dueDateInfo.daysOverdue}` 
+            : dueDateInfo.daysRemaining;
+          
+          const dueDateFormatted = formatDate(invoice.dueDate);
+          
+          return (
+            <div className="flex flex-col gap-1 items-center">
+              <span 
+                className="font-semibold text-sm"
+                style={{ color: statusColor }}
+              >
+                {dueDateFormatted}
+              </span>
+              <div className="flex items-center gap-1">
+                <span 
+                  className="font-bold text-base"
+                  style={{ color: statusColor }}
+                  title={dueDateInfo.isOverdue ? `${dueDateInfo.daysOverdue} days overdue` : `${dueDateInfo.daysRemaining} days remaining`}
+                >
+                  {daysValue}
+                </span>
+                <span className="text-xs font-medium" style={{ color: statusColor }}>
+                  {dueDateInfo.isOverdue ? 'days overdue' : 'days left'}
+                </span>
+                <CheckCircle 
+                  size={16} 
+                  style={{ color: statusColor }}
+                  className="flex-shrink-0"
+                />
+              </div>
+            </div>
+          );
+        })()}
+      </td>
+      <td className="py-2 px-3">
+        <div className="flex items-center justify-center">
+          {isPaid ? (
+            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700">
+              <CheckCircle size={14} />
+              Paid
+            </span>
+          ) : (
+            <button
+              onClick={() => onPayClick(deliveryOrder)}
+              className="px-4 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Pay to Carrier"
+            >
+              Pay
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="py-2 px-3">
+        <div className="flex items-center justify-center">
+          <button
+            onClick={() => onViewDetails(deliveryOrder.originalId)}
+            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            title="View Details"
+          >
+            <Eye size={16} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+TableRow.displayName = 'TableRow';
 
 export default AcountentPayable;

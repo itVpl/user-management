@@ -6,25 +6,30 @@ import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
 import DateRangeSelector from '../HRDashboard/DateRangeSelector';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { 
+  fetchTruckers, 
+  setCurrentPage,
+  selectTruckers,
+  selectStatistics,
+  selectPagination,
+  selectLoading,
+  selectError
+} from '../../store/slices/truckerReportSlice';
 
 export default function TruckerReport() {
-  const [truckers, setTruckers] = useState([]);
-  const [statistics, setStatistics] = useState({
-    totalTruckers: 0,
-    approvedTruckers: 0,
-    rejectedTruckers: 0,
-    pendingApproval: 0,
-    totalLoads: 0,
-    completedLoads: 0,
-    pendingLoads: 0,
-    totalRevenue: 0
-  });
+  const dispatch = useAppDispatch();
+  const truckers = useAppSelector(selectTruckers);
+  const statistics = useAppSelector(selectStatistics);
+  const pagination = useAppSelector(selectPagination);
+  const loading = useAppSelector(selectLoading);
+  const error = useAppSelector(selectError);
+
   const [viewDoc, setViewDoc] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
   const [modalType, setModalType] = useState(null);
   const [selectedTrucker, setSelectedTrucker] = useState(null);
   const [reason, setReason] = useState('');
-  const [loading, setLoading] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchFilter, setSearchFilter] = useState('all');
@@ -38,14 +43,25 @@ export default function TruckerReport() {
     endDate: null
   });
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const currentPage = pagination.currentPage;
+  const itemsPerPage = pagination.itemsPerPage || 15;
 
   useEffect(() => {
-    fetchTruckerReports();
+    dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: false }));
     fetchCmtUsers();
   }, []);
+
+  // Fetch truckers when page changes
+  useEffect(() => {
+    dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: false }));
+  }, [dispatch, currentPage]);
+
+  // Show error messages
+  useEffect(() => {
+    if (error) {
+      alertify.error(error);
+    }
+  }, [error]);
 
   // Close Created By dropdown when clicking outside
   useEffect(() => {
@@ -76,69 +92,12 @@ export default function TruckerReport() {
     return users;
   }, [cmtUsers, createdBySearch]);
 
-  // Reset to first page when search term, filter, or status filter changes
+  // Reset to first page when search term, filter, or status filter changes (client-side filters only)
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, searchFilter, statusFilter, dateRange, createdByFilter]);
-
-  const fetchTruckerReports = async () => {
-    try {
-      setLoading(true);
-
-      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (res.data && res.data.success) {
-        const truckersData = res.data.data || [];
-        setTruckers(truckersData);
-
-        // Calculate statistics from the actual data
-        const approvedCount = truckersData.filter(t => t.status === 'approved' || t.status === 'accountant_approved').length;
-        const rejectedCount = truckersData.filter(t => t.status === 'rejected').length;
-        const pendingCount  = truckersData.filter(t => t.status === 'pending').length;
-
-        setStatistics({
-          totalTruckers: truckersData.length,
-          approvedTruckers: approvedCount,
-          rejectedTruckers: rejectedCount,
-          pendingApproval: pendingCount,
-          totalLoads: truckersData.reduce((sum, t) => sum + (t.totalLoads || 0), 0),
-          completedLoads: truckersData.reduce((sum, t) => sum + (t.completedLoads || 0), 0),
-          pendingLoads: truckersData.reduce((sum, t) => sum + (t.pendingLoads || 0), 0),
-          totalRevenue: truckersData.reduce((sum, t) => sum + (t.totalRevenue || 0), 0)
-        });
-      } else {
-        console.error('API response format error:', res.data);
-        setTruckers([]);
-        setStatistics({
-          totalTruckers: 0,
-          approvedTruckers: 0,
-          rejectedTruckers: 0,
-          pendingApproval: 0,
-          totalLoads: 0,
-          completedLoads: 0,
-          pendingLoads: 0,
-          totalRevenue: 0
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching trucker reports:', err);
-      setTruckers([]);
-      setStatistics({
-        totalTruckers: 0,
-        approvedTruckers: 0,
-        rejectedTruckers: 0,
-        pendingApproval: 0,
-        totalLoads: 0,
-        completedLoads: 0,
-        pendingLoads: 0,
-        totalRevenue: 0
-      });
-    } finally {
-      setLoading(false);
+    if (searchTerm || searchFilter !== 'all' || statusFilter !== 'all' || dateRange.startDate || createdByFilter) {
+      dispatch(setCurrentPage(1));
     }
-  };
+  }, [searchTerm, searchFilter, statusFilter, dateRange, createdByFilter, dispatch]);
 
   const handleStatusUpdate = async (status) => {
     try {
@@ -168,7 +127,8 @@ export default function TruckerReport() {
       setReason('');
       setSelectedTrucker(null);
       setViewDoc(false);
-      fetchTruckerReports();
+      // Refresh current page data
+      dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: true }));
     } catch (err) {
       console.error('Status update failed:', err);
       alertify.error(`❌ Error: ${err.response?.data?.message || err.message}`);
@@ -309,17 +269,22 @@ export default function TruckerReport() {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [truckers, statusFilter, searchFilter, searchTerm, dateRange, createdByFilter]);
 
-  // -------- PAGINATION derived from FILTERED list (bug fix) --------
-  const totalPages = Math.max(1, Math.ceil(filteredTruckers.length / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentTruckers = filteredTruckers.slice(startIndex, endIndex);
+  // -------- PAGINATION (server-side pagination - client-side filtering on current page) --------
+  const totalPages = pagination.totalPages || 1;
+  const currentTruckers = filteredTruckers; // Already filtered by server, just apply client-side search/filter
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages) return;
+    dispatch(setCurrentPage(page));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Format currency (reserved for any revenue cells later)
   const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
 
-  if (loading) {
+  // Initial loading state (only when no truckers)
+  if (loading && truckers.length === 0) {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
@@ -331,6 +296,9 @@ export default function TruckerReport() {
       </div>
     );
   }
+
+  // Loading overlay for pagination (no blur)
+  const showLoadingOverlay = loading && truckers.length > 0;
 
   if (previewImg) {
     return (
@@ -350,7 +318,7 @@ export default function TruckerReport() {
 
   if (modalType) {
     return (
-      <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
         <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center">
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
           <textarea
@@ -373,6 +341,17 @@ export default function TruckerReport() {
 
   return (
     <div className="p-6">
+      {/* Loading overlay for pagination (no blur) */}
+      {showLoadingOverlay && (
+        <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-700 font-semibold">Loading...</p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Stats Cards */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-6">
@@ -583,13 +562,13 @@ export default function TruckerReport() {
       {totalPages > 1 && filteredTruckers.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
-            Showing {filteredTruckers.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredTruckers.length)} of {filteredTruckers.length} truckers
-            {searchTerm && ` (filtered from ${truckers.length} total)`}
+            Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalItems} total truckers)
+            {searchTerm && ` (${filteredTruckers.length} filtered on this page)`}
           </div>
 
           <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
             <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
@@ -600,53 +579,77 @@ export default function TruckerReport() {
             </button>
 
             <div className="flex items-center gap-1">
-              {currentPage > 3 && (
+              {/* Always show first page if not near the beginning */}
+              {currentPage > 4 && pagination.totalPages > 7 && (
                 <>
                   <button
-                    onClick={() => setCurrentPage(1)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                    onClick={() => handlePageChange(1)}
+                    className="px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
                   >
                     1
                   </button>
-                  {currentPage > 4 && <span className="px-2 text-gray-400">...</span>}
+                  {currentPage > 5 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
                 </>
               )}
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(page => {
-                  if (totalPages <= 7) return true;
-                  if (currentPage <= 4) return page <= 5;
-                  if (currentPage >= totalPages - 3) return page >= totalPages - 4;
-                  return page >= currentPage - 2 && page <= currentPage + 2;
-                })
-                .map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
-                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
-                  >
-                    {page}
-                  </button>
-                ))}
+              {/* Show page numbers around current page */}
+              {(() => {
+                const pages = [];
+                let startPage = Math.max(1, currentPage - 2);
+                let endPage = Math.min(pagination.totalPages, currentPage + 2);
 
-              {currentPage < totalPages - 2 && totalPages > 7 && (
-                <>
-                  {currentPage < totalPages - 3 && <span className="px-2 text-gray-400">...</span>}
+                // Adjust if we're near the beginning
+                if (currentPage <= 3) {
+                  startPage = 1;
+                  endPage = Math.min(5, pagination.totalPages);
+                }
+
+                // Adjust if we're near the end
+                if (currentPage >= pagination.totalPages - 2) {
+                  startPage = Math.max(1, pagination.totalPages - 4);
+                  endPage = pagination.totalPages;
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(i);
+                }
+
+                return pages.map((pageNum) => (
                   <button
-                    onClick={() => setCurrentPage(totalPages)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
+                    key={pageNum}
+                    onClick={() => handlePageChange(pageNum)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                      currentPage === pageNum
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                    }`}
                   >
-                    {totalPages}
+                    {pageNum}
+                  </button>
+                ));
+              })()}
+
+              {/* Always show last page if not near the end */}
+              {currentPage < pagination.totalPages - 3 && pagination.totalPages > 7 && (
+                <>
+                  {currentPage < pagination.totalPages - 4 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
+                  <button
+                    onClick={() => handlePageChange(pagination.totalPages)}
+                    className="px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                  >
+                    {pagination.totalPages}
                   </button>
                 </>
               )}
             </div>
 
             <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === pagination.totalPages}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               Next
