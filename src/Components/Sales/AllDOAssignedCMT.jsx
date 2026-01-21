@@ -238,6 +238,25 @@ export default function AllDOAssignedCMT() {
     setSearchTerm('');
     setActiveSearchTerm('');
     setCurrentPage(1);
+    // Force refresh to get all data with proper pagination
+    dispatch(fetchDOReport({ 
+      page: 1, 
+      limit: itemsPerPage, 
+      addDispature: selectedCompany || null,
+      loadNumber: null,
+      shipmentNo: null,
+      carrierName: null,
+      containerNo: null,
+      pickupDate: null,
+      dropDate: null,
+      returnDate: null,
+      assignedToCMT: null,
+      createdByEmpId: null,
+      startDate: dateFilterApplied ? ymd(range.startDate) : null,
+      endDate: dateFilterApplied ? ymd(range.endDate) : null,
+      cmtAssignedOnly: true,
+      forceRefresh: true // Force refresh to clear cache
+    }));
   };
 
   // Reset to page 1 when date range changes
@@ -286,7 +305,7 @@ export default function AllDOAssignedCMT() {
 
   // Use backend pagination
   const totalPages = pagination.totalPages || 1;
-  const totalItems = pagination.totalItems || filteredOrders.length;
+  const totalItems = pagination.totalItems || 0; // Use backend totalItems, not filteredOrders.length
   const currentOrders = filteredOrders; // Already paginated by backend
 
   // Handle page change
@@ -706,8 +725,8 @@ export default function AllDOAssignedCMT() {
         )}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && filteredOrders.length > 0 && (
+      {/* Pagination - Show if we have more items than per page limit */}
+      {totalItems > itemsPerPage && filteredOrders.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
             Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} orders
