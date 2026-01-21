@@ -5,17 +5,28 @@ import API_CONFIG from '../../config/api.js';
 // Fetch DO Report data with pagination and caching
 export const fetchDOReport = createAsyncThunk(
   'doReport/fetchDOReport',
-  async ({ page = 1, limit = 15, addDispature = null, forceRefresh = false }, { getState, rejectWithValue }) => {
+  async ({ 
+    page = 1, 
+    limit = 15, 
+    addDispature = null, 
+    loadNumber = null,
+    carrierName = null,
+    forceRefresh = false 
+  }, { getState, rejectWithValue }) => {
     const state = getState();
     const { pageCache, cacheTimestamps, cacheExpiry } = state.doReport;
     
-    // Create cache key that includes both page and addDispature parameter
-    const cacheKey = addDispature ? `${page}_${addDispature}` : `${page}_all`;
+    // Create cache key that includes page, addDispature, and search parameters
+    const cacheKeyParts = [page];
+    if (addDispature) cacheKeyParts.push(`company_${addDispature}`);
+    if (loadNumber) cacheKeyParts.push(`load_${loadNumber}`);
+    if (carrierName) cacheKeyParts.push(`carrier_${carrierName}`);
+    const cacheKey = cacheKeyParts.join('_');
     
     // Check if cache is valid for this page and no force refresh
     if (!forceRefresh && pageCache[cacheKey] && cacheTimestamps[cacheKey] && 
         (Date.now() - cacheTimestamps[cacheKey] < cacheExpiry)) {
-      console.log(`Returning cached data for DO Report page ${page}${addDispature ? ` (company: ${addDispature})` : ''}`);
+      console.log(`Returning cached data for DO Report page ${page}${addDispature ? ` (company: ${addDispature})` : ''}${loadNumber ? ` (loadNumber: ${loadNumber})` : ''}${carrierName ? ` (carrierName: ${carrierName})` : ''}`);
       return {
         orders: pageCache[cacheKey],
         pagination: state.doReport.pagination,
@@ -26,12 +37,24 @@ export const fetchDOReport = createAsyncThunk(
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
-      // Build API URL with pagination and optional addDispature parameter
+      // Build API URL with pagination and optional parameters
       let apiUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/report`;
       const params = { page, limit };
       if (addDispature) {
         params.addDispature = addDispature;
       }
+      if (loadNumber) {
+        params.loadNumber = loadNumber;
+      }
+      if (carrierName) {
+        params.carrierName = carrierName;
+      }
+      
+      console.log('DO Report API Request:', {
+        url: apiUrl,
+        params: params,
+        fullUrl: `${apiUrl}?${new URLSearchParams(params).toString()}`
+      });
       
       const response = await axios.get(apiUrl, {
         params: params,
@@ -41,10 +64,20 @@ export const fetchDOReport = createAsyncThunk(
           'Content-Type': 'application/json'
         }
       });
+      
+      console.log('DO Report API Response:', {
+        success: response.data?.success,
+        dataLength: Array.isArray(response.data?.data) ? response.data.data.length : 'not array',
+        pagination: response.data?.pagination
+      });
 
       if (response.data && response.data.success) {
-        // API response structure: { success: true, data: { dos: [...] } }
-        const ordersArray = response.data.data?.dos || [];
+        // Updated API response structure (standardized):
+        // { success: true, data: [...], pagination: { page, limit, total, totalPages, ... } }
+        // data is now a direct array, not nested in data.dos
+        const ordersArray = Array.isArray(response.data.data) 
+          ? response.data.data 
+          : (response.data.data?.dos || []);
         
         // Transform orders (same logic as component)
         const transformedOrders = ordersArray.map(order => {
@@ -94,9 +127,45 @@ export const fetchDOReport = createAsyncThunk(
           };
         });
 
-        // Calculate pagination from response
-        const totalItems = response.data.pagination?.totalItems || response.data.total || transformedOrders.length;
-        const totalPages = response.data.pagination?.totalPages || Math.ceil(totalItems / limit);
+        // Extract pagination from standardized API response structure
+        // New structure: { pagination: { page, limit, total, totalPages, hasNextPage, hasPrevPage } }
+        const paginationData = response.data.pagination || {};
+        
+        // Use standardized field names: 'total' instead of 'totalItems' or 'totalCount'
+        const totalItems = paginationData.total || 
+                          paginationData.totalItems ||  // Fallback for backward compatibility
+                          paginationData.totalCount ||   // Fallback for backward compatibility
+                          (transformedOrders.length >= limit ? limit * 10 : transformedOrders.length); // Estimate if no total provided
+        
+        // Use standardized field name: 'totalPages' (already standardized)
+        const apiTotalPages = paginationData.totalPages;
+        
+        // Calculate totalPages from totalItems to ensure accuracy
+        // Always calculate to prevent issues where API returns wrong totalPages
+        const calculatedTotalPages = limit > 0 ? Math.ceil(totalItems / limit) : 1;
+        
+        // Use API totalPages if it matches calculation, otherwise use calculated value
+        const totalPages = (apiTotalPages && apiTotalPages === calculatedTotalPages) 
+                          ? apiTotalPages 
+                          : calculatedTotalPages;
+        
+        console.log('DO Report Pagination (Standardized API):', {
+          totalItems,
+          apiTotalPages,
+          calculatedTotalPages,
+          totalPages,
+          currentPage: page,
+          itemsPerPage: limit,
+          ordersInResponse: transformedOrders.length,
+          paginationData,
+          apiPage: paginationData.page, // Standardized: 'page' instead of 'currentPage'
+          responseStructure: {
+            hasPagination: !!response.data.pagination,
+            hasTotal: !!paginationData.total,
+            hasTotalPages: !!paginationData.totalPages,
+            hasPage: !!paginationData.page
+          }
+        });
         
         return {
           orders: transformedOrders,
