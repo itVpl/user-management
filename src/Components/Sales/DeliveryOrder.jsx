@@ -468,8 +468,8 @@ export default function DeliveryOrder() {
 
   // Date range state (default: last 30 days like screenshot)
   const [range, setRange] = useState({
-    startDate: addDays(new Date(), -29),
-    endDate: new Date(),
+    startDate: null,
+    endDate: null,
     key: 'selection'
   });
   const [showPresetMenu, setShowPresetMenu] = useState(false);
@@ -601,6 +601,9 @@ export default function DeliveryOrder() {
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
+  const [pagination, setPagination] = useState(null);
+  const [allOrdersForCount, setAllOrdersForCount] = useState([]); // For Total Orders and Today counts
+  const [activeSearchTerm, setActiveSearchTerm] = useState(''); // The actual search term used for API calls
 
   // Monitor customers array to ensure it's never empty
   useEffect(() => {
@@ -621,10 +624,8 @@ export default function DeliveryOrder() {
     }
   }, [formData.customers]);
 
-  // Fetch data from API
-  // REPLACE THIS BLOCK: fetchOrders() (quantity ko locations ke weight se lo)
-  // REPLACE your fetchOrders with this version
-  const fetchOrders = async () => {
+  // Fetch data from API with search and pagination
+  const fetchOrders = async (searchQuery = '', page = 1, limit = itemsPerPage, fetchAllForCount = false) => {
     try {
       setLoading(true);
 
@@ -636,8 +637,21 @@ export default function DeliveryOrder() {
 
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (searchQuery && searchQuery.trim()) {
+        params.append('search', searchQuery.trim());
+      }
+      if (!fetchAllForCount) {
+        params.append('page', page.toString());
+        params.append('limit', limit.toString());
+      }
+      
+      const queryString = params.toString();
+      const url = `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}${queryString ? `?${queryString}` : ''}`;
+      
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/do/do/employee/${empId}`,
+        url,
         {
           timeout: 10000,
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
@@ -766,7 +780,25 @@ export default function DeliveryOrder() {
           };
         });
 
-        setOrders(transformedOrders);
+        if (fetchAllForCount) {
+          // Store all orders for Total Orders and Today counts
+          setAllOrdersForCount(transformedOrders);
+        } else {
+          // Store paginated orders for display
+          setOrders(transformedOrders);
+          // Store pagination info if available
+          if (response.data.pagination) {
+            setPagination(response.data.pagination);
+          } else {
+            // Fallback: calculate pagination from data length
+            setPagination({
+              page: page,
+              limit: limit,
+              total: transformedOrders.length,
+              totalPages: Math.ceil(transformedOrders.length / limit)
+            });
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -774,6 +806,11 @@ export default function DeliveryOrder() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fetch all orders for Total Orders and Today counts (without pagination)
+  const fetchAllOrdersForCount = async () => {
+    await fetchOrders('', 1, 1, true);
   };
 
 
@@ -846,10 +883,31 @@ export default function DeliveryOrder() {
     }
   };
 
+  // Handle search button click or Enter key
+  const handleSearch = () => {
+    setActiveSearchTerm(searchTerm.trim());
+    setCurrentPage(1); // Reset to first page on new search
+    fetchOrders(searchTerm.trim(), 1, itemsPerPage);
+  };
+
+  // Handle Enter key press in search input
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  // Initial load and page change effect
   useEffect(() => {
-    fetchOrders(); // Fetch all orders on mount
+    fetchOrders(activeSearchTerm, currentPage, itemsPerPage); // Fetch orders with search and pagination
     // Removed: fetchDispatchers, fetchShippersList, fetchTruckersList, fetchLoads
     // These will now be called on-demand when dropdowns are clicked
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, activeSearchTerm]);
+
+  // Initial load for Total Orders and Today counts
+  useEffect(() => {
+    fetchAllOrdersForCount(); // Fetch all orders for Total Orders and Today counts
   }, []);
 
 
@@ -1079,45 +1137,36 @@ export default function DeliveryOrder() {
     return (fromCustomers || fromDoNum || fromOrder || fromWON || '').toLowerCase();
   };
 
-  // Filter orders based on search term
+  // Filter orders based on date range only (search is now server-side)
   const filteredOrders = orders.filter(order => {
-    const text = searchTerm.toLowerCase();
-    const loadNumber = getLoadNumberForSearch(order);
-    
-    // Get searchable fields
-    const workOrderNo = (order.customers?.[0]?.workOrderNo || '').toLowerCase();
-    const shipmentNo = (order.shipper?.shipmentNo || '').toLowerCase();
-    const containerNo = (order.shipper?.containerNo || '').toLowerCase();
-    const carrierName = (order.carrierName || '').toLowerCase();
-    
-    const matchesText =
-      (order.id?.toLowerCase() || '').includes(text) ||
-      (order.clientName?.toLowerCase() || '').includes(text) ||
-      (order.pickupLocation?.toLowerCase() || '').includes(text) ||
-      (order.deliveryLocation?.toLowerCase() || '').includes(text) ||
-      loadNumber.includes(text) ||
-      workOrderNo.includes(text) ||
-      shipmentNo.includes(text) ||
-      containerNo.includes(text) ||
-      carrierName.includes(text);
-
     const created = order.createdAt || ''; // e.g., "2025-08-27"
-    const inRange = created >= ymd(range.startDate) && created <= ymd(range.endDate);
-
-    return matchesText && inRange;
+    // Only apply date filter if dates are selected
+    const inRange = !range.startDate || !range.endDate || (created >= ymd(range.startDate) && created <= ymd(range.endDate));
+    return inRange;
   });
 
+  // Apply date filter to allOrdersForCount for Total Orders and Today counts
+  const filteredAllOrdersForCount = allOrdersForCount.filter(order => {
+    const created = order.createdAt || '';
+    const inRange = !range.startDate || !range.endDate || (created >= ymd(range.startDate) && created <= ymd(range.endDate));
+    return inRange;
+  });
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+  // Use filtered orders for display (date filter only, search is server-side)
+  const currentOrders = filteredOrders;
+  
+  // Pagination calculations from API
+  const totalPages = pagination?.totalPages || 1;
+  const totalItems = pagination?.total || filteredOrders.length;
 
   // Handle page change
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Update date range filter effect - only affects client-side filtering, no API call needed
+  // Date filtering is done client-side on already fetched data
 
   // Generate smart pagination page numbers
   const getPaginationPages = () => {
@@ -2329,7 +2378,7 @@ export default function DeliveryOrder() {
         // reset form
         setShowAddOrderForm(false);
         setCurrentPage(1); // Reset to first page
-        await fetchOrders(); // Refresh orders
+        await fetchOrders(activeSearchTerm, currentPage, itemsPerPage); // Refresh orders
         setFormData({
           customers: [{
             billTo: '', dispatcherName: '', workOrderNo: '',
@@ -3358,7 +3407,7 @@ const handleUpdateOrder = async (e) => {
     
     // Refresh the orders list
     setCurrentPage(1); // Reset to first page
-    await fetchOrders(); // Refresh orders
+    await fetchOrders(searchTerm, currentPage, itemsPerPage); // Refresh orders
     
   } catch (error) {
     console.error('Update error:', error);
@@ -3442,7 +3491,7 @@ const handleUpdateOrder = async (e) => {
 
       if (response.data && response.data.success) {
         alertify.success('Carrier fees updated successfully!');
-        fetchOrders(); // Refresh orders
+        fetchOrders(searchTerm, currentPage, itemsPerPage); // Refresh orders
         return response.data;
       } else {
         console.error('Server response:', response.data);
@@ -4776,7 +4825,7 @@ const handleUpdateOrder = async (e) => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Orders</p>
-                <p className="text-xl font-bold text-gray-800">{orders.length}</p>
+                <p className="text-xl font-bold text-gray-800">{filteredAllOrdersForCount.length}</p>
               </div>
             </div>
           </div>
@@ -4787,7 +4836,7 @@ const handleUpdateOrder = async (e) => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Approved</p>
-                  <p className="text-xl font-bold text-blue-600">{orders.filter(order => order.status === 'approved').length}</p>
+                  <p className="text-xl font-bold text-blue-600">{filteredAllOrdersForCount.filter(order => order.status === 'approved').length}</p>
                 </div>
               </div>
             </div> */}
@@ -4798,7 +4847,7 @@ const handleUpdateOrder = async (e) => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Pending</p>
-                  <p className="text-xl font-bold text-yellow-600">{orders.filter(order => order.status === 'pending').length}</p>
+                  <p className="text-xl font-bold text-yellow-600">{filteredAllOrdersForCount.filter(order => order.status === 'pending').length}</p>
                 </div>
               </div>
             </div> */}
@@ -4809,22 +4858,31 @@ const handleUpdateOrder = async (e) => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{orders.filter(order => order.createdAt === new Date().toISOString().split('T')[0]).length}</p>
+                <p className="text-xl font-bold text-purple-600">{filteredAllOrdersForCount.filter(order => order.createdAt === new Date().toISOString().split('T')[0]).length}</p>
               </div>
             </div>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search orders..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
+          <div className="relative flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search orders..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              onClick={handleSearch}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors font-medium"
+            >
+              Search
+            </button>
           </div>
           {/* Range dropdown (like screenshot) */}
           <div className="relative">
@@ -4833,14 +4891,26 @@ const handleUpdateOrder = async (e) => {
               onClick={() => setShowPresetMenu(v => !v)}
               className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
             >
-              <span>
-                {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
+              <span className={!range.startDate || !range.endDate ? 'text-gray-400' : ''}>
+                {range.startDate && range.endDate 
+                  ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                  : 'Select date range'}
               </span>
               <span className="ml-3">▼</span>
             </button>
 
             {showPresetMenu && (
               <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
+                <button
+                  onClick={() => {
+                    setRange({ startDate: null, endDate: null, key: 'selection' });
+                    setShowPresetMenu(false);
+                  }}
+                  className="block w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-600"
+                >
+                  Clear Filter
+                </button>
+                <div className="my-1 border-t" />
                 {Object.keys(presets).map((lbl) => (
                   <button
                     key={lbl}
@@ -4866,13 +4936,27 @@ const handleUpdateOrder = async (e) => {
             <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
               <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
                 <DateRange
-                  ranges={[range]}
-                  onChange={(item) => setRange(item.selection)}
+                  ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+                  onChange={(item) => {
+                    if (item.selection.startDate && item.selection.endDate) {
+                      setRange(item.selection);
+                    }
+                  }}
                   moveRangeOnFirstSelection={false}
                   months={2}
                   direction="horizontal"
                 />
                 <div className="flex justify-end gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRange({ startDate: null, endDate: null, key: 'selection' });
+                      setShowCustomRange(false);
+                    }}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    Clear
+                  </button>
                   <button
                     type="button"
                     onClick={() => setShowCustomRange(false)}
@@ -4882,8 +4966,17 @@ const handleUpdateOrder = async (e) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowCustomRange(false)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    onClick={() => {
+                      if (range.startDate && range.endDate) {
+                        setShowCustomRange(false);
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-lg ${
+                      range.startDate && range.endDate
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                    disabled={!range.startDate || !range.endDate}
                   >
                     OK
                   </button>
@@ -5152,11 +5245,11 @@ const handleUpdateOrder = async (e) => {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && filteredOrders.length > 0 && (
+      {totalPages > 1 && currentOrders.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
-            {searchTerm && ` (filtered from ${orders.length} total)`}
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} orders
+            {activeSearchTerm && ` (searching: "${activeSearchTerm}")`}
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             <button
