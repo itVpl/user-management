@@ -10,7 +10,17 @@ export const fetchDOReport = createAsyncThunk(
     limit = 15, 
     addDispature = null, 
     loadNumber = null,
+    shipmentNo = null,
     carrierName = null,
+    containerNo = null,
+    pickupDate = null,
+    dropDate = null,
+    returnDate = null,
+    assignedToCMT = null,
+    createdByEmpId = null,
+    startDate = null,
+    endDate = null,
+    cmtAssignedOnly = false,
     forceRefresh = false 
   }, { getState, rejectWithValue }) => {
     const state = getState();
@@ -20,13 +30,23 @@ export const fetchDOReport = createAsyncThunk(
     const cacheKeyParts = [page];
     if (addDispature) cacheKeyParts.push(`company_${addDispature}`);
     if (loadNumber) cacheKeyParts.push(`load_${loadNumber}`);
+    if (shipmentNo) cacheKeyParts.push(`shipment_${shipmentNo}`);
     if (carrierName) cacheKeyParts.push(`carrier_${carrierName}`);
+    if (containerNo) cacheKeyParts.push(`container_${containerNo}`);
+    if (pickupDate) cacheKeyParts.push(`pickup_${pickupDate}`);
+    if (dropDate) cacheKeyParts.push(`drop_${dropDate}`);
+    if (returnDate) cacheKeyParts.push(`return_${returnDate}`);
+    if (assignedToCMT) cacheKeyParts.push(`cmt_${assignedToCMT}`);
+    if (createdByEmpId) cacheKeyParts.push(`created_${createdByEmpId}`);
+    if (startDate) cacheKeyParts.push(`start_${startDate}`);
+    if (endDate) cacheKeyParts.push(`end_${endDate}`);
+    if (cmtAssignedOnly) cacheKeyParts.push('cmtOnly');
     const cacheKey = cacheKeyParts.join('_');
     
     // Check if cache is valid for this page and no force refresh
     if (!forceRefresh && pageCache[cacheKey] && cacheTimestamps[cacheKey] && 
         (Date.now() - cacheTimestamps[cacheKey] < cacheExpiry)) {
-      console.log(`Returning cached data for DO Report page ${page}${addDispature ? ` (company: ${addDispature})` : ''}${loadNumber ? ` (loadNumber: ${loadNumber})` : ''}${carrierName ? ` (carrierName: ${carrierName})` : ''}`);
+      console.log(`Returning cached data for DO Report page ${page}${addDispature ? ` (company: ${addDispature})` : ''}${loadNumber ? ` (loadNumber: ${loadNumber})` : ''}${shipmentNo ? ` (shipmentNo: ${shipmentNo})` : ''}${carrierName ? ` (carrierName: ${carrierName})` : ''}${containerNo ? ` (containerNo: ${containerNo})` : ''}${pickupDate ? ` (pickupDate: ${pickupDate})` : ''}${dropDate ? ` (dropDate: ${dropDate})` : ''}${returnDate ? ` (returnDate: ${returnDate})` : ''}${assignedToCMT ? ` (assignedToCMT: ${assignedToCMT})` : ''}${createdByEmpId ? ` (createdByEmpId: ${createdByEmpId})` : ''}${startDate ? ` (startDate: ${startDate})` : ''}${endDate ? ` (endDate: ${endDate})` : ''}${cmtAssignedOnly ? ` (cmtAssignedOnly: true)` : ''}`);
       return {
         orders: pageCache[cacheKey],
         pagination: state.doReport.pagination,
@@ -46,8 +66,38 @@ export const fetchDOReport = createAsyncThunk(
       if (loadNumber) {
         params.loadNumber = loadNumber;
       }
+      if (shipmentNo) {
+        params.shipmentNo = shipmentNo;
+      }
       if (carrierName) {
         params.carrierName = carrierName;
+      }
+      if (containerNo) {
+        params.containerNo = containerNo;
+      }
+      if (pickupDate) {
+        params.pickupDate = pickupDate;
+      }
+      if (dropDate) {
+        params.dropDate = dropDate;
+      }
+      if (returnDate) {
+        params.returnDate = returnDate;
+      }
+      if (assignedToCMT) {
+        params.assignedToCMT = assignedToCMT;
+      }
+      if (createdByEmpId) {
+        params.createdByEmpId = createdByEmpId;
+      }
+      if (startDate) {
+        params.startDate = startDate;
+      }
+      if (endDate) {
+        params.endDate = endDate;
+      }
+      if (cmtAssignedOnly) {
+        params.assignmentStatus = 'assigned';
       }
       
       console.log('DO Report API Request:', {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
@@ -33,20 +33,22 @@ export default function AllDOAssignedCMT() {
   const selectedCompany = useAppSelector(selectCurrentAddDispature);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeSearchTerm, setActiveSearchTerm] = useState(''); // Active search term (only set when search button clicked)
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedLoadData, setSelectedLoadData] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
   const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const itemsPerPage = 15; // 15 records per page
 
-  // Date range state
+  // Date range state - no default, only set when user selects dates
   const [range, setRange] = useState({
-    startDate: addDays(new Date(), -29),
-    endDate: new Date(),
+    startDate: null,
+    endDate: null,
     key: 'selection'
   });
+  const [dateFilterApplied, setDateFilterApplied] = useState(false); // Track if date filter is applied
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
 
@@ -64,130 +66,228 @@ export default function AllDOAssignedCMT() {
   const applyPreset = (label) => {
     const [s, e] = presets[label];
     setRange({ startDate: s, endDate: e, key: 'selection' });
+    setDateFilterApplied(true); // Mark date filter as applied
     setShowPresetMenu(false);
   };
-  const ymd = (d) => format(d, 'yyyy-MM-dd'); // "YYYY-MM-DD"
+  const ymd = (d) => d ? format(d, 'yyyy-MM-dd') : null; // "YYYY-MM-DD" or null
 
+  // Parse search term to detect what type of search it is
+  const parseSearchTerm = (term) => {
+    if (!term || term.trim() === '') {
+      return {
+        loadNumber: null,
+        shipmentNo: null,
+        carrierName: null,
+        containerNo: null,
+        pickupDate: null,
+        dropDate: null,
+        returnDate: null,
+        assignedToCMT: null,
+        createdByEmpId: null
+      };
+    }
+    
+    const trimmedTerm = term.trim();
+    
+    // 1. Check if it's a load number (starts with 'L' followed by numbers, e.g., L12345, L0770)
+    const loadNumberPattern = /^L\d+/i;
+    if (loadNumberPattern.test(trimmedTerm)) {
+      return {
+        loadNumber: trimmedTerm.toUpperCase(),
+        shipmentNo: null,
+        carrierName: null,
+        containerNo: null,
+        pickupDate: null,
+        dropDate: null,
+        returnDate: null,
+        assignedToCMT: null,
+        createdByEmpId: null
+      };
+    }
+    
+    // 2. Check if it's a date (YYYY-MM-DD, MM/DD/YYYY, MM-DD-YYYY)
+    const datePatterns = [
+      /^\d{4}-\d{2}-\d{2}$/, // YYYY-MM-DD
+      /^\d{2}\/\d{2}\/\d{4}$/, // MM/DD/YYYY
+      /^\d{2}-\d{2}-\d{4}$/, // MM-DD-YYYY
+      /^\d{1,2}\/\d{1,2}\/\d{4}$/, // M/D/YYYY
+      /^\d{1,2}-\d{1,2}-\d{4}$/ // M-D-YYYY
+    ];
+    
+    for (const pattern of datePatterns) {
+      if (pattern.test(trimmedTerm)) {
+        // Convert to YYYY-MM-DD format
+        let dateStr = trimmedTerm;
+        if (dateStr.includes('/') || dateStr.includes('-')) {
+          const parts = dateStr.split(/[\/\-]/);
+          if (parts.length === 3) {
+            // If format is MM/DD/YYYY or MM-DD-YYYY
+            if (parts[0].length <= 2 && parts[1].length <= 2 && parts[2].length === 4) {
+              const month = parts[0].padStart(2, '0');
+              const day = parts[1].padStart(2, '0');
+              const year = parts[2];
+              dateStr = `${year}-${month}-${day}`;
+            }
+            // If already YYYY-MM-DD, keep as is
+            else if (parts[0].length === 4) {
+              dateStr = trimmedTerm;
+            }
+          }
+        }
+        
+        // Try to parse the date to validate it
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          // For dates, search in pickupDate (most common use case)
+          // User can search dropDate or returnDate by being more specific if needed
+          return {
+            loadNumber: null,
+            shipmentNo: null,
+            carrierName: null,
+            containerNo: null,
+            pickupDate: dateStr,
+            dropDate: null,
+            returnDate: null,
+            assignedToCMT: null,
+            createdByEmpId: null
+          };
+        }
+      }
+    }
+    
+    // 3. Check if it's an employee ID (starts with EMP or short alphanumeric code)
+    const empIdPattern = /^(EMP|emp)[\dA-Za-z]+$/i;
+    if (empIdPattern.test(trimmedTerm)) {
+      // Could be assignedToCMT or createdByEmpId - we'll try assignedToCMT first
+      return {
+        loadNumber: null,
+        shipmentNo: null,
+        carrierName: null,
+        containerNo: null,
+        pickupDate: null,
+        dropDate: null,
+        returnDate: null,
+        assignedToCMT: trimmedTerm.toUpperCase(),
+        createdByEmpId: null
+      };
+    }
+    
+    // 4. Check if it's a shipment number (usually numeric or alphanumeric)
+    // Shipment numbers are often longer numeric strings
+    const shipmentPattern = /^\d{6,}$/; // 6+ digits
+    if (shipmentPattern.test(trimmedTerm)) {
+      return {
+        loadNumber: null,
+        shipmentNo: trimmedTerm,
+        carrierName: null,
+        containerNo: null,
+        pickupDate: null,
+        dropDate: null,
+        returnDate: null,
+        assignedToCMT: null,
+        createdByEmpId: null
+      };
+    }
+    
+    // 5. Check if it's a container number (usually alphanumeric, often starts with letters)
+    // Container numbers often have format like MSKU6924917, ONEU6068302
+    const containerPattern = /^[A-Z]{2,}\d+$/i; // 2+ letters followed by numbers
+    if (containerPattern.test(trimmedTerm)) {
+      return {
+        loadNumber: null,
+        shipmentNo: null,
+        carrierName: null,
+        containerNo: trimmedTerm.toUpperCase(),
+        pickupDate: null,
+        dropDate: null,
+        returnDate: null,
+        assignedToCMT: null,
+        createdByEmpId: null
+      };
+    }
+    
+    // 6. Default: treat as carrier name search
+    return {
+      loadNumber: null,
+      shipmentNo: null,
+      carrierName: trimmedTerm,
+      containerNo: null,
+      pickupDate: null,
+      dropDate: null,
+      returnDate: null,
+      assignedToCMT: null,
+      createdByEmpId: null
+    };
+  };
+
+  // Handle search button click
+  const handleSearch = () => {
+    setActiveSearchTerm(searchTerm.trim());
+    setCurrentPage(1); // Reset to page 1 when searching
+  };
+
+  // Handle Enter key in search input
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  // Handle clear search
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setActiveSearchTerm('');
+    setCurrentPage(1);
+  };
+
+  // Reset to page 1 when date range changes
   useEffect(() => {
+    if (dateFilterApplied) {
+      setCurrentPage(1);
+    }
+  }, [range, dateFilterApplied]);
+
+  // Fetch data from backend with all filters
+  useEffect(() => {
+    const searchParams = parseSearchTerm(activeSearchTerm);
+    
+    // Only send date params if date filter is applied
+    const startDateParam = dateFilterApplied ? ymd(range.startDate) : null;
+    const endDateParam = dateFilterApplied ? ymd(range.endDate) : null;
+    
     dispatch(fetchDOReport({ 
       page: currentPage, 
       limit: itemsPerPage, 
       addDispature: selectedCompany || null,
+      loadNumber: searchParams.loadNumber,
+      shipmentNo: searchParams.shipmentNo,
+      carrierName: searchParams.carrierName,
+      containerNo: searchParams.containerNo,
+      pickupDate: searchParams.pickupDate,
+      dropDate: searchParams.dropDate,
+      returnDate: searchParams.returnDate,
+      assignedToCMT: searchParams.assignedToCMT,
+      createdByEmpId: searchParams.createdByEmpId,
+      startDate: startDateParam,
+      endDate: endDateParam,
+      cmtAssignedOnly: true, // Only fetch CMT assigned orders
       forceRefresh: false 
     }));
-  }, [dispatch, currentPage, selectedCompany]);
+  }, [dispatch, currentPage, selectedCompany, activeSearchTerm, range, dateFilterApplied]);
 
-  // Helper function to get load number from order
-  const getLoadNumberForSearch = (order) => {
-    if (!order) return '';
-    const fromCustomers = Array.isArray(order.customers)
-      ? (order.customers.map(c => (c?.loadNo || '').trim()).find(v => v))
-      : null;
-    const fromDoNum = (order.doNum || '').trim();
-    const fromOrder = (order.loadNo || order.loadNumber || order.loadId || order.referenceNo || '').trim();
-    const fromWON = Array.isArray(order.customers)
-      ? (order.customers.map(c => (c?.workOrderNo || '').trim()).find(v => v) || '')
-      : '';
-    return (fromCustomers || fromDoNum || fromOrder || fromWON || '').toLowerCase();
-  };
 
-  // Helper function to format date for search
-  const formatDateForSearch = (dateString) => {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      // Format as MM/DD/YYYY, MM-DD-YYYY, YYYY-MM-DD for search
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${month}/${day}/${year} ${month}-${day}-${year} ${year}-${month}-${day}`.toLowerCase();
-    } catch {
-      return '';
-    }
-  };
-
-  // Filter orders to show only CMT assigned ones
+  // Backend handles filtering, so we just use the orders from API
+  // Only apply minimal client-side filtering if needed (fallback)
   const filteredOrders = orders.filter(order => {
-    // First check if it's CMT assigned
+    // Double-check CMT assigned (backend should handle this, but keep as safety)
     const isCMTAssigned = order.assignmentStatus === 'assigned' || order.assignedToCMT;
-    if (!isCMTAssigned) return false;
-
-    // Then apply search and date filters
-    const text = searchTerm.toLowerCase();
-    if (!text) {
-      // If no search term, only apply date filter
-      const created = order.createdAt || '';
-      return created >= ymd(range.startDate) && created <= ymd(range.endDate);
-    }
-
-    // Get Load Num
-    const loadNumber = getLoadNumberForSearch(order);
-    
-    // Get Shipment No
-    const shipmentNo = (order.shipper?.shipmentNo || order._fullOrderData?.shipper?.shipmentNo || '').toLowerCase();
-    
-    // Get Carrier Name
-    const carrierName = (order.carrierName || order.carrier?.carrierName || order._fullOrderData?.carrier?.carrierName || '').toLowerCase();
-    
-    // Get Container No
-    const containerNo = (order.containerNo || order.shipper?.containerNo || order._fullOrderData?.shipper?.containerNo || '').toLowerCase();
-    
-    // Get Pick Up Date
-    const pickupDate = order.shipper?.pickUpLocations?.[0]?.pickUpDate || 
-                      order.shipper?.pickupLocations?.[0]?.pickUpDate ||
-                      order._fullOrderData?.shipper?.pickUpLocations?.[0]?.pickUpDate ||
-                      order._fullOrderData?.shipper?.pickupLocations?.[0]?.pickUpDate || null;
-    const pickupDateFormatted = formatDateForSearch(pickupDate);
-    
-    // Get Drop Date
-    const dropDate = order.shipper?.dropLocations?.[0]?.dropDate || 
-                    order.shipper?.deliveryLocations?.[0]?.dropDate ||
-                    order._fullOrderData?.shipper?.dropLocations?.[0]?.dropDate ||
-                    order._fullOrderData?.shipper?.deliveryLocations?.[0]?.dropDate || null;
-    const dropDateFormatted = formatDateForSearch(dropDate);
-    
-    // Get Return Date
-    const returnDate = order.returnLocation?.returnDate || 
-                      order._fullOrderData?.returnLocation?.returnDate || null;
-    const returnDateFormatted = formatDateForSearch(returnDate);
-    
-    // Get ASSIGNED CMT
-    const assignedCMT = (order.assignedToCMT?.employeeName || 
-                        order._fullOrderData?.assignedToCMT?.employeeName || 
-                        order.assignedToCMT?.empId ||
-                        order._fullOrderData?.assignedToCMT?.empId || '').toLowerCase();
-    
-    // Get CREATED BY
-    const createdBy = (order.createdBySalesUser?.employeeName || 
-                      order._fullOrderData?.createdBySalesUser?.employeeName ||
-                      order.createdBySalesUser?.empId ||
-                      order._fullOrderData?.createdBySalesUser?.empId ||
-                      order.createdByData?.employeeName ||
-                      order.createdBy || '').toLowerCase();
-    
-    const matchesText =
-      loadNumber.includes(text) ||
-      shipmentNo.includes(text) ||
-      carrierName.includes(text) ||
-      containerNo.includes(text) ||
-      pickupDateFormatted.includes(text) ||
-      dropDateFormatted.includes(text) ||
-      returnDateFormatted.includes(text) ||
-      assignedCMT.includes(text) ||
-      createdBy.includes(text);
-
-    const created = order.createdAt || '';
-    const inRange = created >= ymd(range.startDate) && created <= ymd(range.endDate);
-
-    return matchesText && inRange;
+    return isCMTAssigned;
   });
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+  // Use backend pagination
+  const totalPages = pagination.totalPages || 1;
+  const totalItems = pagination.totalItems || filteredOrders.length;
+  const currentOrders = filteredOrders; // Already paginated by backend
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -229,11 +329,6 @@ export default function AllDOAssignedCMT() {
     
     return pages;
   };
-
-  // Reset to first page when search term or date range changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, range]);
 
   const handleViewOrder = async (rowOrder) => {
     try {
@@ -332,7 +427,7 @@ export default function AllDOAssignedCMT() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total CMT Assigned Orders</p>
-                <p className="text-xl font-bold text-gray-800">{filteredOrders.length}</p>
+                <p className="text-xl font-bold text-gray-800">{totalItems || filteredOrders.length}</p>
               </div>
             </div>
           </div>
@@ -343,22 +438,46 @@ export default function AllDOAssignedCMT() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{filteredOrders.filter(order => order.createdAt === new Date().toISOString().split('T')[0]).length}</p>
+                <p className="text-xl font-bold text-purple-600">{filteredOrders.filter(order => {
+                  const orderDate = order.createdAt || '';
+                  const today = ymd(new Date());
+                  return orderDate === today;
+                }).length}</p>
               </div>
             </div>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search orders..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
+          <div className="relative flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search: Load No (L0618), Shipment No, Carrier, Container, Date (MM/DD/YYYY), CMT ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="w-96 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+            {searchTerm && (
+              <>
+                <button
+                  onClick={handleSearch}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  Search
+                </button>
+                <button
+                  onClick={handleClearSearch}
+                  className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              </>
+            )}
           </div>
           {/* Date Range dropdown */}
           <div className="relative">
@@ -368,13 +487,31 @@ export default function AllDOAssignedCMT() {
               className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
             >
               <span>
-                {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
+                {dateFilterApplied && range.startDate && range.endDate
+                  ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                  : 'Select Date Range'}
               </span>
               <span className="ml-3">▼</span>
             </button>
 
             {showPresetMenu && (
               <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
+                {dateFilterApplied && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setDateFilterApplied(false);
+                        setRange({ startDate: null, endDate: null, key: 'selection' });
+                        setShowPresetMenu(false);
+                        setCurrentPage(1);
+                      }}
+                      className="block w-full text-left px-3 py-2 hover:bg-gray-50 text-red-600"
+                    >
+                      Clear Date Filter
+                    </button>
+                    <div className="my-1 border-t" />
+                  </>
+                )}
                 {Object.keys(presets).map((lbl) => (
                   <button
                     key={lbl}
@@ -409,14 +546,24 @@ export default function AllDOAssignedCMT() {
                 <div className="flex justify-end gap-2 mt-3">
                   <button
                     type="button"
-                    onClick={() => setShowCustomRange(false)}
+                    onClick={() => {
+                      setShowCustomRange(false);
+                      // Reset date filter if cancelled
+                      if (!dateFilterApplied) {
+                        setRange({ startDate: null, endDate: null, key: 'selection' });
+                      }
+                    }}
                     className="px-4 py-2 border rounded-lg hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowCustomRange(false)}
+                    onClick={() => {
+                      setDateFilterApplied(true); // Apply date filter
+                      setShowCustomRange(false);
+                      setCurrentPage(1); // Reset to page 1
+                    }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     OK
@@ -563,8 +710,8 @@ export default function AllDOAssignedCMT() {
       {totalPages > 1 && filteredOrders.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
-            {searchTerm && ` (filtered from ${orders.length} total)`}
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} orders
+            {activeSearchTerm && ` (filtered)`}
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             <button
