@@ -112,6 +112,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Sales Dept Report",
       "Follow Up Report",
       "DO Report",
+      "All DO Assigned CMT",
       "Team Rating",
       "Call Data",
       "Call Records (Id)",
@@ -380,6 +381,7 @@ const menuItems = [
   { name: "Manager Review", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/manager-review" },
   { name: "My Reviews", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/my-reviews" },
   { name: "QA Call Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/call-report" },
+  { name: "All DO Assigned CMT", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-do-assigned-cmt" },
   
   
 ];

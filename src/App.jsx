@@ -54,6 +54,7 @@ const Loads = lazy(() => import("./Components/CMT/Loads.jsx"));
 const CarrierApproval = lazy(() => import("./Components/CMT/CarrierApproval.jsx"));
 const DeliveryOrder = lazy(() => import("./Components/Sales/DeliveryOrder.jsx"));
 const DOReport = lazy(() => import("./Components/Sales/DOReport.jsx"));
+const AllDOAssignedCMT = lazy(() => import("./Components/Sales/AllDOAssignedCMT.jsx"));
 const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
 const DailyFollowUp = lazy(() => import("./Pages/DailyFollowUp.jsx"));
 const AddCustomer = lazy(() => import("./Components/Sales/AddCustomer.jsx"));
@@ -644,6 +645,7 @@ function App() {
           <Route path="LeaveApproval" element={<LeaveApproval />} />
           <Route path="delivery-order" element={<DeliveryOrder />} />
           <Route path="do-report" element={<DOReport />} />
+          <Route path="all-do-assigned-cmt" element={<AllDOAssignedCMT />} />
           <Route path="team-rating" element={<TeamRating />} />
           <Route path="daily-follow-up" element={<DailyFollowUp />} />
           <Route path="AddCustomer" element={<AddCustomer />} />

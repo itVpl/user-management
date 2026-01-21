@@ -76,6 +76,7 @@ export const fetchDOReport = createAsyncThunk(
             priority: 'normal',
             status: order.status || 'open',
             assignmentStatus: order.assignmentStatus || 'unassigned',
+            assignedToCMT: order.assignedToCMT || null,
             createdAt: order.date ? new Date(order.date).toISOString().split('T')[0] : '',
             createdBy: `Employee ${order.empId || 'N/A'}`,
             createdByEmpId: order.empId || 'N/A',
@@ -90,6 +91,9 @@ export const fetchDOReport = createAsyncThunk(
             supportingDocs: order.supportingDocs || [],
             customers: order.customers || [],
             shipper: order.shipper || {},
+            carrier: order.carrier || {},
+            containerNo: order.shipper?.containerNo || order.containerNo || 'N/A',
+            returnLocation: order.returnLocation || null,
             _fullOrderData: order
           };
         });
