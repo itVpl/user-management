@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import apiService from '../../services/apiService.js';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, FileSpreadsheet, Upload, Download } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, FileSpreadsheet, Upload, Download, X } from 'lucide-react';
 import Logo from '../../assets/LogoFinal.png';
 import IdentificaLogo from '../../assets/identifica_logo.png';
 import MtPoconoLogo from '../../assets/mtPocono.png';
@@ -389,7 +389,8 @@ export default function DOReport() {
   const [showAddOrderForm, setShowAddOrderForm] = useState(false);
   const [loadingOrderId, setLoadingOrderId] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(''); // Input value (what user is typing)
+  const [activeSearchTerm, setActiveSearchTerm] = useState(''); // Active search (what's actually being searched)
   const [submitting, setSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
@@ -636,14 +637,60 @@ export default function DOReport() {
     }
   }, [formData.customers]);
 
+  // Parse search term to determine if it's a load number or carrier name
+  const parseSearchTerm = (term) => {
+    if (!term || term.trim() === '') {
+      return { loadNumber: null, carrierName: null };
+    }
+    
+    const trimmedTerm = term.trim();
+    
+    // Check if it looks like a load number (starts with 'L' followed by numbers, e.g., L12345, L0770)
+    const loadNumberPattern = /^L\d+/i;
+    if (loadNumberPattern.test(trimmedTerm)) {
+      return { loadNumber: trimmedTerm.toUpperCase(), carrierName: null };
+    }
+    
+    // Otherwise, treat it as a carrier name search
+    return { loadNumber: null, carrierName: trimmedTerm };
+  };
+
   // Fetch data from API using Redux
   const fetchOrders = () => {
+    const { loadNumber, carrierName } = parseSearchTerm(activeSearchTerm);
+    
+    console.log('Fetching orders with search:', { activeSearchTerm, loadNumber, carrierName });
+    
     dispatch(fetchDOReport({ 
       page: currentPage, 
       limit: itemsPerPage, 
       addDispature: selectedCompany || null,
+      loadNumber: loadNumber,
+      carrierName: carrierName,
       forceRefresh: false 
     }));
+  };
+
+  // Handle search button click or Enter key
+  const handleSearch = () => {
+    const trimmedSearch = searchTerm.trim();
+    console.log('Search button clicked, setting activeSearchTerm:', trimmedSearch);
+    setActiveSearchTerm(trimmedSearch);
+    // Page reset will happen in useEffect when activeSearchTerm changes
+  };
+
+  // Handle Enter key in search input
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  // Handle clear search
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setActiveSearchTerm('');
+    dispatch(setCurrentPage(1));
   };
 
   // Excel Import Functions
@@ -1490,7 +1537,15 @@ export default function DOReport() {
       }
       
       // Refresh orders list
-      await dispatch(fetchDOReport({ page: currentPage, limit: itemsPerPage, addDispature: selectedCompany || null, forceRefresh: true }));
+      const { loadNumber, carrierName } = parseSearchTerm(activeSearchTerm);
+      await dispatch(fetchDOReport({ 
+        page: currentPage, 
+        limit: itemsPerPage, 
+        addDispature: selectedCompany || null, 
+        loadNumber: loadNumber,
+        carrierName: carrierName,
+        forceRefresh: true 
+      }));
     } catch (error) {
       console.error('Import error:', error);
       alertify.error(error.message || 'Failed to import data');
@@ -1611,20 +1666,44 @@ export default function DOReport() {
     }
   };
 
-  // Initial load - fetch all data once
+  // Initial load - fetch all data once (only if no active search)
   useEffect(() => {
-    fetchOrders();
+    // Only fetch orders on initial load if there's no active search
+    // Otherwise, the search useEffect will handle it
+    if (!activeSearchTerm) {
+      fetchOrders();
+    }
     fetchDispatchers();
     fetchShippersList();         // ADD: load companies for Bill To dropdown
     fetchTruckersList();         // ADD: load truckers for Carrier Name dropdown
     fetchLoads();                // ADD: load loads for load reference dropdown
     fetchAllEmployees();          // Fetch employees for Created By filter
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch orders when page or company filter changes
+  // Reset to page 1 when active search term or company filter changes
   useEffect(() => {
+    if (activeSearchTerm || selectedCompany) {
+      console.log('Resetting to page 1 due to search/filter change:', { activeSearchTerm, selectedCompany });
+      if (currentPage !== 1) {
+        dispatch(setCurrentPage(1));
+      }
+    }
+  }, [activeSearchTerm, selectedCompany, dispatch, currentPage]);
+
+  // Fetch orders when page, company filter, or active search term changes
+  useEffect(() => {
+    const parsed = parseSearchTerm(activeSearchTerm);
+    console.log('Fetch orders triggered:', { 
+      currentPage, 
+      selectedCompany, 
+      activeSearchTerm,
+      parsed,
+      willCallAPI: true
+    });
     fetchOrders();
-  }, [currentPage, selectedCompany, dispatch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, selectedCompany, activeSearchTerm]);
 
   // Show error messages
   useEffect(() => {
@@ -1870,35 +1949,47 @@ export default function DOReport() {
   // Total orders excluding Shyam Singh/1234 (for display count)
   const totalOrdersExcludingShyam = orders.filter(excludeShyamSinghOrders);
 
-  // Filter orders based on search term, date range, and created by
+  // Filter orders based on date range and created by
+  // Note: loadNumber and carrierName are now handled by API search, so we don't filter them client-side
   const filteredOrders = orders.filter(order => {
     // Exclude orders created by Shyam Singh or empId 1234
     if (!excludeShyamSinghOrders(order)) {
       return false;
     }
 
-    const text = searchTerm.toLowerCase();
-    const loadNumber = getLoadNumberForSearch(order);
+    // Only apply client-side filtering for fields not supported by API search
+    // API handles: loadNumber, carrierName
+    // Client-side handles: other fields, date range, created by, company
+    const text = activeSearchTerm.toLowerCase();
+    const { loadNumber: searchLoadNumber, carrierName: searchCarrierName } = parseSearchTerm(activeSearchTerm);
     
-    // Get searchable fields
-    const workOrderNo = (order.customers?.[0]?.workOrderNo || '').toLowerCase();
-    const shipmentNo = (order.shipper?.shipmentNo || '').toLowerCase();
-    const containerNo = (order.shipper?.containerNo || '').toLowerCase();
-    const carrierName = (order.carrierName || '').toLowerCase();
-    
-    const matchesText =
-      (order.id?.toLowerCase() || '').includes(text) ||
-      (order.clientName?.toLowerCase() || '').includes(text) ||
-      (order.pickupLocation?.toLowerCase() || '').includes(text) ||
-      (order.deliveryLocation?.toLowerCase() || '').includes(text) ||
-      loadNumber.includes(text) ||
-      workOrderNo.includes(text) ||
-      shipmentNo.includes(text) ||
-      containerNo.includes(text) ||
-      carrierName.includes(text);
+    // If search term is for loadNumber or carrierName, skip client-side text matching
+    // (API already filtered these)
+    let matchesText = true;
+    if (text && !searchLoadNumber && !searchCarrierName) {
+      // Only do client-side text search if it's not a loadNumber or carrierName search
+      const loadNumber = getLoadNumberForSearch(order);
+      const workOrderNo = (order.customers?.[0]?.workOrderNo || '').toLowerCase();
+      const shipmentNo = (order.shipper?.shipmentNo || '').toLowerCase();
+      const containerNo = (order.shipper?.containerNo || '').toLowerCase();
+      
+      matchesText =
+        (order.id?.toLowerCase() || '').includes(text) ||
+        (order.clientName?.toLowerCase() || '').includes(text) ||
+        (order.pickupLocation?.toLowerCase() || '').includes(text) ||
+        (order.deliveryLocation?.toLowerCase() || '').includes(text) ||
+        loadNumber.includes(text) ||
+        workOrderNo.includes(text) ||
+        shipmentNo.includes(text) ||
+        containerNo.includes(text);
+    }
 
+    // When doing API search by loadNumber or carrierName, skip date range filtering
+    // (API search should return exact matches regardless of date)
     const created = order.createdAt || ''; // e.g., "2025-08-27"
-    const inRange = created >= ymd(range.startDate) && created <= ymd(range.endDate);
+    const inRange = (searchLoadNumber || searchCarrierName) 
+      ? true  // Skip date filter for API searches
+      : (created >= ymd(range.startDate) && created <= ymd(range.endDate));
 
     // Filter by Created By (match by empId)
     const matchesCreatedBy = !selectedCreatedBy || 
@@ -1916,7 +2007,20 @@ export default function DOReport() {
 
   // Pagination calculations (server-side pagination - no client-side slicing needed)
   const totalPages = pagination.totalPages || 1;
+  const totalItems = pagination.totalItems || 0;
   const currentOrders = filteredOrders; // Already filtered by server, just apply client-side search/filter
+
+  // Debug pagination info
+  useEffect(() => {
+    console.log('DO Report Pagination State:', {
+      currentPage: pagination.currentPage,
+      totalPages: pagination.totalPages,
+      totalItems: pagination.totalItems,
+      itemsPerPage: pagination.itemsPerPage,
+      filteredOrdersCount: filteredOrders.length,
+      willShowPagination: totalPages > 1 && filteredOrders.length > 0
+    });
+  }, [pagination, filteredOrders.length, totalPages]);
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -2025,12 +2129,12 @@ export default function DOReport() {
     return pages;
   };
 
-  // Reset to first page when search term or filters change (client-side filters only)
+  // Reset to first page when active search term or filters change (client-side filters only)
   useEffect(() => {
-    if (searchTerm || range || selectedCreatedBy) {
+    if (activeSearchTerm || range || selectedCreatedBy) {
       dispatch(setCurrentPage(1));
     }
-  }, [searchTerm, range, selectedCreatedBy, dispatch]);
+  }, [activeSearchTerm, range, selectedCreatedBy, dispatch]);
 
   // Get unique Created By values from orders (Name + empId format)
   const uniqueCreatedBy = React.useMemo(() => {
@@ -5432,7 +5536,7 @@ const handleUpdateOrder = async (e) => {
               </div>
               <div>
                 <p className="text-green-100 text-xs md:text-sm font-medium mb-1">Total Delivery Orders</p>
-                <p className="text-2xl md:text-4xl font-bold text-white drop-shadow-lg">{totalOrdersExcludingShyam.length}</p>
+                <p className="text-2xl md:text-4xl font-bold text-white drop-shadow-lg">{pagination.totalItems || 0}</p>
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-2 text-green-100">
@@ -5447,16 +5551,45 @@ const handleUpdateOrder = async (e) => {
           <div className="flex flex-col lg:flex-row gap-3 md:gap-4 items-start lg:items-center">
             {/* Left Side - Search and Filters */}
             <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1 w-full">
-              {/* Search Input */}
-              <div className="relative flex-1 min-w-[200px] md:min-w-[250px] w-full md:w-auto">
-                <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search orders..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 md:pl-12 pr-3 md:pr-4 py-2 md:py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-gray-50 focus:bg-white text-gray-700 placeholder-gray-400 text-sm md:text-base"
-                />
+              {/* Search Input with Button */}
+              <div className="relative flex-1 min-w-[200px] md:min-w-[300px] w-full md:w-auto flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Search orders... (e.g., L0551 or Carrier Name)"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyPress={handleSearchKeyPress}
+                    className="w-full pl-10 md:pl-12 pr-10 md:pr-12 py-2 md:py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-gray-50 focus:bg-white text-gray-700 placeholder-gray-400 text-sm md:text-base"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={handleClearSearch}
+                      className="absolute right-3 md:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                      type="button"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={handleSearch}
+                  disabled={loading}
+                  className="px-4 md:px-6 py-2 md:py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm md:text-base"
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span className="hidden sm:inline">Searching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search size={18} />
+                      <span className="hidden sm:inline">Search</span>
+                    </>
+                  )}
+                </button>
               </div>
 
               {/* Date Range */}
@@ -5814,10 +5947,10 @@ const handleUpdateOrder = async (e) => {
             <div className="text-center py-12">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
-                {searchTerm ? 'No orders found matching your search' : 'No delivery orders found'}
+                {activeSearchTerm ? 'No orders found matching your search' : 'No delivery orders found'}
               </p>
               <p className="text-gray-400 text-sm">
-                {searchTerm ? 'Try adjusting your search terms' : 'Create your first delivery order to get started'}
+                {activeSearchTerm ? `Try adjusting your search terms. Searched for: "${activeSearchTerm}"` : 'Create your first delivery order to get started'}
               </p>
             </div>
           )}
@@ -5840,7 +5973,7 @@ const handleUpdateOrder = async (e) => {
       {totalPages > 1 && filteredOrders.length > 0 && (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 mt-4 md:mt-6 bg-white rounded-2xl shadow-xl p-3 md:p-4 border border-gray-100">
           <div className="text-xs md:text-sm text-gray-600 whitespace-nowrap">
-            Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalItems} total orders)
+            Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalItems || filteredOrders.length} total orders)
             {searchTerm && <span className="block sm:inline sm:ml-1">({filteredOrders.length} filtered)</span>}
           </div>
           <div className="flex gap-1 md:gap-2 items-center flex-wrap w-full sm:w-auto justify-center sm:justify-end">
