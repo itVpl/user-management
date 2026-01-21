@@ -420,10 +420,18 @@ export default function DeliveryOrder() {
       setLoadingTruckers(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`,
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers/all`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
-      const list = (res.data?.data || []).filter(x => x.userType === 'trucker' && x.status === 'approved');
+      // API returns { success: true, truckers: [{ carrierId, name }] }
+      const truckersData = res.data?.truckers || [];
+      // Map API response to match component expectations
+      const list = truckersData.map(t => ({
+        _id: t.carrierId,
+        carrierId: t.carrierId,
+        compName: t.name,
+        name: t.name
+      }));
       list.sort((a, b) => (a.compName || '').localeCompare(b.compName || ''));
       setTruckers(list);
     } catch (err) {
@@ -2085,7 +2093,7 @@ export default function DeliveryOrder() {
       let carrierId = formData.carrierId || '';
       if (!carrierId && formData.carrierName) {
         const foundCarrier = truckers.find(t => t.compName === formData.carrierName);
-        carrierId = foundCarrier?._id || '';
+        carrierId = foundCarrier?.carrierId || foundCarrier?._id || '';
       }
 
       // Helper function to convert datetime-local to ISO string
@@ -6015,7 +6023,7 @@ const handleUpdateOrder = async (e) => {
                         setFormData(prev => ({ 
                           ...prev, 
                           carrierName: value,
-                          carrierId: selectedCarrier?._id || ''
+                          carrierId: selectedCarrier?.carrierId || selectedCarrier?._id || ''
                         }));
                       }}
                       options={truckers.map(t => ({ 
