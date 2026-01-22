@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Search, BarChart3, ChevronDown } from 'lucide-react';
@@ -31,10 +31,14 @@ export default function TruckerReport() {
   const [selectedTrucker, setSelectedTrucker] = useState(null);
   const [reason, setReason] = useState('');
   const [selectedDocument, setSelectedDocument] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(''); // Input value (what user types)
+  const [activeSearchTerm, setActiveSearchTerm] = useState(''); // Active search term (what's actually being searched)
   const [searchFilter, setSearchFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [createdByFilter, setCreatedByFilter] = useState('');
+  // Created By filters - using API parameters
+  const [createdByEmpId, setCreatedByEmpId] = useState('');
+  const [createdByEmployeeName, setCreatedByEmployeeName] = useState('');
+  const [createdByDepartment, setCreatedByDepartment] = useState('');
   const [createdBySearch, setCreatedBySearch] = useState('');
   const [isCreatedByDropdownOpen, setIsCreatedByDropdownOpen] = useState(false);
   const [cmtUsers, setCmtUsers] = useState([]);
@@ -47,14 +51,84 @@ export default function TruckerReport() {
   const itemsPerPage = pagination.itemsPerPage || 15;
 
   useEffect(() => {
-    dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: false }));
     fetchCmtUsers();
   }, []);
 
-  // Fetch truckers when page changes
+  // Build search parameters for API
+  const buildSearchParams = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      forceRefresh: false
+    };
+
+    // Handle search term based on searchFilter (use activeSearchTerm instead of searchTerm)
+    const searchTermTrimmed = activeSearchTerm.trim();
+    
+    if (searchTermTrimmed) {
+      // Map searchFilter to API parameters
+      if (searchFilter === 'mc_dot') {
+        // Use individual field filter for MC/DOT
+        params.mcDotNo = searchTermTrimmed;
+      } else if (searchFilter === 'all') {
+        // Use general search (searches across multiple fields)
+        params.search = searchTermTrimmed;
+      } else {
+        // For 'state' and 'city', use general search (API doesn't have specific filters for these)
+        // We'll do client-side filtering for state/city after fetching
+        params.search = searchTermTrimmed;
+      }
+    }
+
+    // Status filter
+    if (statusFilter && statusFilter !== 'all') {
+      params.status = statusFilter;
+    }
+
+    // Date range filters
+    if (dateRange.startDate) {
+      params.createdFrom = dateRange.startDate instanceof Date 
+        ? dateRange.startDate.toISOString().split('T')[0]
+        : dateRange.startDate;
+    }
+    if (dateRange.endDate) {
+      params.createdTo = dateRange.endDate instanceof Date 
+        ? dateRange.endDate.toISOString().split('T')[0]
+        : dateRange.endDate;
+    }
+
+    // Created By filters
+    if (createdByEmpId && createdByEmpId.trim()) {
+      params.createdByEmpId = createdByEmpId.trim();
+    }
+    if (createdByEmployeeName && createdByEmployeeName.trim()) {
+      params.createdByEmployeeName = createdByEmployeeName.trim();
+    }
+    if (createdByDepartment && createdByDepartment.trim()) {
+      params.createdByDepartment = createdByDepartment.trim();
+    }
+
+    return params;
+  }, [currentPage, itemsPerPage, activeSearchTerm, searchFilter, statusFilter, dateRange.startDate, dateRange.endDate, createdByEmpId, createdByEmployeeName, createdByDepartment]);
+
+  // Handle search button click
+  const handleSearch = () => {
+    setActiveSearchTerm(searchTerm);
+    dispatch(setCurrentPage(1)); // Reset to first page when searching
+  };
+
+  // Handle Enter key press in search input
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  // Fetch truckers when filters or page changes
   useEffect(() => {
-    dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: false }));
-  }, [dispatch, currentPage]);
+    const searchParams = buildSearchParams();
+    dispatch(fetchTruckers(searchParams));
+  }, [dispatch, buildSearchParams]);
 
   // Show error messages
   useEffect(() => {
@@ -92,12 +166,12 @@ export default function TruckerReport() {
     return users;
   }, [cmtUsers, createdBySearch]);
 
-  // Reset to first page when search term, filter, or status filter changes (client-side filters only)
+  // Reset to first page when filters change (but not when searchTerm changes - only when activeSearchTerm changes)
   useEffect(() => {
-    if (searchTerm || searchFilter !== 'all' || statusFilter !== 'all' || dateRange.startDate || createdByFilter) {
+    if (activeSearchTerm || searchFilter !== 'all' || statusFilter !== 'all' || dateRange.startDate || createdByEmpId || createdByEmployeeName || createdByDepartment) {
       dispatch(setCurrentPage(1));
     }
-  }, [searchTerm, searchFilter, statusFilter, dateRange, createdByFilter, dispatch]);
+  }, [activeSearchTerm, searchFilter, statusFilter, dateRange.startDate, dateRange.endDate, createdByEmpId, createdByEmployeeName, createdByDepartment, dispatch]);
 
   const handleStatusUpdate = async (status) => {
     try {
@@ -127,8 +201,10 @@ export default function TruckerReport() {
       setReason('');
       setSelectedTrucker(null);
       setViewDoc(false);
-      // Refresh current page data
-      dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: true }));
+      // Refresh current page data with current filters
+      const searchParams = buildSearchParams();
+      searchParams.forceRefresh = true;
+      dispatch(fetchTruckers(searchParams));
     } catch (err) {
       console.error('Status update failed:', err);
       alertify.error(`❌ Error: ${err.response?.data?.message || err.message}`);
@@ -204,74 +280,34 @@ export default function TruckerReport() {
     document.body.removeChild(link);
   };
 
-  // -------- FILTER + SORT (memoized) --------
+  // -------- CLIENT-SIDE FILTERING (only for fields not supported by API) --------
+  // Note: Most filtering is done server-side. This only handles:
+  // State/City search when searchFilter is 'state' or 'city' (API search doesn't include these fields)
   const filteredTruckers = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    let result = [...(truckers || [])];
+    const term = activeSearchTerm.trim().toLowerCase();
 
-    return (truckers || [])
-      .filter(trucker => {
-        // Status filter
-        if (statusFilter !== 'all') {
-          if (statusFilter === 'approved' && !(trucker.status === 'approved' || trucker.status === 'accountant_approved')) return false;
-          if (statusFilter === 'rejected' && trucker.status !== 'rejected') return false;
-          if (statusFilter === 'pending'  && trucker.status !== 'pending')  return false;
-        }
-
-        // Date range filter
-        if (dateRange.startDate && dateRange.endDate) {
-          const truckerDate = new Date(trucker.createdAt);
-          truckerDate.setHours(0, 0, 0, 0);
-          
-          const start = new Date(dateRange.startDate);
-          start.setHours(0, 0, 0, 0);
-          
-          const end = new Date(dateRange.endDate);
-          end.setHours(23, 59, 59, 999);
-
-          if (truckerDate < start || truckerDate > end) return false;
-        }
-
-        // Created By filter
-        if (createdByFilter) {
-          const addedBy = trucker.addedBy;
-          // Check against empId or _id, handling cases where addedBy might be just an ID string or an object
-          const creatorId = typeof addedBy === 'object' ? (addedBy?.empId || addedBy?._id) : addedBy;
-          if (creatorId !== createdByFilter) return false;
-        }
-
-        // Search filter
-        if (!term) return true;
-
-        const comp = trucker.compName?.toLowerCase() || '';
-        const email = trucker.email?.toLowerCase() || '';
-        const mcDot = trucker.mc_dot_no?.toLowerCase() || '';
+    // State/City search (client-side only - API search doesn't include these fields)
+    if (term && (searchFilter === 'state' || searchFilter === 'city')) {
+      result = result.filter(trucker => {
         const state = trucker.state?.toLowerCase() || '';
-        const city  = trucker.city?.toLowerCase() || '';
-
-        switch (searchFilter) {
-          case 'mc_dot':
-            return mcDot.includes(term);
-          case 'state':
-            return state.startsWith(term) || state === term;
-          case 'city':
-            return city.includes(term);
-          case 'all':
-          default:
-            return (
-              comp.includes(term) ||
-              email.includes(term) ||
-              mcDot.includes(term) ||
-              state.includes(term) ||
-              city.includes(term)
-            );
+        const city = trucker.city?.toLowerCase() || '';
+        
+        if (searchFilter === 'state') {
+          return state.startsWith(term) || state === term;
+        } else if (searchFilter === 'city') {
+          return city.includes(term);
         }
-      })
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [truckers, statusFilter, searchFilter, searchTerm, dateRange, createdByFilter]);
+        return true;
+      });
+    }
 
-  // -------- PAGINATION (server-side pagination - client-side filtering on current page) --------
+    return result;
+  }, [truckers, activeSearchTerm, searchFilter]);
+
+  // -------- PAGINATION (server-side pagination with server-side filtering) --------
   const totalPages = pagination.totalPages || 1;
-  const currentTruckers = filteredTruckers; // Already filtered by server, just apply client-side search/filter
+  const currentTruckers = filteredTruckers; // Server-side filtered, with optional client-side filters applied
 
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -386,8 +422,12 @@ export default function TruckerReport() {
               className="flex items-center justify-between px-4 py-2 border border-gray-200 rounded-lg bg-white w-48 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
             >
               <span className="truncate text-md text-gray-700">
-                {createdByFilter 
-                  ? cmtUsers.find(u => (u.empId || u._id) === createdByFilter)?.employeeName 
+                {createdByEmpId 
+                  ? cmtUsers.find(u => (u.empId || u._id) === createdByEmpId)?.employeeName 
+                  : createdByEmployeeName
+                  ? createdByEmployeeName
+                  : createdByDepartment
+                  ? `Dept: ${createdByDepartment}`
                   : 'Created By'}
               </span>
               <ChevronDown 
@@ -423,11 +463,13 @@ export default function TruckerReport() {
 
                 <div
                   onClick={() => {
-                    setCreatedByFilter('');
+                    setCreatedByEmpId('');
+                    setCreatedByEmployeeName('');
+                    setCreatedByDepartment('');
                     setCreatedBySearch('');
                     setIsCreatedByDropdownOpen(false);
                   }}
-                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 transition-colors ${!createdByFilter ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 transition-colors ${!createdByEmpId && !createdByEmployeeName && !createdByDepartment ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
                 >
                   Created All
                 </div>
@@ -435,11 +477,13 @@ export default function TruckerReport() {
                   <div
                     key={user._id || user.empId}
                     onClick={() => {
-                      setCreatedByFilter(user.empId || user._id);
+                      setCreatedByEmpId(user.empId || user._id);
+                      setCreatedByEmployeeName(''); // Clear name filter when selecting by ID
+                      setCreatedByDepartment(''); // Clear department filter when selecting by ID
                       setCreatedBySearch('');
                       setIsCreatedByDropdownOpen(false);
                     }}
-                    className={`px-4 py-2 text-md cursor-pointer hover:bg-blue-50 transition-colors ${createdByFilter === (user.empId || user._id) ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                    className={`px-4 py-2 text-md cursor-pointer hover:bg-blue-50 transition-colors ${createdByEmpId === (user.empId || user._id) ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
                   >
                     {user.employeeName}
                   </div>
@@ -464,15 +508,26 @@ export default function TruckerReport() {
               <option value="city">City</option>
             </select>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder={`Search by ${searchFilter === 'all' ? 'all fields' : searchFilter === 'mc_dot' ? 'MC/DOT No' : searchFilter}...`}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+          <div className="relative flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder={`Search by ${searchFilter === 'all' ? 'all fields' : searchFilter === 'mc_dot' ? 'MC/DOT No' : searchFilter}...`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              onClick={handleSearch}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm"
+              title="Search"
+            >
+              <Search size={16} />
+              Search
+            </button>
           </div>
           <button
             onClick={handleExportCSV}
