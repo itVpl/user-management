@@ -338,15 +338,22 @@ const NotificationHandler = () => {
       }
     }
 
-    // Prevent duplicate browser notifications (browser API handles this with tag, but we check too)
-    if (notificationIdsRef.current.has(notificationData.messageId)) {
+    // CRITICAL: Prevent duplicate browser notifications
+    // Use messageId as primary key, fallback to composite key if messageId not available
+    const notificationKey = notificationData.messageId || 
+                           `${notificationData.from || 'unknown'}-${notificationData.timestamp || Date.now()}`;
+    
+    if (notificationIdsRef.current.has(notificationKey)) {
+      console.log('⚠️ Browser notification already shown for:', notificationKey);
       return;
     }
-    notificationIdsRef.current.add(notificationData.messageId);
+    
+    // Mark as shown
+    notificationIdsRef.current.add(notificationKey);
 
     // Clean up old notification IDs after 1 minute
     setTimeout(() => {
-      notificationIdsRef.current.delete(notificationData.messageId);
+      notificationIdsRef.current.delete(notificationKey);
     }, 60000);
 
     const bodyText = getNotificationBody(notificationData);
@@ -367,11 +374,15 @@ const NotificationHandler = () => {
     }
 
     try {
+      // Use messageId as tag for browser deduplication, fallback to composite key
+      const notificationTag = notificationData.messageId || 
+                             `notification-${notificationData.from || 'unknown'}-${notificationData.timestamp || Date.now()}`;
+      
       const notification = new Notification(title, {
         body: bodyText,
         icon: '/LogoFinal.png', // Your app icon
         badge: '/LogoFinal.png', // Badge icon
-        tag: notificationData.messageId, // Prevent duplicates
+        tag: notificationTag, // CRITICAL: Browser uses tag to prevent duplicate notifications
         data: notificationData, // Store notification data
         requireInteraction: false, // Auto-close after a few seconds
         silent: false, // Play sound
@@ -449,6 +460,8 @@ const NotificationHandler = () => {
   const handlerRef = useRef(null);
   const bidSubmittedHandlerRef = useRef(null);
   const listenerSetupRef = useRef(false);
+  const notificationProcessedRef = useRef(new Set()); // Track processed notifications to prevent duplicates
+  const connectionCallbackRef = useRef(null); // Store connection callback to prevent multiple registrations
 
   useEffect(() => {
     // Create handler function - always use latest callbacks
@@ -471,6 +484,21 @@ const NotificationHandler = () => {
         console.warn('⚠️ Invalid notification data received:', notificationData);
         return;
       }
+
+      // CRITICAL: Prevent duplicate processing - check if we've already processed this notification
+      const notificationKey = notificationData.messageId || `${notificationData.from}-${notificationData.timestamp || Date.now()}`;
+      if (notificationProcessedRef.current.has(notificationKey)) {
+        console.log('⚠️ Duplicate notification detected, ignoring:', notificationKey);
+        return;
+      }
+      
+      // Mark as processed
+      notificationProcessedRef.current.add(notificationKey);
+      
+      // Clean up old notification keys after 1 minute to prevent memory leak
+      setTimeout(() => {
+        notificationProcessedRef.current.delete(notificationKey);
+      }, 60000);
 
       // Show browser notification (uses latest callback)
       showBrowserNotification(notificationData);
@@ -529,9 +557,13 @@ const NotificationHandler = () => {
         return null;
       }
 
-      // Prevent duplicate listener setup
-      if (listenerSetupRef.current) {
-        console.log('⚠️ Listener already set up, skipping duplicate setup...');
+      // CRITICAL: Check if listener is already set up for this socket instance
+      // Use a unique identifier to track listener setup per socket instance
+      const socketId = currentSocket.id;
+      const listenerKey = `notification-listener-${socketId}`;
+      
+      if (listenerSetupRef.current === listenerKey) {
+        console.log('⚠️ Listener already set up for this socket instance, skipping duplicate setup...');
         return null;
       }
 
@@ -540,11 +572,15 @@ const NotificationHandler = () => {
       console.log('📍 Socket ID:', currentSocket.id);
       console.log('📍 Current page:', location.pathname);
 
-      // Remove any existing listener first to prevent duplicates
-      currentSocket.off('notification', handlerRef.current);
+      // CRITICAL: Remove ALL existing listeners for 'notification' event first
+      // This ensures we don't have multiple listeners registered
+      currentSocket.removeAllListeners('notification');
       
       // Add the listener using the ref handler
       currentSocket.on('notification', handlerRef.current);
+      
+      // Mark as set up for this socket instance
+      listenerSetupRef.current = listenerKey;
       
       // Add bid-submitted listener for sales person notifications
       // NOTE: Backend emits TWO events: 'bid-submitted' (detailed) and 'notification' (standard)
@@ -664,25 +700,24 @@ const NotificationHandler = () => {
       // Listen for socket reconnect events to re-setup listener
       const handleReconnect = () => {
         console.log('🔄 NotificationHandler: Socket reconnected, re-setting up listener');
-        listenerSetupRef.current = false;
+        listenerSetupRef.current = false; // Reset flag to allow re-setup
         // Get fresh socket instance after reconnect
         const freshSocket = sharedSocketService.getSocket();
         if (freshSocket && freshSocket.connected) {
+          // Remove old listeners before setting up new one
+          freshSocket.removeAllListeners('notification');
           setupListenerWithSocket(freshSocket);
         }
       };
 
       currentSocket.on('reconnect', handleReconnect);
 
-      // REMOVED: Duplicate connection callback - causes multiple listener setups
-      // The reconnect event handler above is sufficient
-
       // Return cleanup function
       return () => {
         console.log('🧹 Cleaning up notification listener');
         listenerSetupRef.current = false;
-        // Removed interval - was causing page freeze
         if (currentSocket) {
+          // Remove specific listeners
           currentSocket.off('notification', handlerRef.current);
           currentSocket.off('bid-submitted', bidSubmittedHandlerRef.current);
           currentSocket.off('reconnect', handleReconnect);
@@ -693,20 +728,27 @@ const NotificationHandler = () => {
     // Start setting up listener
     const cleanup = setupListener();
     
-    // Also register connection callback to ensure listener is set up on reconnect
-    // This ensures listener is re-setup whenever socket connects/reconnects
-    const connectionCallback = (connectedSocket) => {
-      console.log('🔄 NotificationHandler: Socket connected/reconnected via service callback');
-      setSocket(connectedSocket);
-      listenerSetupRef.current = false; // Reset flag to allow re-setup
-      // Re-setup listener with fresh socket
-      const freshSocket = sharedSocketService.getSocket();
-      if (freshSocket && freshSocket.connected) {
-        setupListenerWithSocket(freshSocket);
-      }
-    };
-    
-    sharedSocketService.onConnect(connectionCallback);
+    // Only register connection callback once to prevent multiple registrations
+    if (!connectionCallbackRef.current) {
+      connectionCallbackRef.current = (connectedSocket) => {
+        console.log('🔄 NotificationHandler: Socket connected/reconnected via service callback');
+        setSocket(connectedSocket);
+        listenerSetupRef.current = false; // Reset flag to allow re-setup
+        
+        // Remove all existing listeners before setting up new one
+        if (connectedSocket) {
+          connectedSocket.removeAllListeners('notification');
+        }
+        
+        // Re-setup listener with fresh socket
+        const freshSocket = sharedSocketService.getSocket();
+        if (freshSocket && freshSocket.connected) {
+          setupListenerWithSocket(freshSocket);
+        }
+      };
+      
+      sharedSocketService.onConnect(connectionCallbackRef.current);
+    }
     
     // Return cleanup function
     return () => {
@@ -714,8 +756,11 @@ const NotificationHandler = () => {
       if (cleanup) cleanup();
       const s = sharedSocketService.getSocket();
       if (s && handlerRef.current) {
-        s.off('notification', handlerRef.current);
+        // Remove all notification listeners to ensure complete cleanup
+        s.removeAllListeners('notification');
       }
+      // Note: Don't remove connection callback here as it's shared
+      // The sharedSocketService manages its own cleanup
     };
   }, [socket, showBrowserNotification, showInAppNotification, playNotificationSound, shouldShowNotification, updateUnreadCount, location.pathname]);
 
