@@ -95,10 +95,11 @@ const NotificationHandler = () => {
       console.log('✅ NotificationHandler: Using existing shared socket:', socketInstance.id);
       setSocket(socketInstance);
     } else {
-      // Socket not ready yet - wait for it or initialize
-      console.log('⏳ NotificationHandler: Socket not ready yet, waiting...');
+      // Socket not ready yet - ensure it's initialized
+      console.log('⏳ NotificationHandler: Socket not ready yet, ensuring initialization...');
       
-      // Initialize shared socket service (App.jsx should do this, but ensure it's done)
+      // Ensure socket is initialized (App.jsx should do this, but ensure it's done)
+      // This is safe - initialize() returns existing socket if already initialized
       socketInstance = sharedSocketService.initialize(user.empId);
       
       if (socketInstance) {
@@ -107,20 +108,16 @@ const NotificationHandler = () => {
           console.log('✅ NotificationHandler: Shared socket connected:', socketInstance.id);
           setSocket(socketInstance);
         } else {
-          // Socket connecting - wait for connection via callback (no polling to prevent freeze)
+          // Socket connecting - wait for connection via callback
           console.log('⏳ NotificationHandler: Waiting for socket connection...');
           sharedSocketService.onConnect((connectedSocket) => {
             console.log('✅ NotificationHandler: Socket connected:', connectedSocket.id);
             setSocket(connectedSocket);
           });
         }
+      } else {
+        console.warn('⚠️ NotificationHandler: Failed to initialize socket, will retry in listener setup');
       }
-      
-      // Also listen for connection event
-      sharedSocketService.onConnect((connectedSocket) => {
-        console.log('✅ NotificationHandler: Socket connected via callback:', connectedSocket.id);
-        setSocket(connectedSocket);
-      });
     }
 
     // No cleanup needed - shared socket service manages the connection
@@ -479,26 +476,33 @@ const NotificationHandler = () => {
       console.log('📍 Socket ID:', currentSocket?.id);
       console.log('📍 Socket connected:', currentSocket?.connected);
 
-      // Validate notification data structure
-      if (!notificationData || !notificationData.messageId) {
+      // Validate notification data structure - be lenient, only check if data exists
+      if (!notificationData) {
         console.warn('⚠️ Invalid notification data received:', notificationData);
         return;
       }
 
       // CRITICAL: Prevent duplicate processing - check if we've already processed this notification
-      const notificationKey = notificationData.messageId || `${notificationData.from}-${notificationData.timestamp || Date.now()}`;
+      // Use messageId if available, otherwise create a composite key
+      const notificationKey = notificationData.messageId || 
+                             `${notificationData.from || 'unknown'}-${notificationData.timestamp || Date.now()}-${notificationData.type || 'default'}`;
+      
       if (notificationProcessedRef.current.has(notificationKey)) {
         console.log('⚠️ Duplicate notification detected, ignoring:', notificationKey);
+        console.log('📦 Notification data:', notificationData);
         return;
       }
+      
+      console.log('✅ Processing new notification:', notificationKey);
+      console.log('📦 Full notification data:', notificationData);
       
       // Mark as processed
       notificationProcessedRef.current.add(notificationKey);
       
-      // Clean up old notification keys after 1 minute to prevent memory leak
+      // Clean up old notification keys after 30 seconds to prevent memory leak (reduced from 60s for faster cleanup)
       setTimeout(() => {
         notificationProcessedRef.current.delete(notificationKey);
-      }, 60000);
+      }, 30000);
 
       // Show browser notification (uses latest callback)
       showBrowserNotification(notificationData);
@@ -520,21 +524,50 @@ const NotificationHandler = () => {
       // Try to get socket from service (always get fresh instance)
       let currentSocket = sharedSocketService.getSocket();
       
+      // If socket doesn't exist, try to initialize it first
       if (!currentSocket) {
-        console.warn('⚠️ NotificationHandler: Socket not initialized yet, will retry in 2 seconds...');
-        // Retry after longer delay to prevent rapid retries causing page freeze
-        setTimeout(setupListener, 2000);
-        return null;
+        // Get user empId to initialize socket
+        const userString = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (userString) {
+          try {
+            const user = JSON.parse(userString);
+            if (user?.empId) {
+              console.log('🔄 NotificationHandler: Socket not found, initializing with empId:', user.empId);
+              currentSocket = sharedSocketService.initialize(user.empId);
+              
+              // Give socket a moment to connect (socket.io connections are async)
+              if (currentSocket && !currentSocket.connected) {
+                console.log('⏳ Socket initialized but not connected yet, waiting 500ms...');
+                setTimeout(() => {
+                  setupListener();
+                }, 500);
+                return null;
+              }
+            }
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
+        
+        // If still no socket, wait and retry
+        if (!currentSocket) {
+          console.warn('⚠️ NotificationHandler: Socket not initialized yet, will retry in 2 seconds...');
+          setTimeout(setupListener, 2000);
+          return null;
+        }
       }
 
+      // Wait for socket to connect if not connected yet
       if (!currentSocket.connected) {
         console.warn('⚠️ NotificationHandler: Socket not connected yet, waiting for connection...');
         // Wait for connection using onConnect callback
-        sharedSocketService.onConnect((connectedSocket) => {
+        // Use a one-time callback to avoid duplicate setups
+        const connectionHandler = (connectedSocket) => {
           console.log('✅ NotificationHandler: Socket connected via callback, setting up listener');
           setSocket(connectedSocket);
           setupListenerWithSocket(connectedSocket);
-        });
+        };
+        sharedSocketService.onConnect(connectionHandler);
         return null;
       }
 
@@ -578,6 +611,9 @@ const NotificationHandler = () => {
       
       // Add the listener using the ref handler
       currentSocket.on('notification', handlerRef.current);
+      
+      console.log('✅ Notification listener registered successfully!');
+      console.log('🔍 Testing listener - if you see this, listener is active');
       
       // Mark as set up for this socket instance
       listenerSetupRef.current = listenerKey;
