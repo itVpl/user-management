@@ -3727,14 +3727,16 @@ const ChatPage = () => {
 
       // Show notification if message is for current user and not from current selected user
       // Also show if no chat is currently selected (user is not viewing any chat)
+      // NOTE: Browser notifications are handled globally by NotificationHandler.jsx to prevent duplicates
+      // We only show in-app notifications here for the Chat component UI
       if (isForMe && (!selectedUser || !isFromSelectedUser)) {
         const senderDisplayName = senderName || "Someone";
         
-        // Always show in-app notification
+        // Only show in-app notification (browser notifications handled by NotificationHandler)
         displayInAppNotification(`New Message from ${senderDisplayName}`, notificationMessage, senderDisplayName);
         
-        // Try browser notification (will only show if permission granted)
-        showNotification(`New Message from ${senderDisplayName}`, notificationMessage, senderDisplayName);
+        // REMOVED: Browser notification - handled globally by NotificationHandler.jsx
+        // showNotification(`New Message from ${senderDisplayName}`, notificationMessage, senderDisplayName);
       }
 
       // Update last message time for sorting
@@ -3901,15 +3903,17 @@ const ChatPage = () => {
 
       // Show notification if message is not from me and (not for selected group OR no group is selected)
       // This ensures notifications show even when user is not viewing the group or viewing a different group
+      // NOTE: Browser notifications are handled globally by NotificationHandler.jsx to prevent duplicates
+      // We only show in-app notifications here for the Chat component UI
       if (!isFromMe && (!selectedGroup || !isForSelectedGroup)) {
         const senderDisplayName = senderName || "Someone";
         const groupDisplayName = groupName || "Group";
         
-        // Always show in-app notification
+        // Only show in-app notification (browser notifications handled by NotificationHandler)
         displayInAppNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
         
-        // Try browser notification (will only show if permission granted)
-        showNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
+        // REMOVED: Browser notification - handled globally by NotificationHandler.jsx
+        // showNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
       }
       
       // If message is for selected group, add it immediately to state
