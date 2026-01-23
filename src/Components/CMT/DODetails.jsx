@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { FaBox, FaSearch, FaFilePdf, FaEye, FaTimes, FaTrash, FaUpload } from 'react-icons/fa';
 import { FaDownload } from 'react-icons/fa';
-import { Search, FileText, CheckCircle, XCircle, Clock, RefreshCw, Truck, Package, DollarSign, Calendar, User } from 'lucide-react';
+import { Search, FileText, CheckCircle, XCircle, Clock, RefreshCw, Truck, Package, DollarSign, Calendar, User, Mail } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -258,6 +258,12 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     deliveryDate: getDateValue(apiImportantDates.dlvyDate)
   });
   const [updatingDates, setUpdatingDates] = useState(false);
+
+  // Send Email to Shipper state
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailText, setEmailText] = useState('');
+  const [emailAttachments, setEmailAttachments] = useState([]); // File[]
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   // Initialize important dates only when modal opens (not on order changes)
   useEffect(() => {
@@ -1751,6 +1757,109 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
     }
   };
 
+  /* ---------------- Send Email to Shipper ---------------- */
+  const sendEmailToShipper = async () => {
+    try {
+      // Get loadId from loadReference
+      const loadId = loadRef._id || loadRef.loadId || loadRef.id;
+
+      if (!loadId) {
+        return alertify.error('Missing Load ID. Please ensure load reference is available.');
+      }
+
+      if (!cmtEmpId) return alertify.error('Missing CMT EmpId');
+
+      // Validate required fields
+      if (!emailSubject || emailSubject.trim() === '') {
+        return alertify.error('Email subject is required');
+      }
+
+      if (!emailText || emailText.trim() === '') {
+        return alertify.error('Email content (text) is required');
+      }
+
+      // Validate attachments (max 5 files, 10MB each)
+      if (emailAttachments.length > 5) {
+        return alertify.error('Maximum 5 attachments allowed');
+      }
+
+      for (const file of emailAttachments) {
+        if (file.size > 10 * 1024 * 1024) {
+          return alertify.error(`${file.name}: exceeds 10MB limit`);
+        }
+      }
+
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) return alertify.error('Authentication required');
+
+      setSendingEmail(true);
+
+      const url = `${API_CONFIG.BASE_URL}/api/v1/load/cmt/load/${encodeURIComponent(loadId)}/send-email`;
+
+      // Create FormData for multipart/form-data
+      const formData = new FormData();
+      formData.append('subject', emailSubject.trim());
+      formData.append('text', emailText.trim()); // Plain text - HTML will be auto-generated on backend
+
+      // Add attachments (field name must be 'attachments')
+      emailAttachments.forEach(file => {
+        formData.append('attachments', file);
+      });
+
+      const response = await axios.post(url, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (response?.data?.success) {
+        alertify.success(response?.data?.message || 'Email sent successfully to shipper');
+        
+        // Reset form
+        setEmailSubject('');
+        setEmailText('');
+        setEmailAttachments([]);
+      } else {
+        alertify.error(response?.data?.message || 'Failed to send email');
+      }
+    } catch (e) {
+      console.error('Send email error:', e);
+      const errorMsg = e?.response?.data?.message || e.message || 'Failed to send email';
+      alertify.error(errorMsg);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const handleEmailAttachmentChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = [];
+    
+    for (const file of files) {
+      // Check file size (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        alertify.error(`${file.name}: exceeds 10MB limit`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    // Check total count (max 5)
+    if (emailAttachments.length + validFiles.length > 5) {
+      alertify.error('Maximum 5 attachments allowed');
+      e.target.value = '';
+      return;
+    }
+
+    setEmailAttachments(prev => [...prev, ...validFiles]);
+    e.target.value = '';
+  };
+
+  const removeEmailAttachment = (index) => {
+    setEmailAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   /* ---------------- Additional Docs: UPLOAD ---------------- */
   const MAX_SIZE_MB = 10;
   const allowed = [
@@ -2983,6 +3092,142 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                     <>
                       <FileText size={18} className="inline mr-2" />
                       Forward to Accountant
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Send Email to Shipper */}
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Mail className="text-green-600" size={20} />
+              <h3 className="text-lg font-bold text-gray-800">Send Email to Shipper</h3>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-green-200">
+              {/* Subject */}
+              <div className="mb-4">
+                <label className="text-sm text-gray-600 mb-2 block">
+                  Email Subject <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="Enter email subject"
+                  className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={sendingEmail}
+                />
+              </div>
+
+              {/* Text Content */}
+              <div className="mb-4">
+                <label className="text-sm text-gray-600 mb-2 block">
+                  Email Content <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={emailText}
+                  onChange={(e) => setEmailText(e.target.value)}
+                  rows={8}
+                  placeholder="Enter your email message here...
+
+Line breaks will be preserved and converted to HTML automatically.
+
+The email will be formatted with professional styling and company branding on the backend."
+                  className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                  disabled={sendingEmail}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Plain text content is required. HTML email template with company branding, logo, and professional styling will be automatically generated on the backend.
+                </p>
+              </div>
+
+              {/* Attachments */}
+              <div className="mb-4">
+                <label className="text-sm text-gray-600 mb-2 block">
+                  Attachments <span className="text-gray-400 text-xs">(optional, max 5 files, 10MB each)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <label
+                    className={`px-4 py-2 rounded-lg cursor-pointer transition-all ${
+                      sendingEmail || emailAttachments.length >= 5
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-green-500 text-white hover:bg-green-600'
+                    }`}
+                  >
+                    <FaUpload className="inline mr-2" />
+                    Select Files
+                    <input
+                      type="file"
+                      multiple
+                      onChange={handleEmailAttachmentChange}
+                      disabled={sendingEmail || emailAttachments.length >= 5}
+                      className="hidden"
+                    />
+                  </label>
+                  <span className="text-xs text-gray-500">
+                    {emailAttachments.length}/5 files selected
+                  </span>
+                </div>
+
+                {/* Display selected attachments */}
+                {emailAttachments.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {emailAttachments.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg border"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileText size={16} className="text-gray-500" />
+                          <span className="text-sm text-gray-700">{file.name}</span>
+                          <span className="text-xs text-gray-500">
+                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeEmailAttachment(index)}
+                          disabled={sendingEmail}
+                          className="text-red-500 hover:text-red-700 disabled:opacity-50"
+                          title="Remove attachment"
+                        >
+                          <FaTimes size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Send Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={sendEmailToShipper}
+                  disabled={sendingEmail || !emailSubject.trim() || !emailText.trim()}
+                  className={`px-6 py-3 rounded-lg transition-all font-semibold flex items-center gap-2 ${
+                    sendingEmail || !emailSubject.trim() || !emailText.trim()
+                      ? 'bg-gray-400 text-white cursor-not-allowed opacity-60'
+                      : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
+                  }`}
+                  title={
+                    !emailSubject.trim()
+                      ? 'Subject is required'
+                      : !emailText.trim()
+                        ? 'Email content is required'
+                        : 'Send email to shipper'
+                  }
+                >
+                  {sendingEmail ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail size={18} />
+                      Send Email to Shipper
                     </>
                   )}
                 </button>
