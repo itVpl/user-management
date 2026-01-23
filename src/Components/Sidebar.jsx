@@ -118,7 +118,11 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Call Data",
       "Call Records (Id)",
       "Report Analysis",
-      "Emp Login Report"
+      "Emp Login Report",
+      "Break Report",
+      "Receivable Report",
+      "Payable Report",
+      "Rate Request Report"
     ],
     "Follow-ups": [
       "Daily Follow-Up",
