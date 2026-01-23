@@ -573,10 +573,8 @@ const Sidebar = () => {
               const deptMenus = menuItems.filter(item => 
                 allDeptModuleNames.includes(item.name)
               );
-              // Separate reports from other menus
-              const reports = menuItems.filter(item => 
-                REPORT_NAMES.includes(item.name)
-              );
+              // For fallback case, we don't have matchedMenus, so we can't filter reports by permissions
+              // Only show basic menus in this case
               const otherMenus = menuItems.filter(item => 
                 !allDeptModuleNames.includes(item.name) && 
                 !REPORT_NAMES.includes(item.name) &&
@@ -595,21 +593,17 @@ const Sidebar = () => {
               
               setDepartmentMenuItems(deptMenus);
               setDepartmentCategories(categorized);
-              setReportMenuItems(reports);
+              setReportMenuItems([]); // Don't show reports in fallback case without proper permissions
               setFilteredMenuItems(otherMenus);
             } else {
               console.warn("⚠️ No modules matched, showing basic menus");
               const basicMenus = menuItems.filter(item => 
                 ['Dashboard', 'Tracking'].includes(item.name)
               );
-              // Still try to get reports even if no modules matched
-              const reports = menuItems.filter(item => 
-                REPORT_NAMES.includes(item.name)
-              );
               setFilteredMenuItems(basicMenus);
               setDepartmentMenuItems([]);
               setDepartmentCategories({});
-              setReportMenuItems(reports);
+              setReportMenuItems([]); // Don't show reports if no modules matched
             }
           } else {
             // For users with department categories, separate department modules and categorize them
@@ -621,24 +615,10 @@ const Sidebar = () => {
               const deptMenus = matchedMenus.filter(item => 
                 allDeptModuleNames.includes(item.name)
               );
-              // Separate reports from other menus
-              // Get reports from matchedMenus first, then add any missing ones from menuItems
-              const reportsFromMatched = matchedMenus.filter(item => 
+              // Separate reports from other menus - only include reports that user has permission for
+              const reports = matchedMenus.filter(item => 
                 REPORT_NAMES.includes(item.name)
               );
-              // Also get reports from all menuItems as fallback (in case user has access but they weren't matched)
-              const allReports = menuItems.filter(item => 
-                REPORT_NAMES.includes(item.name)
-              );
-              // Combine and deduplicate by path
-              const reportsMap = new Map();
-              reportsFromMatched.forEach(item => reportsMap.set(item.path, item));
-              allReports.forEach(item => {
-                if (!reportsMap.has(item.path)) {
-                  reportsMap.set(item.path, item);
-                }
-              });
-              const reports = Array.from(reportsMap.values());
               
               const otherMenus = matchedMenus.filter(item => 
                 !allDeptModuleNames.includes(item.name) && !REPORT_NAMES.includes(item.name)
@@ -671,23 +651,10 @@ const Sidebar = () => {
               setFilteredMenuItems(otherMenus);
             } else {
               // For users without department categories, separate reports from other menus
-              // Get reports from matchedMenus first, then add any missing ones from menuItems
-              const reportsFromMatched = matchedMenus.filter(item => 
+              // Only include reports that user has permission for
+              const reports = matchedMenus.filter(item => 
                 REPORT_NAMES.includes(item.name)
               );
-              // Also get reports from all menuItems as fallback
-              const allReports = menuItems.filter(item => 
-                REPORT_NAMES.includes(item.name)
-              );
-              // Combine and deduplicate by path
-              const reportsMap = new Map();
-              reportsFromMatched.forEach(item => reportsMap.set(item.path, item));
-              allReports.forEach(item => {
-                if (!reportsMap.has(item.path)) {
-                  reportsMap.set(item.path, item);
-                }
-              });
-              const reports = Array.from(reportsMap.values());
               
               const otherMenus = matchedMenus.filter(item => 
                 !REPORT_NAMES.includes(item.name)
@@ -714,13 +681,10 @@ const Sidebar = () => {
           const basicMenus = menuItems.filter(item => 
             ['Dashboard', 'Tracking'].includes(item.name)
           );
-          const reports = menuItems.filter(item => 
-            REPORT_NAMES.includes(item.name)
-          );
           setFilteredMenuItems(basicMenus);
           setDepartmentMenuItems([]);
           setDepartmentCategories({});
-          setReportMenuItems(reports);
+          setReportMenuItems([]); // Don't show reports if API fails
         }
       } catch (err) {
         console.error("❌ Failed to fetch modules:", err);
@@ -728,13 +692,10 @@ const Sidebar = () => {
         const basicMenus = menuItems.filter(item => 
           ['Dashboard', 'Tracking'].includes(item.name)
         );
-        const reports = menuItems.filter(item => 
-          REPORT_NAMES.includes(item.name)
-        );
         setFilteredMenuItems(basicMenus);
         setDepartmentMenuItems([]);
         setDepartmentCategories({});
-        setReportMenuItems(reports);
+        setReportMenuItems([]); // Don't show reports on error
       } finally {
         setLoading(false);
       }
