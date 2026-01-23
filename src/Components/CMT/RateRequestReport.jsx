@@ -170,7 +170,8 @@ const RateRequestReport = () => {
 
   const [filters, setFilters] = useState({
     userId: '',
-    loadType: ''
+    loadType: '',
+    assignedCompany: ''
   });
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedLoad, setSelectedLoad] = useState(null);
@@ -289,7 +290,8 @@ const RateRequestReport = () => {
   const handleClearFilters = () => {
     setFilters({
       userId: '',
-      loadType: ''
+      loadType: '',
+      assignedCompany: ''
     });
     setRange({
       startDate: addDays(new Date(), -29),
@@ -322,6 +324,7 @@ const RateRequestReport = () => {
   const filteredLoads = loads.filter(load => {
     if (filters.userId && load.postedBy?.empId !== filters.userId) return false;
     if (filters.loadType && load.loadType !== filters.loadType) return false;
+    if (filters.assignedCompany && load.assignedCompany !== filters.assignedCompany) return false;
     return true;
   });
 
@@ -382,7 +385,7 @@ const RateRequestReport = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.userId, filters.loadType, range]);
+  }, [filters.userId, filters.loadType, filters.assignedCompany, range]);
 
   return (
     <div className="p-6">
@@ -547,6 +550,27 @@ const RateRequestReport = () => {
                 className="w-full"
               />
             </div>
+
+            {/* Assigned Company Filter */}
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <Building className="inline w-4 h-4 mr-1.5 text-gray-500" />
+                Assigned Company
+              </label>
+              <SearchableDropdown
+                value={filters.assignedCompany}
+                onChange={(value) => handleFilterChange({ target: { name: 'assignedCompany', value } })}
+                options={[
+                  { value: '', label: 'ALL' },
+                  { value: 'V Power Logistics', label: 'V Power Logistics' },
+                  { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' },
+                  { value: 'MT. POCONO TRANSPORTATION INC', label: 'MT. POCONO TRANSPORTATION INC' }
+                ]}
+                placeholder="Select Company"
+                searchPlaceholder="Search company..."
+                className="w-full"
+              />
+            </div>
           </div>
 
           {/* Custom Range calendars */}
@@ -614,6 +638,7 @@ const RateRequestReport = () => {
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">LOAD TYPE</th>
                   <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BID COUNT</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">POSTED BY</th>
+                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ASSIGNED CMT</th>
                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DATE</th>
                   <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
                 </tr>
@@ -621,7 +646,7 @@ const RateRequestReport = () => {
               <tbody>
                 {currentLoads.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-6 py-12 text-center">
+                    <td colSpan="9" className="px-6 py-12 text-center">
                       <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-500 text-lg">
                         {filters.userId || filters.loadType
@@ -680,6 +705,14 @@ const RateRequestReport = () => {
                         <div>
                           <span className="font-medium text-gray-700">{load.postedBy?.employeeName || 'N/A'}</span>
                           <p className="text-sm text-gray-500 mt-1">{load.postedBy?.type || 'N/A'}</p>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <span className="font-medium text-indigo-600">{load.assignedCMTUser?.employeeName || 'N/A'}</span>
+                          {load.assignedCMTUser?.empId && (
+                            <p className="text-sm text-gray-500 mt-1">{load.assignedCMTUser.empId}</p>
+                          )}
                         </div>
                       </td>
                       <td className="py-2 px-3">
