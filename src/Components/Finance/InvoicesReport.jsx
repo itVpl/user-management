@@ -34,6 +34,11 @@ const InvoicesReport = () => {
   });
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
+  
+  // Company/Dispatcher filter state (addDispature)
+  const [companyFilter, setCompanyFilter] = useState('');
+  const [companies, setCompanies] = useState([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
 
   // Presets
   const presets = {
@@ -64,22 +69,65 @@ const InvoicesReport = () => {
   
   const ymd = (d) => format(d, 'yyyy-MM-dd'); // "YYYY-MM-DD"
 
+  // Fetch companies for dropdown
+  const fetchCompanies = async () => {
+    if (loadingCompanies) return;
+    
+    try {
+      setLoadingCompanies(true);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/do/do/shipper-payment-report/companies`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.data && response.data.success) {
+        const companiesList = response.data.data?.companies || [];
+        // Sort companies alphabetically
+        companiesList.sort((a, b) => (a || '').localeCompare(b || ''));
+        setCompanies(companiesList);
+      }
+    } catch (err) {
+      console.error('Error loading companies:', err);
+      alertify.error('Failed to load companies list');
+      setCompanies([]);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
+  // Fetch companies on component mount
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
+
   useEffect(() => {
     fetchAllDOs();
-  }, [range]);
+  }, [range, companyFilter]);
 
   const fetchAllDOs = async () => {
     try {
       setLoading(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
-      // Build query parameters with date range
+      // Build query parameters with date range and company/dispatcher filter
       const params = {};
       
       // Add date range if specified
       if (range.startDate && range.endDate) {
         params.startDate = ymd(range.startDate);
         params.endDate = ymd(range.endDate);
+      }
+      
+      // Add company/dispatcher filter if specified (addDispature - supports partial matching)
+      if (companyFilter && companyFilter.trim()) {
+        params.addDispature = companyFilter.trim();
       }
       
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/shipper-payment-report`, {
@@ -131,13 +179,16 @@ const InvoicesReport = () => {
             invoice.dueDateInfo = dueDateInfo;
           }
 
+          // Get carrier fees from API response (now included in shipper-payment-report)
+          const carrierFees = Number(order.carrierFees) || 0;
+
           return {
             id: `DO-${String(order._id).slice(-6)}`,
             originalId: order._id,
             doNum: order.loadNo || 'N/A',
             clientName: order.billTo || order.shipperName || 'N/A',
-            carrierName: 'N/A', // Not available in shipper payment report
-            carrierFees: 0, // Not available in shipper payment report
+            carrierName: order.carrier?.carrierName || 'N/A',
+            carrierFees: carrierFees,
             createdAt: new Date(order.createdAt || order.date).toISOString().split('T')[0],
             createdBySalesUser: 'N/A', // Not available in this API
             status: order.assignmentStatus || order.status || 'open',
@@ -269,7 +320,7 @@ const InvoicesReport = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, range]);
+  }, [searchTerm, range, companyFilter]);
 
   // Helper function to format date
   const formatDate = (dateString) => {
@@ -401,7 +452,7 @@ const InvoicesReport = () => {
 
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -412,6 +463,42 @@ const InvoicesReport = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          {/* Company/Dispatcher Filter (addDispature) - Dropdown */}
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" size={18} />
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              className="w-[250px] pl-9 pr-8 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
+              disabled={loadingCompanies}
+            >
+              <option value="">All Companies</option>
+              {companies.map((company) => (
+                <option key={company} value={company}>
+                  {company}
+                </option>
+              ))}
+            </select>
+            {loadingCompanies ? (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              </div>
+            ) : (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <span className="text-gray-400">▼</span>
+              </div>
+            )}
+            {companyFilter && (
+              <button
+                onClick={() => setCompanyFilter('')}
+                className="absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors z-10"
+                title="Clear filter"
+              >
+                ×
+              </button>
+            )}
           </div>
 
           {/* Date Range Picker */}
@@ -493,6 +580,7 @@ const InvoicesReport = () => {
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPPER NAME</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
+                <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Customer Charges</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED DATE</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
               </tr>
@@ -585,6 +673,11 @@ const InvoicesReport = () => {
                           </div>
                         );
                       })()}
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center justify-end">
+                        <span className="font-semibold text-gray-700">${fmtMoney(deliveryOrder.carrierFees || 0)}</span>
+                      </div>
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{formatDate(deliveryOrder.createdAt)}</span>
@@ -786,87 +879,7 @@ const InvoicesReport = () => {
                 </div>
               )}
 
-              {/* Carrier Information */}
-              {selectedDoDetails?.carrier && (
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Truck className="text-purple-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Carrier Information</h3>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <Truck className="text-purple-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Carrier Name</p>
-                        <p className="font-semibold text-gray-800">{selectedDoDetails.carrier?.carrierName || selectedDoDetails.carrier?.compName || 'N/A'}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                        <DollarSign className="text-green-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Total Carrier Fees</p>
-                        <p className="font-semibold text-gray-800">${fmtMoney(selectedDoDetails.carrier?.totalCarrierFees || 0)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {selectedDoDetails.carrier?.carrierFees?.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-3">Carrier Charges</h4>
-                      <div className="space-y-2">
-                        {selectedDoDetails.carrier.carrierFees.map((charge, i) => (
-                          <div key={i} className="bg-white rounded-lg p-3 border border-purple-200">
-                            <div className="flex justify-between items-center">
-                              <span className="font-medium text-gray-800">{charge?.name}</span>
-                              <span className="font-bold text-green-600">${fmtMoney(charge?.total || 0)}</span>
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Quantity: {charge?.quantity || 0} × Amount: ${fmtMoney(charge?.amount || 0)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Totals */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <DollarSign className="text-blue-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Totals</h3>
-                </div>
-                <div className="space-y-2">
-                  {(() => {
-                    const totals = computeTotals(selectedDoDetails);
-                    return (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Bill Amount (Customer)</span>
-                          <span className="font-semibold text-gray-800">${fmtMoney(totals.billTotal)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Carrier Fees</span>
-                          <span className="font-semibold text-gray-800">${fmtMoney(totals.carrierTotal)}</span>
-                        </div>
-                        <div className="border-t border-blue-200 pt-2 mt-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-semibold text-gray-700">Net Revenue</span>
-                            <span className="font-bold text-lg text-blue-600">${fmtMoney(totals.netRevenue)}</span>
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
 
               {/* Shipper Payment Information */}
               {selectedDoDetails?.paymentStatus && (
