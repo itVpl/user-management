@@ -12,6 +12,8 @@ import { addDays, format } from 'date-fns';
 // Utility functions
 const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
+const isImageUrl = (url = "") => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url);
+const isPdfUrl = (url = "") => /\.pdf$/i.test(url);
 
 const PayableReport = () => {
   const [dos, setDos] = useState([]);
@@ -137,7 +139,7 @@ const PayableReport = () => {
             doNum: order.loadNo || '',
             clientName: order.billTo || '',
             carrierName: order.carrierName || '',
-            carrierFees: order.totalCarrierFees || 0,
+            carrierFees: order.carrierFeesAmount || order.totalCarrierFees || 0,
             createdAt: new Date(order.createdAt || order.date).toISOString().split('T')[0],
             createdBySalesUser: '',
             status: order.assignmentStatus || order.status || 'open',
@@ -303,16 +305,9 @@ const PayableReport = () => {
       if (response.data && response.data.success) {
         const order = response.data.data;
         
-        // Merge payment information from existing DO if available
-        if (existingDo) {
-          order.carrierPaymentStatus = existingDo.paymentStatus || order.carrierPaymentStatus;
-          order.paidAt = existingDo.paidAt || order.paidAt;
-          order.paidBy = existingDo.paidBy || order.paidBy;
-          order.paymentMethod = existingDo.paymentMethod || order.paymentMethod;
-          order.paymentReference = existingDo.paymentReference || order.paymentReference;
-          order.paymentNotes = existingDo.paymentNotes || order.paymentNotes;
-          order.paymentDueDate = existingDo.paymentDueDate || order.paymentDueDate;
-        }
+        // The API response should already contain carrierPaymentStatus with paymentProof
+        // We don't need to merge from existingDo since the API has the complete data
+        // The carrierPaymentStatus.paymentProof will be available if the DO is paid
         
         setSelectedDoDetails(order);
         setShowDetailsModal(true);
@@ -486,10 +481,10 @@ const PayableReport = () => {
             <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
               <tr>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
+                <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED DATE</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
               </tr>
@@ -503,9 +498,6 @@ const PayableReport = () => {
                   <tr key={deliveryOrder.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                     <td className="py-2 px-3">
                       <span className="font-mono text-base font-semibold text-gray-700">{deliveryOrder.doNum}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{deliveryOrder.clientName}</span>
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{deliveryOrder.carrierName || ''}</span>
@@ -582,6 +574,11 @@ const PayableReport = () => {
                           </div>
                         );
                       })()}
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center justify-end">
+                        <span className="font-semibold text-gray-700">${fmtMoney(deliveryOrder.carrierFees || 0)}</span>
+                      </div>
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{formatDate(deliveryOrder.createdAt)}</span>
@@ -721,68 +718,6 @@ const PayableReport = () => {
 
             {/* Content */}
             <div className="p-6 space-y-6">
-              {/* Customer Information */}
-              {selectedDoDetails?.customers?.length > 0 && (
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <User className="text-green-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
-                  </div>
-
-                  <div className="space-y-4">
-                    {selectedDoDetails.customers.map((customer, index) => (
-                      <div key={customer?._id || index} className="bg-white rounded-xl p-4 border border-green-200">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-green-600 font-bold text-sm">{index + 1}</span>
-                          </div>
-                          <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-600">Bill To</p>
-                            <p className="font-medium text-gray-800">{customer?.billTo || selectedDoDetails?.customerName || ''}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Dispatcher Name</p>
-                            <p className="font-medium text-gray-800">{customer?.dispatcherName || ''}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Load No</p>
-                            <p className="font-medium text-gray-800">{customer?.loadNo || ''}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Work Order No</p>
-                            <p className="font-medium text-gray-800">{customer?.workOrderNo || ''}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Line Haul</p>
-                            <p className="font-medium text-gray-800">${fmtMoney(customer?.lineHaul || 0)}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">FSC</p>
-                            <p className="font-medium text-gray-800">${fmtMoney(customer?.fsc || 0)}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Other</p>
-                            <p className="font-medium text-gray-800">${fmtMoney(
-                              Array.isArray(customer?.other) 
-                                ? (customer?.otherTotal || customer.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
-                                : (customer?.other || customer?.otherTotal || 0)
-                            )}</p>
-                          </div>
-                          <div className="col-span-2">
-                            <p className="text-sm text-gray-600">Total Amount</p>
-                            <p className="font-bold text-lg text-green-600">${fmtMoney(customer?.calculatedTotal ?? customer?.totalAmount ?? 0)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Carrier Information */}
               {selectedDoDetails?.carrier && (
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
@@ -833,37 +768,6 @@ const PayableReport = () => {
                   )}
                 </div>
               )}
-
-              {/* Totals */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <DollarSign className="text-blue-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Totals</h3>
-                </div>
-                <div className="space-y-2">
-                  {(() => {
-                    const totals = computeTotals(selectedDoDetails);
-                    return (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Bill Amount (Customer)</span>
-                          <span className="font-semibold text-gray-800">${fmtMoney(totals.billTotal)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Carrier Fees</span>
-                          <span className="font-semibold text-gray-800">${fmtMoney(totals.carrierTotal)}</span>
-                        </div>
-                        <div className="border-t border-blue-200 pt-2 mt-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-semibold text-gray-700">Net Revenue</span>
-                            <span className="font-bold text-lg text-blue-600">${fmtMoney(totals.netRevenue)}</span>
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
 
               {/* Carrier Payment Information */}
               {selectedDoDetails?.carrierPaymentStatus && (
@@ -925,6 +829,68 @@ const PayableReport = () => {
                               <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
                                 {selectedDoDetails.paymentNotes}
                               </p>
+                            </div>
+                          )}
+                          {selectedDoDetails?.carrierPaymentStatus?.paymentProof && (
+                            <div className="col-span-2">
+                              <p className="text-sm text-gray-600 mb-2">Invoice / Payment Proof</p>
+                              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <div className="flex items-center gap-3">
+                                  {isImageUrl(selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl) ? (
+                                    <div className="flex flex-col items-center gap-2">
+                                      <a
+                                        href={selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                      >
+                                        <FileText className="text-blue-600" size={24} />
+                                        <div>
+                                          <p className="font-medium">{selectedDoDetails.carrierPaymentStatus.paymentProof.fileName || 'Invoice'}</p>
+                                          <p className="text-xs text-gray-500">Click to view image</p>
+                                        </div>
+                                      </a>
+                                      <img
+                                        src={selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl}
+                                        alt="Invoice"
+                                        className="max-w-full max-h-64 rounded-lg border border-gray-300 shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                                        onClick={() => window.open(selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl, '_blank')}
+                                      />
+                                    </div>
+                                  ) : isPdfUrl(selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl) ? (
+                                    <a
+                                      href={selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                    >
+                                      <FileText className="text-red-600" size={24} />
+                                      <div>
+                                        <p className="font-medium">{selectedDoDetails.carrierPaymentStatus.paymentProof.fileName || 'Invoice PDF'}</p>
+                                        <p className="text-xs text-gray-500">Click to view PDF</p>
+                                      </div>
+                                    </a>
+                                  ) : (
+                                    <a
+                                      href={selectedDoDetails.carrierPaymentStatus.paymentProof.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                                    >
+                                      <FileText className="text-gray-600" size={24} />
+                                      <div>
+                                        <p className="font-medium">{selectedDoDetails.carrierPaymentStatus.paymentProof.fileName || 'Invoice Document'}</p>
+                                        <p className="text-xs text-gray-500">Click to download</p>
+                                      </div>
+                                    </a>
+                                  )}
+                                </div>
+                                {selectedDoDetails.carrierPaymentStatus.paymentProof.uploadedAt && (
+                                  <p className="text-xs text-gray-500 mt-3">
+                                    Uploaded: {fmtDateTime(selectedDoDetails.carrierPaymentStatus.paymentProof.uploadedAt)}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           )}
                         </>
