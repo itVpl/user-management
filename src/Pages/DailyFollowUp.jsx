@@ -30,7 +30,7 @@ const getNextMinDate = (followUpDate) => {
 
 const onlyLetters = /^[A-Za-z ]+$/;                  // alphabets + space
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;     // simple robust email
-const phoneRe = /^[6-9]\d{9}$/;                      // 10 digits, starts 6-9
+const phoneRe = /^\d{10}$/;                          // 10 digits, any starting digit
 const clampDigits = (s) => s.replace(/\D/g, '').slice(0, 10);
 // ---- DUPLICATE ERROR PARSER (NEW) ----
 const parseDuplicateError = (error) => {
