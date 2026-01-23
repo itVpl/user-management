@@ -74,6 +74,14 @@ const RateRequest = () => {
   const [completedRequests, setCompletedRequests] = useState([]);
   const [rateDetailsData, setRateDetailsData] = useState([]);
   const [rateDetailsLoading, setRateDetailsLoading] = useState(false);
+  // Rate Details pagination and filters
+  const [rateDetailsSearch, setRateDetailsSearch] = useState('');
+  const [rateDetailsPage, setRateDetailsPage] = useState(1);
+  const [rateDetailsLimit, setRateDetailsLimit] = useState(10);
+  const [rateDetailsSortBy, setRateDetailsSortBy] = useState('createdAt');
+  const [rateDetailsSortOrder, setRateDetailsSortOrder] = useState('desc');
+  const [rateDetailsPagination, setRateDetailsPagination] = useState(null);
+  const [rateDetailsStatistics, setRateDetailsStatistics] = useState(null);
   const [bidDetailsModal, setBidDetailsModal] = useState({ visible: false, load: null });
   const [bidDetailsData, setBidDetailsData] = useState(null);
   const [bidDetailsLoading, setBidDetailsLoading] = useState(false);
@@ -534,10 +542,19 @@ try {
       }
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
       const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers/`,
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers/all`,
         { headers }
       );
-      setTruckers(res.data?.data || []);
+      // Map the response to match expected structure
+      // New API returns: { totalCount, truckers: [{ carrierId, name, ... }] }
+      const truckersData = res.data?.truckers || [];
+      // Map carrierId to _id and name to compName for compatibility
+      const mappedTruckers = truckersData.map(trucker => ({
+        ...trucker,
+        _id: trucker.carrierId || trucker._id,
+        compName: trucker.name || trucker.compName
+      }));
+      setTruckers(mappedTruckers);
     } catch (error) {
       console.error('Error fetching truckers:', error);
       if (error.response?.data?.message) toast.error(error.response.data.message);
@@ -546,7 +563,7 @@ try {
   };
 
   // Fetch CMT assigned loads data for Rate Details tab
-  const fetchRateDetails = async () => {
+  const fetchRateDetails = async (page = rateDetailsPage, limit = rateDetailsLimit, searchTerm = rateDetailsSearch, sortBy = rateDetailsSortBy, sortOrder = rateDetailsSortOrder) => {
     try {
       setRateDetailsLoading(true);
       const token = getAuthToken();
@@ -557,20 +574,29 @@ try {
         return;
       }
 
-      const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/bid/cmt-assigned-loads/${empId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (searchTerm && searchTerm.trim()) params.append('search', searchTerm.trim());
+      if (sortBy) params.append('sortBy', sortBy);
+      if (sortOrder) params.append('sortOrder', sortOrder);
 
+      const queryString = params.toString();
+      const url = `${API_CONFIG.BASE_URL}/api/v1/bid/cmt-assigned-loads/${empId}${queryString ? `?${queryString}` : ''}`;
+
+      const response = await axios.get(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
       if (response.data && response.data.success) {
         const assignedLoads = response.data.data?.assignedLoads || [];
         setRateDetailsData(assignedLoads);
+        setRateDetailsPagination(response.data.data?.pagination || null);
+        setRateDetailsStatistics(response.data.data?.statistics || null);
       } else {
         toast.error(response.data?.message || 'Failed to fetch rate details');
       }
@@ -763,12 +789,34 @@ const fetchLoadDetailsForChat = async (loadId) => {
   // Fetch data when tab changes
   useEffect(() => {
     if (activeTab === 'rateDetails') {
-      fetchRateDetails();
+      setRateDetailsPage(1); // Reset to first page when switching to Rate Details tab
+      fetchRateDetails(1, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder);
     } else if (activeTab === 'pending' || activeTab === 'rate') {
       // Fetch rate requests data for pending and rate tabs
       fetchRateRequests();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Debounced search for Rate Details
+  useEffect(() => {
+    if (activeTab !== 'rateDetails') return;
+    
+    const debounceTimer = setTimeout(() => {
+      setRateDetailsPage(1); // Reset to first page on search
+      fetchRateDetails(1, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder);
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(debounceTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rateDetailsSearch]);
+
+  // Refetch when filters, pagination, or sorting changes
+  useEffect(() => {
+    if (activeTab !== 'rateDetails') return;
+    fetchRateDetails(rateDetailsPage, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rateDetailsPage, rateDetailsLimit, rateDetailsSortBy, rateDetailsSortOrder]);
 
   // Start auto-accept timer for new pending requests
   // ✅ Stable auto-accept countdown (interval clear + single fire)
@@ -3242,6 +3290,7 @@ useEffect(() => {
       {/* Rate Details Tab */}
       {activeTab === 'rateDetails' && (
         <div>
+          {/* Statistics Cards */}
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-6">
               <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
@@ -3251,24 +3300,29 @@ useEffect(() => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Total Assigned Loads</p>
-                    <p className="text-xl font-bold text-gray-800">{rateDetailsData.length}</p>
+                    <p className="text-xl font-bold text-gray-800">
+                      {rateDetailsStatistics?.totalAssigned || rateDetailsPagination?.totalItems || rateDetailsData.length}
+                    </p>
                   </div>
                 </div>
               </div>
+              {rateDetailsStatistics?.statusBreakdown && (
+                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                      <CheckCircle className="text-green-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Approved</p>
+                      <p className="text-xl font-bold text-gray-800">{rateDetailsStatistics.statusBreakdown.approved || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search loads..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
               <button
-                onClick={fetchRateDetails}
+                onClick={() => fetchRateDetails(rateDetailsPage, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder)}
                 disabled={rateDetailsLoading}
                 className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -3277,6 +3331,66 @@ useEffect(() => {
                 </svg>
                 {rateDetailsLoading ? 'Refreshing...' : 'Refresh'}
               </button>
+            </div>
+          </div>
+
+          {/* Filters and Search */}
+          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search by shipment, city, commodity..."
+                  value={rateDetailsSearch}
+                  onChange={(e) => setRateDetailsSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              {/* Sort By */}
+              <select
+                value={rateDetailsSortBy}
+                onChange={(e) => {
+                  setRateDetailsSortBy(e.target.value);
+                  setRateDetailsPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="createdAt">Sort by Created Date</option>
+                <option value="updatedAt">Sort by Updated Date</option>
+                <option value="assignedAt">Sort by Assigned Date</option>
+                <option value="overallStatus">Sort by Status</option>
+              </select>
+              {/* Sort Order */}
+              <select
+                value={rateDetailsSortOrder}
+                onChange={(e) => {
+                  setRateDetailsSortOrder(e.target.value);
+                  setRateDetailsPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="desc">Newest First</option>
+                <option value="asc">Oldest First</option>
+              </select>
+            </div>
+            {/* Items per page */}
+            <div className="mt-4 flex items-center gap-2">
+              <label className="text-sm text-gray-600">Items per page:</label>
+              <select
+                value={rateDetailsLimit}
+                onChange={(e) => {
+                  setRateDetailsLimit(Number(e.target.value));
+                  setRateDetailsPage(1);
+                }}
+                className="px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
             </div>
           </div>
 
@@ -3301,6 +3415,7 @@ useEffect(() => {
                       <tr>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load ID</th>
+                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Shipment #</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Origin</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Destination</th>
                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight (lbs)</th>
@@ -3312,22 +3427,20 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      {rateDetailsData
-                        .filter(load =>
-                          load.load?.shipper?.compName?.toLowerCase().includes(search.toLowerCase()) ||
-                          load.load?.origin?.city?.toLowerCase().includes(search.toLowerCase()) ||
-                          load.load?.destination?.city?.toLowerCase().includes(search.toLowerCase()) ||
-                          load.load?.commodity?.toLowerCase().includes(search.toLowerCase()) ||
-                          load.load?.vehicleType?.toLowerCase().includes(search.toLowerCase()) ||
-                          load.load?.assignedTo?.compName?.toLowerCase().includes(search.toLowerCase())
-                        )
-                        .map((load, index) => (
+                      {rateDetailsData.map((load, index) => {
+                        const serialNumber = rateDetailsPagination 
+                          ? (rateDetailsPagination.currentPage - 1) * rateDetailsPagination.itemsPerPage + index + 1
+                          : index + 1;
+                        return (
                         <tr key={load._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                           <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{index + 1}</span>
+                            <span className="font-medium text-gray-700">{serialNumber}</span>
                           </td>
                           <td className="py-2 px-3">
                             <span className="font-medium text-gray-700">{load.load?._id ? `L-${load.load._id.slice(-5)}` : 'N/A'}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-gray-700 text-sm">{load.load?.shipmentNumber || 'N/A'}</span>
                           </td>
                           <td className="py-2 px-3">
                             <div>
@@ -3348,8 +3461,8 @@ useEffect(() => {
                             <span className="font-medium text-gray-700">${load.load?.rate?.toLocaleString() || '0'}</span>
                           </td>
                           <td className="py-2 px-3">
-                            <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(load.load?.status)}`}>
-                              {load.load?.status || 'N/A'}
+                            <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(load.overallStatus || load.load?.status)}`}>
+                              {load.overallStatus || load.load?.status || 'N/A'}
                             </span>
                           </td>
                           <td className="py-2 px-3">
@@ -3370,15 +3483,16 @@ useEffect(() => {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      );
+                      })}
                       {rateDetailsData.length === 0 && (
                         <tr>
-                          <td colSpan="10" className="text-center py-12">
+                          <td colSpan="11" className="text-center py-12">
                             <div className="text-gray-500">
                               <BarChart3 className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                               <p className="text-lg font-medium">No rate details found</p>
                               <p className="text-gray-400 text-sm">
-                                {search ? 'Try adjusting your search terms' : 'No assigned loads available'}
+                                {rateDetailsSearch ? 'Try adjusting your search terms' : 'No assigned loads available'}
                               </p>
                             </div>
                           </td>
@@ -3387,6 +3501,60 @@ useEffect(() => {
                     </tbody>
                   </table>
                 </div>
+                {/* Pagination Controls */}
+                {rateDetailsPagination && rateDetailsPagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+                    <div className="text-sm text-gray-600">
+                      Showing {((rateDetailsPagination.currentPage - 1) * rateDetailsPagination.itemsPerPage) + 1} to{' '}
+                      {Math.min(rateDetailsPagination.currentPage * rateDetailsPagination.itemsPerPage, rateDetailsPagination.totalItems)} of{' '}
+                      {rateDetailsPagination.totalItems} results
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setRateDetailsPage(prev => Math.max(1, prev - 1))}
+                        disabled={rateDetailsPage === 1 || rateDetailsLoading}
+                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, rateDetailsPagination.totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (rateDetailsPagination.totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (rateDetailsPagination.currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (rateDetailsPagination.currentPage >= rateDetailsPagination.totalPages - 2) {
+                            pageNum = rateDetailsPagination.totalPages - 4 + i;
+                          } else {
+                            pageNum = rateDetailsPagination.currentPage - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => setRateDetailsPage(pageNum)}
+                              disabled={rateDetailsLoading}
+                              className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
+                                rateDetailsPage === pageNum
+                                  ? 'bg-purple-600 text-white border-purple-600'
+                                  : 'border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={() => setRateDetailsPage(prev => Math.min(rateDetailsPagination.totalPages, prev + 1))}
+                        disabled={rateDetailsPage === rateDetailsPagination.totalPages || rateDetailsLoading}
+                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
