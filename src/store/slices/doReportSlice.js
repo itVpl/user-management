@@ -13,6 +13,8 @@ export const fetchDOReport = createAsyncThunk(
     shipmentNo = null,
     carrierName = null,
     containerNo = null,
+    workOrderNo = null,
+    billTo = null,
     pickupDate = null,
     dropDate = null,
     returnDate = null,
@@ -33,6 +35,8 @@ export const fetchDOReport = createAsyncThunk(
     if (shipmentNo) cacheKeyParts.push(`shipment_${shipmentNo}`);
     if (carrierName) cacheKeyParts.push(`carrier_${carrierName}`);
     if (containerNo) cacheKeyParts.push(`container_${containerNo}`);
+    if (workOrderNo) cacheKeyParts.push(`workorder_${workOrderNo}`);
+    if (billTo) cacheKeyParts.push(`billto_${billTo}`);
     if (pickupDate) cacheKeyParts.push(`pickup_${pickupDate}`);
     if (dropDate) cacheKeyParts.push(`drop_${dropDate}`);
     if (returnDate) cacheKeyParts.push(`return_${returnDate}`);
@@ -46,7 +50,7 @@ export const fetchDOReport = createAsyncThunk(
     // Check if cache is valid for this page and no force refresh
     if (!forceRefresh && pageCache[cacheKey] && cacheTimestamps[cacheKey] && 
         (Date.now() - cacheTimestamps[cacheKey] < cacheExpiry)) {
-      console.log(`Returning cached data for DO Report page ${page}${addDispature ? ` (company: ${addDispature})` : ''}${loadNumber ? ` (loadNumber: ${loadNumber})` : ''}${shipmentNo ? ` (shipmentNo: ${shipmentNo})` : ''}${carrierName ? ` (carrierName: ${carrierName})` : ''}${containerNo ? ` (containerNo: ${containerNo})` : ''}${pickupDate ? ` (pickupDate: ${pickupDate})` : ''}${dropDate ? ` (dropDate: ${dropDate})` : ''}${returnDate ? ` (returnDate: ${returnDate})` : ''}${assignedToCMT ? ` (assignedToCMT: ${assignedToCMT})` : ''}${createdByEmpId ? ` (createdByEmpId: ${createdByEmpId})` : ''}${startDate ? ` (startDate: ${startDate})` : ''}${endDate ? ` (endDate: ${endDate})` : ''}${cmtAssignedOnly ? ` (cmtAssignedOnly: true)` : ''}`);
+      console.log(`Returning cached data for DO Report page ${page}${addDispature ? ` (company: ${addDispature})` : ''}${loadNumber ? ` (loadNumber: ${loadNumber})` : ''}${shipmentNo ? ` (shipmentNo: ${shipmentNo})` : ''}${carrierName ? ` (carrierName: ${carrierName})` : ''}${containerNo ? ` (containerNo: ${containerNo})` : ''}${workOrderNo ? ` (workOrderNo: ${workOrderNo})` : ''}${billTo ? ` (billTo: ${billTo})` : ''}${pickupDate ? ` (pickupDate: ${pickupDate})` : ''}${dropDate ? ` (dropDate: ${dropDate})` : ''}${returnDate ? ` (returnDate: ${returnDate})` : ''}${assignedToCMT ? ` (assignedToCMT: ${assignedToCMT})` : ''}${createdByEmpId ? ` (createdByEmpId: ${createdByEmpId})` : ''}${startDate ? ` (startDate: ${startDate})` : ''}${endDate ? ` (endDate: ${endDate})` : ''}${cmtAssignedOnly ? ` (cmtAssignedOnly: true)` : ''}`);
       return {
         orders: pageCache[cacheKey],
         pagination: state.doReport.pagination,
@@ -74,6 +78,12 @@ export const fetchDOReport = createAsyncThunk(
       }
       if (containerNo) {
         params.containerNo = containerNo;
+      }
+      if (workOrderNo) {
+        params.workOrderNo = workOrderNo;
+      }
+      if (billTo) {
+        params.billTo = billTo;
       }
       if (pickupDate) {
         params.pickupDate = pickupDate;

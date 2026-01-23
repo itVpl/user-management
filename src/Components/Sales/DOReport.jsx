@@ -391,6 +391,7 @@ export default function DOReport() {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState(''); // Input value (what user is typing)
   const [activeSearchTerm, setActiveSearchTerm] = useState(''); // Active search (what's actually being searched)
+  const [searchFieldType, setSearchFieldType] = useState('loadNumber'); // Search field type: 'loadNumber', 'billTo', 'carrierName', 'workOrderNo', 'shipmentNo', 'containerNo'
   const [submitting, setSubmitting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
@@ -637,36 +638,97 @@ export default function DOReport() {
     }
   }, [formData.customers]);
 
-  // Parse search term to determine if it's a load number or carrier name
-  const parseSearchTerm = (term) => {
+  // Parse search term based on selected search field type
+  const parseSearchTerm = (term, fieldType = searchFieldType) => {
     if (!term || term.trim() === '') {
-      return { loadNumber: null, carrierName: null };
+      return { 
+        loadNumber: null, 
+        workOrderNo: null,
+        shipmentNo: null,
+        containerNo: null,
+        carrierName: null,
+        billTo: null
+      };
     }
     
     const trimmedTerm = term.trim();
     
-    // Check if it looks like a load number (starts with 'L' followed by numbers, e.g., L12345, L0770)
+    // Auto-detect load number if it starts with 'L' followed by numbers
     const loadNumberPattern = /^L\d+/i;
-    if (loadNumberPattern.test(trimmedTerm)) {
-      return { loadNumber: trimmedTerm.toUpperCase(), carrierName: null };
+    if (loadNumberPattern.test(trimmedTerm) && fieldType === 'loadNumber') {
+      return { 
+        loadNumber: trimmedTerm.toUpperCase(), 
+        workOrderNo: null,
+        shipmentNo: null,
+        containerNo: null,
+        carrierName: null,
+        billTo: null
+      };
     }
     
-    // Otherwise, treat it as a carrier name search
-    return { loadNumber: null, carrierName: trimmedTerm };
+    // Use the selected search field type
+    const result = {
+      loadNumber: null,
+      workOrderNo: null,
+      shipmentNo: null,
+      containerNo: null,
+      carrierName: null,
+      billTo: null
+    };
+    
+    // Set the appropriate field based on searchFieldType
+    switch (fieldType) {
+      case 'loadNumber':
+        result.loadNumber = trimmedTerm.toUpperCase();
+        break;
+      case 'billTo':
+        result.billTo = trimmedTerm;
+        break;
+      case 'carrierName':
+        result.carrierName = trimmedTerm;
+        break;
+      case 'workOrderNo':
+        result.workOrderNo = trimmedTerm;
+        break;
+      case 'shipmentNo':
+        result.shipmentNo = trimmedTerm;
+        break;
+      case 'containerNo':
+        result.containerNo = trimmedTerm;
+        break;
+      default:
+        // Default to loadNumber if fieldType is not recognized
+        result.loadNumber = trimmedTerm.toUpperCase();
+    }
+    
+    return result;
   };
 
   // Fetch data from API using Redux
   const fetchOrders = () => {
-    const { loadNumber, carrierName } = parseSearchTerm(activeSearchTerm);
+    const { loadNumber, workOrderNo, shipmentNo, containerNo, carrierName, billTo } = parseSearchTerm(activeSearchTerm, searchFieldType);
     
-    console.log('Fetching orders with search:', { activeSearchTerm, loadNumber, carrierName });
+    console.log('Fetching orders with search:', { 
+      activeSearchTerm, 
+      searchFieldType,
+      loadNumber, 
+      workOrderNo, 
+      shipmentNo, 
+      containerNo, 
+      carrierName,
+      billTo
+    });
     
     dispatch(fetchDOReport({ 
       page: currentPage, 
       limit: itemsPerPage, 
       addDispature: selectedCompany || null,
       loadNumber: loadNumber,
+      workOrderNo: workOrderNo,
+      shipmentNo: shipmentNo,
+      containerNo: containerNo,
       carrierName: carrierName,
+      billTo: billTo,
       forceRefresh: false 
     }));
   };
@@ -5548,150 +5610,165 @@ const handleUpdateOrder = async (e) => {
 
         {/* Filters and Actions Bar */}
         <div className="bg-white rounded-2xl shadow-xl p-4 md:p-5 border border-gray-200">
-          <div className="flex flex-col lg:flex-row gap-3 md:gap-4 items-start lg:items-center">
-            {/* Left Side - Search and Filters */}
-            <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1 w-full">
-              {/* Search Input with Button */}
-              <div className="relative flex-1 min-w-[200px] md:min-w-[300px] w-full md:w-auto flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Search orders... (e.g., L0551 or Carrier Name)"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyPress={handleSearchKeyPress}
-                    className="w-full pl-10 md:pl-12 pr-10 md:pr-12 py-2 md:py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-gray-50 focus:bg-white text-gray-700 placeholder-gray-400 text-sm md:text-base"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={handleClearSearch}
-                      className="absolute right-3 md:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                      type="button"
-                    >
-                      <X size={18} />
-                    </button>
-                  )}
-                </div>
-                <button
-                  onClick={handleSearch}
-                  disabled={loading}
-                  className="px-4 md:px-6 py-2 md:py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm md:text-base"
-                >
-                  {loading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span className="hidden sm:inline">Searching...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Search size={18} />
-                      <span className="hidden sm:inline">Search</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Date Range */}
-              <div className="relative w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => setShowPresetMenu(v => !v)}
-                  className="w-full sm:w-[240px] md:w-[280px] text-left px-3 md:px-4 py-2 md:py-3 border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all flex items-center justify-between group text-sm md:text-base"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <Calendar className="text-gray-400 group-hover:text-green-600 transition-colors flex-shrink-0" size={16} />
-                    <span className="text-gray-700 font-medium truncate">
-                      {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
-                    </span>
-                  </div>
-                  <span className="text-gray-400 group-hover:text-green-600 transition-colors flex-shrink-0 ml-2">▼</span>
-                </button>
-
-                {showPresetMenu && (
-                  <div className="absolute z-50 mt-2 w-64 rounded-xl border-2 border-gray-200 bg-white shadow-2xl overflow-hidden">
-                    {Object.keys(presets).map((lbl) => (
-                      <button
-                        key={lbl}
-                        onClick={() => applyPreset(lbl)}
-                        className="block w-full text-left px-4 py-3 hover:bg-green-50 hover:text-green-700 transition-colors font-medium text-gray-700"
-                      >
-                        {lbl}
-                      </button>
-                    ))}
-                    <div className="my-1 border-t border-gray-200" />
-                    <button
-                      onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
-                      className="block w-full text-left px-4 py-3 hover:bg-green-50 hover:text-green-700 transition-colors font-medium text-gray-700"
-                    >
-                      Custom Range
-                    </button>
-                  </div>
+          {/* First Row - Search and Filters */}
+          <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-4 pb-4 border-b border-gray-200">
+            {/* Search Field Type Dropdown (Searchable) */}
+            <div className="w-full sm:w-auto min-w-[180px] md:min-w-[200px]">
+              <SearchableDropdown
+                value={searchFieldType}
+                onChange={(value) => setSearchFieldType(value)}
+                options={[
+                  { value: 'loadNumber', label: 'Load Num' },
+                  { value: 'billTo', label: 'Bill To' },
+                  { value: 'carrierName', label: 'Carrier Name' },
+                  { value: 'workOrderNo', label: 'Work Order No' },
+                  { value: 'shipmentNo', label: 'Shipment No' },
+                  { value: 'containerNo', label: 'Container No' }
+                ]}
+                placeholder="Select Search Type"
+                searchPlaceholder="Search field type..."
+                className="w-full border-2 border-gray-200 rounded-xl bg-white hover:bg-gray-50 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
+              />
+            </div>
+            
+            {/* Search Input with Button */}
+            <div className="flex-1 min-w-[200px] md:min-w-[300px] flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder={`Search by ${searchFieldType === 'loadNumber' ? 'Load Num (e.g., L0551)' : searchFieldType === 'billTo' ? 'Bill To' : searchFieldType === 'carrierName' ? 'Carrier Name' : searchFieldType === 'workOrderNo' ? 'Work Order No' : searchFieldType === 'shipmentNo' ? 'Shipment No' : 'Container No'}...`}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyPress={handleSearchKeyPress}
+                  className="w-full pl-10 md:pl-12 pr-10 md:pr-12 py-2.5 md:py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-gray-50 focus:bg-white text-gray-700 placeholder-gray-400 text-sm md:text-base"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="absolute right-3 md:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    type="button"
+                  >
+                    <X size={18} />
+                  </button>
                 )}
               </div>
-
-              {/* Created By Filter */}
-              <div className="relative w-full sm:w-auto">
-                <SearchableDropdown
-                  value={selectedCreatedBy}
-                  onChange={(value) => setSelectedCreatedBy(value)}
-                  options={[
-                    { value: '', label: 'All Created By' },
-                    ...uniqueCreatedBy
-                  ]}
-                  placeholder="Select Created By"
-                  searchPlaceholder="Search created by..."
-                  className="w-full sm:w-[200px] md:w-[220px] border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
-                />
-              </div>
-
-              {/* Company Filter */}
-              <div className="relative w-full sm:w-auto">
-                <SearchableDropdown
-                  value={selectedCompany}
-                  onChange={(value) => {
-                    dispatch(setAddDispature(value || null));
-                  }}
-                  options={[
-                    { value: '', label: 'All Companies' },
-                    ...companyOptions
-                  ]}
-                  placeholder="Select Company"
-                  searchPlaceholder="Search company..."
-                  className="w-full sm:w-[200px] md:w-[220px] border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
-                />
-              </div>
+              <button
+                onClick={handleSearch}
+                disabled={loading}
+                className="px-4 md:px-6 py-2.5 md:py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm md:text-base whitespace-nowrap"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span className="hidden sm:inline">Searching...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search size={18} />
+                    <span>Search</span>
+                  </>
+                )}
+              </button>
             </div>
 
-            {/* Right Side - Action Buttons */}
-            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0 w-full sm:w-auto">
-              {/* Export CSV Button */}
+            {/* Date Range */}
+            <div className="relative w-full sm:w-auto min-w-[240px] md:min-w-[280px]">
               <button
-                onClick={exportToCSV}
-                className="flex items-center gap-1 md:gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 md:px-5 py-2 md:py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 text-sm md:text-base flex-1 sm:flex-none justify-center"
+                type="button"
+                onClick={() => setShowPresetMenu(v => !v)}
+                className="w-full text-left px-3 md:px-4 py-2.5 md:py-3 border-2 border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all flex items-center justify-between group text-sm md:text-base"
               >
-                <FaDownload size={16} />
-                <span className="hidden sm:inline">Export CSV</span>
-                <span className="sm:hidden">Export</span>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Calendar className="text-gray-400 group-hover:text-green-600 transition-colors flex-shrink-0" size={16} />
+                  <span className="text-gray-700 font-medium truncate">
+                    {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
+                  </span>
+                </div>
+                <span className="text-gray-400 group-hover:text-green-600 transition-colors flex-shrink-0 ml-2">▼</span>
               </button>
 
-              {/* Import Excel Button */}
-              <button
-                onClick={() => {
-                  setShowExcelImportModal(true);
-                  setImportStep(1);
-                  setColumnMapping({});
-                  setPreviewData(null);
-                  setFileReference(null);
-                  setImportResult(null);
+              {showPresetMenu && (
+                <div className="absolute z-50 mt-2 w-64 rounded-xl border-2 border-gray-200 bg-white shadow-2xl overflow-hidden">
+                  {Object.keys(presets).map((lbl) => (
+                    <button
+                      key={lbl}
+                      onClick={() => applyPreset(lbl)}
+                      className="block w-full text-left px-4 py-3 hover:bg-green-50 hover:text-green-700 transition-colors font-medium text-gray-700"
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                  <div className="my-1 border-t border-gray-200" />
+                  <button
+                    onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                    className="block w-full text-left px-4 py-3 hover:bg-green-50 hover:text-green-700 transition-colors font-medium text-gray-700"
+                  >
+                    Custom Range
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Created By Filter */}
+            <div className="relative w-full sm:w-auto min-w-[180px] md:min-w-[200px]">
+              <SearchableDropdown
+                value={selectedCreatedBy}
+                onChange={(value) => setSelectedCreatedBy(value)}
+                options={[
+                  { value: '', label: 'All Created By' },
+                  ...uniqueCreatedBy
+                ]}
+                placeholder="All Created By"
+                searchPlaceholder="Search created by..."
+                className="w-full border-2 border-gray-200 rounded-xl bg-white hover:bg-gray-50 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
+              />
+            </div>
+
+            {/* Company Filter */}
+            <div className="relative w-full sm:w-auto min-w-[180px] md:min-w-[200px]">
+              <SearchableDropdown
+                value={selectedCompany}
+                onChange={(value) => {
+                  dispatch(setAddDispature(value || null));
                 }}
-                className="flex items-center gap-1 md:gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-3 md:px-5 py-2 md:py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 text-sm md:text-base flex-1 sm:flex-none justify-center"
-              >
-                <FileSpreadsheet size={16} />
-                <span className="hidden sm:inline">Import Excel</span>
-                <span className="sm:hidden">Import</span>
-              </button>
+                options={[
+                  { value: '', label: 'Select Company' },
+                  ...companyOptions
+                ]}
+                placeholder="Select Company"
+                searchPlaceholder="Search company..."
+                className="w-full border-2 border-gray-200 rounded-xl bg-white hover:bg-gray-50 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-500 transition-all"
+              />
             </div>
+          </div>
+
+          {/* Second Row - Action Buttons */}
+          <div className="flex items-center gap-3 md:gap-4">
+            {/* Export CSV Button */}
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 text-sm md:text-base"
+            >
+              <FaDownload size={18} />
+              <span>Export CSV</span>
+            </button>
+
+            {/* Import Excel Button */}
+            <button
+              onClick={() => {
+                setShowExcelImportModal(true);
+                setImportStep(1);
+                setColumnMapping({});
+                setPreviewData(null);
+                setFileReference(null);
+                setImportResult(null);
+              }}
+              className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 text-sm md:text-base"
+            >
+              <FileSpreadsheet size={18} />
+              <span>Import Excel</span>
+            </button>
           </div>
         </div>
       </div>
