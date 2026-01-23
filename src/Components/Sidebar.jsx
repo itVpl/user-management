@@ -59,7 +59,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Rate Request Report",
       "Call Records (Id)",
       "Call Data",
-      "Report Analysis"
+      "Report Analysis",
+      "Emp Login Report"
     ],
     "Attendance & Leave": [
       "Attendance Leave",
@@ -116,7 +117,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Team Rating",
       "Call Data",
       "Call Records (Id)",
-      "Report Analysis"
+      "Report Analysis",
+      "Emp Login Report"
     ],
     "Follow-ups": [
       "Daily Follow-Up",
@@ -161,7 +163,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Finance Dashboard",
       "Call Data",
       "Call Records (Id)",
-      "Report Analysis"
+      "Report Analysis",
+      "Emp Login Report"
     ],
     "System Administration": [
       "Manage Module"
@@ -193,7 +196,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "DO Report",
       "Call Records (Id)",
       "Call Data",
-      "Report Analysis"
+      "Report Analysis",
+      "Emp Login Report"
     ],
     "Rate Management": [
       "Rate Request",
@@ -382,6 +386,7 @@ const menuItems = [
   { name: "My Reviews", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/my-reviews" },
   { name: "QA Call Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/call-report" },
   { name: "All DO Assigned CMT", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-do-assigned-cmt" },
+  { name: "Emp Login Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/emp-login-report" },
   
   
 ];

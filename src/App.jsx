@@ -73,6 +73,7 @@ const AllLeads = lazy(() => import("./Components/AllLeads.jsx"));
 const TaskScheduling = lazy(() => import("./Components/TaskScheduling/TaskScheduling.jsx"));
 const CmtDeptReport = lazy(() => import("./Components/CMT/cmtDeptReport.jsx"));
 const SalesDeptReport = lazy(() => import("./Components/Sales/salesDeptReport.jsx"));
+const EmpLoginReport = lazy(() => import("./Components/Report/EmpLoginReport.jsx"));
 const Invoices = lazy(() => import("./Components/Accountant/Invoices.jsx"));
 const CheckInvoice = lazy(() => import("./Components/Sales/CheckInvoice.jsx"));
 const AssignLoad = lazy(() => import("./Components/CMT-Manager/AssignLoad.jsx"));
@@ -664,6 +665,7 @@ function App() {
           <Route path="TaskScheduling" element={<TaskScheduling />} />
           <Route path="CmtDeptReport" element={<CmtDeptReport />} />
           <Route path="SalesDeptReport" element={<SalesDeptReport />} />
+          <Route path="emp-login-report" element={<EmpLoginReport />} />
           <Route path="Invoices" element={<Invoices />} />
           <Route path="CheckInvoice" element={<CheckInvoice />} />
           <Route path="AssignLoad" element={<AssignLoad />} />
