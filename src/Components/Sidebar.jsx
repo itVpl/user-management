@@ -109,17 +109,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Shipper Load Data",
       "Manager L Document"
     ],
-    "Reports": [
-      "Sales Dept Report",
-      "Follow Up Report",
-      "DO Report",
-      "All DO Assigned CMT",
-      "Team Rating",
-      "Call Data",
-      "Call Records (Id)",
-      "Report Analysis",
-      "Emp Login Report"
-    ],
     "Follow-ups": [
       "Daily Follow-Up",
       "Follow Up Report"
@@ -391,6 +380,27 @@ const menuItems = [
   
 ];
 
+// List of report names to filter for Reports section
+const REPORT_NAMES = [
+  "Sales Dept Report",
+  "Follow Up Report",
+  "DO Report",
+  "All DO Assigned CMT",
+  "Team Rating",
+  "Call Data",
+  "Call Records (Id)",
+  "Report Analysis",
+  "Emp Login Report",
+  "Break Report",
+  "Receivable Report",
+  "Payable Report",
+  "Rate Request Report",
+  "CMT Dept Report",
+  "Trucker Report",
+  "Target Reports",
+  "QA Call Report"
+];
+
 const Sidebar = () => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
@@ -398,6 +408,8 @@ const Sidebar = () => {
   const [departmentCategories, setDepartmentCategories] = useState({});
   const [isDepartmentMenuOpen, setIsDepartmentMenuOpen] = useState(false);
   const [openCategories, setOpenCategories] = useState({});
+  const [isReportsOpen, setIsReportsOpen] = useState(true);
+  const [reportMenuItems, setReportMenuItems] = useState([]);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userDepartment, setUserDepartment] = useState(null);
@@ -561,8 +573,13 @@ const Sidebar = () => {
               const deptMenus = menuItems.filter(item => 
                 allDeptModuleNames.includes(item.name)
               );
+              // Separate reports from other menus
+              const reports = menuItems.filter(item => 
+                REPORT_NAMES.includes(item.name)
+              );
               const otherMenus = menuItems.filter(item => 
                 !allDeptModuleNames.includes(item.name) && 
+                !REPORT_NAMES.includes(item.name) &&
                 ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
               );
               
@@ -578,15 +595,21 @@ const Sidebar = () => {
               
               setDepartmentMenuItems(deptMenus);
               setDepartmentCategories(categorized);
+              setReportMenuItems(reports);
               setFilteredMenuItems(otherMenus);
             } else {
               console.warn("⚠️ No modules matched, showing basic menus");
               const basicMenus = menuItems.filter(item => 
                 ['Dashboard', 'Tracking'].includes(item.name)
               );
+              // Still try to get reports even if no modules matched
+              const reports = menuItems.filter(item => 
+                REPORT_NAMES.includes(item.name)
+              );
               setFilteredMenuItems(basicMenus);
               setDepartmentMenuItems([]);
               setDepartmentCategories({});
+              setReportMenuItems(reports);
             }
           } else {
             // For users with department categories, separate department modules and categorize them
@@ -598,8 +621,27 @@ const Sidebar = () => {
               const deptMenus = matchedMenus.filter(item => 
                 allDeptModuleNames.includes(item.name)
               );
+              // Separate reports from other menus
+              // Get reports from matchedMenus first, then add any missing ones from menuItems
+              const reportsFromMatched = matchedMenus.filter(item => 
+                REPORT_NAMES.includes(item.name)
+              );
+              // Also get reports from all menuItems as fallback (in case user has access but they weren't matched)
+              const allReports = menuItems.filter(item => 
+                REPORT_NAMES.includes(item.name)
+              );
+              // Combine and deduplicate by path
+              const reportsMap = new Map();
+              reportsFromMatched.forEach(item => reportsMap.set(item.path, item));
+              allReports.forEach(item => {
+                if (!reportsMap.has(item.path)) {
+                  reportsMap.set(item.path, item);
+                }
+              });
+              const reports = Array.from(reportsMap.values());
+              
               const otherMenus = matchedMenus.filter(item => 
-                !allDeptModuleNames.includes(item.name)
+                !allDeptModuleNames.includes(item.name) && !REPORT_NAMES.includes(item.name)
               );
               
               // Categorize department modules
@@ -625,19 +667,43 @@ const Sidebar = () => {
               
               setDepartmentMenuItems(deptMenus);
               setDepartmentCategories(categorized);
+              setReportMenuItems(reports);
               setFilteredMenuItems(otherMenus);
             } else {
-              // For users without department categories, show all modules as before
-              const hasCompanies = matchedMenus.some(item => item.name === 'Companies');
+              // For users without department categories, separate reports from other menus
+              // Get reports from matchedMenus first, then add any missing ones from menuItems
+              const reportsFromMatched = matchedMenus.filter(item => 
+                REPORT_NAMES.includes(item.name)
+              );
+              // Also get reports from all menuItems as fallback
+              const allReports = menuItems.filter(item => 
+                REPORT_NAMES.includes(item.name)
+              );
+              // Combine and deduplicate by path
+              const reportsMap = new Map();
+              reportsFromMatched.forEach(item => reportsMap.set(item.path, item));
+              allReports.forEach(item => {
+                if (!reportsMap.has(item.path)) {
+                  reportsMap.set(item.path, item);
+                }
+              });
+              const reports = Array.from(reportsMap.values());
+              
+              const otherMenus = matchedMenus.filter(item => 
+                !REPORT_NAMES.includes(item.name)
+              );
+              
+              const hasCompanies = otherMenus.some(item => item.name === 'Companies');
               if (!hasCompanies && companiesMenuItem) {
-                const dashboardIndex = matchedMenus.findIndex(item => item.name === 'Dashboard');
+                const dashboardIndex = otherMenus.findIndex(item => item.name === 'Dashboard');
                 if (dashboardIndex >= 0) {
-                  matchedMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
+                  otherMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
                 } else {
-                  matchedMenus.unshift(companiesMenuItem);
+                  otherMenus.unshift(companiesMenuItem);
                 }
               }
-              setFilteredMenuItems(matchedMenus);
+              setReportMenuItems(reports);
+              setFilteredMenuItems(otherMenus);
               setDepartmentMenuItems([]);
               setDepartmentCategories({});
             }
@@ -648,9 +714,13 @@ const Sidebar = () => {
           const basicMenus = menuItems.filter(item => 
             ['Dashboard', 'Tracking'].includes(item.name)
           );
+          const reports = menuItems.filter(item => 
+            REPORT_NAMES.includes(item.name)
+          );
           setFilteredMenuItems(basicMenus);
           setDepartmentMenuItems([]);
           setDepartmentCategories({});
+          setReportMenuItems(reports);
         }
       } catch (err) {
         console.error("❌ Failed to fetch modules:", err);
@@ -658,9 +728,13 @@ const Sidebar = () => {
         const basicMenus = menuItems.filter(item => 
           ['Dashboard', 'Tracking'].includes(item.name)
         );
+        const reports = menuItems.filter(item => 
+          REPORT_NAMES.includes(item.name)
+        );
         setFilteredMenuItems(basicMenus);
         setDepartmentMenuItems([]);
         setDepartmentCategories({});
+        setReportMenuItems(reports);
       } finally {
         setLoading(false);
       }
@@ -692,6 +766,20 @@ const Sidebar = () => {
       }
     }
   }, [location.pathname, userDepartment, departmentMenuItems, departmentCategories]);
+
+  // Auto-expand Reports section if current location matches any report path
+  useEffect(() => {
+    if (reportMenuItems.length > 0) {
+      const currentPath = location.pathname;
+      const isReportActive = reportMenuItems.some(item => 
+        currentPath === item.path || currentPath.startsWith(item.path + '/')
+      );
+      
+      if (isReportActive) {
+        setIsReportsOpen(true);
+      }
+    }
+  }, [location.pathname, reportMenuItems]);
 
   useEffect(() => {
     const onStorage = () => {
@@ -736,9 +824,13 @@ const Sidebar = () => {
             <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
               {filteredMenuItems.length > 0 || departmentMenuItems.length > 0 ? (
                 <>
-                  {filteredMenuItems.map((item, idx) => {
-                    // Render Dashboard first, then department dropdown for users with department categories
+                  {(() => {
+                    // Define hasDeptCategories outside the map for use in multiple places
                     const hasDeptCategories = userDepartment && getDepartmentCategories(userDepartment) !== null;
+                    return (
+                      <>
+                        {filteredMenuItems.map((item, idx) => {
+                          // Render Dashboard first, then department dropdown for users with department categories
                     if (hasDeptCategories && item.name === "Dashboard") {
                       return (
                         <React.Fragment key={idx}>
@@ -940,6 +1032,78 @@ const Sidebar = () => {
                       </NavLink>
                     );
                   })}
+                  {/* Reports Section - Top Level (for all users) */}
+                  {reportMenuItems.length > 0 && (
+                    <div className="w-full mt-2">
+                      <button
+                        onClick={() => setIsReportsOpen(!isReportsOpen)}
+                        className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 w-full ${
+                          reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/'))
+                            ? "text-white"
+                            : "hover:bg-gray-100 text-gray-700"
+                        }`}
+                        style={
+                          reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/'))
+                            ? { backgroundColor: activeBgColor }
+                            : {}
+                        }
+                      >
+                        <img
+                          src={
+                            reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/'))
+                              ? WhiteRevenueStatic
+                              : BlueRevenueStatic
+                          }
+                          alt="Reports"
+                          className="w-5 h-5"
+                        />
+                        <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
+                          Reports
+                        </span>
+                        {isExpanded && (
+                          <img
+                            src={isReportsOpen ? ArrowUp : ArrowDown}
+                            alt={isReportsOpen ? "Collapse" : "Expand"}
+                            className="w-4 h-4"
+                          />
+                        )}
+                      </button>
+                      {isReportsOpen && isExpanded && (
+                        <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
+                          {reportMenuItems.map((reportItem, reportIdx) => (
+                            <NavLink
+                              to={reportItem.path}
+                              key={reportIdx}
+                              title={!isExpanded ? reportItem.name : ""}
+                              className={({ isActive }) =>
+                                `flex items-center justify-start gap-2 p-2 rounded-lg transition-all ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
+                              }
+                              style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
+                              end
+                            >
+                              {({ isActive }) => (
+                                <>
+                                  <div className="relative">
+                                    <img
+                                      src={isActive ? reportItem.whiteIcon || reportItem.icon : reportItem.icon}
+                                      alt={reportItem.name}
+                                      className="w-4 h-4"
+                                    />
+                                  </div>
+                                  <span className="text-xs font-medium">
+                                    {reportItem.name}
+                                  </span>
+                                </>
+                              )}
+                            </NavLink>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                      </>
+                    );
+                  })()}
                 </>
               ) : (
                 <div className="text-center p-4 text-gray-500">
