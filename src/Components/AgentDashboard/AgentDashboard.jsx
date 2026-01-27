@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { MoreHorizontal, Phone, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Award, Truck, DollarSign, Target } from 'lucide-react';
+import GroupIcon from '@mui/icons-material/Group';
+import InfoOutlineSharpIcon from '@mui/icons-material/InfoOutlineSharp';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
+import CheckCircleOutlineSharpIcon from '@mui/icons-material/CheckCircleOutlineSharp';
+import { MoreHorizontal, Phone, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Award, Truck, DollarSign, Target, UserPlus, AlertTriangle, User, Info } from 'lucide-react';
 import UpcomingBirthdays from '../UpcomingBirthdays';
 import DailyFollowNotification from '../DailyFollowNotification';
 import API_CONFIG from '../../config/api';
@@ -364,18 +368,42 @@ const Dashboard = () => {
     );
   };
 
-  const StatCard = ({ title, value, icon: Icon, color, gradient, subtitle }) => (
-    <div className={`bg-gradient-to-br ${gradient} rounded-xl shadow-lg p-6 border border-white/20 backdrop-blur-sm`}>
+  const StatCard = ({ title, value, icon: Icon, color, subtitle, trend, trendValue, showTitle = false, noBackground = false, iconColor = null, backgroundColor = null }) => (
+    <div className="bg-white rounded-2xl p-6 border-2 border-gray-200">
       <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center shadow-lg`}>
-          <Icon className="text-white" size={24} />
+        <div className="text-left">
+          <p className="text-sm text-gray-500 font-medium">{subtitle}</p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-white/80 font-medium">{subtitle}</p>
+        <div 
+          className={`w-12 h-12 ${noBackground ? '' : (backgroundColor ? '' : color)} rounded-xl flex items-center justify-center`}
+          style={backgroundColor ? { backgroundColor } : {}}
+        >
+          <Icon 
+            className={noBackground ? "" : "text-white"} 
+            style={noBackground ? { color: iconColor || '#8280FF' } : {}} 
+            size={20} 
+          />
         </div>
       </div>
-      <div className="text-3xl font-bold text-white mb-2">{value || 0}</div>
-      <p className="text-white/90 font-medium">{title}</p>
+      <div className="text-3xl font-bold text-gray-900 mb-3">{value?.toLocaleString() || 0}</div>
+      <div className="flex items-center justify-between">
+        {trend && trendValue && !showTitle ? (
+          <div className="flex items-center gap-1">
+            <svg className="w-4 h-4" fill="none" stroke="#00B69B" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            <span className="text-sm font-medium">
+              <span style={{ color: '#00B69B' }}>{trendValue}</span>
+              <span className="text-gray-500"> Up from yesterday</span>
+            </span>
+          </div>
+        ) : showTitle ? (
+          <p className="font-medium" style={{ color: '#00B69B' }}>{title}</p>
+        ) : (
+          <div></div>
+        )}
+        <div></div>
+      </div>
     </div>
   );
 
@@ -439,33 +467,37 @@ const Dashboard = () => {
               title="Present Days"
               value={presentDaysCount}
               icon={Calendar}
-              color="bg-gradient-to-r from-blue-500 to-blue-600"
-              gradient="from-blue-500 to-blue-600"
+              color="bg-blue-500"
               subtitle="This Month"
+              showTitle={true}
             />
             <StatCard
               title="Today's Carriers"
               value={cmtData.todayStats.totalAdded}
-              icon={Target}
-              color="bg-gradient-to-r from-emerald-500 to-emerald-600"
-              gradient="from-emerald-500 to-emerald-600"
+              icon={Users}
+              color="bg-blue-500"
               subtitle="Added Today"
+              trend="up"
+              trendValue="8.5%"
+              noBackground={true}
             />
             <StatCard
               title="Total Calls"
               value={callStats.total}
-              icon={Phone}
-              color="bg-gradient-to-r from-orange-500 to-orange-600"
-              gradient="from-orange-500 to-orange-600"
-              subtitle="Today"
+              icon={Info}
+              color="bg-yellow-500"
+              subtitle="Pending DOs"
+              trend="up"
+              trendValue="8.5%"
             />
             <StatCard
               title="Approved Carriers"
               value={cmtData.todayStats.approved}
-              icon={Award}
-              color="bg-gradient-to-r from-purple-500 to-purple-600"
-              gradient="from-purple-500 to-purple-600"
-              subtitle="Today"
+              icon={CheckCircle}
+              color="bg-green-500"
+              subtitle="Completed Today"
+              trend="up"
+              trendValue="8.5%"
             />
           </div>
 
@@ -666,34 +698,38 @@ const Dashboard = () => {
             <StatCard
               title="Present Days"
               value={presentDaysCount}
-              icon={Calendar}
-              color="bg-gradient-to-r from-blue-500 to-blue-600"
-              gradient="from-blue-500 to-blue-600"
+              icon={CalendarMonthOutlinedIcon}
+              color="bg-blue-500"
               subtitle="This Month"
+              showTitle={true}
             />
             <StatCard
               title="Total DO"
               value={doData.todayStats.totalAdded}
-              icon={Target}
-              color="bg-gradient-to-r from-emerald-500 to-emerald-600"
-              gradient="from-emerald-500 to-emerald-600"
+              icon={GroupIcon}
+              color="bg-blue-500"
               subtitle="Added Today"
+              trend="up"
+              trendValue="8.5%"
+              noBackground={true}
             />
             <StatCard
               title="Total Calls"
               value={callStats.total}
-              icon={Phone}
-              color="bg-gradient-to-r from-orange-500 to-orange-600"
-              gradient="from-orange-500 to-orange-600"
-              subtitle="Today"
+              icon={InfoOutlineSharpIcon}
+              backgroundColor="#FCC962"
+              subtitle="Pending DOs"
+              trend="up"
+              trendValue="8.5%"
             />
             <StatCard
               title="Today’s DO"
               value={doData.todayStats.approved}
-              icon={Award}
-              color="bg-gradient-to-r from-purple-500 to-purple-600"
-              gradient="from-purple-500 to-purple-600"
-              subtitle="Today"
+              icon={CheckCircleOutlineSharpIcon}
+              color="bg-green-500"
+              subtitle="Completed Today"
+              trend="up"
+              trendValue="8.5%"
             />
           </div>
 
