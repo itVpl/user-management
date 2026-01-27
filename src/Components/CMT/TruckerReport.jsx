@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Search, BarChart3, ChevronDown } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Eye, Search, BarChart3 } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
-import DateRangeSelector from '../HRDashboard/DateRangeSelector';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { 
   fetchTruckers, 
@@ -35,24 +34,9 @@ export default function TruckerReport() {
   const [activeSearchTerm, setActiveSearchTerm] = useState(''); // Active search term (what's actually being searched)
   const [searchFilter, setSearchFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  // Created By filters - using API parameters
-  const [createdByEmpId, setCreatedByEmpId] = useState('');
-  const [createdByEmployeeName, setCreatedByEmployeeName] = useState('');
-  const [createdByDepartment, setCreatedByDepartment] = useState('');
-  const [createdBySearch, setCreatedBySearch] = useState('');
-  const [isCreatedByDropdownOpen, setIsCreatedByDropdownOpen] = useState(false);
-  const [cmtUsers, setCmtUsers] = useState([]);
-  const [dateRange, setDateRange] = useState({
-    startDate: null,
-    endDate: null
-  });
 
   const currentPage = pagination.currentPage;
   const itemsPerPage = pagination.itemsPerPage || 15;
-
-  useEffect(() => {
-    fetchCmtUsers();
-  }, []);
 
   // Build search parameters for API
   const buildSearchParams = useCallback(() => {
@@ -85,31 +69,8 @@ export default function TruckerReport() {
       params.status = statusFilter;
     }
 
-    // Date range filters
-    if (dateRange.startDate) {
-      params.createdFrom = dateRange.startDate instanceof Date 
-        ? dateRange.startDate.toISOString().split('T')[0]
-        : dateRange.startDate;
-    }
-    if (dateRange.endDate) {
-      params.createdTo = dateRange.endDate instanceof Date 
-        ? dateRange.endDate.toISOString().split('T')[0]
-        : dateRange.endDate;
-    }
-
-    // Created By filters
-    if (createdByEmpId && createdByEmpId.trim()) {
-      params.createdByEmpId = createdByEmpId.trim();
-    }
-    if (createdByEmployeeName && createdByEmployeeName.trim()) {
-      params.createdByEmployeeName = createdByEmployeeName.trim();
-    }
-    if (createdByDepartment && createdByDepartment.trim()) {
-      params.createdByDepartment = createdByDepartment.trim();
-    }
-
     return params;
-  }, [currentPage, itemsPerPage, activeSearchTerm, searchFilter, statusFilter, dateRange.startDate, dateRange.endDate, createdByEmpId, createdByEmployeeName, createdByDepartment]);
+  }, [currentPage, itemsPerPage, activeSearchTerm, searchFilter, statusFilter]);
 
   // Handle search button click
   const handleSearch = () => {
@@ -137,41 +98,13 @@ export default function TruckerReport() {
     }
   }, [error]);
 
-  // Close Created By dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (isCreatedByDropdownOpen && !event.target.closest('.created-by-dropdown-container')) {
-        setIsCreatedByDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isCreatedByDropdownOpen]);
-
-  // Filter and Sort CMT Users for Created By Dropdown
-  const filteredCreatedByUsers = useMemo(() => {
-    let users = [...cmtUsers];
-    // Sort alphabetically
-    users.sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
-    
-    // Filter by search term
-    if (createdBySearch.trim()) {
-      users = users.filter(user => 
-        (user.employeeName?.toLowerCase() || '').includes(createdBySearch.toLowerCase())
-      );
-    }
-    return users;
-  }, [cmtUsers, createdBySearch]);
 
   // Reset to first page when filters change (but not when searchTerm changes - only when activeSearchTerm changes)
   useEffect(() => {
-    if (activeSearchTerm || searchFilter !== 'all' || statusFilter !== 'all' || dateRange.startDate || createdByEmpId || createdByEmployeeName || createdByDepartment) {
+    if (activeSearchTerm || searchFilter !== 'all' || statusFilter !== 'all') {
       dispatch(setCurrentPage(1));
     }
-  }, [activeSearchTerm, searchFilter, statusFilter, dateRange.startDate, dateRange.endDate, createdByEmpId, createdByEmployeeName, createdByDepartment, dispatch]);
+  }, [activeSearchTerm, searchFilter, statusFilter, dispatch]);
 
   const handleStatusUpdate = async (status) => {
     try {
@@ -211,17 +144,6 @@ export default function TruckerReport() {
     }
   };
 
-  const fetchCmtUsers = async () => {
-    try {
-      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`);
-      if (res.data) {
-          const employees = res.data.employees || res.data.data || (Array.isArray(res.data) ? res.data : []);
-          setCmtUsers(employees);
-      }
-    } catch (err) {
-      console.error('Error fetching CMT users:', err);
-    }
-  };
 
   // Helpers
   const statusColor = (status) => {
@@ -413,89 +335,6 @@ export default function TruckerReport() {
 
         {/* Search + Filter */}
         <div className="flex items-center gap-4">
-          <div className="relative text-md">
-            <DateRangeSelector dateRange={dateRange} setDateRange={setDateRange} />
-          </div>
-          <div className="relative created-by-dropdown-container">
-            <button
-              onClick={() => setIsCreatedByDropdownOpen(!isCreatedByDropdownOpen)}
-              className="flex items-center justify-between px-4 py-2 border border-gray-200 rounded-lg bg-white w-48 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
-            >
-              <span className="truncate text-md text-gray-700">
-                {createdByEmpId 
-                  ? cmtUsers.find(u => (u.empId || u._id) === createdByEmpId)?.employeeName 
-                  : createdByEmployeeName
-                  ? createdByEmployeeName
-                  : createdByDepartment
-                  ? `Dept: ${createdByDepartment}`
-                  : 'Created By'}
-              </span>
-              <ChevronDown 
-                size={16} 
-                className={`text-gray-500 transition-transform duration-200 ${isCreatedByDropdownOpen ? 'transform rotate-180' : ''}`} 
-              />
-            </button>
-
-            {isCreatedByDropdownOpen && (
-              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                <style>
-                  {`
-                    .created-by-dropdown-container div::-webkit-scrollbar {
-                      display: none;
-                    }
-                  `}
-                </style>
-                
-                {/* Search Input */}
-                <div className="sticky top-0 bg-white p-2 border-b border-gray-100 z-10">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={createdBySearch}
-                      onChange={(e) => setCreatedBySearch(e.target.value)}
-                      placeholder="Search..."
-                      className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => {
-                    setCreatedByEmpId('');
-                    setCreatedByEmployeeName('');
-                    setCreatedByDepartment('');
-                    setCreatedBySearch('');
-                    setIsCreatedByDropdownOpen(false);
-                  }}
-                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 transition-colors ${!createdByEmpId && !createdByEmployeeName && !createdByDepartment ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
-                >
-                  Created All
-                </div>
-                {filteredCreatedByUsers.map((user) => (
-                  <div
-                    key={user._id || user.empId}
-                    onClick={() => {
-                      setCreatedByEmpId(user.empId || user._id);
-                      setCreatedByEmployeeName(''); // Clear name filter when selecting by ID
-                      setCreatedByDepartment(''); // Clear department filter when selecting by ID
-                      setCreatedBySearch('');
-                      setIsCreatedByDropdownOpen(false);
-                    }}
-                    className={`px-4 py-2 text-md cursor-pointer hover:bg-blue-50 transition-colors ${createdByEmpId === (user.empId || user._id) ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
-                  >
-                    {user.employeeName}
-                  </div>
-                ))}
-                {filteredCreatedByUsers.length === 0 && (
-                   <div className="px-4 py-3 text-gray-500 text-center text-xs">
-                     No users found
-                   </div>
-                )}
-              </div>
-            )}
-          </div>
           <div className="relative">
             <select
               value={searchFilter}
