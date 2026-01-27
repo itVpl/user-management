@@ -34,11 +34,12 @@ import {
   ArrowDown,
   ArrowUp
 } from "../assets/image";
-import logo from "../assets/LogoFinal.png";
+import logo from "../assets/logo_vpower.png";
 import LogoutConfirmationModal from "./LogoutConfirmationModal";
 import { useUnreadCount } from "../contexts/UnreadCountContext";
 import sharedSocketService from "../services/sharedSocketService";
 import API_CONFIG from "../config/api";
+import SidebarFlyout from "./SidebarFlyout";
 
 // Department-specific Module Categories
 const DEPARTMENT_MODULE_CATEGORIES = {
@@ -430,6 +431,11 @@ const Sidebar = () => {
   const [breakLoading, setBreakLoading] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
   
+  // Flyout menu states
+  const [flyoutOpen, setFlyoutOpen] = useState(false);
+  const [flyoutType, setFlyoutType] = useState(''); // 'sales' or 'reports'
+  const [flyoutPosition, setFlyoutPosition] = useState({ left: 280, top: 100 });
+  
   const location = useLocation();
   const { getTotalUnreadCount, hasUnreadMessages, unreadCounts, groupUnreadCounts } = useUnreadCount();
   
@@ -558,6 +564,55 @@ const Sidebar = () => {
       alert("Failed to logout. Please try again.");
     }
   };
+
+  // Flyout menu handlers
+  const handleFlyoutOpen = (type, event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    
+    let topPosition = rect.top;
+    
+    // Only apply advanced positioning logic for Reports flyout
+    if (type === 'reports') {
+      // Estimate flyout height for reports
+      let estimatedFlyoutHeight = 200; // Base height for header and padding
+      if (reportMenuItems) {
+        estimatedFlyoutHeight += 40; // Category header
+        estimatedFlyoutHeight += reportMenuItems.length * 36; // Each item ~36px
+      }
+      
+      // Check if flyout would extend below viewport
+      if (topPosition + estimatedFlyoutHeight > viewportHeight - 20) {
+        // Position flyout so it fits within viewport with 20px margin at bottom
+        topPosition = Math.max(20, viewportHeight - estimatedFlyoutHeight - 20);
+      }
+      
+      // Ensure flyout doesn't go above viewport
+      topPosition = Math.max(20, topPosition);
+    } else {
+      // Keep original simple positioning for Sales flyout
+      if (topPosition > viewportHeight * 0.7) {
+        topPosition = Math.max(20, viewportHeight * 0.1);
+      }
+    }
+    
+    setFlyoutPosition({
+      left: rect.right + 10,
+      top: topPosition
+    });
+    setFlyoutType(type);
+    setFlyoutOpen(true);
+  };
+
+  const handleFlyoutClose = () => {
+    setFlyoutOpen(false);
+    setFlyoutType('');
+  };
+
+  // Close flyout when navigating to other pages
+  useEffect(() => {
+    handleFlyoutClose();
+  }, [location.pathname]);
 
   useEffect(() => {
     const fetchModules = async () => {
@@ -877,7 +932,7 @@ const Sidebar = () => {
   // Show loading state
   if (loading) {
     return (
-      <div className={`fixed top-0 left-0 h-screen bg-white shadow-md z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-35"}`}>
+      <div className={`fixed top-4 left-4 h-[calc(100vh-32px)] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
         <div className="p-4">
           <img src={logo} alt="Logo" className={`${isExpanded ? "w-24 h-10" : "w-23 h-10 mx-auto"}`} />
         </div>
@@ -890,12 +945,27 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className={`fixed top-0 left-0 h-screen bg-white shadow-md z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-35"}`}>
+      <div className={`fixed top-4 left-4 h-[calc(100vh-32px)] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
         <div className="flex-none">
           <div className="p-4 relative flex items-center justify-between">
-            <img src={logo} alt="Logo" className={`${isExpanded ? "w-24 h-10" : "w-23 h-10 mx-auto"}`} />
-            <button onClick={toggleSidebar} className="absolute -right-3 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-full p-1 shadow-md z-10">
-              <img src={isExpanded ? BackButtonLeft : BackButtonRight} alt="Toggle" className="w-6 h-6" />
+            <img 
+              src={logo} 
+              alt="Logo" 
+              className={`${isExpanded ? "w-24 h-10" : "w-8 h-8 mx-auto object-contain"}`} 
+            />
+            <button 
+              onClick={toggleSidebar} 
+              className="absolute -right-3 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-full p-2 shadow-md z-10 hover:bg-gray-50 transition-colors"
+            >
+              {isExpanded ? (
+                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
@@ -919,7 +989,7 @@ const Sidebar = () => {
                             to={item.path}
                             title={!isExpanded ? item.name : ""}
                             className={({ isActive }) =>
-                              `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
+                              `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all ${isExpanded ? "mx-2" : "mx-1"} ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
                             }
                             style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
                             end
@@ -943,21 +1013,21 @@ const Sidebar = () => {
                           {departmentMenuItems.length > 0 && (
                             <div className="w-full">
                               <button
-                                onClick={() => setIsDepartmentMenuOpen(!isDepartmentMenuOpen)}
-                                className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 w-full ${
-                                  departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/'))
-                                    ? "text-white"
-                                    : "hover:bg-gray-100 text-gray-700"
+                                onClick={(e) => handleFlyoutOpen('sales', e)}
+                                className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 transition-all ${isExpanded ? "mx-2" : "mx-1"} w-full ${
+                                  departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
+                                    ? "text-white rounded-l-lg rounded-r-3xl"
+                                    : "hover:bg-gray-100 text-gray-700 rounded-lg"
                                 }`}
                                 style={
-                                  departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/'))
+                                  departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
                                     ? { backgroundColor: activeBgColor }
                                     : {}
                                 }
                               >
                                 <img
                                   src={
-                                    departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/'))
+                                    departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
                                       ? WhiteManageUser
                                       : ManageUser
                                   }
@@ -967,98 +1037,7 @@ const Sidebar = () => {
                                 <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
                                   {getDepartmentDropdownName(userDepartment)}
                                 </span>
-                                {isExpanded && (
-                                  <img
-                                    src={isDepartmentMenuOpen ? ArrowUp : ArrowDown}
-                                    alt={isDepartmentMenuOpen ? "Collapse" : "Expand"}
-                                    className="w-4 h-4"
-                                  />
-                                )}
                               </button>
-                              {isDepartmentMenuOpen && isExpanded && (
-                                <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
-                                  {Object.entries(departmentCategories).map(([category, modules]) => {
-                                    const isCategoryActive = modules.some(mod => 
-                                      location.pathname === mod.path || location.pathname.startsWith(mod.path + '/')
-                                    );
-                                    const isCategoryOpen = openCategories[category] || false;
-                                    
-                                    return (
-                                      <div key={category} className="w-full">
-                                        <button
-                                          onClick={() => setOpenCategories(prev => ({ ...prev, [category]: !isCategoryOpen }))}
-                                          className={`flex items-center justify-start gap-2 p-2 rounded-lg transition-all w-full ${
-                                            isCategoryActive
-                                              ? "text-white"
-                                              : "hover:bg-gray-100 text-gray-700"
-                                          }`}
-                                          style={isCategoryActive ? { backgroundColor: activeBgColor } : {}}
-                                        >
-                                          <img
-                                            src={isCategoryOpen ? ArrowUp : ArrowDown}
-                                            alt={isCategoryOpen ? "Collapse" : "Expand"}
-                                            className="w-3 h-3"
-                                          />
-                                          <span className="text-sm font-semibold relative inline-block">
-                                            {category}
-                                            {/* Red dot badge for Communication when there are unread messages */}
-                                            {category === "Communication" && hasUnread && (
-                                              <span
-                                                className="absolute -top-1 -right-4 w-3 h-3 bg-red-500 rounded-full border-2 border-white"
-                                                style={{
-                                                  boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
-                                                }}
-                                                title={`${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`}
-                                              />
-                                            )}
-                                          </span>
-                                        </button>
-                                        {isCategoryOpen && (
-                                          <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-300 pl-2">
-                                            {modules.map((deptItem, deptIdx) => (
-                                              <NavLink
-                                                to={deptItem.path}
-                                                key={deptIdx}
-                                                title={!isExpanded ? deptItem.name : ""}
-                                                className={({ isActive }) =>
-                                                  `flex items-center justify-start gap-2 p-2 rounded-lg transition-all ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
-                                                }
-                                                style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
-                                                end
-                                              >
-                                                {({ isActive }) => (
-                                                  <>
-                                                    <div className="relative">
-                                                      <img
-                                                        src={isActive ? deptItem.whiteIcon || deptItem.icon : deptItem.icon}
-                                                        alt={deptItem.name}
-                                                        className="w-4 h-4"
-                                                      />
-                                                      {/* Red dot badge for Chat when there are unread messages */}
-                                                      {deptItem.name === "Chat" && hasUnread && (
-                                                        <span
-                                                          className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"
-                                                          style={{
-                                                            boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
-                                                          }}
-                                                          title={`${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`}
-                                                        />
-                                                      )}
-                                                    </div>
-                                                    <span className="text-xs font-medium">
-                                                      {deptItem.name}
-                                                    </span>
-                                                  </>
-                                                )}
-                                              </NavLink>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
                             </div>
                           )}
                         </React.Fragment>
@@ -1075,7 +1054,7 @@ const Sidebar = () => {
                         key={idx}
                         title={!isExpanded ? item.name : ""}
                         className={({ isActive }) =>
-                          `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
+                          `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all ${isExpanded ? "mx-2" : "mx-1"} ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
                         }
                         style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
                         end
@@ -1117,21 +1096,21 @@ const Sidebar = () => {
                   {reportMenuItems.length > 0 && (
                     <div className="w-full mt-2">
                       <button
-                        onClick={() => setIsReportsOpen(!isReportsOpen)}
-                        className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all mx-2 w-full ${
-                          reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/'))
-                            ? "text-white"
-                            : "hover:bg-gray-100 text-gray-700"
+                        onClick={(e) => handleFlyoutOpen('reports', e)}
+                        className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 transition-all ${isExpanded ? "mx-2" : "mx-1"} w-full ${
+                          reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/')) || (flyoutOpen && flyoutType === 'reports')
+                            ? "text-white rounded-l-lg rounded-r-3xl"
+                            : "hover:bg-gray-100 text-gray-700 rounded-lg"
                         }`}
                         style={
-                          reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/'))
+                          reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/')) || (flyoutOpen && flyoutType === 'reports')
                             ? { backgroundColor: activeBgColor }
                             : {}
                         }
                       >
                         <img
                           src={
-                            reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/'))
+                            reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/')) || (flyoutOpen && flyoutType === 'reports')
                               ? WhiteRevenueStatic
                               : BlueRevenueStatic
                           }
@@ -1141,45 +1120,7 @@ const Sidebar = () => {
                         <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
                           Reports
                         </span>
-                        {isExpanded && (
-                          <img
-                            src={isReportsOpen ? ArrowUp : ArrowDown}
-                            alt={isReportsOpen ? "Collapse" : "Expand"}
-                            className="w-4 h-4"
-                          />
-                        )}
                       </button>
-                      {isReportsOpen && isExpanded && (
-                        <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
-                          {reportMenuItems.map((reportItem, reportIdx) => (
-                            <NavLink
-                              to={reportItem.path}
-                              key={reportIdx}
-                              title={!isExpanded ? reportItem.name : ""}
-                              className={({ isActive }) =>
-                                `flex items-center justify-start gap-2 p-2 rounded-lg transition-all ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
-                              }
-                              style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
-                              end
-                            >
-                              {({ isActive }) => (
-                                <>
-                                  <div className="relative">
-                                    <img
-                                      src={isActive ? reportItem.whiteIcon || reportItem.icon : reportItem.icon}
-                                      alt={reportItem.name}
-                                      className="w-4 h-4"
-                                    />
-                                  </div>
-                                  <span className="text-xs font-medium">
-                                    {reportItem.name}
-                                  </span>
-                                </>
-                              )}
-                            </NavLink>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
                       </>
@@ -1323,7 +1264,7 @@ const Sidebar = () => {
 
           <NavLink
             to="/"
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors mb-1"
+            className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors mb-1 ${isExpanded ? "mx-0" : "justify-center"}`}
           >
             <img src={DashboardImage} alt="Back to Home" className="w-5 h-5" />
             <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
@@ -1331,7 +1272,7 @@ const Sidebar = () => {
             </span>
           </NavLink>
           <div 
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors"
+            className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors ${isExpanded ? "mx-0" : "justify-center"}`}
             onClick={handleLogoutClick}
           >
             <img src={LogOut} alt="Logout" className="w-5 h-5" />
@@ -1341,6 +1282,15 @@ const Sidebar = () => {
           </div>
         </div>
       </div>
+
+      {/* Sidebar Flyout Menu */}
+      <SidebarFlyout
+        isOpen={flyoutOpen}
+        categories={flyoutType === 'sales' ? departmentCategories : { 'Reports': reportMenuItems }}
+        position={flyoutPosition}
+        onItemClick={handleFlyoutClose}
+        title={flyoutType === 'sales' ? getDepartmentDropdownName(userDepartment) : 'Reports'}
+      />
 
       {/* Logout Confirmation Modal */}
       <LogoutConfirmationModal

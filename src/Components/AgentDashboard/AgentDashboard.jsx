@@ -17,7 +17,34 @@ const Dashboard = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
-  
+  // Helper function to convert status display text
+  const getStatusDisplayText = (status) => {
+    if (!status) return 'Pending';
+    
+    switch(status.toLowerCase()) {
+      case 'delivered':
+      case 'completed':
+        return 'Delivered';
+      case 'pending':
+        return 'Pending';
+      case 'rejected':
+      case 'cancelled':
+        return 'Rejected';
+      case 'approved':
+        return 'Approved';
+      case 'open':
+        return 'Open';
+      case 'in-progress':
+      case 'in_progress':
+        return 'In Progress';
+      case 'on-hold':
+      case 'on_hold':
+        return 'On Hold';
+      default:
+        // Return the original status with proper capitalization
+        return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+    }
+  };
 
   // Add formatSeconds function
   const formatSeconds = (secs) => {
@@ -236,6 +263,9 @@ const Dashboard = () => {
         );
         
         if (response.data.success) {
+          // Debug: Log the API response to see the actual data structure
+          console.log('DO API Response:', response.data.data);
+          
           // Filter today's DOs - check createdAt or date field
           const today = new Date().toISOString().split('T')[0];
           const todayDOs = response.data.data.filter(deliveryOrder => {
@@ -254,6 +284,10 @@ const Dashboard = () => {
               return true; // If date parsing fails, include it
             }
           });
+
+          // Debug: Log filtered data
+          console.log('Today\'s DOs:', todayDOs);
+          console.log('Sample DO structure:', todayDOs[0]);
 
           // Calculate stats based on status field
           const totalAdded = todayDOs.length;
@@ -501,8 +535,155 @@ const Dashboard = () => {
             />
           </div>
 
-          {/* Main Content Grid */}
-          <div className="grid lg:grid-cols-3 gap-8 mb-8">
+          {/* New Section - Add your content here */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
+                  <FileText className="text-white" size={20} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800">New Section</h3>
+              </div>
+              <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span className="text-gray-700 font-medium">Sample Item 1</span>
+                </div>
+                <span className="font-bold text-blue-600">100</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span className="text-gray-700 font-medium">Sample Item 2</span>
+                </div>
+                <span className="font-bold text-green-600">75</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                  <span className="text-gray-700 font-medium">Sample Item 3</span>
+                </div>
+                <span className="font-bold text-orange-600">25</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Delivery Orders */}
+<div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-8" 
+     style={{
+       boxShadow: '7.54px 7.54px 67.85px 0px rgba(0, 0, 0, 0.05)',
+       borderWidth: '1.31px'
+     }}>
+  <div className="flex items-center justify-between mb-6">
+    <h3 className="text-xl font-bold text-gray-800">Recent Delivery Orders</h3>
+    <button className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 border border-gray-300 rounded-lg">
+      View All
+    </button>
+  </div>
+  
+  <div className="overflow-x-auto">
+    <table className="w-full">
+      <thead>
+        <tr className="bg-gray-50 border-b border-gray-200">
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Load ID</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Bill To</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Carrier Name</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Date-Time</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Shipper Name</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {doData.todayDOs.length > 0 ? (
+          doData.todayDOs.map((deliveryOrder, index) => {
+            // Extract data from API response structure
+            const loadId = deliveryOrder.loadNo || deliveryOrder._id?.slice(-8) || 'N/A';
+            const billTo = deliveryOrder.billTo || 'N/A';
+            const carrierName = deliveryOrder.assignedToCMT?.compName || 
+                              deliveryOrder.carrier?.compName || 
+                              deliveryOrder.carrierName || 
+                              'N/A';
+            const shipperName = deliveryOrder.shipper?.compName || 
+                              deliveryOrder.shipperName || 
+                              'N/A';
+            
+            // Format date-time
+            const dateTime = deliveryOrder.createdAt || deliveryOrder.date || new Date().toISOString();
+            const formattedDateTime = new Date(dateTime).toLocaleDateString('en-US', {
+              month: '2-digit',
+              day: '2-digit', 
+              year: 'numeric'
+            }) + ' - ' + new Date(dateTime).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            });
+            
+            // Calculate total amount from lineHaul, fsc, and other charges
+            const lineHaul = Number(deliveryOrder.lineHaul) || 0;
+            const fsc = Number(deliveryOrder.fsc) || 0;
+            const otherTotal = Array.isArray(deliveryOrder.other) 
+              ? deliveryOrder.other.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
+              : 0;
+            const totalAmount = lineHaul + fsc + otherTotal;
+            
+            // Status styling
+            const status = deliveryOrder.status || 'pending';
+            const getStatusStyle = (status) => {
+              switch(status.toLowerCase()) {
+                case 'delivered':
+                case 'completed':
+                  return 'bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'approved':
+                  return 'bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'pending':
+                  return 'bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'rejected':
+                case 'cancelled':
+                  return 'bg-red-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'open':
+                  return 'bg-indigo-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'in-progress':
+                case 'in_progress':
+                  return 'bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'on-hold':
+                case 'on_hold':
+                  return 'bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                default:
+                  return 'bg-gray-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+              }
+            };
+            
+            return (
+              <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                <td className="py-4 px-6 text-gray-800 font-medium">{loadId}</td>
+                <td className="py-4 px-6 text-gray-600">{billTo}</td>
+                <td className="py-4 px-6 text-gray-600">{carrierName}</td>
+                <td className="py-4 px-6 text-gray-600">{formattedDateTime}</td>
+                <td className="py-4 px-6 text-gray-600">{shipperName}</td>
+                <td className="py-4 px-6 text-gray-800 font-semibold">${totalAmount.toLocaleString()}</td>
+              </tr>
+            );
+          })
+        ) : (
+          <tr>
+            <td colSpan="6" className="py-8 px-6 text-center text-gray-500">
+              <div className="flex flex-col items-center">
+                <Truck className="w-8 h-8 text-gray-300 mb-2" />
+                <p>No recent delivery orders available</p>
+              </div>
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
+          {/* Main Content Grid - Call Performance and Daily Call Target */}
+          <div className="grid lg:grid-cols-2 gap-8 mb-8">
             {/* Call Performance Overview */}
             <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-6">
@@ -579,17 +760,13 @@ const Dashboard = () => {
                     percentage={cmtTargetProgress}
                     color={cmtTargetColor}
                   />
-                  {/* <div className="text-center mt-2">
-                    <p className="text-xs text-gray-600">Target Progress</p>
-                    <p className="text-sm font-bold text-gray-800">
-                      {Math.round(((callStats.totalDuration / 1000) / 60 / 90) * 100)}% Complete
-                    </p>
-                  </div> */}
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Recent Carrier (instead of Recent Loads) */}
+          {/* Recent Carrier Section */}
+          <div className="mb-8">
             <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -733,51 +910,15 @@ const Dashboard = () => {
             />
           </div>
 
-          {/* Main Content Grid */}
-          <div className="grid lg:grid-cols-3 gap-8 mb-8">
-            {/* Call Performance Overview */}
+          {/* Main Content Grid -  Daily Call Target and Call Performance */}
+          <div className="grid lg:grid-cols-2 gap-8 mb-8">
+             {/* Call Duration Stats */}
             <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-                    <Phone className="text-white" size={20} />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800">Call Performance</h3>
-                </div>
-                <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                    <span className="text-gray-700 font-medium">Answered Calls</span>
-                  </div>
-                  <span className="font-bold text-emerald-600">{callStats.answered}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                    <span className="text-gray-700 font-medium">Missed Calls</span>
-                  </div>
-                  <span className="font-bold text-red-600">{callStats.noAnswer}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    <span className="text-gray-700 font-medium">Total Calls Today</span>
-                  </div>
-                  <span className="font-bold text-blue-600">{callStats.total}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Call Duration Stats */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                  {/* <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
                     <Clock className="text-white" size={20} />
-                  </div>
+                  </div> */}
                   <h3 className="text-xl font-bold text-gray-800">Daily Call Target</h3>
                 </div>
                 <div className="text-sm text-gray-500 font-medium">
@@ -811,67 +952,47 @@ const Dashboard = () => {
                     percentage={salesTargetProgress}
                     color={salesTargetColor}
                   />
-                  {/* <div className="text-center mt-2">
-                    <p className="text-xs text-gray-600">Target Progress</p>
-                    <p className="text-sm font-bold text-gray-800">
-                      {Math.round((callStats.totalDuration / 10800) * 100)}% Complete
-                    </p>
-                  </div> */}
                 </div>
               </div>
             </div>
-            
 
-            {/* Recent DO (instead of Recent Carrier) */}
+            {/* Call Performance Overview */}
             <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
-                    <Truck className="text-white" size={20} />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800">Recent DO</h3>
+                  {/* <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                    <Phone className="text-white" size={20} />
+                  </div> */}
+                  <h3 className="text-xl font-bold text-gray-800">Call Performance</h3>
                 </div>
-                <div className="text-sm text-gray-500 font-medium">
-                  {doData.todayDOs.length} DO today
-                </div>
+                <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
               </div>
-              <div className="relative">
-                <div className="max-h-64 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                  <div className="space-y-2 pr-2">
-                    {doData.todayDOs.map((deliveryOrder, index) => {
-                      // Extract data from API response structure (new format)
-                      const loadNo = deliveryOrder.loadNo || 'N/A';
-                      const billTo = deliveryOrder.billTo || 'N/A';
-                      const shipperName = deliveryOrder.shipper?.compName || 'N/A';
-                      
-                      return (
-                        <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-100 hover:shadow-sm transition-all duration-200">
-                          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                            {loadNo !== 'N/A' ? loadNo.slice(-2) : (deliveryOrder._id || '').slice(-2)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-800 text-sm truncate">{loadNo}</p>
-                            <p className="text-xs text-gray-600">{billTo}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {doData.todayDOs.length === 0 && (
-                      <div className="text-center py-6">
-                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <Truck className="w-6 h-6 text-gray-400" size={20} />
-                        </div>
-                        <p className="text-gray-500 text-sm">No recent DO</p>
-                        <p className="text-gray-400 text-xs">DO data will appear here</p>
-                      </div>
-                    )}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                    <span className="text-gray-700 font-medium">Answered Calls</span>
                   </div>
+                  <span className="font-bold text-emerald-600">{callStats.answered}</span>
                 </div>
-                {doData.todayDOs.length > 3 && (
-                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
-                )}
+                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <span className="text-gray-700 font-medium">Missed Calls</span>
+                  </div>
+                  <span className="font-bold text-red-600">{callStats.noAnswer}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-gray-700 font-medium">Total Calls Today</span>
+                  </div>
+                  <span className="font-bold text-blue-600">{callStats.total}</span>
+                </div>
               </div>
             </div>
+
+           
           </div>
 
           {/* Upcoming Birthdays and Daily Follow Notification */}
@@ -879,72 +1000,118 @@ const Dashboard = () => {
             <UpcomingBirthdays limit={3} />
             <DailyFollowNotification limit={3} />
           </div>
-          {/* DO Data Table */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
-                  <Truck className="text-white" size={20} />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">DO Data</h3>
+        
+               {/* Recent Delivery Orders */}
+<div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-8" 
+     style={{
+       boxShadow: '7.54px 7.54px 67.85px 0px rgba(0, 0, 0, 0.05)',
+       borderWidth: '1.31px'
+     }}>
+  <div className="flex items-center justify-between mb-6">
+    <h3 className="text-xl font-bold text-gray-800">Recent Delivery Orders</h3>
+    <button className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 border border-gray-300 rounded-lg">
+      View All
+    </button>
+  </div>
+  
+  <div className="overflow-x-auto">
+    <table className="w-full">
+      <thead>
+        <tr className="bg-gray-50 border-b border-gray-200">
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Load ID</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Bill To</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Shipper Name</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Carrier Name</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Date-Time</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Carrier Fees</th>
+        </tr>
+      </thead>
+      <tbody>
+        {doData.todayDOs.length > 0 ? (
+          doData.todayDOs.map((deliveryOrder, index) => {
+            // Extract data from API response structure
+            const loadId = deliveryOrder.loadNo || deliveryOrder._id?.slice(-8) || 'N/A';
+            const billTo = deliveryOrder.billTo || 'N/A';
+            const carrierName = deliveryOrder.assignedToCMT?.compName || 
+                              deliveryOrder.carrier?.compName || 
+                              deliveryOrder.carrierName || 
+                              'N/A';
+            const shipperName = deliveryOrder.shipper?.compName || 
+                              deliveryOrder.shipperName || 
+                              'N/A';
+            
+            // Format date-time
+            const dateTime = deliveryOrder.createdAt || deliveryOrder.date || new Date().toISOString();
+            const formattedDateTime = new Date(dateTime).toLocaleDateString('en-US', {
+              month: '2-digit',
+              day: '2-digit', 
+              year: 'numeric'
+            }) + ' - ' + new Date(dateTime).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            });
+            
+            // Calculate total amount from lineHaul, fsc, and other charges
+            const lineHaul = Number(deliveryOrder.lineHaul) || 0;
+            const fsc = Number(deliveryOrder.fsc) || 0;
+            const otherTotal = Array.isArray(deliveryOrder.other) 
+              ? deliveryOrder.other.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
+              : 0;
+            const totalAmount = lineHaul + fsc + otherTotal;
+            
+            // Status styling
+            const status = deliveryOrder.status || 'pending';
+            const getStatusStyle = (status) => {
+              switch(status.toLowerCase()) {
+                case 'delivered':
+                case 'completed':
+                  return 'bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'approved':
+                  return 'bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'pending':
+                  return 'bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'rejected':
+                case 'cancelled':
+                  return 'bg-red-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'open':
+                  return 'bg-indigo-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'in-progress':
+                case 'in_progress':
+                  return 'bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                case 'on-hold':
+                case 'on_hold':
+                  return 'bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+                default:
+                  return 'bg-gray-500 text-white px-3 py-1 rounded-full text-xs font-medium';
+              }
+            };
+            
+            return (
+              <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                <td className="py-4 px-6 text-gray-800 font-medium">{loadId}</td>
+                <td className="py-4 px-6 text-gray-600">{billTo}</td>
+                <td className="py-4 px-6 text-gray-600">{shipperName}</td>
+                <td className="py-4 px-6 text-gray-600">{carrierName}</td>
+                <td className="py-4 px-6 text-gray-600">{formattedDateTime}</td>
+                <td className="py-4 px-6 text-gray-800 font-semibold">${totalAmount.toLocaleString()}</td>
+              </tr>
+            );
+          })
+        ) : (
+          <tr>
+            <td colSpan="6" className="py-8 px-6 text-center text-gray-500">
+              <div className="flex flex-col items-center">
+                <Truck className="w-8 h-8 text-gray-300 mb-2" />
+                <p>No recent delivery orders available</p>
               </div>
-              {/* <button className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium shadow-lg">
-                Create New DO
-              </button> */}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Load No</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Bill To</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Shipper Name</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Carrier Name</th>
-                    <th className="text-left py-4 px-4 text-blue-600 font-semibold">Carrier Fees</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {doData.todayDOs.length > 0 ? (
-                    doData.todayDOs.map((deliveryOrder, index) => {
-                      // Extract data from API response structure (new format)
-                      const loadNo = deliveryOrder.loadNo || 'N/A';
-                      const billTo = deliveryOrder.billTo || 'N/A';
-                      const shipperName = deliveryOrder.shipper?.compName || 'N/A';
-                      const carrierName = deliveryOrder.carrier?.compName || 'N/A';
-                      
-                      // Calculate total carrier fees from lineHaul, fsc, and other charges
-                      const lineHaul = Number(deliveryOrder.lineHaul) || 0;
-                      const fsc = Number(deliveryOrder.fsc) || 0;
-                      const otherTotal = Array.isArray(deliveryOrder.other) 
-                        ? deliveryOrder.other.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
-                        : 0;
-                      const carrierFees = lineHaul + fsc + otherTotal;
-                      
-                      return (
-                        <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
-                          <td className="py-4 px-4 text-gray-800 font-medium">{loadNo}</td>
-                          <td className="py-4 px-4 text-gray-800">{billTo}</td>
-                          <td className="py-4 px-4 text-gray-800">{shipperName}</td>
-                          <td className="py-4 px-4 text-gray-800">{carrierName}</td>
-                          <td className="py-4 px-4 text-gray-800 font-bold text-green-600">${carrierFees.toLocaleString()}</td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr className="border-b border-gray-100">
-                      <td colSpan="5" className="py-8 px-4 text-center text-gray-500">
-                        <div className="flex flex-col items-center">
-                          <Truck className="w-8 h-8 text-gray-300 mb-2" />
-                          <p>No DO data available for today</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-           
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
            {/* Team DO Records */}
           {/* <div className="bg-white rounded-2xl shadow-md p-6">
       

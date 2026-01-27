@@ -77,14 +77,12 @@ const Layout = () => {
   }, [isCMTUser, user, newDOAssignment, newAssignment]);
 
   return (
-    <div className="flex">
+    <div className="min-h-screen bg-gray-50">
       <Sidebar />
-      <div className="flex-1 ml-20 md:ml-64">
-        <Topbar />
-        <main className="p-4 pt-20"> {/* Adjust padding if needed */}
-          <Outlet />
-        </main>
-      </div>
+      <Topbar />
+      <main className="ml-20 md:ml-[320px] mr-12 pt-20 px-4 pb-4"> {/* Perfect vertical alignment: exact same boundaries as TopBar - left-[320px] and right-12 */}
+        <Outlet />
+      </main>
 {/*      
       {showFoodModal && (
         <FoodPreferenceModal onClose={() => setShowFoodModal(false)} user={user} />
@@ -112,13 +110,13 @@ const Layout = () => {
       {process.env.NODE_ENV === 'development' && (
         <>
           {newAssignment && !isCMTUser && (
-            <div className="fixed top-4 left-4 bg-yellow-500 text-black p-2 rounded z-[99999] text-xs max-w-xs">
+            <div className="fixed top-4 right-4 bg-yellow-500 text-black p-2 rounded z-[99999] text-xs max-w-xs">
               ⚠️ Debug: Assignment found but isCMTUser={String(isCMTUser)}. 
               Showing popup anyway in dev mode.
             </div>
           )}
           {isCMTUser && newAssignment && (
-            <div className="fixed top-4 left-4 bg-green-500 text-white p-2 rounded z-[99999] text-xs">
+            <div className="fixed top-4 right-4 bg-green-500 text-white p-2 rounded z-[99999] text-xs">
               ✅ Load Assignment Popup should be visible
             </div>
           )}

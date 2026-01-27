@@ -270,8 +270,8 @@ const Topbar = () => {
   }, []);
 
   return (
-    <div className="fixed w-full top-0 right-0 h-20 z-10 px-6 flex items-center pl-[280px] pr-6 pt-4 pb-4 bg-white">
-      <div className="w-full bg-white border border-gray-300 rounded-xl px-6 py-3 flex items-center justify-between shadow-sm">
+    <div className="fixed top-6 left-[320px] right-12 h-16 z-10 flex items-center">
+      <div className="w-full bg-white border border-gray-300 rounded-xl px-6 py-3 flex items-center justify-between">
         {/* Left Section - Checklist Stepper Icons */}
         <div className="flex items-center gap-2">
           {userDepartment && (userDepartment === 'sales' || userDepartment === 'cmt') && checklistItems.length > 0 ? (
