@@ -413,8 +413,101 @@ const Sidebar = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userDepartment, setUserDepartment] = useState(null);
+  
+  // Time Display and Break/Meeting states
+  const [loginTime, setLoginTime] = useState(() => {
+    const saved = sessionStorage.getItem("loginTime");
+    return saved ? new Date(saved) : new Date();
+  });
+  const [elapsedTime, setElapsedTime] = useState("00:00:00");
+  const [onBreak, setOnBreak] = useState(false);
+  const [breakTimeLeft, setBreakTimeLeft] = useState(60 * 60); // 60 mins in seconds
+  const [breakIntervalId, setBreakIntervalId] = useState(null);
+  const [onMeeting, setOnMeeting] = useState(false);
+  const [meetingTime, setMeetingTime] = useState(0);
+  const [meetingIntervalId, setMeetingIntervalId] = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [breakLoading, setBreakLoading] = useState(false);
+  const [meetingLoading, setMeetingLoading] = useState(false);
+  
   const location = useLocation();
   const { getTotalUnreadCount, hasUnreadMessages, unreadCounts, groupUnreadCounts } = useUnreadCount();
+  
+  // Helper function for time formatting
+  const formatTime = (totalSeconds) => {
+    const h = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+    const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+    const s = String(totalSeconds % 60).padStart(2, "0");
+    return `${h}:${m}:${s}`;
+  };
+
+  // Break/Meeting handlers
+  const handleStartBreak = async () => {
+    try {
+      setBreakLoading(true);
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/break/start`,
+        {},
+        { withCredentials: true }
+      );
+      if (res.data.success) {
+        setOnBreak(true);
+        const remaining = res.data.remainingMinutes || 60;
+        setBreakTimeLeft(remaining * 60);
+
+        const intervalId = setInterval(() => {
+          setBreakTimeLeft((prev) => {
+            if (prev <= 1) {
+              clearInterval(intervalId);
+              setOnBreak(false);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        setBreakIntervalId(intervalId);
+        setDropdownOpen(false);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Break start failed");
+    } finally {
+      setBreakLoading(false);
+    }
+  };
+
+  const handleEndBreak = async () => {
+    try {
+      setBreakLoading(true);
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/break/end`,
+        {},
+        { withCredentials: true }
+      );
+      if (res.data.success) {
+        clearInterval(breakIntervalId);
+        setOnBreak(false);
+      }
+    } catch (err) {
+      alert("Break end failed.");
+    } finally {
+      setBreakLoading(false);
+    }
+  };
+
+  const handleMeetingToggle = () => {
+    if (onMeeting) {
+      clearInterval(meetingIntervalId);
+      setOnMeeting(false);
+    } else {
+      setOnMeeting(true);
+      const intervalId = setInterval(() => {
+        setMeetingTime((prev) => prev + 1);
+      }, 1000);
+      setMeetingIntervalId(intervalId);
+    }
+    setDropdownOpen(false);
+  };
   // Make these reactive by recalculating when unreadCounts or groupUnreadCounts change
   const totalUnreadCount = useMemo(() => {
     const count = getTotalUnreadCount();
@@ -754,6 +847,33 @@ const Sidebar = () => {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // Time Display useEffect
+  useEffect(() => {
+    if (!sessionStorage.getItem("loginTime")) {
+      sessionStorage.setItem("loginTime", new Date().toISOString());
+    }
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const diff = new Date(now - new Date(loginTime));
+      const hours = String(diff.getUTCHours()).padStart(2, "0");
+      const minutes = String(diff.getUTCMinutes()).padStart(2, "0");
+      const seconds = String(diff.getUTCSeconds()).padStart(2, "0");
+      setElapsedTime(`${hours}:${minutes}:${seconds}`);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [loginTime]);
+
+  // Handle click outside for dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest("#break-dropdown")) setDropdownOpen(false);
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
   // Show loading state
   if (loading) {
     return (
@@ -1075,6 +1195,132 @@ const Sidebar = () => {
           </div>
 
         <div className="flex-none px-4 py-4 border-t border-gray-200">
+          {/* Time Display Section */}
+          {isExpanded && (
+            <div className="mb-2">
+              <div className="bg-white border border-gray-300 rounded-full px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-2">
+                    <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,14.9L16.2,16.2Z"/>
+                    </svg>
+                  </div>
+                </div>
+                <div className="text-sm font-semibold text-gray-800">
+                  {elapsedTime}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Break/Meeting Section */}
+          {isExpanded && (
+            <div className="mb-3">
+              <div className="relative" id="break-dropdown">
+                <button
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="w-full bg-white border border-gray-300 rounded-full px-3 py-2 flex items-center justify-between hover:border-gray-400 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-2">
+                      <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12,2A2,2 0 0,1 14,4C14,5.5 13.6,6.9 12.9,8.1C17.2,8.8 20.5,12.3 20.5,16.5V18.5C20.5,19.6 19.6,20.5 18.5,20.5H17V22H15V20.5H9V22H7V20.5H5.5C4.4,20.5 3.5,19.6 3.5,18.5V16.5C3.5,12.3 6.8,8.8 11.1,8.1C10.4,6.9 10,5.5 10,4A2,2 0 0,1 12,2M12,4.5A0.5,0.5 0 0,0 11.5,4A0.5,0.5 0 0,0 12,4.5A0.5,0.5 0 0,0 12.5,4A0.5,0.5 0 0,0 12,4.5Z"/>
+                      </svg>
+                    </div>
+                    <span className="text-gray-800 text-sm font-medium">Meeting</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-gray-800 text-sm font-medium">Break</span>
+                    <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center ml-2">
+                      <svg className="w-4 h-4 text-amber-700" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M2,21V19H20V21H2M20,8V5L18,5V8H20M18,8.5V10.5C18,11.3 17.3,12 16.5,12H15.5C14.7,12 14,11.3 14,10.5V8.5C14,7.7 14.7,7 15.5,7H16.5C17.3,7 18,7.7 18,8.5M16,8.75A0.25,0.25 0 0,0 15.75,8.5A0.25,0.25 0 0,0 15.5,8.75A0.25,0.25 0 0,0 15.75,9A0.25,0.25 0 0,0 16,8.75M14,20.5V16.5C14,15.7 14.7,15 15.5,15H16.5C17.3,15 18,15.7 18,16.5V20.5C18,21.3 17.3,22 16.5,22H15.5C14.7,22 14,21.3 14,20.5M16,16.75A0.25,0.25 0 0,0 15.75,16.5A0.25,0.25 0 0,0 15.5,16.75A0.25,0.25 0 0,0 15.75,17A0.25,0.25 0 0,0 16,16.75M5,3H7C8,3 9,4 9,5V6H11L12,7H14C15,7 16,8 16,9V11C16,12 15,13 14,13H7C6,13 5,12 5,11V3M7,9A1,1 0 0,0 8,10A1,1 0 0,0 9,9A1,1 0 0,0 8,8A1,1 0 0,0 7,9Z"/>
+                      </svg>
+                    </div>
+                  </div>
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-lg shadow-lg py-2 animate-fade-in z-50 border border-gray-200">
+                    {/* Break Section */}
+                    <div className="px-4 py-2 hover:bg-gray-100 text-sm text-gray-800 flex justify-between items-center">
+                      <span>Break</span>
+                      {onBreak ? (
+                        <span className="text-yellow-600 font-semibold">
+                          {formatTime(breakTimeLeft)}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={handleStartBreak}
+                          disabled={breakLoading}
+                          className="text-xs bg-yellow-200 px-2 py-1 rounded-full flex items-center gap-1"
+                        >
+                          {breakLoading ? (
+                            <>
+                              <span className="animate-spin">⏳</span> Starting...
+                            </>
+                          ) : (
+                            "Start"
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {onBreak && (
+                      <div className="px-4 py-1">
+                        <button
+                          onClick={handleEndBreak}
+                          disabled={breakLoading}
+                          className="w-full bg-red-100 text-red-700 text-xs py-1 rounded flex items-center justify-center gap-1"
+                        >
+                          {breakLoading ? (
+                            <>
+                              <span className="animate-spin">⏳</span> Ending...
+                            </>
+                          ) : (
+                            "End Break"
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Meeting Section */}
+                    <div className="px-4 py-2 hover:bg-gray-100 text-sm text-gray-800 flex justify-between items-center">
+                      <span>Meeting</span>
+                      {onMeeting ? (
+                        <span className="text-blue-600 font-semibold">
+                          {formatTime(meetingTime)}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={handleMeetingToggle}
+                          disabled={meetingLoading}
+                          className="text-xs bg-blue-200 px-2 py-1 rounded-full flex items-center gap-1"
+                        >
+                          {meetingLoading ? (
+                            <>
+                              <span className="animate-spin">⏳</span> Starting...
+                            </>
+                          ) : (
+                            "Start"
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {onMeeting && (
+                      <div className="px-4 py-1">
+                        <button
+                          onClick={handleMeetingToggle}
+                          className="w-full bg-red-100 text-red-700 text-xs py-1 rounded"
+                        >
+                          End Meeting
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <NavLink
             to="/"
             className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors mb-1"
