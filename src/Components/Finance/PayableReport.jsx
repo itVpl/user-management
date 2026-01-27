@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
-import { Truck, Calendar, DollarSign, Search, FileText, CheckCircle, Eye, User } from 'lucide-react';
+import { Truck, Calendar, DollarSign, Search, FileText, CheckCircle, Eye, User, AlertTriangle } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
+import apiService from '../../services/apiService.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import 'react-date-range/dist/styles.css';
@@ -27,6 +28,10 @@ const PayableReport = () => {
   const [selectedDoDetails, setSelectedDoDetails] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  
+  // Payment Remark states
+  const [updatingRemark, setUpdatingRemark] = useState({});
+  const [remarkFilter, setRemarkFilter] = useState('all'); // 'all', 'ok', 'not_okay'
   
   // Date range state (default: last 30 days)
   const [range, setRange] = useState({
@@ -156,6 +161,13 @@ const PayableReport = () => {
             paymentDueDate: order.paymentDueDate || null,
             carrierId: order.carrierId || null,
             carrierFeesArray: order.carrierFees || [],
+            // Payment Remark information (NEW)
+            paymentRemark: order.paymentRemark || {
+              status: 'ok',
+              updatedBy: null,
+              updatedAt: null,
+              notes: ''
+            },
             // Full order data for details
             fullData: order
           };
@@ -203,6 +215,13 @@ const PayableReport = () => {
       );
     }
     
+    // Filter by remark status
+    if (remarkFilter !== 'all') {
+      filtered = filtered.filter(deliveryOrder => 
+        deliveryOrder.paymentRemark?.status === remarkFilter
+      );
+    }
+    
     // Filter by date range
     if (range.startDate && range.endDate) {
       filtered = filtered.filter(deliveryOrder => {
@@ -216,7 +235,39 @@ const PayableReport = () => {
     }
     
     return filtered;
-  }, [dos, searchTerm, range]);
+  }, [dos, searchTerm, range, remarkFilter]);
+
+  // Update Payment Remark function
+  const updatePaymentRemark = async (doId, newStatus, notes = '') => {
+    try {
+      setUpdatingRemark(prev => ({ ...prev, [doId]: true }));
+      
+      const response = await apiService.updatePaymentRemark(doId, newStatus, notes);
+      
+      if (response?.success) {
+        // Update the local state
+        setDos(prevDos => 
+          prevDos.map(deliveryOrder => 
+            deliveryOrder.originalId === doId 
+              ? {
+                  ...deliveryOrder,
+                  paymentRemark: response.data.paymentRemark
+                }
+              : deliveryOrder
+          )
+        );
+        
+        alertify.success('Payment remark updated successfully');
+      } else {
+        throw new Error(response?.message || 'Failed to update payment remark');
+      }
+    } catch (error) {
+      console.error('Error updating payment remark:', error);
+      alertify.error(`Failed to update remark: ${error.message}`);
+    } finally {
+      setUpdatingRemark(prev => ({ ...prev, [doId]: false }));
+    }
+  };
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredDOs.length / itemsPerPage);
@@ -279,6 +330,43 @@ const PayableReport = () => {
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  // Remark Button Component
+  const RemarkButton = ({ deliveryOrder }) => {
+    const isUpdating = updatingRemark[deliveryOrder.originalId];
+    const remarkStatus = deliveryOrder.paymentRemark?.status || 'ok';
+    
+    const handleRemarkToggle = async () => {
+      const newStatus = remarkStatus === 'ok' ? 'not_okay' : 'ok';
+      await updatePaymentRemark(deliveryOrder.originalId, newStatus);
+    };
+
+    return (
+      <button
+        onClick={handleRemarkToggle}
+        disabled={isUpdating}
+        className={`px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 min-w-[70px] ${
+          remarkStatus === 'ok' 
+            ? 'bg-green-100 text-green-800 hover:bg-green-200 border border-green-300' 
+            : 'bg-red-100 text-red-800 hover:bg-red-200 border border-red-300'
+        } ${isUpdating ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+        title={`Click to mark as ${remarkStatus === 'ok' ? 'Not OK' : 'OK'}`}
+      >
+        {isUpdating ? 'Updating...' : (remarkStatus === 'ok' ? 'OK' : 'Not OK')}
+      </button>
+    );
+  };
+
+  // Get row styling based on remark status
+  const getRowClassName = (deliveryOrder, index) => {
+    const baseClass = `border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`;
+    
+    if (deliveryOrder.paymentRemark?.status === 'not_okay') {
+      return `${baseClass} bg-red-50 border-red-200`;
+    }
+    
+    return baseClass;
   };
 
   const handleDoSelect = async (doId) => {
@@ -391,9 +479,37 @@ const PayableReport = () => {
               </div>
             </div>
           </div>
+
+          {/* Not OK Remarks Card */}
+          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="text-orange-600" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Not OK</p>
+                <p className="text-xl font-bold text-orange-600">
+                  {dos.filter(d => d.paymentRemark?.status === 'not_okay').length}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
         
         <div className="flex items-center gap-4">
+          {/* Remark Filter */}
+          <div className="relative">
+            <select
+              value={remarkFilter}
+              onChange={(e) => setRemarkFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-medium"
+            >
+              <option value="all">All DOs</option>
+              <option value="ok">OK DOs</option>
+              <option value="not_okay">Not OK DOs</option>
+            </select>
+          </div>
+
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -486,6 +602,7 @@ const PayableReport = () => {
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
                 <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED DATE</th>
+                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Remark</th>
                 <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
@@ -495,9 +612,14 @@ const PayableReport = () => {
                 const invoiceDueDateInfo = invoice?.dueDateInfo;
                 
                 return (
-                  <tr key={deliveryOrder.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                  <tr key={deliveryOrder.id} className={getRowClassName(deliveryOrder, index)}>
                     <td className="py-2 px-3">
-                      <span className="font-mono text-base font-semibold text-gray-700">{deliveryOrder.doNum}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-base font-semibold text-gray-700">{deliveryOrder.doNum}</span>
+                        {deliveryOrder.paymentRemark?.status === 'not_okay' && (
+                          <AlertTriangle className="text-red-500" size={16} title="Payment issue flagged" />
+                        )}
+                      </div>
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{deliveryOrder.carrierName || ''}</span>
@@ -582,6 +704,11 @@ const PayableReport = () => {
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-medium text-gray-700">{formatDate(deliveryOrder.createdAt)}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center justify-center">
+                        <RemarkButton deliveryOrder={deliveryOrder} />
+                      </div>
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center justify-center">
@@ -788,6 +915,84 @@ const PayableReport = () => {
                       {selectedDoDetails.carrierPaymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
                     </span>
                   </div>
+
+              {/* Payment Remark Section */}
+              {selectedDoDetails?.paymentRemark && (
+                <div className={`bg-gradient-to-br rounded-2xl p-6 border mb-6 ${
+                  selectedDoDetails.paymentRemark.status === 'not_okay'
+                    ? 'from-red-50 to-pink-50 border-red-200'
+                    : 'from-green-50 to-emerald-50 border-green-200'
+                }`}>
+                  <div className="flex items-center gap-2 mb-4">
+                    {selectedDoDetails.paymentRemark.status === 'not_okay' ? (
+                      <AlertTriangle className="text-red-600" size={20} />
+                    ) : (
+                      <CheckCircle className="text-green-600" size={20} />
+                    )}
+                    <h3 className="text-lg font-bold text-gray-800">Payment Remark</h3>
+                    <span className={`ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
+                      selectedDoDetails.paymentRemark.status === 'not_okay'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-green-100 text-green-700'
+                    }`}>
+                      {selectedDoDetails.paymentRemark.status === 'not_okay' ? (
+                        <>
+                          <AlertTriangle size={14} />
+                          Not OK
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle size={14} />
+                          OK
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  
+                  <div className="bg-white rounded-xl p-4 border border-gray-200">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Status</p>
+                        <p className={`font-medium capitalize ${
+                          selectedDoDetails.paymentRemark.status === 'not_okay' ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          {selectedDoDetails.paymentRemark.status.replace('_', ' ')}
+                        </p>
+                      </div>
+                      
+                      {selectedDoDetails.paymentRemark.updatedBy && (
+                        <>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Updated By</p>
+                            <p className="font-medium text-gray-800">
+                              {selectedDoDetails.paymentRemark.updatedBy.employeeName}
+                              {selectedDoDetails.paymentRemark.updatedBy.department && 
+                                ` (${selectedDoDetails.paymentRemark.updatedBy.department})`
+                              }
+                            </p>
+                          </div>
+                          
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Updated At</p>
+                            <p className="font-medium text-gray-800">
+                              {fmtDateTime(selectedDoDetails.paymentRemark.updatedAt)}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                      
+                      {selectedDoDetails.paymentRemark.notes && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-600 mb-1">Notes</p>
+                          <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            {selectedDoDetails.paymentRemark.notes}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
                   <div className="bg-white rounded-xl p-4 border border-gray-200">
                     <div className="grid grid-cols-2 gap-4">
                       {selectedDoDetails.carrierPaymentStatus === 'paid' && (
