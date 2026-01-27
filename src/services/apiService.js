@@ -102,6 +102,38 @@ class ApiService {
     }
   }
 
+  // Update Payment Remark
+  async updatePaymentRemark(doId, remarkStatus, notes = '') {
+    try {
+      const endpoint = `/api/v1/do/do/${doId}/payment-remark`;
+      const body = {
+        remarkStatus,
+        notes
+      };
+      
+      return await this.put(endpoint, body);
+    } catch (error) {
+      errorLog(`Error updating payment remark for DO ${doId}:`, error);
+      throw error;
+    }
+  }
+
+  // Update Shipper Payment Remark (for receivable reports)
+  async updateShipperPaymentRemark(doId, remarkStatus, notes = '') {
+    try {
+      const endpoint = `/api/v1/do/do/${doId}/shipper-payment-remark`;
+      const body = {
+        remarkStatus,
+        notes
+      };
+      
+      return await this.put(endpoint, body);
+    } catch (error) {
+      errorLog(`Error updating shipper payment remark for DO ${doId}:`, error);
+      throw error;
+    }
+  }
+
   // Generic PATCH request
   async patch(endpoint, body = {}, options = {}) {
     try {
