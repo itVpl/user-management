@@ -123,9 +123,9 @@ const DailyFollowNotification = ({ limit = 4 }) => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+      <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Daily Follow Notification</h3>
+          <h3 className="text-xl font-bold text-gray-800">Daily Follow Notification</h3>
           <button className="text-gray-400 text-sm flex items-center gap-1">
             View All <ChevronDown className="w-4 h-4" />
           </button>
@@ -150,9 +150,9 @@ const DailyFollowNotification = ({ limit = 4 }) => {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-6">
+    <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">Daily Follow Notification</h3>
+        <h3 className="text-xl font-bold text-gray-800">Daily Follow Notification</h3>
         <button className="text-gray-400 text-sm flex items-center gap-1 hover:text-gray-600">
           View All <ChevronDown className="w-4 h-4" />
         </button>

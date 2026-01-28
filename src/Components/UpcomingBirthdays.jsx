@@ -109,8 +109,8 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Upcoming Birthdays</h3>
+      <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
+        <h3 className="text-xl font-bold text-gray-800 mb-4">Upcoming Birthdays</h3>
         <div className="space-y-3">
           {[...Array(3)].map((_, index) => (
             <div key={index} className="animate-pulse">
@@ -135,8 +135,8 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Upcoming Birthdays</h3>
+    <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
+      <h3 className="text-xl font-bold text-gray-800 mb-4">Upcoming Birthdays</h3>
       <div className="space-y-3">
         {/* Show all birthdays (real + sample) sorted by date */}
         {upcomingBirthdays.map((emp, index) => {
@@ -153,9 +153,9 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
           const isToday = diffDays === 0;
           
           return (
-            <div key={emp._id} className="flex items-center justify-between p-4 border border-gray-200 rounded-full bg-gray-50 hover:bg-gray-100 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+            <div key={emp._id} className="flex items-center justify-between p-3 border border-gray-200 rounded-full bg-gray-50 hover:bg-gray-100 transition-colors">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
                   <img 
                     src={emp.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.employeeName || emp.empName || 'User')}&background=6366f1&color=fff`}
                     alt={emp.employeeName || emp.empName}
@@ -170,20 +170,20 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
                   </div>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 text-base">{emp.employeeName || emp.empName}</p>
-                  <p className="text-sm text-gray-500">{emp.department}</p>
+                  <p className="font-semibold text-gray-900 text-sm">{emp.employeeName || emp.empName}</p>
+                  <p className="text-xs text-gray-500">{emp.department}</p>
                 </div>
               </div>
               <div className="text-right">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-1 mb-1">
                   {isToday && (
-                    <span className="text-orange-500 text-lg">🎉</span>
+                    <span className="text-orange-500 text-sm">🎉</span>
                   )}
-                  <span className="text-sm text-gray-500">
+                  <span className="text-xs text-gray-500">
                     {isToday ? 'Birthday Today' : `${diffDays} days remaining`}
                   </span>
                 </div>
-                <p className="text-lg font-bold text-gray-900">
+                <p className="text-sm font-bold text-gray-900">
                   {birthday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </p>
               </div>

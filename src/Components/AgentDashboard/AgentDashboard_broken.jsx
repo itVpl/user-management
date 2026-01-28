@@ -403,8 +403,8 @@ const Dashboard = () => {
   };
 
   const StatCard = ({ title, value, icon: Icon, color, subtitle, trend, trendValue, showTitle = false, noBackground = false, iconColor = null, backgroundColor = null }) => (
-    <div className="bg-white rounded-2xl p-4 border-2 border-gray-200">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-white rounded-2xl p-6 border-2 border-gray-200">
+      <div className="flex items-center justify-between mb-4">
         <div className="text-left">
           <p className="text-sm text-gray-500 font-medium">{subtitle}</p>
         </div>
@@ -419,7 +419,7 @@ const Dashboard = () => {
           />
         </div>
       </div>
-      <div className="text-3xl font-bold text-gray-900 mb-2">{value?.toLocaleString() || 0}</div>
+      <div className="text-3xl font-bold text-gray-900 mb-3">{value?.toLocaleString() || 0}</div>
       <div className="flex items-center justify-between">
         {trend && trendValue && !showTitle ? (
           <div className="flex items-center gap-1">
@@ -496,7 +496,7 @@ const Dashboard = () => {
         // --- CMT Dashboard (current layout) ---
         <>
           {/* Top Stats Cards */}
-          <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-6 mb-3">
+          <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-6 mb-8">
             <StatCard
               title="Present Days"
               value={presentDaysCount}
@@ -536,7 +536,7 @@ const Dashboard = () => {
           </div>
 
           {/* New Section - Add your content here */}
-          <div className="bg-white rounded-2xl p-6 mb-3 border border-gray-100">
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
@@ -572,7 +572,7 @@ const Dashboard = () => {
           </div>
 
           {/* Recent Delivery Orders */}
-<div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-3" 
+<div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-8" 
      style={{
        boxShadow: '7.54px 7.54px 67.85px 0px rgba(0, 0, 0, 0.05)',
        borderWidth: '1.31px'
@@ -683,10 +683,10 @@ const Dashboard = () => {
   </div>
 </div>
           {/* Main Content Grid - Call Performance and Daily Call Target */}
-          <div className="grid lg:grid-cols-2 gap-8 mb-3">
+          <div className="grid lg:grid-cols-2 gap-8 mb-8">
             {/* Call Performance Overview */}
-            <div className="bg-white rounded-2xl p-4 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
                     <Phone className="text-white" size={20} />
@@ -699,13 +699,13 @@ const Dashboard = () => {
               </div>
               
               {/* Completed calls summary */}
-              <div className="mb-3">
+              <div className="mb-4">
                 <p className="text-gray-600 text-sm">{callStats.answered} completed</p>
               </div>
               
-              {/* Thicker colorful progress bar */}
-              <div className="mb-4">
-                <div className="w-full h-4 bg-gray-200 overflow-hidden">
+              {/* Colorful progress bar */}
+              <div className="mb-6">
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                   <div className="h-full flex">
                     {/* Green section - Answered calls */}
                     <div 
@@ -727,7 +727,7 @@ const Dashboard = () => {
               </div>
               
               {/* Call statistics */}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-bold text-gray-800">{callStats.answered}</span>
@@ -740,7 +740,6 @@ const Dashboard = () => {
                     <span className="text-gray-600 font-medium">Missed</span>
                   </div>
                 </div>
-                
                 <div className="flex items-center justify-between border-2 border-blue-500 rounded-lg p-3">
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-bold text-gray-800">{callStats.total}</span>
@@ -752,8 +751,8 @@ const Dashboard = () => {
             </div>
 
             {/* Call Duration Stats */}
-            <div className="bg-white rounded-2xl p-3 border border-gray-100">
-              <div className="flex items-center justify-between mb-3">
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
                     <Clock className="text-white" size={16} />
@@ -764,46 +763,46 @@ const Dashboard = () => {
                   Target: {(CMT_TARGET_MINUTES / 60).toFixed(1)} Hours
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                {/* Left side - Bigger Pie Chart */}
+              <div className="flex items-center gap-4">
+                {/* Left side - 3-Segment Pie Chart - Takes half space */}
                 <div className="flex flex-col items-center justify-center flex-1">
                   <div className="relative">
-                    <svg width="160" height="160" className="transform -rotate-90">
-                      {/* Green segment - Today's Total */}
+                    <svg width="140" height="140" className="transform -rotate-90">
+                      {/* Green segment - Today's Total (24% of circle with 1% gap) */}
                       <circle
-                        cx="80"
-                        cy="80"
-                        r="65"
+                        cx="70"
+                        cy="70"
+                        r="55"
                         stroke="#10b981"
-                        strokeWidth="20"
+                        strokeWidth="16"
                         fill="none"
-                        strokeDasharray={`${24 * 4.08} ${76 * 4.08}`}
+                        strokeDasharray={`${24 * 3.45} ${76 * 3.45}`}
                         className="transition-all duration-500"
                       />
                       
-                      {/* Blue segment - Target Remaining */}
+                      {/* Blue segment - Target Remaining (48% of circle with 1% gap) */}
                       <circle
-                        cx="80"
-                        cy="80"
-                        r="65"
+                        cx="70"
+                        cy="70"
+                        r="55"
                         stroke="#3b82f6"
-                        strokeWidth="20"
+                        strokeWidth="16"
                         fill="none"
-                        strokeDasharray={`${48 * 4.08} ${52 * 4.08}`}
-                        strokeDashoffset={`-${25 * 4.08}`}
+                        strokeDasharray={`${48 * 3.45} ${52 * 3.45}`}
+                        strokeDashoffset={`-${25 * 3.45}`}
                         className="transition-all duration-500"
                       />
                       
-                      {/* Purple segment - Average per Call */}
+                      {/* Purple segment - Average per Call (19% of circle with 1% gap) */}
                       <circle
-                        cx="80"
-                        cy="80"
-                        r="65"
+                        cx="70"
+                        cy="70"
+                        r="55"
                         stroke="#8b5cf6"
-                        strokeWidth="20"
+                        strokeWidth="16"
                         fill="none"
-                        strokeDasharray={`${19 * 4.08} ${81 * 4.08}`}
-                        strokeDashoffset={`-${74 * 4.08}`}
+                        strokeDasharray={`${19 * 3.45} ${81 * 3.45}`}
+                        strokeDashoffset={`-${74 * 3.45}`}
                         className="transition-all duration-500"
                       />
                     </svg>
@@ -813,19 +812,19 @@ const Dashboard = () => {
                   </div>
                 </div>
                 
-                {/* Right side - Bigger Stats Cards */}
+                {/* Right side - Compact Stats Cards - Takes half space */}
                 <div className="flex-1 space-y-2">
                   {/* Today's Total Card */}
                   <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="text-gray-600 text-sm font-medium">Today's Total</p>
-                        <p className="text-lg font-bold text-gray-800 truncate">
+                        <p className="text-gray-600 text-xs font-medium">Today's Total</p>
+                        <p className="text-base font-bold text-gray-800 truncate">
                           {Math.floor(totalTalkMinutes / 60).toString().padStart(2, '0')}:
                           {Math.floor(totalTalkMinutes % 60).toString().padStart(2, '0')}:00
                         </p>
                       </div>
-                      <div className="w-10 h-10 bg-emerald-500 rounded-full flex-shrink-0"></div>
+                      <div className="w-8 h-8 bg-emerald-500 rounded-full flex-shrink-0"></div>
                     </div>
                   </div>
                   
@@ -833,13 +832,13 @@ const Dashboard = () => {
                   <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="text-gray-600 text-sm font-medium">Target Remaining</p>
-                        <p className="text-lg font-bold text-gray-800 truncate">
+                        <p className="text-gray-600 text-xs font-medium">Target Remaining</p>
+                        <p className="text-base font-bold text-gray-800 truncate">
                           {Math.floor(cmtTargetRemainingMinutes / 60).toString().padStart(2, '0')}:
                           {Math.floor(cmtTargetRemainingMinutes % 60).toString().padStart(2, '0')}:00
                         </p>
                       </div>
-                      <div className="w-10 h-10 bg-blue-500 rounded-full flex-shrink-0"></div>
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex-shrink-0"></div>
                     </div>
                   </div>
                   
@@ -847,23 +846,23 @@ const Dashboard = () => {
                   <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="text-gray-600 text-sm font-medium">Average per Calls</p>
-                        <p className="text-lg font-bold text-gray-800 truncate">
+                        <p className="text-gray-600 text-xs font-medium">Average per Calls</p>
+                        <p className="text-base font-bold text-gray-800 truncate">
                           {Math.floor(averageCallMinutes).toString().padStart(2, '0')}:
                           {Math.floor((averageCallMinutes % 1) * 60).toString().padStart(2, '0')}:00
                         </p>
                       </div>
-                      <div className="w-10 h-10 bg-purple-500 rounded-full flex-shrink-0"></div>
+                      <div className="w-8 h-8 bg-purple-500 rounded-full flex-shrink-0"></div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          
+          </div>
 
           {/* Recent Carrier Section */}
-          <div className="mb-3">
-            <div className="bg-white rounded-2xl p-6 border border-gray-100">
+          <div className="mb-8">
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
@@ -908,12 +907,12 @@ const Dashboard = () => {
           </div>
 
           {/* Upcoming Birthdays */}
-          <div className="mb-3">
+          <div className="mb-8">
             <UpcomingBirthdays limit={3}  />
           </div>
 
                      {/* Pending Load Table */}
-           <div className="bg-white rounded-2xl p-6 mb-3 border border-gray-100">
+           <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
              <div className="flex items-center justify-between mb-6">
                <div className="flex items-center gap-3">
                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
@@ -967,7 +966,7 @@ const Dashboard = () => {
         // --- Sales Dashboard (Same design as CMT) ---
         <>
           {/* Top Stats Cards */}
-          <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-6 mb-3">
+          <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-6 mb-8">
             <StatCard
               title="Present Days"
               value={presentDaysCount}
@@ -1008,7 +1007,7 @@ const Dashboard = () => {
 
 
                          {/* Recent Delivery Orders */}
-<div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-3" 
+<div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-8" 
      style={{
        boxShadow: '7.54px 7.54px 67.85px 0px rgba(0, 0, 0, 0.05)',
        borderWidth: '1.31px'
@@ -1120,219 +1119,254 @@ const Dashboard = () => {
 </div>
 
           {/* Main Content Grid -  Daily Call Target and Call Performance */}
-          <div className="grid lg:grid-cols-2 gap-8 mb-3">
-
-  {/* ================= Daily Call Target ================= */}
-  <div className="bg-white border border-[#C8C8C8] rounded-[17.59px]">
-    
-    {/* Header */}
-    <div className="flex items-center justify-between px-6 pt-4 mb-3">
-      <h3 className="text-lg font-bold text-gray-800">Daily Call Target</h3>
-    </div>
-
-    {/* Content */}
-    <div className="flex items-center justify-between px-6 pb-4">
-
-      {/* Bigger Pie Chart */}
-      <div className="flex items-center justify-center flex-1">
-        <div className="relative">
-          <svg width="160" height="160" className="-rotate-90">
-            
-            <circle
-              cx="80"
-              cy="80"
-              r="65"
-              stroke="#10b981"
-              strokeWidth="30"
-              fill="none"
-              strokeDasharray={`${24 * 4.08} ${76 * 4.08}`}
-            />
-
-            <circle
-              cx="80"
-              cy="80"
-              r="65"
-              stroke="#3b82f6"
-              strokeWidth="30"
-              fill="none"
-              strokeDasharray={`${48 * 4.08} ${52 * 4.08}`}
-              strokeDashoffset={`-${25 * 4.08}`}
-            />
-
-            <circle
-              cx="80"
-              cy="80"
-              r="65"
-              stroke="#8b5cf6"
-              strokeWidth="30"
-              fill="none"
-              strokeDasharray={`${25 * 4.08} ${81 * 4.08}`}
-              strokeDashoffset={`-${74 * 4.08}`}
-            />
-          </svg>
-
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-2xl font-bold text-gray-800">
-              {salesTargetProgress}%
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Bigger Right Stats */}
-      <div className="flex-1 flex flex-col justify-center gap-2">
-
-        {/* Today Total */}
-        <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Today's Total</p>
-              <p className="text-lg font-bold text-gray-800">
-                {formatSeconds(totalTalkSeconds)}
-              </p>
+          <div className="grid lg:grid-cols-2 gap-8 mb-8">
+             {/* Call Duration Stats */}
+            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  {/* <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                    <Clock className="text-white" size={16} />
+                  </div> */}
+                  <h3 className="text-lg font-bold text-gray-800">Daily Call Target</h3>
+                </div>
+                {/* <div className="text-xs text-gray-500 font-medium">
+                  Target: {(SALES_TARGET_SECONDS / 3600).toFixed(1)} Hours
+                </div> */}
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Left side - 3-Segment Pie Chart - Takes half space */}
+                <div className="flex flex-col items-center justify-center flex-1">
+                  <div className="relative">
+                    <svg width="140" height="140" className="transform -rotate-90">
+                      {/* Green segment - Today's Total (24% of circle with 1% gap) */}
+                      <circle
+                        cx="70"
+                        cy="70"
+                        r="55"
+                        stroke="#10b981"
+                        strokeWidth="16"
+                        fill="none"
+                        strokeDasharray={`${24 * 3.45} ${76 * 3.45}`}
+                        className="transition-all duration-500"
+                      />
+                      
+                      {/* Blue segment - Target Remaining (48% of circle with 1% gap) */}
+                      <circle
+                        cx="70"
+                        cy="70"
+                        r="55"
+                        stroke="#3b82f6"
+                        strokeWidth="16"
+                        fill="none"
+                        strokeDasharray={`${48 * 3.45} ${52 * 3.45}`}
+                        strokeDashoffset={`-${25 * 3.45}`}
+                        className="transition-all duration-500"
+                      />
+                      
+                      {/* Purple segment - Average per Call (19% of circle with 1% gap) */}
+                      <circle
+                        cx="70"
+                        cy="70"
+                        r="55"
+                        stroke="#8b5cf6"
+                        strokeWidth="16"
+                        fill="none"
+                        strokeDasharray={`${25 * 3.45} ${81 * 3.45}`}
+                        strokeDashoffset={`-${74 * 3.45}`}
+                        className="transition-all duration-500"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-2xl font-bold text-gray-800">{salesTargetProgress}%</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Right side - Compact Stats Cards - Takes half space */}
+                <div className="flex-1 space-y-2">
+                  {/* Today's Total Card */}
+                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-600 text-xs font-medium">Today's Total</p>
+                        <p className="text-base font-bold text-gray-800 truncate">{formatSeconds(totalTalkSeconds)}</p>
+                      </div>
+                      <div className="w-8 h-8 bg-emerald-500 rounded-full flex-shrink-0"></div>
+                    </div>
+                  </div>
+                  
+                  {/* Target Remaining Card */}
+                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-600 text-xs font-medium">Target Remaining</p>
+                        <p className="text-base font-bold text-gray-800 truncate">{formatSeconds(salesTargetRemainingSeconds)}</p>
+                      </div>
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex-shrink-0"></div>
+                    </div>
+                  </div>
+                  
+                  {/* Average per Calls Card */}
+                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-600 text-xs font-medium">Average per Calls</p>
+                        <p className="text-base font-bold text-gray-800 truncate">
+                          {Math.floor(averageCallMinutes).toString().padStart(2, '0')}:
+                          {Math.floor((averageCallMinutes % 1) * 60).toString().padStart(2, '0')}:00
+                        </p>
+                      </div>
+                      <div className="w-8 h-8 bg-purple-500 rounded-full flex-shrink-0"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="w-10 h-10 bg-emerald-500 rounded-full"></div>
-          </div>
-        </div>
 
-        {/* Target Remaining */}
-        <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Target Remaining</p>
-              <p className="text-lg font-bold text-gray-800">
-                {formatSeconds(salesTargetRemainingSeconds)}
-              </p>
+            {/* Call Performance Overview */}
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  {/* <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                    <Phone className="text-white" size={20} />
+                  </div> */}
+                  <h3 className="text-xl font-bold text-gray-800">Call Performance</h3>
+                </div>
+                <button className="text-blue-500 hover:text-blue-700 text-sm font-medium">
+                  View
+                </button>
+              </div>
+              
+              {/* Completed calls summary */}
+              <div className="mb-4">
+                <p className="text-gray-600 text-sm">{callStats.answered} completed</p>
+              </div>
+              
+              {/* Colorful progress bar */}
+              <div className="mb-6">
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full flex">
+                    {/* Green section - Answered calls */}
+                    <div 
+                      className="bg-green-500" 
+                      style={{ width: `${callStats.total > 0 ? (callStats.answered / callStats.total) * 60 : 0}%` }}
+                    ></div>
+                    {/* Orange section - Missed calls */}
+                    <div 
+                      className="bg-orange-500" 
+                      style={{ width: `${callStats.total > 0 ? (callStats.noAnswer / callStats.total) * 20 : 0}%` }}
+                    ></div>
+                    {/* Blue section - Remaining */}
+                    <div 
+                      className="bg-blue-500" 
+                      style={{ width: '20%' }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Call statistics */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-bold text-gray-800">{callStats.answered}</span>
+                    <span className="text-gray-600 font-medium">Answered</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-bold text-gray-800">{callStats.noAnswer}</span>
+                    <span className="text-gray-600 font-medium">Missed</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-2 border-blue-500 rounded-lg p-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-bold text-gray-800">{callStats.total}</span>
+                    <span className="text-gray-600 font-medium">Late</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="w-10 h-10 bg-blue-500 rounded-full"></div>
+
+           
           </div>
-        </div>
-
-        {/* Average Calls */}
-        <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Average per Calls</p>
-              <p className="text-lg font-bold text-gray-800">
-                {Math.floor(averageCallMinutes).toString().padStart(2, '0')}:
-                {Math.floor((averageCallMinutes % 1) * 60).toString().padStart(2, '0')}:00
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-purple-500 rounded-full"></div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  {/* ================= Call Performance ================= */}
-  <div className="bg-white border border-[#C8C8C8] rounded-[17.59px]">
-
-    {/* Header */}
-    <div className="flex items-center justify-between px-6 pt-4 mb-3">
-      <h3 className="text-xl font-bold text-gray-800">Call Performance</h3>
-      <button className="text-blue-500 text-sm font-medium">View</button>
-    </div>
-
-    {/* Completed */}
-    <div className="px-6 mb-3">
-      <p className="text-gray-600 text-sm">
-        {callStats.answered} completed
-      </p>
-    </div>
-
-    {/* Thicker Progress Bar */}
-   <div className="px-6 mb-4">
-  <div className="w-full h-4 bg-gray-200 overflow-hidden flex">
-    
-    {/* Completed */}
-    <div
-      className="h-full"
-      style={{
-        backgroundColor: '#00BD76',
-        width: `${callStats.total ? (callStats.answered / callStats.total) * 60 : 0}%`,
-      }}
-    />
-
-    {/* Missed */}
-    <div
-      className="h-full bg-orange-500"
-      style={{
-        width: `${callStats.total ? (callStats.noAnswer / callStats.total) * 20 : 0}%`,
-      }}
-    />
-
-    {/* Remaining */}
-    <div className="h-full bg-blue-500 w-[20%]" />
-
-  </div>
-</div>
-
-
-    {/* Stats */}
-    <div className="px-6 pb-6 space-y-3">
-
-  {/* Answered */}
-  <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
-    <div className="flex items-center gap-6">
-      <span className="text-lg font-semibold text-gray-900 w-8 text-left">
-        {callStats.answered}
-      </span>
-      <span className="text-sm font-medium text-gray-700">
-        Answered
-      </span>
-    </div>
-
-    <span className="px-4 py-1 text-sm font-medium rounded-full bg-red-100 text-red-500">
-      Overdue
-    </span>
-  </div>
-
-  {/* Missed */}
-  <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
-    <div className="flex items-center gap-6">
-      <span className="text-lg font-semibold text-gray-900 w-8 text-left">
-        {callStats.noAnswer}
-      </span>
-      <span className="text-sm font-medium text-gray-700">
-        Missed
-      </span>
-    </div>
-
-    <span className="px-4 py-1 text-sm font-medium rounded-full bg-orange-100 text-orange-600">
-      High
-    </span>
-  </div>
-
-  {/* Late */}
-  <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
-    <div className="flex items-center gap-6">
-      <span className="text-lg font-semibold text-gray-900 w-8 text-left">
-        {callStats.total}
-      </span>
-      <span className="text-sm font-medium text-gray-700">
-        Late
-      </span>
-    </div>
-
-    <span className="px-4 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-600">
-      Medium
-    </span>
-  </div>
-
-</div>
-
-  </div>
-
-</div>
-
 
           {/* Upcoming Birthdays and Daily Follow Notification */}
-          <div className="grid lg:grid-cols-2 gap-8 mb-3">
+          <div className="grid lg:grid-cols-2 gap-8 mb-8">
             <UpcomingBirthdays limit={3} />
             <DailyFollowNotification limit={3} />
           </div>
+          
+           {/* Team DO Records */}
+          {/* <div className="bg-white rounded-2xl shadow-md p-6">
+      
+      <div className="flex flex-row md:flex-row md:items-center md:justify-between gap-4 mb-6">
+       
+        <div className="flex items-center gap-3">
+          <div className="bg-green-500 p-2 rounded-lg shadow-sm text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none"
+              viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 17v-2h6v2h5v-6.586a1 1 0 00-.293-.707l-3.414-3.414A1 1 0 0015.586 6H15V5a1 1 0 00-1-1H5a1 1 0 00-1 1v12h5zm0 0v2a2 2 0 104 0v-2m4-7l3 3" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800">Team DO Records</h2>
+        </div>
+
+       
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <span className="text-gray-500">to</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="text"
+            placeholder="Search by Name or ID"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+     
+      <div className="overflow-x-auto">
+        <table className="min-w-full border border-gray-200 rounded-md overflow-hidden text-sm">
+          <thead className="bg-gray-100 text-gray-700">
+            <tr>
+              <th className="px-5 py-3 text-left font-medium text-blue-600">Emp ID</th>
+              <th className="px-5 py-3 text-left font-medium text-blue-600">Name</th>
+              <th className="px-5 py-3 text-left font-medium text-blue-600">Total Delivery Orders</th>
+              <th className="px-5 py-3 text-left font-medium text-blue-600">Status</th>
+            </tr>
+          </thead>
+          <tbody className="text-gray-700">
+            {filteredData.map((row, index) => (
+              <tr key={index} className="hover:bg-gray-50 border-t border-gray-100">
+                <td className="px-5 py-3 font-medium">{row.id}</td>
+                <td className="px-5 py-3">{row.name}</td>
+                <td className="px-5 py-3">{row.orders}</td>
+                <td className={`px-5 py-3 font-semibold ${getStatusColor(row.status)}`}>{row.status}</td>
+              </tr>
+            ))}
+            {filteredData.length === 0 && (
+              <tr>
+                <td colSpan="4" className="text-center px-5 py-6 text-gray-400 italic">
+                  No matching records found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
         </>
       ) : null}
     </div>
@@ -1340,5 +1374,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-
-
