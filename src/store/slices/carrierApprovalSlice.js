@@ -5,27 +5,37 @@ import API_CONFIG from '../../config/api.js';
 // Fetch truckers with pagination and caching
 export const fetchTruckers = createAsyncThunk(
   'carrierApproval/fetchTruckers',
-  async ({ page = 1, limit = 15, forceRefresh = false }, { getState, rejectWithValue }) => {
+  async ({ page = 1, limit = 15, search = null, forceRefresh = false }, { getState, rejectWithValue }) => {
     const state = getState();
     const { pageCache, cacheTimestamps, cacheExpiry } = state.carrierApproval;
     
-    // Check if cache is valid for this page and no force refresh
-    if (!forceRefresh && pageCache[page] && cacheTimestamps[page] && 
-        (Date.now() - cacheTimestamps[page] < cacheExpiry)) {
-      console.log(`Returning cached data for page ${page}`);
+    // Create cache key that includes search term
+    const cacheKey = search ? `${page}_${search}` : page.toString();
+    
+    // Check if cache is valid for this page/search and no force refresh
+    if (!forceRefresh && pageCache[cacheKey] && cacheTimestamps[cacheKey] && 
+        (Date.now() - cacheTimestamps[cacheKey] < cacheExpiry)) {
+      console.log(`Returning cached data for page ${page}${search ? ` with search: ${search}` : ''}`);
       return {
-        truckers: pageCache[page],
+        truckers: pageCache[cacheKey],
         statistics: state.carrierApproval.statistics,
         pagination: state.carrierApproval.pagination,
-        page: page
+        page: page,
+        search: search
       };
     }
 
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
+      // Build params object
+      const params = { page, limit };
+      if (search && search.trim()) {
+        params.search = search.trim();
+      }
+      
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/all-truckers`, {
-        params: { page, limit },
+        params,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -40,6 +50,9 @@ export const fetchTruckers = createAsyncThunk(
         const totalItems = statistics.totalTruckers || truckers.length;
         const totalPages = Math.ceil(totalItems / limit);
         
+        // Cache the data with search key
+        const cacheKey = search ? `${page}_${search}` : page.toString();
+        
         return {
           truckers,
           statistics,
@@ -49,7 +62,9 @@ export const fetchTruckers = createAsyncThunk(
             totalItems: totalItems,
             itemsPerPage: limit
           },
-          page: page
+          page: page,
+          search: search,
+          cacheKey: cacheKey
         };
       }
       
@@ -99,15 +114,17 @@ const carrierApprovalSlice = createSlice({
       })
       .addCase(fetchTruckers.fulfilled, (state, action) => {
         state.loading = false;
-        const { truckers, statistics, pagination, page } = action.payload;
+        const { truckers, statistics, pagination, page, cacheKey } = action.payload;
         
         state.truckers = truckers;
         state.statistics = statistics;
         state.pagination = pagination;
         
-        // Cache the data for this page
-        state.pageCache[page] = truckers;
-        state.cacheTimestamps[page] = Date.now();
+        // Cache the data with search key
+        if (cacheKey) {
+          state.pageCache[cacheKey] = truckers;
+          state.cacheTimestamps[cacheKey] = Date.now();
+        }
       })
       .addCase(fetchTruckers.rejected, (state, action) => {
         state.loading = false;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Search } from 'lucide-react';
@@ -55,10 +55,55 @@ export default function CarrierApproval() {
 
   const currentUserDepartment = useMemo(() => getCurrentUserDepartment(), []);
 
-  // Fetch carriers when page changes
+  // Debounced search effect - fetch when search term changes
+  const searchDebounceTimerRef = useRef(null);
+  
   useEffect(() => {
-    dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: false }));
-  }, [dispatch, currentPage]);
+    // Clear previous timer
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+    }
+
+    searchDebounceTimerRef.current = setTimeout(() => {
+      // Reset to page 1 when searching
+      if (searchTerm && searchTerm.trim()) {
+        dispatch(setCurrentPage(1));
+        dispatch(fetchTruckers({ 
+          page: 1, 
+          limit: itemsPerPage, 
+          search: searchTerm.trim(),
+          forceRefresh: true
+        }));
+      } else if (!searchTerm) {
+        // If search is cleared, fetch current page without search
+        dispatch(fetchTruckers({ 
+          page: currentPage, 
+          limit: itemsPerPage, 
+          search: null,
+          forceRefresh: true
+        }));
+      }
+    }, 500); // 500ms debounce
+
+    return () => {
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current);
+      }
+    };
+  }, [searchTerm, dispatch, itemsPerPage, currentPage]);
+
+  // Fetch carriers when page changes (only if no active search)
+  useEffect(() => {
+    // Only fetch on page change if there's no search term
+    if (!searchTerm || !searchTerm.trim()) {
+      dispatch(fetchTruckers({ 
+        page: currentPage, 
+        limit: itemsPerPage, 
+        search: null,
+        forceRefresh: false 
+      }));
+    }
+  }, [dispatch, currentPage, itemsPerPage]);
 
   // Show error messages
   useEffect(() => {
@@ -100,20 +145,8 @@ export default function CarrierApproval() {
 
   const isImageFile = (fileType) => ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes((fileType || '').toUpperCase());
 
-
-  // --- Search / Filter (client-side filtering on current page) ---
-  const filteredCarriers = useMemo(() => {
-    if (!searchTerm) return carriers;
-    const q = norm(searchTerm);
-    return carriers.filter(c =>
-      norm(c.compName).includes(q) ||
-      norm(c.email).includes(q) ||
-      norm(c.mc_dot_no).includes(q)
-    );
-  }, [carriers, searchTerm]);
-
-  // Use filtered carriers for display
-  const currentCarriers = filteredCarriers;
+  // Use carriers directly from API (server-side search)
+  const currentCarriers = carriers;
 
   const handlePageChange = (page) => {
     if (page < 1 || page > pagination.totalPages) return;
@@ -240,8 +273,13 @@ export default function CarrierApproval() {
       setSelectedCarrier(null);
       setViewDoc(false);
       setShowCarrierModal(false);
-      // Refresh current page data
-      dispatch(fetchTruckers({ page: currentPage, limit: itemsPerPage, forceRefresh: true }));
+      // Refresh current page data with current search term
+      dispatch(fetchTruckers({ 
+        page: currentPage, 
+        limit: itemsPerPage, 
+        search: searchTerm || null,
+        forceRefresh: true 
+      }));
     } catch (err) {
       console.error('Status update failed:', err);
       alertify.error(`❌ Error: ${err.response?.data?.message || err.message}`);
@@ -547,7 +585,7 @@ export default function CarrierApproval() {
           </div>
 
 
-          {filteredCarriers.length === 0 && (
+          {currentCarriers.length === 0 && (
             <div className="text-center py-12">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
