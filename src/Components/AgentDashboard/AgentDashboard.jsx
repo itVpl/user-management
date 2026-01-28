@@ -403,10 +403,10 @@ const Dashboard = () => {
   };
 
   const StatCard = ({ title, value, icon: Icon, color, subtitle, trend, trendValue, showTitle = false, noBackground = false, iconColor = null, backgroundColor = null }) => (
-    <div className="bg-white rounded-2xl p-4 border-2 border-gray-200">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-white rounded-2xl p-3 border-2 border-gray-200">
+      <div className="flex items-center justify-between mb-2">
         <div className="text-left">
-          <p className="text-sm text-gray-500 font-medium">{subtitle}</p>
+          <p className="text-base text-gray-500 font-medium">{subtitle}</p>
         </div>
         <div 
           className={`w-12 h-12 ${noBackground ? '' : (backgroundColor ? '' : color)} rounded-xl flex items-center justify-center`}
@@ -419,7 +419,7 @@ const Dashboard = () => {
           />
         </div>
       </div>
-      <div className="text-3xl font-bold text-gray-900 mb-2">{value?.toLocaleString() || 0}</div>
+      <div className="text-3xl font-bold text-gray-900 mb-1">{value?.toLocaleString() || 0}</div>
       <div className="flex items-center justify-between">
         {trend && trendValue && !showTitle ? (
           <div className="flex items-center gap-1">
@@ -491,7 +491,7 @@ const Dashboard = () => {
     );
   });
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 min-h-screen">
+    <div className="p-6 bg-white min-h-screen">
       {department === 'CMT' ? (
         // --- CMT Dashboard (current layout) ---
         <>

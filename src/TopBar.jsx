@@ -33,6 +33,15 @@ const Topbar = () => {
   const [checklistItems, setChecklistItems] = useState(['blank', 'blank', 'blank', 'blank']); // Default blank items
   const [checklistTooltips, setChecklistTooltips] = useState(['', '', '', '']);
   const [hoveredIndex, setHoveredIndex] = useState(null);
+  
+  // User profile data
+  const [userProfile, setUserProfile] = useState({
+    name: 'Loading...',
+    department: 'Loading...',
+    empId: '',
+    profileImage: ProfileIcon
+  });
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -42,25 +51,95 @@ const Topbar = () => {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  // Get user department
+  // Helper function to format department name
+  const formatDepartmentName = (dept) => {
+    if (!dept) return 'Employee';
+    
+    const deptLower = dept.toLowerCase().trim();
+    
+    // Map department codes to readable names
+    const departmentMap = {
+      'hr': 'Human Resources',
+      'sales': 'Sales',
+      'cmt': 'CMT',
+      'finance': 'Finance',
+      'qa': 'Quality Assurance',
+      'admin': 'Administration',
+      'it': 'Information Technology',
+      'operations': 'Operations',
+      'marketing': 'Marketing'
+    };
+    
+    // Check if it's a known department code
+    if (departmentMap[deptLower]) {
+      return departmentMap[deptLower];
+    }
+    
+    // If not a code, capitalize first letter of each word
+    return dept.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  // Get user department and profile data
   useEffect(() => {
     const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
     
     if (userString) {
       try {
         const userData = JSON.parse(userString);
+        console.log('TopBar: User data loaded:', userData); // Debug log
+        
+        // Set user profile data
+        const userName = userData?.employeeName || userData?.name || userData?.firstName || 
+                        (userData?.firstName && userData?.lastName ? `${userData.firstName} ${userData.lastName}` : '') ||
+                        'User';
+        const empId = userData?.empId || userData?.employeeId || '';
+        const designation = userData?.designation || userData?.position || userData?.role || '';
+        
+        // Get department info
         const department = typeof userData?.department === 'string' 
           ? userData.department 
           : userData?.department?.name || '';
         const departmentLower = department.toLowerCase().trim();
         
+        // Set profile data with designation if available, otherwise use department
+        const displayRole = designation || formatDepartmentName(department);
+        
+        setUserProfile({
+          name: userName,
+          department: displayRole,
+          empId: empId,
+          profileImage: userData?.profileImage || ProfileIcon
+        });
+        
+        setProfileLoaded(true);
+        
+        // Set department for checklist
         if (departmentLower === 'sales' || departmentLower === 'cmt' || departmentLower.includes('sales') || departmentLower.includes('cmt')) {
           const finalDept = departmentLower.includes('sales') ? 'sales' : 'cmt';
           setUserDepartment(finalDept);
         }
       } catch (error) {
         console.error("Error parsing user data:", error);
+        // Set fallback profile data
+        setUserProfile({
+          name: 'User',
+          department: 'Employee',
+          empId: '',
+          profileImage: ProfileIcon
+        });
+        setProfileLoaded(true);
       }
+    } else {
+      // No user data found, set fallback
+      setUserProfile({
+        name: 'Guest User',
+        department: 'Not Logged In',
+        empId: '',
+        profileImage: ProfileIcon
+      });
+      setProfileLoaded(true);
     }
   }, []);
 
@@ -270,7 +349,7 @@ const Topbar = () => {
   }, []);
 
   return (
-    <div className="fixed top-6 left-[320px] right-12 h-16 z-10 flex items-center">
+    <div className="fixed top-6 left-[355px] right-22 h-16 z-50 flex items-center">
       <div className="w-full bg-white border border-gray-300 rounded-xl px-6 py-3 flex items-center justify-between">
         {/* Left Section - Checklist Stepper Icons */}
         <div className="flex items-center gap-2">
@@ -510,13 +589,24 @@ const Topbar = () => {
               onClick={() => setProfileOpen(!profileOpen)}
             >
               <img
-                src={ProfileIcon}
+                src={userProfile.profileImage}
                 alt="Profile"
-                className="w-10 h-10 rounded-full border-2 border-gray-200"
+                className="w-10 h-10 rounded-full border-2 border-gray-200 object-cover"
+                onError={(e) => {
+                  e.target.src = ProfileIcon; // Fallback to default icon if image fails to load
+                }}
               />
               <div className="flex flex-col">
-                <span className="text-sm font-semibold text-gray-800">Moni Roy</span>
-                <span className="text-xs text-gray-500">Sales Trainee</span>
+                <span className="text-sm font-semibold text-gray-800">
+                  {profileLoaded ? userProfile.name : (
+                    <span className="animate-pulse bg-gray-200 rounded h-4 w-20 inline-block"></span>
+                  )}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {profileLoaded ? userProfile.department : (
+                    <span className="animate-pulse bg-gray-200 rounded h-3 w-16 inline-block"></span>
+                  )}
+                </span>
               </div>
               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -525,6 +615,15 @@ const Topbar = () => {
             
             {profileOpen && (
               <div className="absolute right-0 top-16 w-48 bg-white shadow-lg rounded-lg py-2 z-50 animate-fade-in border border-gray-100">
+                {/* Profile Info Header */}
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <div className="text-sm font-medium text-gray-800">{userProfile.name}</div>
+                  <div className="text-xs text-gray-500">{userProfile.department}</div>
+                  {userProfile.empId && (
+                    <div className="text-xs text-gray-400">ID: {userProfile.empId}</div>
+                  )}
+                </div>
+                
                 <button
                   onClick={() => {
                     setProfileOpen(false);

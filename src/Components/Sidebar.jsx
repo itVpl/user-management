@@ -932,7 +932,7 @@ const Sidebar = () => {
   // Show loading state
   if (loading) {
     return (
-      <div className={`fixed top-4 left-4 h-[calc(100vh-32px)] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
+      <div className={`fixed top-4 left-20 h-[800px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
         <div className="p-4">
           <img src={logo} alt="Logo" className={`${isExpanded ? "w-24 h-10" : "w-23 h-10 mx-auto"}`} />
         </div>
@@ -945,7 +945,7 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className={`fixed top-4 left-4 h-[calc(100vh-32px)] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
+      <div className={`fixed top-4 left-20 h-[800px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
         <div className="flex-none">
           <div className="p-4 relative flex items-center justify-between">
             <img 
@@ -971,7 +971,7 @@ const Sidebar = () => {
         </div>
 
           {/* Scrollable Menu Section */}
-          <div className="overflow-y-auto h-[calc(100vh-160px)] px-1 pr-2 scrollbar-hide">
+          <div className="overflow-y-auto h-[640px] px-1 pr-2 scrollbar-hide">
             <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
               {filteredMenuItems.length > 0 || departmentMenuItems.length > 0 ? (
                 <>
