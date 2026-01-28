@@ -69,7 +69,7 @@ const RateRequest = () => {
   const [isFetching, setIsFetching] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [touchedFields, setTouchedFields] = useState({});
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'rate', or 'rateDetails'
+  const [activeTab, setActiveTab] = useState('rate'); // 'pending', 'rate', or 'rateDetails'
   const [pendingRequests, setPendingRequests] = useState([]);
   const [completedRequests, setCompletedRequests] = useState([]);
   const [rateDetailsData, setRateDetailsData] = useState([]);
@@ -82,6 +82,13 @@ const RateRequest = () => {
   const [rateDetailsSortOrder, setRateDetailsSortOrder] = useState('desc');
   const [rateDetailsPagination, setRateDetailsPagination] = useState(null);
   const [rateDetailsStatistics, setRateDetailsStatistics] = useState(null);
+  // Rate Request pagination
+  const [rateRequestPage, setRateRequestPage] = useState(1);
+  const [rateRequestLimit, setRateRequestLimit] = useState(10);
+  const [rateRequestPagination, setRateRequestPagination] = useState(null);
+  // Rate Request date filters
+  const [rateRequestFromDate, setRateRequestFromDate] = useState('');
+  const [rateRequestToDate, setRateRequestToDate] = useState('');
   const [bidDetailsModal, setBidDetailsModal] = useState({ visible: false, load: null });
   const [bidDetailsData, setBidDetailsData] = useState(null);
   const [bidDetailsLoading, setBidDetailsLoading] = useState(false);
@@ -185,7 +192,7 @@ const autoAcceptingRef = useRef(new Set());
     );
   };
 
-  const fetchRateRequests = async () => {
+  const fetchRateRequests = async (page = rateRequestPage, limit = rateRequestLimit, fromDate = rateRequestFromDate, toDate = rateRequestToDate) => {
     try {
       setIsFetching(true);
       const token = getAuthToken();
@@ -199,7 +206,7 @@ const autoAcceptingRef = useRef(new Set());
       console.log('Fetching pending approvals...');
       // Pending approvals
       const pendingRes = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending`,
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?page=${page}&limit=${limit}`,
         { headers }
       );
       console.log('Pending Response:', pendingRes.data);
@@ -335,18 +342,47 @@ const autoAcceptingRef = useRef(new Set());
         };
       });
 
-      // Approved loads for Rate tab - using new API endpoint
+      // Approved loads for Rate tab - using new API endpoint with pagination and date filters
       console.log('Fetching approved requests...');
+      // Build query parameters for date filtering
+      let queryParams = `status=approved&page=${page}&limit=${limit}`;
+      if (fromDate) {
+        queryParams += `&fromDate=${fromDate}`;
+      }
+      if (toDate) {
+        queryParams += `&toDate=${toDate}`;
+      }
       const approvedRes = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?status=approved`,
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?${queryParams}`,
         { headers }
       );
       console.log('Approved Response:', approvedRes.data);
       let approvedApprovals = [];
+      let approvedPagination = null;
       if (Array.isArray(approvedRes.data)) {
         approvedApprovals = approvedRes.data;
+        // If response is array, no pagination available
+        setRateRequestPagination(null);
       } else {
         approvedApprovals = approvedRes.data?.approvals || approvedRes.data?.data?.approvals || [];
+        // Extract pagination info from response - check multiple possible locations
+        approvedPagination = approvedRes.data?.pagination || 
+                             approvedRes.data?.data?.pagination || 
+                             approvedRes.data?.meta?.pagination ||
+                             null;
+        if (approvedPagination) {
+          const totalItems = approvedPagination.totalItems || approvedPagination.total || approvedApprovals.length;
+          const itemsPerPage = approvedPagination.itemsPerPage || approvedPagination.limit || limit;
+          setRateRequestPagination({
+            currentPage: approvedPagination.currentPage || approvedPagination.page || page,
+            itemsPerPage: itemsPerPage,
+            totalItems: totalItems,
+            totalPages: approvedPagination.totalPages || Math.ceil(totalItems / itemsPerPage)
+          });
+        } else {
+          // If no pagination object but we have data, assume single page
+          setRateRequestPagination(null);
+        }
       }
       console.log('Approved Approvals Count:', approvedApprovals.length);
 
@@ -384,7 +420,9 @@ const autoAcceptingRef = useRef(new Set());
             salesUserInfo: approval.createdBySalesUser || 
                           approval.createdBy || 
                           approval.salesUser ||
-                          null
+                          null,
+            // Add bid count
+            bidCount: approval.loadId?.bidCount || 0
           };
         }
 
@@ -480,7 +518,9 @@ const autoAcceptingRef = useRef(new Set());
                         approval.createdBySalesUser || 
                         approval.createdBy || 
                         approval.salesUser ||
-                        null
+                        null,
+          // Add bid count
+          bidCount: approval.loadId?.bidCount || 0
         };
       });
 // ---- broadcast new pending approvals (cross-tab + same tab) ----
@@ -615,7 +655,13 @@ try {
   // Handle View Bids
   const handleViewBids = (load) => {
     setBidDetailsModal({ visible: true, load });
-    fetchBidDetails(load._id);
+    // Use actualLoadId if available, then loadId, otherwise use _id
+    const loadIdToFetch = load.actualLoadId || load.loadId || load._id;
+    if (loadIdToFetch) {
+      fetchBidDetails(loadIdToFetch);
+    } else {
+      toast.error('Unable to determine load ID');
+    }
   };
 
   const closeBidDetailsModal = () => {
@@ -772,7 +818,7 @@ const fetchLoadDetailsForChat = async (loadId) => {
  useEffect(() => {
    const approval = location?.state?.openApprovalFromBroadcast;
    if (approval) {
-     setActiveTab('pending');
+     setActiveTab('rate'); // Changed from 'pending' to 'rate' since pending tab is disabled
      openApprovalModal(approval, 'approval');
      // state clear so refresh pe dubara na khule
      window.history.replaceState({}, document.title);
@@ -782,7 +828,7 @@ const fetchLoadDetailsForChat = async (loadId) => {
 
   // init
   useEffect(() => {
-    fetchRateRequests();
+    fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
     fetchTruckers();
   }, []);
 
@@ -793,10 +839,28 @@ const fetchLoadDetailsForChat = async (loadId) => {
       fetchRateDetails(1, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder);
     } else if (activeTab === 'pending' || activeTab === 'rate') {
       // Fetch rate requests data for pending and rate tabs
-      fetchRateRequests();
+      setRateRequestPage(1); // Reset to first page when switching tabs
+      fetchRateRequests(1, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Fetch data when pagination changes for Rate Request tab
+  useEffect(() => {
+    if (activeTab === 'rate' || activeTab === 'pending') {
+      fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rateRequestPage, rateRequestLimit]);
+
+  // Fetch data when date filters change for Rate Request tab
+  useEffect(() => {
+    if (activeTab === 'rate' || activeTab === 'pending') {
+      setRateRequestPage(1); // Reset to first page when date filters change
+      fetchRateRequests(1, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rateRequestFromDate, rateRequestToDate]);
 
   // Debounced search for Rate Details
   useEffect(() => {
@@ -1001,7 +1065,7 @@ useEffect(() => {
       );
 
       closeApprovalModal();   // timer bhi clear ho jayega
-      setTimeout(() => { fetchRateRequests(); }, 1000);
+      setTimeout(() => { fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate); }, 1000);
     } else {
       toast.error('Auto-accept failed. Please try again.');
     }
@@ -1061,7 +1125,7 @@ useEffect(() => {
       });
 
       setTimeout(() => {
-        fetchRateRequests();
+        fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
       }, 1000);
     } else {
       toast.error('Auto-accept failed. Please try again.');
@@ -1172,7 +1236,7 @@ useEffect(() => {
 
         closeApprovalModal();
         setTimeout(() => {
-          fetchRateRequests();
+          fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
         }, 600);
       } else {
         toast.error(response.data.message || 'Action failed');
@@ -1319,7 +1383,7 @@ useEffect(() => {
         saveStop(loadId, Date.now());
       }
 
-      await fetchRateRequests();
+      await fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
       closeModal();
     } catch (error) {
       console.error('Submission Error:', error.response?.data || error.message);
@@ -1834,7 +1898,7 @@ useEffect(() => {
     <div className="p-6 bg-gray-50 min-h-screen">
       {/* Tabs */}
       <div className="flex items-center gap-4 mb-6">
-        <button
+        {/* <button
           onClick={() => setActiveTab('pending')}
           className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
             activeTab === 'pending'
@@ -1846,7 +1910,7 @@ useEffect(() => {
             <Clock size={18} />
             <span>Pending Request</span>
           </div>
-        </button>
+        </button> */}
         <button
           onClick={() => setActiveTab('rate')}
           className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
@@ -1876,7 +1940,7 @@ useEffect(() => {
       </div>
 
       {/* Pending Tab */}
-      {activeTab === 'pending' && (
+      {false && activeTab === 'pending' && (
         <div>
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-6">
@@ -2138,11 +2202,11 @@ useEffect(() => {
                       Total {activeTab === 'rate' ? (completedRequests.length > 0 ? 'Completed' : 'All') : 'Completed'}
                     </p>
                     <p className="text-xl font-bold text-gray-800">
-                      {activeTab === 'rate'
+                      {rateRequestPagination?.totalItems || (activeTab === 'rate'
                         ? completedRequests.length > 0
                           ? completedRequests.length
                           : rateRequests.length
-                        : completedRequests.length}
+                        : completedRequests.length)}
                     </p>
                   </div>
                 </div>
@@ -2160,17 +2224,39 @@ useEffect(() => {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Date Filters */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600 font-medium">From Date:</label>
                 <input
-                  type="text"
-                  placeholder="Search completed requests..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  type="date"
+                  value={rateRequestFromDate}
+                  onChange={(e) => setRateRequestFromDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600 font-medium">To Date:</label>
+                <input
+                  type="date"
+                  value={rateRequestToDate}
+                  onChange={(e) => setRateRequestToDate(e.target.value)}
+                  min={rateRequestFromDate || undefined}
+                  className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              {(rateRequestFromDate || rateRequestToDate) && (
+                <button
+                  onClick={() => {
+                    setRateRequestFromDate('');
+                    setRateRequestToDate('');
+                  }}
+                  className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="Clear date filters"
+                >
+                  Clear Dates
+                </button>
+              )}
               
               <button
                 onClick={exportToCSV}
@@ -2220,6 +2306,7 @@ useEffect(() => {
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid Count</th>
                     {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th> */}
                     {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Time</th> */}
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Details</th>
@@ -2277,6 +2364,11 @@ useEffect(() => {
                       <td className="px-4 py-3">
                         <span className="font-bold text-green-600">
                           ${item.rate?.toLocaleString() || '0'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-700">
+                          {item.bidCount || 0}
                         </span>
                       </td>
                       {/* <td className="px-4 py-3">
@@ -2395,10 +2487,18 @@ useEffect(() => {
 </button>
                           
                           <button
+                            onClick={() => {
+                              handleViewBids(item);
+                            }}
+                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                          >
+                            View
+                          </button>
+                          <button
                             onClick={() => openModal(item)}
                             className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                           >
-                            View Details
+                            Submit Rate
                           </button>
                         </div>
                       </td>
@@ -2425,6 +2525,79 @@ useEffect(() => {
                   )}
                 </tbody>
               </table>
+            )}
+            
+            {/* Pagination Controls */}
+            {rateRequestPagination && rateRequestPagination.totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-gray-600">
+                    Showing {((rateRequestPagination.currentPage - 1) * rateRequestPagination.itemsPerPage) + 1} to{' '}
+                    {Math.min(rateRequestPagination.currentPage * rateRequestPagination.itemsPerPage, rateRequestPagination.totalItems)} of{' '}
+                    {rateRequestPagination.totalItems} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Items per page:</label>
+                    <select
+                      value={rateRequestLimit}
+                      onChange={(e) => {
+                        setRateRequestLimit(Number(e.target.value));
+                        setRateRequestPage(1);
+                      }}
+                      className="px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRateRequestPage(prev => Math.max(1, prev - 1))}
+                    disabled={rateRequestPage === 1 || isFetching}
+                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, rateRequestPagination.totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (rateRequestPagination.totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (rateRequestPagination.currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (rateRequestPagination.currentPage >= rateRequestPagination.totalPages - 2) {
+                        pageNum = rateRequestPagination.totalPages - 4 + i;
+                      } else {
+                        pageNum = rateRequestPagination.currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setRateRequestPage(pageNum)}
+                          disabled={isFetching}
+                          className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
+                            rateRequestPage === pageNum
+                              ? 'bg-green-600 text-white border-green-600'
+                              : 'border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setRateRequestPage(prev => Math.min(rateRequestPagination.totalPages, prev + 1))}
+                    disabled={rateRequestPage === rateRequestPagination.totalPages || isFetching}
+                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -3174,10 +3347,10 @@ useEffect(() => {
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
                   <BarChart3 size={24} />
-                  Bid Details
+                  Load Information & Bid Details
                 </h2>
                 <p className="text-sm text-purple-100 mt-1">
-                  View all bids for this load
+                  View load details and all bids for this load
                 </p>
               </div>
               <button 
@@ -3189,6 +3362,89 @@ useEffect(() => {
               </button>
             </div>
 
+            {/* Load Information Section */}
+            {bidDetailsModal.load && (
+              <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 mb-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Truck className="w-4 h-4 text-purple-600" size={20} />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800">Load Information</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Load ID</div>
+                    <div className="text-sm font-semibold text-gray-800">{loadShort(bidDetailsModal.load._id || bidDetailsModal.load.loadId)}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pickup Location</div>
+                    {bidDetailsModal.load.origin?.address && (
+                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.origin.address}</div>
+                    )}
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.origin?.city || '—'}</div>
+                    <div className="text-xs text-gray-500">{bidDetailsModal.load.origin?.state || ''}</div>
+                    <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.origin?.zipcode || 'N/A'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Delivery Location</div>
+                    {bidDetailsModal.load.destination?.address && (
+                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.destination.address}</div>
+                    )}
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.destination?.city || '—'}</div>
+                    <div className="text-xs text-gray-500">{bidDetailsModal.load.destination?.state || ''}</div>
+                    <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.destination?.zipcode || 'N/A'}</div>
+                  </div>
+                  {(bidDetailsModal.load.returnAddress || bidDetailsModal.load.returnCity || bidDetailsModal.load.returnState || bidDetailsModal.load.returnZip) && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Return Location</div>
+                      {bidDetailsModal.load.returnAddress && (
+                        <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.returnAddress}</div>
+                      )}
+                      {bidDetailsModal.load.returnCity && (
+                        <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.returnCity}</div>
+                      )}
+                      {bidDetailsModal.load.returnState && (
+                        <div className="text-xs text-gray-500">{bidDetailsModal.load.returnState}</div>
+                      )}
+                      {bidDetailsModal.load.returnZip && (
+                        <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.returnZip}</div>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weight</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.weight || 'N/A'} lbs</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Vehicle Type</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.vehicleType || '—'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Commodity</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.commodity || 'N/A'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rate</div>
+                    <div className="text-sm font-semibold text-emerald-600">${bidDetailsModal.load.rate?.toLocaleString() || '0'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Bid Count</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.bidCount || 0}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.status || 'N/A'}</div>
+                  </div>
+                  {bidDetailsModal.load.shipper && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Shipper</div>
+                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.shipper.compName || 'N/A'}</div>
+                      <div className="text-xs text-gray-500">{bidDetailsModal.load.shipper.email || ''}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Bids Table */}
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
