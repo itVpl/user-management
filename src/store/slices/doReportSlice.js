@@ -187,6 +187,8 @@ export const fetchDOReport = createAsyncThunk(
             carrier: order.carrier || {},
             containerNo: order.shipper?.containerNo || order.containerNo || 'N/A',
             returnLocation: order.returnLocation || null,
+            company: order.company || order.addDispature || order.customerName || '', // Add company field for consistency
+            addDispature: order.addDispature || order.company || '', // Add addDispature field for consistency
             _fullOrderData: order
           };
         });
