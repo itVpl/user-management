@@ -83,14 +83,14 @@ const SidebarFlyout = ({
         </div>
 
         {/* Content - Better spacing */}
-        <div className="px-5 pb-5">
+        <div className={`px-5 pb-5 ${title === "CMT" ? "max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent" : ""}`}>
           {Object.entries(categories).map(([categoryName, items]) => (
             <div key={categoryName} className="mb-4">
               {/* Category Header - Readable size */}
               <h4 className="text-sm font-medium text-gray-700 mb-2">
                 {categoryName}
               </h4>
-              
+
               {/* Category Items - Good spacing */}
               <div className="space-y-1">
                 {items.map((item, index) => {
@@ -102,8 +102,8 @@ const SidebarFlyout = ({
                       onClick={() => onItemClick && onItemClick()}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                          isActive 
-                            ? "bg-blue-100 text-blue-700" 
+                          isActive
+                            ? "bg-blue-100 text-blue-700"
                             : "text-gray-600 hover:bg-gray-50"
                         }`
                       }
