@@ -3376,14 +3376,82 @@ useEffect(() => {
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</div>
                     <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.status || 'N/A'}</div>
                   </div>
-                  {bidDetailsModal.load.shipper && (
-                    <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Shipper</div>
-                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.shipper.compName || 'N/A'}</div>
-                      <div className="text-xs text-gray-500">{bidDetailsModal.load.shipper.email || ''}</div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created By</div>
+                    <div className="text-sm font-semibold text-gray-800">
+                      {bidDetailsModal.load?.createdBySalesUser?.empName || 
+                       bidDetailsModal.load?.salesUserInfo?.empName ||
+                       bidDetailsModal.load?.salesUserInfo?.employeeName || 
+                       'N/A'}
                     </div>
-                  )}
+                  </div>
                 </div>
+              </div>
+            )}
+
+            {/* Rate Details Section */}
+            {bidDetailsModal.load && (bidDetailsModal.load.rateDetails || bidDetailsData?.rateDetails) && (
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <DollarSign className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800">Rate Details</h3>
+                </div>
+                {(() => {
+                  const rateDetails = bidDetailsModal.load.rateDetails || bidDetailsData?.rateDetails || {};
+                  const lineHaul = rateDetails.lineHaul || 0;
+                  const fsc = rateDetails.fsc || 0;
+                  const fscValue = (lineHaul * fsc) / 100;
+                  const otherCharges = rateDetails.other || [];
+                  const totalRates = rateDetails.totalRates || (lineHaul + fscValue + otherCharges.reduce((sum, item) => sum + (Number(item.total) || 0), 0));
+                  
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Line Haul</div>
+                          <div className="text-sm font-semibold text-gray-800">${lineHaul.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">FSC (%)</div>
+                          <div className="text-sm font-semibold text-gray-800">{fsc}%</div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">FSC Value</div>
+                          <div className="text-sm font-semibold text-blue-600">${fscValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Rates</div>
+                          <div className="text-sm font-semibold text-green-600">${totalRates.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </div>
+                      </div>
+                      
+                      {otherCharges && otherCharges.length > 0 && (
+                        <div className="mt-4">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Other Charges</div>
+                          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div className="space-y-2">
+                              {otherCharges.map((charge, index) => (
+                                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-800">{charge.name || 'N/A'}</div>
+                                    <div className="text-xs text-gray-500">
+                                      Qty: {charge.quantity || 0} × ${(charge.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </div>
+                                  </div>
+                                  <div className="text-sm font-semibold text-gray-800">
+                                    ${(charge.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
