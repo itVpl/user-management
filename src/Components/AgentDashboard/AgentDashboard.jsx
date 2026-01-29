@@ -6,6 +6,7 @@ import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined
 import CheckCircleOutlineSharpIcon from '@mui/icons-material/CheckCircleOutlineSharp';
 import { MoreHorizontal, Phone, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Award, Truck, DollarSign, Target, UserPlus, AlertTriangle, User, Info } from 'lucide-react';
 import UpcomingBirthdays from '../UpcomingBirthdays';
+import { IoCall } from "react-icons/io5";
 import DailyFollowNotification from '../DailyFollowNotification';
 import API_CONFIG from '../../config/api';
 // import firstIcon from "../../assets/Icon.svg"
@@ -519,7 +520,7 @@ const Dashboard = () => {
             <StatCard
               title="Total Calls"
               value={callStats.total}
-              icon={Info}
+              icon={IoCall}
               color="bg-yellow-500"
               subtitle="Total Calls"
               trend="up"
@@ -666,7 +667,7 @@ const Dashboard = () => {
               stroke="#8b5cf6"
               strokeWidth="30"
               fill="none"
-              strokeDasharray={`${19 * 4.08} ${81 * 4.08}`}
+              strokeDasharray={`${25 * 4.08} ${81 * 4.08}`}
               strokeDashoffset={`-${74 * 4.08}`}
             />
           </svg>

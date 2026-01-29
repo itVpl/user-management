@@ -175,7 +175,7 @@ const Layout = () => {
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
       <Topbar />
-      <main className="ml-20 md:ml-[316px] mr-12 pt-24 px-4 pb-4"> {/* Increased pt-20 to pt-24 to account for TopBar at top-6 + h-16 */}
+      <main className="ml-20 md:ml-[296px] mr-5 pt-24 px-4 pb-4"> {/* Increased pt-20 to pt-24 to account for TopBar at top-6 + h-16 */}
         <Outlet />
       </main>
 {/*      

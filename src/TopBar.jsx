@@ -349,7 +349,7 @@ const Topbar = () => {
   }, []);
 
   return (
-    <div className="fixed top-6 left-[355px] right-22 h-16 z-50 flex items-center">
+    <div className="fixed top-6 left-[335px] right-15 h-16 z-50 flex items-center">
       <div className="w-full bg-white border border-gray-300 rounded-xl px-6 py-3 flex items-center justify-between">
         {/* Left Section - Checklist Stepper Icons */}
         <div className="flex items-center gap-2">
@@ -389,35 +389,17 @@ const Topbar = () => {
                     );
                   }
                 } else if (userDepartment === 'cmt') {
-                  // CMT: Talktime, Truckers, Attendance, Bids
                   if (index === 0) {
-                    // Phone icon for Talktime
-                    return (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                    );
-                  } else if (index === 1) {
-                    // Truck icon for Truckers  
-                    return (
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                      </svg>
-                    );
-                  } else if (index === 2) {
-                    // Clipboard with checkmark icon for Attendance
-                    return (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                    );
-                  } else if (index === 3) {
-                    // Document/Bid icon for Bids
-                    return (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    );
+                    return <img src="/icons/call.svg" className="w-10 h-10" alt="Call" />;
+                  } 
+                  else if (index === 1) {
+                    return <img src="/icons/truck.svg" className="w-10 h-10" alt="Truck" />;
+                  } 
+                  else if (index === 2) {
+                    return <img src="/icons/attendance.svg" className="w-10 h-10" alt="Attendance" />;
+                  } 
+                  else if (index === 3) {
+                    return <img src="/icons/bid.svg" className="w-10 h-10" alt="Bid" />;
                   }
                 }
                 return null;
