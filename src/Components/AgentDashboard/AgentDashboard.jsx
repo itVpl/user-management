@@ -666,7 +666,7 @@ const Dashboard = () => {
               stroke="#8b5cf6"
               strokeWidth="30"
               fill="none"
-              strokeDasharray={`${19 * 4.08} ${81 * 4.08}`}
+              strokeDasharray={`${25 * 4.08} ${81 * 4.08}`}
               strokeDashoffset={`-${74 * 4.08}`}
             />
           </svg>

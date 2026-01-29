@@ -947,7 +947,7 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className={`fixed top-4 left-20 h-[800px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
+      <div className={`fixed top-4 left-20 h-[886px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
         <div className="flex-none">
           <div className="p-4 relative flex items-center justify-between">
             <img 
