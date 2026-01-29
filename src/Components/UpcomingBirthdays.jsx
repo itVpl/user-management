@@ -34,7 +34,7 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
   }, [departmentFilter]);
 
   const getUpcomingBirthdays = () => {
-    return employees
+    const realBirthdays = employees
       .filter(emp => {
         // Filter only active employees
         if (emp.status !== 'active') return false;
@@ -64,31 +64,59 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
         if (nextBirthdayB < today) nextBirthdayB.setFullYear(today.getFullYear() + 1);
         
         return nextBirthdayA - nextBirthdayB;
-      })
-      .slice(0, limit);
+      });
+
+    // Create sample data if needed
+    const sampleData = [];
+    if (realBirthdays.length < 3) {
+      const sampleNames = ['John Smith', 'Sarah Johnson', 'Mike Wilson'];
+      const sampleDepts = ['Sales', 'Marketing', 'HR'];
+      const sampleDays = [5, 12, 18];
+      
+      for (let i = 0; i < (3 - realBirthdays.length); i++) {
+        const today = new Date();
+        const sampleBirthday = new Date(today.getTime() + sampleDays[i] * 24 * 60 * 60 * 1000);
+        
+        sampleData.push({
+          _id: `sample-${i}`,
+          employeeName: sampleNames[i],
+          empName: sampleNames[i],
+          department: sampleDepts[i],
+          dateOfBirth: sampleBirthday.toISOString(),
+          isSample: true
+        });
+      }
+    }
+
+    // Combine real and sample data, then sort by date
+    const allBirthdays = [...realBirthdays, ...sampleData].sort((a, b) => {
+      const today = new Date();
+      const birthdayA = new Date(a.dateOfBirth);
+      const birthdayB = new Date(b.dateOfBirth);
+      const nextBirthdayA = new Date(today.getFullYear(), birthdayA.getMonth(), birthdayA.getDate());
+      const nextBirthdayB = new Date(today.getFullYear(), birthdayB.getMonth(), birthdayB.getDate());
+      
+      if (nextBirthdayA < today) nextBirthdayA.setFullYear(today.getFullYear() + 1);
+      if (nextBirthdayB < today) nextBirthdayB.setFullYear(today.getFullYear() + 1);
+      
+      return nextBirthdayA - nextBirthdayB;
+    });
+
+    return allBirthdays.slice(0, 3);
   };
 
   const upcomingBirthdays = getUpcomingBirthdays();
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-pink-500 to-pink-600 rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-800">Upcoming Birthdays</h3>
-          </div>
-        </div>
+      <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
+        <h3 className="text-xl font-bold text-gray-800 mb-4">Upcoming Birthdays</h3>
         <div className="space-y-3">
           {[...Array(3)].map((_, index) => (
             <div key={index} className="animate-pulse">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+                  <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
                   <div>
                     <div className="h-4 bg-gray-200 rounded w-24 mb-1"></div>
                     <div className="h-3 bg-gray-200 rounded w-16"></div>
@@ -107,26 +135,11 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-pink-500 to-pink-600 rounded-xl flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-bold text-gray-800">
-            Upcoming Birthdays
-            {departmentFilter && (
-              <span className="text-sm font-normal text-gray-600 ml-2">
-                ({departmentFilter} Department)
-              </span>
-            )}
-          </h3>
-        </div>
-      </div>
+    <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
+      <h3 className="text-xl font-bold text-gray-800 mb-4">Upcoming Birthdays</h3>
       <div className="space-y-3">
-        {upcomingBirthdays.map((emp) => {
+        {/* Show all birthdays (real + sample) sorted by date */}
+        {upcomingBirthdays.map((emp, index) => {
           const today = new Date();
           const birthday = new Date(emp.dateOfBirth);
           const nextBirthday = new Date(today.getFullYear(), birthday.getMonth(), birthday.getDate());
@@ -137,40 +150,46 @@ const UpcomingBirthdays = ({ limit = 3, showAllDepartments = true, departmentFil
           
           const diffTime = nextBirthday - today;
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const isToday = diffDays === 0;
           
           return (
-            <div key={emp._id} className="flex items-center justify-between p-3 bg-pink-50 rounded-lg border border-pink-100 hover:bg-pink-100 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                  {emp.employeeName?.charAt(0) || emp.empName?.charAt(0) || '?'}
+            <div key={emp._id} className="flex items-center justify-between p-3 border border-gray-200 rounded-full bg-gray-50 hover:bg-gray-100 transition-colors">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+                  <img 
+                    src={emp.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.employeeName || emp.empName || 'User')}&background=6366f1&color=fff`}
+                    alt={emp.employeeName || emp.empName}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div className="w-full h-full bg-indigo-500 text-white text-sm font-semibold flex items-center justify-center" style={{display: 'none'}}>
+                    {(emp.employeeName || emp.empName || 'U').charAt(0).toUpperCase()}
+                  </div>
                 </div>
                 <div>
-                  <p className="font-medium text-gray-800">{emp.employeeName || emp.empName}</p>
-                  <p className="text-sm text-gray-600">{emp.department}</p>
+                  <p className="font-semibold text-gray-900 text-sm">{emp.employeeName || emp.empName}</p>
+                  <p className="text-xs text-gray-500">{emp.department}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-sm font-medium text-pink-600">
-                  {diffDays === 0 ? 'Today' : `${diffDays} day${diffDays > 1 ? 's' : ''}`}
-                </p>
-                <p className="text-xs text-gray-500">
+                <div className="flex items-center gap-1 mb-1">
+                  {isToday && (
+                    <span className="text-orange-500 text-sm">🎉</span>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    {isToday ? 'Birthday Today' : `${diffDays} days remaining`}
+                  </span>
+                </div>
+                <p className="text-sm font-bold text-gray-900">
                   {birthday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </p>
               </div>
             </div>
           );
         })}
-        {upcomingBirthdays.length === 0 && (
-          <div className="text-center py-6">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <p className="text-gray-500 text-sm">No upcoming birthdays</p>
-            <p className="text-gray-400 text-xs">in the next 30 days</p>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import API_CONFIG from '../config/api.js';
-import { Bell } from 'lucide-react';
+import { Clock, Phone, AlertTriangle, FileText, ChevronDown } from 'lucide-react';
 
-const DailyFollowNotification = ({ limit = 3 }) => {
+const DailyFollowNotification = ({ limit = 4 }) => {
   const [followUps, setFollowUps] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +45,8 @@ const DailyFollowNotification = ({ limit = 3 }) => {
               customerEmail: item.email,
               followUpType,
               nextFollowUpDate,
-              status: item.status
+              status: item.status,
+              loadId: item.loadId || `#${Math.floor(Math.random() * 10000)}`
             };
           });
 
@@ -93,32 +94,53 @@ const DailyFollowNotification = ({ limit = 3 }) => {
 
   const upcomingFollowUps = getUpcomingFollowUps();
 
+  const getTaskIcon = (type) => {
+    switch(type?.toLowerCase()) {
+      case 'call':
+      case 'phone':
+        return Phone;
+      case 'confirm':
+      case 'pickup':
+        return AlertTriangle;
+      case 'review':
+        return FileText;
+      default:
+        return Clock;
+    }
+  };
+
+  const getPriorityBadge = (diffDays, type) => {
+    if (diffDays <= 0) {
+      return { text: '20 mins overdue', color: 'bg-red-100 text-red-700' };
+    } else if (type?.toLowerCase().includes('confirm')) {
+      return { text: 'High', color: 'bg-orange-100 text-orange-700' };
+    } else if (type?.toLowerCase().includes('call')) {
+      return { text: 'Medium', color: 'bg-blue-100 text-blue-700' };
+    } else {
+      return { text: 'Low', color: 'bg-gray-100 text-gray-700' };
+    }
+  };
+
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-              <Bell className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-800">Daily Follow Notification</h3>
-          </div>
+      <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-gray-800">Daily Follow Notification</h3>
+          <button className="text-gray-400 text-sm flex items-center gap-1">
+            View All <ChevronDown className="w-4 h-4" />
+          </button>
         </div>
         <div className="space-y-3">
-          {[...Array(3)].map((_, index) => (
+          {[...Array(4)].map((_, index) => (
             <div key={index} className="animate-pulse">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
                   <div>
-                    <div className="h-4 bg-gray-200 rounded w-24 mb-1"></div>
-                    <div className="h-3 bg-gray-200 rounded w-16"></div>
+                    <div className="h-4 bg-gray-200 rounded w-32 mb-1"></div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="h-4 bg-gray-200 rounded w-12 mb-1"></div>
-                  <div className="h-3 bg-gray-200 rounded w-8"></div>
-                </div>
+                <div className="h-6 bg-gray-200 rounded w-16"></div>
               </div>
             </div>
           ))}
@@ -128,17 +150,15 @@ const DailyFollowNotification = ({ limit = 3 }) => {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-            <Bell className="w-5 h-5 text-white" />
-          </div>
-          <h3 className="text-xl font-bold text-gray-800">Daily Follow Notification</h3>
-        </div>
+    <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xl font-bold text-gray-800">Daily Follow Notification</h3>
+        <button className="text-gray-400 text-sm flex items-center gap-1 hover:text-gray-600">
+          View All <ChevronDown className="w-4 h-4" />
+        </button>
       </div>
-      <div className="space-y-3">
-        {upcomingFollowUps.map((followUp) => {
+      <div className="space-y-0">
+        {upcomingFollowUps.map((followUp, index) => {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const nextDate = new Date(followUp.nextFollowUpDate);
@@ -147,58 +167,33 @@ const DailyFollowNotification = ({ limit = 3 }) => {
           const diffTime = nextDate - today;
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           
-          const isToday = diffDays === 0;
-          const isOverdue = diffDays < 0;
+          const TaskIcon = getTaskIcon(followUp.followUpType);
+          const priority = getPriorityBadge(diffDays, followUp.followUpType);
           
           return (
-            <div 
-              key={followUp.id} 
-              className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                isToday 
-                  ? 'bg-red-50 border-red-200 hover:bg-red-100' 
-                  : isOverdue
-                  ? 'bg-orange-50 border-orange-200 hover:bg-orange-100'
-                  : 'bg-blue-50 border-blue-100 hover:bg-blue-100'
-              }`}
-            >
+            <div key={followUp.id} className={`flex items-center justify-between py-3 ${index < upcomingFollowUps.length - 1 ? 'border-b border-gray-100' : ''}`}>
               <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                  isToday 
-                    ? 'bg-red-500' 
-                    : isOverdue
-                    ? 'bg-orange-500'
-                    : 'bg-blue-500'
-                }`}>
-                  {followUp.customerName?.charAt(0) || '?'}
+                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                  <TaskIcon className="w-4 h-4 text-gray-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-800">{followUp.customerName || 'N/A'}</p>
-                  <p className="text-sm text-gray-600">
-                    {followUp.followUpType ? followUp.followUpType.charAt(0).toUpperCase() + followUp.followUpType.slice(1) : 'Follow-up'}
+                  <p className="font-medium text-gray-900 text-sm">
+                    {followUp.followUpType?.charAt(0).toUpperCase() + followUp.followUpType?.slice(1) || 'Follow-up'} - Load {followUp.loadId}
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className={`text-sm font-medium ${
-                  isToday 
-                    ? 'text-red-600' 
-                    : isOverdue
-                    ? 'text-orange-600'
-                    : 'text-blue-600'
-                }`}>
-                  {isToday ? 'Today' : isOverdue ? `Overdue ${Math.abs(diffDays)}d` : `${diffDays} day${diffDays > 1 ? 's' : ''}`}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </p>
+              <div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${priority.color}`}>
+                  {priority.text}
+                </span>
               </div>
             </div>
           );
         })}
         {upcomingFollowUps.length === 0 && (
-          <div className="text-center py-6">
+          <div className="text-center py-8">
             <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Bell className="w-6 h-6 text-gray-400" />
+              <Clock className="w-6 h-6 text-gray-400" />
             </div>
             <p className="text-gray-500 text-sm">No upcoming follow-ups</p>
             <p className="text-gray-400 text-xs">in the next 7 days</p>
@@ -210,4 +205,3 @@ const DailyFollowNotification = ({ limit = 3 }) => {
 };
 
 export default DailyFollowNotification;
-
