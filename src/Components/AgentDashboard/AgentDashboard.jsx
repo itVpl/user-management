@@ -537,7 +537,7 @@ const Dashboard = () => {
           </div>
 
           {/* New Section - Add your content here */}
-          <div className="bg-white rounded-2xl p-6 mb-3 border border-gray-100">
+          {/* <div className="bg-white rounded-2xl p-6 mb-3 border border-gray-100">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
@@ -570,7 +570,7 @@ const Dashboard = () => {
                 <span className="font-bold text-orange-600">25</span>
               </div>
             </div>
-          </div>
+          </div> */}
 
           {/* Recent Delivery Orders */}
 <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-3" 
