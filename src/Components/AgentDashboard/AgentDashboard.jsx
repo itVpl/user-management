@@ -8,6 +8,7 @@ import { MoreHorizontal, Phone, Users, Calendar, FileText, Clock, CheckCircle, A
 import UpcomingBirthdays from '../UpcomingBirthdays';
 import DailyFollowNotification from '../DailyFollowNotification';
 import API_CONFIG from '../../config/api';
+// import firstIcon from "../../assets/Icon.svg"
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -972,6 +973,7 @@ const Dashboard = () => {
               title="Present Days"
               value={presentDaysCount}
               icon={CalendarMonthOutlinedIcon}
+              // isImage
               color="bg-blue-500"
               subtitle="This Month"
               showTitle={true}
