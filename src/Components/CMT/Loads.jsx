@@ -4147,7 +4147,9 @@ const MaterialShipperDropdown = ({
 
       load.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
 
-      load.truckerName.toLowerCase().includes(searchTerm.toLowerCase());
+      load.truckerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+
+      (load.shipper?.compName && load.shipper.compName.toLowerCase().includes(searchTerm.toLowerCase()));
 
 
 
