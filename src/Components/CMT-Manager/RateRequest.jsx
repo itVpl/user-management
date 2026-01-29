@@ -3376,13 +3376,6 @@ useEffect(() => {
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</div>
                     <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.status || 'N/A'}</div>
                   </div>
-                  {bidDetailsModal.load.shipper && (
-                    <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Shipper</div>
-                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.shipper.compName || 'N/A'}</div>
-                      <div className="text-xs text-gray-500">{bidDetailsModal.load.shipper.email || ''}</div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
