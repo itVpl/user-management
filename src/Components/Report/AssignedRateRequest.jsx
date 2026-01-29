@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
-import { User, CheckCircle, XCircle, MapPin, Search, Package, TrendingUp, Eye, ChevronDown } from 'lucide-react';
+import { FaArrowLeft } from 'react-icons/fa';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, MapPin, Truck, Calendar, DollarSign, Search, Package, TrendingUp, Eye, X, ChevronDown } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -9,10 +10,11 @@ import 'react-date-range/dist/theme/default.css';
 import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 
-export default function DailyRateRequest() {
+export default function AssignedRateRequest() {
   const [assignments, setAssignments] = useState([]);
   const [overallStatistics, setOverallStatistics] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [cmtUsers, setCmtUsers] = useState([]);
   
   // Date range state - default to Today
   const [range, setRange] = useState({
@@ -24,28 +26,16 @@ export default function DailyRateRequest() {
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
 
+  // CMT User filter
+  const [selectedEmpId, setSelectedEmpId] = useState('');
+  const [cmtUserSearch, setCmtUserSearch] = useState('');
+  const [isCmtDropdownOpen, setIsCmtDropdownOpen] = useState(false);
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [showLoadModal, setShowLoadModal] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
-  // Get logged-in user's empId
-  const getLoggedInEmpId = () => {
-    const directEmpId = sessionStorage.getItem("empId") || localStorage.getItem("empId");
-    if (directEmpId) return directEmpId;
-    const userString = sessionStorage.getItem("user") || localStorage.getItem("user");
-    if (userString) {
-      try {
-        const user = JSON.parse(userString);
-        return user?.empId || null;
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
-  };
 
   // Presets
   const presets = {
@@ -66,7 +56,22 @@ export default function DailyRateRequest() {
   };
   const ymd = (d) => d ? format(d, 'yyyy-MM-dd') : null;
 
-  // Fetch assignments data - filtered by logged-in user
+  // Fetch CMT users
+  const fetchCmtUsers = async () => {
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const employees = res.data?.employees || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+      setCmtUsers(employees);
+    } catch (err) {
+      console.error('Error fetching CMT users:', err);
+      alertify.error('Failed to load CMT users');
+    }
+  };
+
+  // Fetch assignments data
   const fetchAssignments = async () => {
     setLoading(true);
     try {
@@ -76,19 +81,13 @@ export default function DailyRateRequest() {
         return;
       }
 
-      const loggedInEmpId = getLoggedInEmpId();
-      if (!loggedInEmpId) {
-        alertify.error('Unable to identify logged-in user');
-        setLoading(false);
-        return;
-      }
-
-      const params = {
-        empId: loggedInEmpId // Always filter by logged-in user
-      };
+      const params = {};
       if (dateFilterApplied && range.startDate && range.endDate) {
         params.startDate = ymd(range.startDate);
         params.endDate = ymd(range.endDate);
+      }
+      if (selectedEmpId && selectedEmpId.trim()) {
+        params.empId = selectedEmpId.trim();
       }
 
       const response = await axios.get(
@@ -137,8 +136,38 @@ export default function DailyRateRequest() {
   };
 
   useEffect(() => {
+    fetchCmtUsers();
+  }, []);
+
+  useEffect(() => {
     fetchAssignments();
-  }, [dateFilterApplied, range.startDate, range.endDate]);
+  }, [dateFilterApplied, range.startDate, range.endDate, selectedEmpId]);
+
+  // Close CMT dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isCmtDropdownOpen && !event.target.closest('.cmt-dropdown-container')) {
+        setIsCmtDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCmtDropdownOpen]);
+
+  // Filter CMT users based on search
+  const filteredCmtUsers = useMemo(() => {
+    let users = [...cmtUsers];
+    users.sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
+    if (cmtUserSearch.trim()) {
+      users = users.filter(user => 
+        (user.employeeName?.toLowerCase() || '').includes(cmtUserSearch.toLowerCase()) ||
+        (user.empId?.toLowerCase() || '').includes(cmtUserSearch.toLowerCase())
+      );
+    }
+    return users;
+  }, [cmtUsers, cmtUserSearch]);
 
   // Flatten loads from all assignments for table display
   const allLoads = useMemo(() => {
@@ -157,6 +186,17 @@ export default function DailyRateRequest() {
     return loads;
   }, [assignments]);
 
+  // Calculate total CMT users from assignments
+  const totalCMTUsers = useMemo(() => {
+    const uniqueCMTUsers = new Set();
+    assignments.forEach(assignment => {
+      if (assignment.cmtUser?.empId) {
+        uniqueCMTUsers.add(assignment.cmtUser.empId);
+      }
+    });
+    return uniqueCMTUsers.size || overallStatistics?.totalCMTUsers || 0;
+  }, [assignments, overallStatistics]);
+
   // Pagination calculations
   const totalPages = Math.ceil(allLoads.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -166,7 +206,7 @@ export default function DailyRateRequest() {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateFilterApplied]);
+  }, [dateFilterApplied, selectedEmpId]);
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -263,7 +303,7 @@ export default function DailyRateRequest() {
           {/* Loads without Bid Card */}
           <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"> 
+              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
                 <XCircle className="text-orange-600" size={20} />
               </div>
               <div>
@@ -272,10 +312,97 @@ export default function DailyRateRequest() {
               </div>
             </div>
           </div>
+
+          {/* Total CMT Users Card */}
+          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                <User className="text-purple-600" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Total CMT Users</p>
+                <p className="text-xl font-bold text-purple-600">{totalCMTUsers}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Filters */}
         <div className="flex items-center gap-4">
+          {/* CMT User Filter */}
+          <div className="relative cmt-dropdown-container">
+            <button
+              onClick={() => setIsCmtDropdownOpen(!isCmtDropdownOpen)}
+              className="flex items-center justify-between px-4 py-2 border border-gray-200 rounded-lg bg-white w-64 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+            >
+              <span className="truncate text-md text-gray-700">
+                {selectedEmpId 
+                  ? cmtUsers.find(u => u.empId === selectedEmpId)?.employeeName || selectedEmpId
+                  : 'All CMT Users'}
+              </span>
+              <ChevronDown 
+                size={16} 
+                className={`text-gray-500 transition-transform duration-200 ${isCmtDropdownOpen ? 'transform rotate-180' : ''}`} 
+              />
+            </button>
+
+            {isCmtDropdownOpen && (
+              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <style>
+                  {`
+                    .cmt-dropdown-container div::-webkit-scrollbar {
+                      display: none;
+                    }
+                  `}
+                </style>
+                
+                {/* Search Input */}
+                <div className="sticky top-0 bg-white p-2 border-b border-gray-100 z-10">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={cmtUserSearch}
+                      onChange={(e) => setCmtUserSearch(e.target.value)}
+                      placeholder="Search CMT user..."
+                      className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => {
+                    setSelectedEmpId('');
+                    setCmtUserSearch('');
+                    setIsCmtDropdownOpen(false);
+                  }}
+                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-indigo-50 transition-colors ${!selectedEmpId ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700'}`}
+                >
+                  All CMT Users
+                </div>
+                {filteredCmtUsers.map((user) => (
+                  <div
+                    key={user._id || user.empId}
+                    onClick={() => {
+                      setSelectedEmpId(user.empId);
+                      setCmtUserSearch('');
+                      setIsCmtDropdownOpen(false);
+                    }}
+                    className={`px-4 py-2 text-md cursor-pointer hover:bg-indigo-50 transition-colors ${selectedEmpId === user.empId ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    {user.employeeName} ({user.empId})
+                  </div>
+                ))}
+                {filteredCmtUsers.length === 0 && (
+                  <div className="px-4 py-3 text-gray-500 text-center text-xs">
+                    No users found
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Date Range dropdown */}
           <div className="relative">
             <button
@@ -466,10 +593,10 @@ export default function DailyRateRequest() {
           <div className="text-center py-12">
             <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">
-              {dateFilterApplied ? 'No loads found matching your filters' : 'No assigned loads found'}
+              {dateFilterApplied || selectedEmpId ? 'No loads found matching your filters' : 'No assigned loads found'}
             </p>
             <p className="text-gray-400 text-sm">
-              {dateFilterApplied ? 'Try adjusting your filters' : 'Loads assigned to you will appear here'}
+              {dateFilterApplied || selectedEmpId ? 'Try adjusting your filters' : 'Loads assigned to CMT users will appear here'}
             </p>
           </div>
         )}
@@ -549,7 +676,7 @@ export default function DailyRateRequest() {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold">Load Details</h2>
-                    <p className="text-indigo-100">Daily Rate Request</p>
+                    <p className="text-indigo-100">Assigned Rate Request</p>
                   </div>
                 </div>
                 <button
@@ -901,4 +1028,3 @@ export default function DailyRateRequest() {
   );
 }
 
-// htest

@@ -4,6 +4,10 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign, BarChart3, FileText, PlusCircle, MessageCircle } from 'lucide-react';
+import { DateRange } from 'react-date-range';
+import { format, addDays } from 'date-fns';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
 import API_CONFIG from '../../config/api.js';
 import LoadChatModalCMT from '../CMT/LoadChatModalCMT.jsx';
  const getAuthToken = () =>
@@ -69,19 +73,24 @@ const RateRequest = () => {
   const [isFetching, setIsFetching] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [touchedFields, setTouchedFields] = useState({});
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'rate', or 'rateDetails'
+  const [activeTab, setActiveTab] = useState('rate'); // 'pending', 'rate', or 'rateDetails'
   const [pendingRequests, setPendingRequests] = useState([]);
   const [completedRequests, setCompletedRequests] = useState([]);
-  const [rateDetailsData, setRateDetailsData] = useState([]);
-  const [rateDetailsLoading, setRateDetailsLoading] = useState(false);
-  // Rate Details pagination and filters
-  const [rateDetailsSearch, setRateDetailsSearch] = useState('');
-  const [rateDetailsPage, setRateDetailsPage] = useState(1);
-  const [rateDetailsLimit, setRateDetailsLimit] = useState(10);
-  const [rateDetailsSortBy, setRateDetailsSortBy] = useState('createdAt');
-  const [rateDetailsSortOrder, setRateDetailsSortOrder] = useState('desc');
-  const [rateDetailsPagination, setRateDetailsPagination] = useState(null);
-  const [rateDetailsStatistics, setRateDetailsStatistics] = useState(null);
+  // Rate Request pagination
+  const [rateRequestPage, setRateRequestPage] = useState(1);
+  const [rateRequestLimit, setRateRequestLimit] = useState(10);
+  const [rateRequestPagination, setRateRequestPagination] = useState(null);
+  // Rate Request date filters
+  const [rateRequestFromDate, setRateRequestFromDate] = useState('');
+  const [rateRequestToDate, setRateRequestToDate] = useState('');
+  // Date range state for All Rate Request tab (like DeliveryOrder.jsx)
+  const [dateRange, setDateRange] = useState({
+    startDate: null,
+    endDate: null,
+    key: 'selection'
+  });
+  const [showPresetMenu, setShowPresetMenu] = useState(false);
+  const [showCustomRange, setShowCustomRange] = useState(false);
   const [bidDetailsModal, setBidDetailsModal] = useState({ visible: false, load: null });
   const [bidDetailsData, setBidDetailsData] = useState(null);
   const [bidDetailsLoading, setBidDetailsLoading] = useState(false);
@@ -118,6 +127,24 @@ const RateRequest = () => {
   const pollRef = useRef(null);
 // 💡 double-submit lock (same load pe multiple auto-accept calls na ho)
 const autoAcceptingRef = useRef(new Set());
+
+  // Date range presets (like DeliveryOrder.jsx)
+  const presets = {
+    'Today': [new Date(), new Date()],
+    'Yesterday': [addDays(new Date(), -1), addDays(new Date(), -1)],
+    'Last 7 Days': [addDays(new Date(), -6), new Date()],
+    'Last 30 Days': [addDays(new Date(), -29), new Date()],
+    'This Month': [new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)],
+    'Last Month': [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1),
+    new Date(new Date().getFullYear(), new Date().getMonth(), 0)],
+  };
+  const applyPreset = (label) => {
+    const [s, e] = presets[label];
+    setDateRange({ startDate: s, endDate: e, key: 'selection' });
+    setShowPresetMenu(false);
+  };
+  const ymd = (d) => format(d, 'yyyy-MM-dd'); // "YYYY-MM-DD"
 
   const saveStart = (loadId, ts) => {
     if (!loadId) return;
@@ -185,7 +212,7 @@ const autoAcceptingRef = useRef(new Set());
     );
   };
 
-  const fetchRateRequests = async () => {
+  const fetchRateRequests = async (page = rateRequestPage, limit = rateRequestLimit, fromDate = rateRequestFromDate, toDate = rateRequestToDate) => {
     try {
       setIsFetching(true);
       const token = getAuthToken();
@@ -199,7 +226,7 @@ const autoAcceptingRef = useRef(new Set());
       console.log('Fetching pending approvals...');
       // Pending approvals
       const pendingRes = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending`,
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?page=${page}&limit=${limit}`,
         { headers }
       );
       console.log('Pending Response:', pendingRes.data);
@@ -335,18 +362,62 @@ const autoAcceptingRef = useRef(new Set());
         };
       });
 
-      // Approved loads for Rate tab - using new API endpoint
+      // Approved loads for Rate tab - using new API endpoint with pagination and date filters
       console.log('Fetching approved requests...');
+      // Build query parameters for date filtering
+      let queryParams = `status=approved&page=${page}&limit=${limit}`;
+      let actualFromDate = fromDate;
+      let actualToDate = toDate;
+      
+      // If Daily Rate Request tab, filter by today's date only
+      if (activeTab === 'rate') {
+        const today = ymd(new Date());
+        actualFromDate = today;
+        actualToDate = today;
+      }
+      // If All Rate Request tab, don't apply date filters in API (fetch all data, filter client-side)
+      else if (activeTab === 'rateDetails') {
+        actualFromDate = '';
+        actualToDate = '';
+      }
+      
+      if (actualFromDate) {
+        queryParams += `&fromDate=${actualFromDate}`;
+      }
+      if (actualToDate) {
+        queryParams += `&toDate=${actualToDate}`;
+      }
       const approvedRes = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?status=approved`,
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?${queryParams}`,
         { headers }
       );
       console.log('Approved Response:', approvedRes.data);
       let approvedApprovals = [];
+      let approvedPagination = null;
       if (Array.isArray(approvedRes.data)) {
         approvedApprovals = approvedRes.data;
+        // If response is array, no pagination available
+        setRateRequestPagination(null);
       } else {
         approvedApprovals = approvedRes.data?.approvals || approvedRes.data?.data?.approvals || [];
+        // Extract pagination info from response - check multiple possible locations
+        approvedPagination = approvedRes.data?.pagination || 
+                             approvedRes.data?.data?.pagination || 
+                             approvedRes.data?.meta?.pagination ||
+                             null;
+        if (approvedPagination) {
+          const totalItems = approvedPagination.totalItems || approvedPagination.total || approvedApprovals.length;
+          const itemsPerPage = approvedPagination.itemsPerPage || approvedPagination.limit || limit;
+          setRateRequestPagination({
+            currentPage: approvedPagination.currentPage || approvedPagination.page || page,
+            itemsPerPage: itemsPerPage,
+            totalItems: totalItems,
+            totalPages: approvedPagination.totalPages || Math.ceil(totalItems / itemsPerPage)
+          });
+        } else {
+          // If no pagination object but we have data, assume single page
+          setRateRequestPagination(null);
+        }
       }
       console.log('Approved Approvals Count:', approvedApprovals.length);
 
@@ -384,7 +455,9 @@ const autoAcceptingRef = useRef(new Set());
             salesUserInfo: approval.createdBySalesUser || 
                           approval.createdBy || 
                           approval.salesUser ||
-                          null
+                          null,
+            // Add bid count
+            bidCount: approval.loadId?.bidCount || 0
           };
         }
 
@@ -480,7 +553,9 @@ const autoAcceptingRef = useRef(new Set());
                         approval.createdBySalesUser || 
                         approval.createdBy || 
                         approval.salesUser ||
-                        null
+                        null,
+          // Add bid count
+          bidCount: approval.loadId?.bidCount || 0
         };
       });
 // ---- broadcast new pending approvals (cross-tab + same tab) ----
@@ -562,60 +637,17 @@ try {
     }
   };
 
-  // Fetch CMT assigned loads data for Rate Details tab
-  const fetchRateDetails = async (page = rateDetailsPage, limit = rateDetailsLimit, searchTerm = rateDetailsSearch, sortBy = rateDetailsSortBy, sortOrder = rateDetailsSortOrder) => {
-    try {
-      setRateDetailsLoading(true);
-      const token = getAuthToken();
-      const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-      
-      if (!token || !empId) {
-        toast.error('Authentication required. Please login again.');
-        return;
-      }
-
-      // Build query parameters
-      const params = new URLSearchParams();
-      if (page) params.append('page', page);
-      if (limit) params.append('limit', limit);
-      if (searchTerm && searchTerm.trim()) params.append('search', searchTerm.trim());
-      if (sortBy) params.append('sortBy', sortBy);
-      if (sortOrder) params.append('sortOrder', sortOrder);
-
-      const queryString = params.toString();
-      const url = `${API_CONFIG.BASE_URL}/api/v1/bid/cmt-assigned-loads/${empId}${queryString ? `?${queryString}` : ''}`;
-
-      const response = await axios.get(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.data && response.data.success) {
-        const assignedLoads = response.data.data?.assignedLoads || [];
-        setRateDetailsData(assignedLoads);
-        setRateDetailsPagination(response.data.data?.pagination || null);
-        setRateDetailsStatistics(response.data.data?.statistics || null);
-      } else {
-        toast.error(response.data?.message || 'Failed to fetch rate details');
-      }
-    } catch (error) {
-      console.error('Error fetching rate details:', error);
-      if (error.response?.data?.message) {
-        toast.error(error.response.data.message);
-      } else {
-        toast.error('Failed to fetch rate details data');
-      }
-    } finally {
-      setRateDetailsLoading(false);
-    }
-  };
 
   // Handle View Bids
   const handleViewBids = (load) => {
     setBidDetailsModal({ visible: true, load });
-    fetchBidDetails(load._id);
+    // Use actualLoadId if available, then loadId, otherwise use _id
+    const loadIdToFetch = load.actualLoadId || load.loadId || load._id;
+    if (loadIdToFetch) {
+      fetchBidDetails(loadIdToFetch);
+    } else {
+      toast.error('Unable to determine load ID');
+    }
   };
 
   const closeBidDetailsModal = () => {
@@ -772,7 +804,7 @@ const fetchLoadDetailsForChat = async (loadId) => {
  useEffect(() => {
    const approval = location?.state?.openApprovalFromBroadcast;
    if (approval) {
-     setActiveTab('pending');
+     setActiveTab('rate'); // Changed from 'pending' to 'rate' since pending tab is disabled
      openApprovalModal(approval, 'approval');
      // state clear so refresh pe dubara na khule
      window.history.replaceState({}, document.title);
@@ -782,41 +814,36 @@ const fetchLoadDetailsForChat = async (loadId) => {
 
   // init
   useEffect(() => {
-    fetchRateRequests();
+    fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
     fetchTruckers();
   }, []);
 
   // Fetch data when tab changes
   useEffect(() => {
-    if (activeTab === 'rateDetails') {
-      setRateDetailsPage(1); // Reset to first page when switching to Rate Details tab
-      fetchRateDetails(1, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder);
-    } else if (activeTab === 'pending' || activeTab === 'rate') {
-      // Fetch rate requests data for pending and rate tabs
-      fetchRateRequests();
+    if (activeTab === 'pending' || activeTab === 'rate' || activeTab === 'rateDetails') {
+      // Fetch rate requests data for all tabs
+      setRateRequestPage(1); // Reset to first page when switching tabs
+      fetchRateRequests(1, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // Debounced search for Rate Details
+  // Fetch data when pagination changes for Rate Request tab
   useEffect(() => {
-    if (activeTab !== 'rateDetails') return;
-    
-    const debounceTimer = setTimeout(() => {
-      setRateDetailsPage(1); // Reset to first page on search
-      fetchRateDetails(1, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder);
-    }, 500); // 500ms debounce
-
-    return () => clearTimeout(debounceTimer);
+    if (activeTab === 'rate' || activeTab === 'pending' || activeTab === 'rateDetails') {
+      fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rateDetailsSearch]);
+  }, [rateRequestPage, rateRequestLimit]);
 
-  // Refetch when filters, pagination, or sorting changes
+  // Fetch data when date filters change for Rate Request tab
   useEffect(() => {
-    if (activeTab !== 'rateDetails') return;
-    fetchRateDetails(rateDetailsPage, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder);
+    if (activeTab === 'rate' || activeTab === 'pending' || activeTab === 'rateDetails') {
+      setRateRequestPage(1); // Reset to first page when date filters change
+      fetchRateRequests(1, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rateDetailsPage, rateDetailsLimit, rateDetailsSortBy, rateDetailsSortOrder]);
+  }, [rateRequestFromDate, rateRequestToDate]);
 
   // Start auto-accept timer for new pending requests
   // ✅ Stable auto-accept countdown (interval clear + single fire)
@@ -1001,7 +1028,7 @@ useEffect(() => {
       );
 
       closeApprovalModal();   // timer bhi clear ho jayega
-      setTimeout(() => { fetchRateRequests(); }, 1000);
+      setTimeout(() => { fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate); }, 1000);
     } else {
       toast.error('Auto-accept failed. Please try again.');
     }
@@ -1061,7 +1088,7 @@ useEffect(() => {
       });
 
       setTimeout(() => {
-        fetchRateRequests();
+        fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
       }, 1000);
     } else {
       toast.error('Auto-accept failed. Please try again.');
@@ -1172,7 +1199,7 @@ useEffect(() => {
 
         closeApprovalModal();
         setTimeout(() => {
-          fetchRateRequests();
+          fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
         }, 600);
       } else {
         toast.error(response.data.message || 'Action failed');
@@ -1319,7 +1346,7 @@ useEffect(() => {
         saveStop(loadId, Date.now());
       }
 
-      await fetchRateRequests();
+      await fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
       closeModal();
     } catch (error) {
       console.error('Submission Error:', error.response?.data || error.message);
@@ -1333,9 +1360,23 @@ useEffect(() => {
     let requests;
     if (activeTab === 'pending') {
       requests = pendingRequests;
+    } else if (activeTab === 'rate' || activeTab === 'rateDetails') {
+      requests = completedRequests.length > 0 ? completedRequests : rateRequests;
     } else {
       requests = completedRequests.length > 0 ? completedRequests : rateRequests;
     }
+    
+    // Filter by date range for All Rate Request tab (client-side filtering)
+    if (activeTab === 'rateDetails' && dateRange.startDate && dateRange.endDate) {
+      requests = requests.filter((item) => {
+        const created = item.createdAt || '';
+        const createdDate = created ? created.split('T')[0] : ''; // Extract date part (YYYY-MM-DD)
+        const startDateStr = ymd(dateRange.startDate);
+        const endDateStr = ymd(dateRange.endDate);
+        return createdDate >= startDateStr && createdDate <= endDateStr;
+      });
+    }
+    
     const q = search.trim().toLowerCase();
     if (!q) return requests;
     return requests.filter((item) => {
@@ -1353,10 +1394,10 @@ useEffect(() => {
       ].map((x) => (x || '').toString().toLowerCase());
       return parts.some((p) => p.includes(q));
     });
-  }, [activeTab, search, pendingRequests, completedRequests, rateRequests]);
+  }, [activeTab, search, pendingRequests, completedRequests, rateRequests, dateRange]);
 
   const listForValue =
-    activeTab === 'rate' ? (completedRequests.length > 0 ? completedRequests : rateRequests) : completedRequests;
+    (activeTab === 'rate' || activeTab === 'rateDetails') ? (completedRequests.length > 0 ? completedRequests : rateRequests) : completedRequests;
   const totalValue = listForValue.reduce((sum, r) => sum + (Number(r.rate) || 0), 0);
 
   // Filter truckers based on search
@@ -1834,7 +1875,7 @@ useEffect(() => {
     <div className="p-6 bg-gray-50 min-h-screen">
       {/* Tabs */}
       <div className="flex items-center gap-4 mb-6">
-        <button
+        {/* <button
           onClick={() => setActiveTab('pending')}
           className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
             activeTab === 'pending'
@@ -1846,7 +1887,7 @@ useEffect(() => {
             <Clock size={18} />
             <span>Pending Request</span>
           </div>
-        </button>
+        </button> */}
         <button
           onClick={() => setActiveTab('rate')}
           className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
@@ -1857,7 +1898,7 @@ useEffect(() => {
         >
           <div className="flex items-center gap-2">
             <CheckCircle size={18} />
-            <span>Rate Request</span>
+            <span>Daily Rate Request</span>
           </div>
         </button>
         <button
@@ -1870,13 +1911,13 @@ useEffect(() => {
         >
           <div className="flex items-center gap-2">
             <BarChart3 size={18} />
-            <span>Rate Details</span>
+            <span>All Rate Request</span>
           </div>
         </button>
       </div>
 
       {/* Pending Tab */}
-      {activeTab === 'pending' && (
+      {false && activeTab === 'pending' && (
         <div>
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-6">
@@ -2135,42 +2176,22 @@ useEffect(() => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">
-                      Total {activeTab === 'rate' ? (completedRequests.length > 0 ? 'Completed' : 'All') : 'Completed'}
+                      Today Rate Request
                     </p>
                     <p className="text-xl font-bold text-gray-800">
-                      {activeTab === 'rate'
+                      {rateRequestPagination?.totalItems || (activeTab === 'rate'
                         ? completedRequests.length > 0
                           ? completedRequests.length
                           : rateRequests.length
-                        : completedRequests.length}
+                        : completedRequests.length)}
                     </p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                    <DollarSign className="text-purple-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Value</p>
-                    <p className="text-xl font-bold text-purple-600">${totalValue.toLocaleString()}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search completed requests..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Daily Rate Request shows only today's data - no date filters needed */}
               
               <button
                 onClick={exportToCSV}
@@ -2220,6 +2241,7 @@ useEffect(() => {
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid Count</th>
                     {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th> */}
                     {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Time</th> */}
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Details</th>
@@ -2277,6 +2299,11 @@ useEffect(() => {
                       <td className="px-4 py-3">
                         <span className="font-bold text-green-600">
                           ${item.rate?.toLocaleString() || '0'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-700">
+                          {item.bidCount || 0}
                         </span>
                       </td>
                       {/* <td className="px-4 py-3">
@@ -2395,10 +2422,18 @@ useEffect(() => {
 </button>
                           
                           <button
+                            onClick={() => {
+                              handleViewBids(item);
+                            }}
+                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                          >
+                            View
+                          </button>
+                          <button
                             onClick={() => openModal(item)}
                             className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                           >
-                            View Details
+                            Submit Rate
                           </button>
                         </div>
                       </td>
@@ -2425,6 +2460,79 @@ useEffect(() => {
                   )}
                 </tbody>
               </table>
+            )}
+            
+            {/* Pagination Controls */}
+            {rateRequestPagination && rateRequestPagination.totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-gray-600">
+                    Showing {((rateRequestPagination.currentPage - 1) * rateRequestPagination.itemsPerPage) + 1} to{' '}
+                    {Math.min(rateRequestPagination.currentPage * rateRequestPagination.itemsPerPage, rateRequestPagination.totalItems)} of{' '}
+                    {rateRequestPagination.totalItems} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Items per page:</label>
+                    <select
+                      value={rateRequestLimit}
+                      onChange={(e) => {
+                        setRateRequestLimit(Number(e.target.value));
+                        setRateRequestPage(1);
+                      }}
+                      className="px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRateRequestPage(prev => Math.max(1, prev - 1))}
+                    disabled={rateRequestPage === 1 || isFetching}
+                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, rateRequestPagination.totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (rateRequestPagination.totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (rateRequestPagination.currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (rateRequestPagination.currentPage >= rateRequestPagination.totalPages - 2) {
+                        pageNum = rateRequestPagination.totalPages - 4 + i;
+                      } else {
+                        pageNum = rateRequestPagination.currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setRateRequestPage(pageNum)}
+                          disabled={isFetching}
+                          className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
+                            rateRequestPage === pageNum
+                              ? 'bg-green-600 text-white border-green-600'
+                              : 'border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setRateRequestPage(prev => Math.min(rateRequestPagination.totalPages, prev + 1))}
+                    disabled={rateRequestPage === rateRequestPagination.totalPages || isFetching}
+                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -3164,40 +3272,133 @@ useEffect(() => {
       {/* View Bids Modal */}
       {bidDetailsModal.visible && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden"
         >
           <div 
-            className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-6xl p-8 border border-purple-100"
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-semibold flex items-center gap-2">
-                  <BarChart3 size={24} />
-                  Bid Details
-                </h2>
-                <p className="text-sm text-purple-100 mt-1">
-                  View all bids for this load
-                </p>
+            <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white px-8 py-6 rounded-t-3xl shadow-lg flex justify-between items-center flex-shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                  <BarChart3 className="w-6 h-6 text-white" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2">Load Information & Bid Details</h2>
+                  <p className="text-sm text-emerald-100 mt-1">View load details and all bids for this load</p>
+                </div>
               </div>
               <button 
                 onClick={closeBidDetailsModal} 
                 type="button" 
-                className="text-white text-3xl hover:text-gray-200"
+                className="text-white hover:text-gray-200 hover:bg-white/10 p-2 rounded-xl transition-all duration-200"
+                aria-label="Close"
               >
-                ×
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
-
-            {/* Bids Table */}
-            <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                  <Truck className="text-purple-600" size={20} />
-                  Recent Bids
-                </h3>
+            <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30">
+              {/* Load Information Section */}
+              {bidDetailsModal.load && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800">Load Information</h3>
+                  </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Load ID</div>
+                    <div className="text-sm font-semibold text-gray-800">{loadShort(bidDetailsModal.load._id || bidDetailsModal.load.loadId)}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pickup Location</div>
+                    {bidDetailsModal.load.origin?.address && (
+                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.origin.address}</div>
+                    )}
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.origin?.city || '—'}</div>
+                    <div className="text-xs text-gray-500">{bidDetailsModal.load.origin?.state || ''}</div>
+                    <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.origin?.zipcode || 'N/A'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Delivery Location</div>
+                    {bidDetailsModal.load.destination?.address && (
+                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.destination.address}</div>
+                    )}
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.destination?.city || '—'}</div>
+                    <div className="text-xs text-gray-500">{bidDetailsModal.load.destination?.state || ''}</div>
+                    <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.destination?.zipcode || 'N/A'}</div>
+                  </div>
+                  {(bidDetailsModal.load.returnAddress || bidDetailsModal.load.returnCity || bidDetailsModal.load.returnState || bidDetailsModal.load.returnZip) && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Return Location</div>
+                      {bidDetailsModal.load.returnAddress && (
+                        <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.returnAddress}</div>
+                      )}
+                      {bidDetailsModal.load.returnCity && (
+                        <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.returnCity}</div>
+                      )}
+                      {bidDetailsModal.load.returnState && (
+                        <div className="text-xs text-gray-500">{bidDetailsModal.load.returnState}</div>
+                      )}
+                      {bidDetailsModal.load.returnZip && (
+                        <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.returnZip}</div>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weight</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.weight || 'N/A'} lbs</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Vehicle Type</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.vehicleType || '—'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Commodity</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.commodity || 'N/A'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rate</div>
+                    <div className="text-sm font-semibold text-emerald-600">${bidDetailsModal.load.rate?.toLocaleString() || '0'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Bid Count</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.bidCount || 0}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</div>
+                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.status || 'N/A'}</div>
+                  </div>
+                  {bidDetailsModal.load.shipper && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Shipper</div>
+                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.shipper.compName || 'N/A'}</div>
+                      <div className="text-xs text-gray-500">{bidDetailsModal.load.shipper.email || ''}</div>
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
+
+              {/* Bids Table */}
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800">Recent Bids</h3>
+                  </div>
+                </div>
               
               {bidDetailsLoading ? (
                 <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
@@ -3271,14 +3472,15 @@ useEffect(() => {
                   </table>
                 </div>
               )}
+              </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end gap-4 mt-6">
+            {/* Footer */}
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-6 rounded-b-3xl border-t border-gray-200 flex justify-end items-center flex-shrink-0">
               <button
                 type="button"
                 onClick={closeBidDetailsModal}
-                className="bg-gray-200 text-gray-800 px-6 py-3 rounded-lg hover:bg-gray-300 transition-all duration-200"
+                className="px-6 py-3 bg-white text-gray-700 border-2 border-gray-300 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-semibold"
               >
                 Close
               </button>
@@ -3287,275 +3489,458 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Rate Details Tab */}
+      {/* All Rate Request Tab */}
       {activeTab === 'rateDetails' && (
         <div>
-          {/* Statistics Cards */}
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-6">
               <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                    <BarChart3 className="text-purple-600" size={20} />
+                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="text-green-600" size={20} />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Total Assigned Loads</p>
+                    <p className="text-sm text-gray-600">
+                      Total Assigned
+                    </p>
                     <p className="text-xl font-bold text-gray-800">
-                      {rateDetailsStatistics?.totalAssigned || rateDetailsPagination?.totalItems || rateDetailsData.length}
+                      {rateRequestPagination?.totalItems || (activeTab === 'rateDetails'
+                        ? completedRequests.length > 0
+                          ? completedRequests.length
+                          : rateRequests.length
+                        : completedRequests.length)}
                     </p>
                   </div>
                 </div>
               </div>
-              {rateDetailsStatistics?.statusBreakdown && (
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                      <CheckCircle className="text-green-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Approved</p>
-                      <p className="text-xl font-bold text-gray-800">{rateDetailsStatistics.statusBreakdown.approved || 0}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
-            <div className="flex items-center gap-4">
+
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Date Range Filter (like DeliveryOrder.jsx) for All Rate Request tab */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowPresetMenu(v => !v)}
+                  className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
+                >
+                  <span className={!dateRange.startDate || !dateRange.endDate ? 'text-gray-400' : ''}>
+                    {dateRange.startDate && dateRange.endDate 
+                      ? `${format(dateRange.startDate, 'MMM dd, yyyy')} - ${format(dateRange.endDate, 'MMM dd, yyyy')}`
+                      : 'All'}
+                  </span>
+                  <span className="ml-3">▼</span>
+                </button>
+
+                {showPresetMenu && (
+                  <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
+                    <button
+                      onClick={() => {
+                        setDateRange({ startDate: null, endDate: null, key: 'selection' });
+                        setShowPresetMenu(false);
+                      }}
+                      className="block w-full text-left px-3 py-2 hover:bg-gray-50 font-semibold text-blue-600"
+                    >
+                      All
+                    </button>
+                    <div className="my-1 border-t" />
+                    {Object.keys(presets).map((lbl) => (
+                      <button
+                        key={lbl}
+                        onClick={() => applyPreset(lbl)}
+                        className="block w-full text-left px-3 py-2 hover:bg-gray-50"
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                    <div className="my-1 border-t" />
+                    <button
+                      onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                      className="block w-full text-left px-3 py-2 hover:bg-gray-50"
+                    >
+                      Custom Range
+                    </button>
+                  </div>
+                )}
+              </div>
+              
               <button
-                onClick={() => fetchRateDetails(rateDetailsPage, rateDetailsLimit, rateDetailsSearch, rateDetailsSortBy, rateDetailsSortOrder)}
-                disabled={rateDetailsLoading}
-                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={exportToCSV}
+                disabled={filteredRequests.length === 0}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
+                  filteredRequests.length === 0
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl'
+                }`}
+                title={filteredRequests.length === 0 ? 'No data to export' : `Export ${filteredRequests.length} records to CSV`}
               >
-                <svg className={`w-4 h-4 ${rateDetailsLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                {rateDetailsLoading ? 'Refreshing...' : 'Refresh'}
+                Export to CSV
+                {filteredRequests.length > 0 && (
+                  <span className="bg-white/20 text-xs px-2 py-1 rounded-full">
+                    {filteredRequests.length}
+                  </span>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Filters and Search */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search by shipment, city, commodity..."
-                  value={rateDetailsSearch}
-                  onChange={(e) => setRateDetailsSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
+          {showCustomRange && (
+            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+                <DateRange
+                  ranges={[dateRange.startDate && dateRange.endDate ? dateRange : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+                  onChange={(item) => {
+                    if (item.selection.startDate && item.selection.endDate) {
+                      setDateRange(item.selection);
+                    }
+                  }}
+                  moveRangeOnFirstSelection={false}
+                  months={2}
+                  direction="horizontal"
                 />
+                <div className="flex justify-end gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateRange({ startDate: null, endDate: null, key: 'selection' });
+                      setShowCustomRange(false);
+                    }}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomRange(false)}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (dateRange.startDate && dateRange.endDate) {
+                        setShowCustomRange(false);
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-lg ${
+                      dateRange.startDate && dateRange.endDate
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                    disabled={!dateRange.startDate || !dateRange.endDate}
+                  >
+                    OK
+                  </button>
+                </div>
               </div>
-              {/* Sort By */}
-              <select
-                value={rateDetailsSortBy}
-                onChange={(e) => {
-                  setRateDetailsSortBy(e.target.value);
-                  setRateDetailsPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="createdAt">Sort by Created Date</option>
-                <option value="updatedAt">Sort by Updated Date</option>
-                <option value="assignedAt">Sort by Assigned Date</option>
-                <option value="overallStatus">Sort by Status</option>
-              </select>
-              {/* Sort Order */}
-              <select
-                value={rateDetailsSortOrder}
-                onChange={(e) => {
-                  setRateDetailsSortOrder(e.target.value);
-                  setRateDetailsPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="desc">Newest First</option>
-                <option value="asc">Oldest First</option>
-              </select>
             </div>
-            {/* Items per page */}
-            <div className="mt-4 flex items-center gap-2">
-              <label className="text-sm text-gray-600">Items per page:</label>
-              <select
-                value={rateDetailsLimit}
-                onChange={(e) => {
-                  setRateDetailsLimit(Number(e.target.value));
-                  setRateDetailsPage(1);
-                }}
-                className="px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
-          </div>
+          )}
 
-          {/* Rate Details Table */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-            {rateDetailsLoading ? (
+          <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
+            {isFetching ? (
               <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
                 <div className="relative">
                   <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                   <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
                 </div>
                 <div className="mt-6 text-center">
-                  <p className="text-xl font-semibold text-gray-800 mb-2">Loading Rate Details...</p>
+                  <p className="text-xl font-semibold text-gray-800 mb-2">Loading Completed Requests...</p>
                   <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
                 </div>
               </div>
             ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                      <tr>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load ID</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Shipment #</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Origin</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Destination</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight (lbs)</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Rate</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Status</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Assigned To</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Bids</th>
-                        <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rateDetailsData.map((load, index) => {
-                        const serialNumber = rateDetailsPagination 
-                          ? (rateDetailsPagination.currentPage - 1) * rateDetailsPagination.itemsPerPage + index + 1
-                          : index + 1;
-                        return (
-                        <tr key={load._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{serialNumber}</span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{load.load?._id ? `L-${load.load._id.slice(-5)}` : 'N/A'}</span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700 text-sm">{load.load?.shipmentNumber || 'N/A'}</span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <div>
-                              <span className="font-medium text-gray-700 text-sm">{load.load?.origin?.city || 'N/A'}</span>
-                              <p className="text-xs text-gray-500">{load.load?.origin?.state || 'N/A'}</p>
+              <table className="min-w-full table-auto text-sm text-left">
+                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight (lbs)</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid Count</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRequests.map((item, index) => (
+                    <tr
+                      key={item._id}
+                      className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                    >
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-700">{loadShort(item._id)}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-700">{item.weight} lbs</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <span className="font-medium text-gray-700">{item.origin?.city || '—'}</span>
+                          <p className="text-xs text-gray-500">{item.origin?.state || ''}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <span className="font-medium text-gray-700">{item.destination?.city || '—'}</span>
+                          <p className="text-xs text-gray-500">{item.destination?.state || ''}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {item.loadType ? (
+                          <span className="font-medium text-gray-700">{item.loadType}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        {item.createdAt ? (
+                          <div>
+                            <div className="font-medium text-gray-700">
+                              {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                             </div>
-                          </td>
-                          <td className="py-2 px-3">
-                            <div>
-                              <span className="font-medium text-gray-700 text-sm">{load.load?.destination?.city || 'N/A'}</span>
-                              <p className="text-xs text-gray-500">{load.load?.destination?.state || 'N/A'}</p>
+                            <div className="text-xs text-gray-500">
+                              {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                             </div>
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{load.load?.weight || 0} lbs</span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">${load.load?.rate?.toLocaleString() || '0'}</span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(load.overallStatus || load.load?.status)}`}>
-                              {load.overallStatus || load.load?.status || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <div>
-                              <span className="font-medium text-gray-700 text-sm">{load.load?.assignedTo?.compName || 'N/A'}</span>
-                              <p className="text-xs text-gray-500">{load.load?.assignedTo?.email || 'N/A'}</p>
-                            </div>
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{load.load?.truckers?.length || 0}</span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <button
-                              onClick={() => handleViewBids(load.load)}
-                              className="px-3 py-1 text-purple-600 text-xs rounded-md transition-colors border border-purple-300 hover:bg-purple-50"
-                            >
-                              View Bids
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                      })}
-                      {rateDetailsData.length === 0 && (
-                        <tr>
-                          <td colSpan="11" className="text-center py-12">
-                            <div className="text-gray-500">
-                              <BarChart3 className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                              <p className="text-lg font-medium">No rate details found</p>
-                              <p className="text-gray-400 text-sm">
-                                {rateDetailsSearch ? 'Try adjusting your search terms' : 'No assigned loads available'}
-                              </p>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                {/* Pagination Controls */}
-                {rateDetailsPagination && rateDetailsPagination.totalPages > 1 && (
-                  <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
-                    <div className="text-sm text-gray-600">
-                      Showing {((rateDetailsPagination.currentPage - 1) * rateDetailsPagination.itemsPerPage) + 1} to{' '}
-                      {Math.min(rateDetailsPagination.currentPage * rateDetailsPagination.itemsPerPage, rateDetailsPagination.totalItems)} of{' '}
-                      {rateDetailsPagination.totalItems} results
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setRateDetailsPage(prev => Math.max(1, prev - 1))}
-                        disabled={rateDetailsPage === 1 || rateDetailsLoading}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Previous
-                      </button>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, rateDetailsPagination.totalPages) }, (_, i) => {
-                          let pageNum;
-                          if (rateDetailsPagination.totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (rateDetailsPagination.currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (rateDetailsPagination.currentPage >= rateDetailsPagination.totalPages - 2) {
-                            pageNum = rateDetailsPagination.totalPages - 4 + i;
-                          } else {
-                            pageNum = rateDetailsPagination.currentPage - 2 + i;
-                          }
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => setRateDetailsPage(pageNum)}
-                              disabled={rateDetailsLoading}
-                              className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
-                                rateDetailsPage === pageNum
-                                  ? 'bg-purple-600 text-white border-purple-600'
-                                  : 'border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <button
-                        onClick={() => setRateDetailsPage(prev => Math.min(rateDetailsPagination.totalPages, prev + 1))}
-                        disabled={rateDetailsPage === rateDetailsPagination.totalPages || rateDetailsLoading}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Next
-                      </button>
-                    </div>
+                          </div>
+                        ) : (
+                          <span className="font-medium text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-bold text-green-600">
+                          ${item.rate?.toLocaleString() || '0'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-700">
+                          {item.bidCount || 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          {/* Chat Button */}
+                         <button
+  onClick={async () => {
+    console.log('🔍 RateRequest (All Rate Request Tab): Chat button clicked - FULL ITEM OBJECT:', item);
+    console.log('🔍 SalesUserInfo structure:', {
+      salesUserInfo: item.salesUserInfo,
+      hasSalesUserInfo: !!item.salesUserInfo,
+      salesUserInfoType: typeof item.salesUserInfo,
+      salesUserInfoKeys: item.salesUserInfo ? Object.keys(item.salesUserInfo) : 'none'
+    });
+    
+    // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
+    const loadId = item.actualLoadId || item.loadId;
+    
+    if (!loadId) {
+      console.error('❌ RateRequest (All Rate Request Tab): Missing loadId', item);
+      toast.error('Unable to determine load ID. Please check the request information.');
+      return;
+    }
+
+    // Enhanced receiver extraction with multiple fallbacks
+    let receiverEmpId = null;
+    let receiverName = 'Sales User';
+
+    // Try multiple possible paths for sales user info
+    if (item.salesUserInfo) {
+      receiverEmpId = item.salesUserInfo.empId || 
+                     item.salesUserInfo._id || 
+                     item.salesUserInfo.id;
+      receiverName = item.salesUserInfo.empName || 
+                    item.salesUserInfo.employeeName || 
+                    item.salesUserInfo.name || 
+                    item.salesUserInfo.username || 
+                    'Sales User';
+
+    }
+    
+    // If still no receiverEmpId, try fetch from load details
+    if (!receiverEmpId && loadId) {
+
+      toast.info('Fetching load details...', { autoClose: 2000 });
+      const salesUserInfo = await fetchLoadDetailsForChat(loadId);
+      
+      if (salesUserInfo) {
+        receiverEmpId = salesUserInfo.empId || salesUserInfo._id || salesUserInfo.id;
+        receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
+
+      }
+    }
+
+    // Final fallback - check if there's any user info in the item itself
+    if (!receiverEmpId) {
+
+      // Check common alternative paths in your data structure
+      const alternativePaths = [
+        item.createdBySalesUser,
+        item.createdBy,
+        item.salesUser,
+        item.user,
+        item.shipper?.createdBy, // Sometimes shipper has creator info
+      ];
+      
+      for (const alt of alternativePaths) {
+        if (alt && (alt.empId || alt._id)) {
+          receiverEmpId = alt.empId || alt._id;
+          receiverName = alt.empName || alt.employeeName || alt.name || 'Sales User';
+
+          break;
+        }
+      }
+    }
+
+    if (!receiverEmpId) {
+      console.error('❌ RateRequest (All Rate Request Tab): Missing receiverEmpId after all attempts', {
+        item,
+        loadId,
+        availableKeys: Object.keys(item)
+      });
+      toast.error('Unable to determine receiver. Sales user information not available for this load.');
+      return;
+    }
+
+    console.log('🎯 RateRequest (All Rate Request Tab): Opening chat modal with final data', {
+      loadId,
+      receiverEmpId,
+      receiverName,
+      actualLoadId: item.actualLoadId
+    });
+
+    setChatModal({
+      visible: true,
+      loadId: loadId,
+      receiverEmpId: receiverEmpId,
+      receiverName: receiverName
+    });
+  }}
+  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+  title="Chat"
+>
+  <MessageCircle size={14} />
+  <span>Chat</span>
+</button>
+                          
+                          <button
+                            onClick={() => {
+                              handleViewBids(item);
+                            }}
+                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => openModal(item)}
+                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                          >
+                            Submit Rate
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredRequests.length === 0 && (
+                    <tr>
+                      <td colSpan="10" className="text-center py-12">
+                        <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500 text-lg">
+                          {search ? 'No requests found matching your search' : 'No requests found'}
+                        </p>
+                        <p className="text-gray-400 text-sm">
+                          {search
+                            ? 'Try adjusting your search terms'
+                            : activeTab === 'rateDetails'
+                            ? completedRequests.length > 0
+                              ? 'No completed requests found'
+                              : 'No requests available'
+                            : 'No requests have been completed yet'}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+            
+            {/* Pagination Controls */}
+            {rateRequestPagination && rateRequestPagination.totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-gray-600">
+                    Showing {((rateRequestPagination.currentPage - 1) * rateRequestPagination.itemsPerPage) + 1} to{' '}
+                    {Math.min(rateRequestPagination.currentPage * rateRequestPagination.itemsPerPage, rateRequestPagination.totalItems)} of{' '}
+                    {rateRequestPagination.totalItems} results
                   </div>
-                )}
-              </>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Items per page:</label>
+                    <select
+                      value={rateRequestLimit}
+                      onChange={(e) => {
+                        setRateRequestLimit(Number(e.target.value));
+                        setRateRequestPage(1);
+                      }}
+                      className="px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRateRequestPage(prev => Math.max(1, prev - 1))}
+                    disabled={rateRequestPage === 1 || isFetching}
+                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, rateRequestPagination.totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (rateRequestPagination.totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (rateRequestPagination.currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (rateRequestPagination.currentPage >= rateRequestPagination.totalPages - 2) {
+                        pageNum = rateRequestPagination.totalPages - 4 + i;
+                      } else {
+                        pageNum = rateRequestPagination.currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setRateRequestPage(pageNum)}
+                          disabled={isFetching}
+                          className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
+                            rateRequestPage === pageNum
+                              ? 'bg-green-600 text-white border-green-600'
+                              : 'border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setRateRequestPage(prev => Math.min(rateRequestPagination.totalPages, prev + 1))}
+                    disabled={rateRequestPage === rateRequestPagination.totalPages || isFetching}
+                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -235,11 +235,11 @@ export default function TargetReports() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Achieved:</span>
-                    <span className="font-medium">{currentData.summary.targets.talkTime.total.toFixed(1)}h</span>
+                    <span className="font-medium">{currentData.summary.targets.talkTime.total.toFixed(2)}h</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Average:</span>
-                    <span className="font-medium">{currentData.summary.targets.talkTime.avg.toFixed(1)}h</span>
+                    <span className="font-medium">{currentData.summary.targets.talkTime.avg.toFixed(2)}h</span>
                   </div>
                 </div>
               </div>
@@ -279,8 +279,8 @@ export default function TargetReports() {
                     <span className="text-gray-600">Average:</span>
                     <span className="font-medium">
                       {activeTab === 'sales'
-                        ? currentData.summary.targets.deliveryOrders.avg
-                        : currentData.summary.targets.truckers.avg.toFixed(1)
+                        ? (typeof currentData.summary.targets.deliveryOrders.avg === 'number' ? currentData.summary.targets.deliveryOrders.avg.toFixed(2) : currentData.summary.targets.deliveryOrders.avg)
+                        : currentData.summary.targets.truckers.avg.toFixed(2)
                       }
                     </span>
                   </div>
@@ -328,7 +328,7 @@ export default function TargetReports() {
                         <div>
                           <div className="font-medium text-gray-800">{employee.talkTime.formatted}</div>
                           <div className="text-xs text-gray-500">
-                            {employee.targets.talkTime.current.toFixed(1)}/{employee.targets.talkTime.required}h
+                            {employee.targets.talkTime.current.toFixed(2)}/{employee.targets.talkTime.required}h
                           </div>
                         </div>
                       </td>

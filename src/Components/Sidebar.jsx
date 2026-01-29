@@ -377,6 +377,7 @@ const menuItems = [
   { name: "QA Call Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/call-report" },
   { name: "All DO Assigned CMT", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-do-assigned-cmt" },
   { name: "Emp Login Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/emp-login-report" },
+  { name: "Assigned Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigned-rate-request" },
   
   
 ];
@@ -387,6 +388,7 @@ const REPORT_NAMES = [
   "Follow Up Report",
   "DO Report",
   "All DO Assigned CMT",
+  "Assigned Rate Request",
   "Team Rating",
   "Call Data",
   "Call Records (Id)",

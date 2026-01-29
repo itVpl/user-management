@@ -422,6 +422,14 @@ export default function DOReport() {
   const [importResult, setImportResult] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importStep, setImportStep] = useState(1); // 1: upload, 2: mapping, 3: results
+  const [importCompany, setImportCompany] = useState(''); // Company selection for Excel import
+  
+  // Available companies for Excel import
+  const importCompanies = [
+    'V Power Logistics',
+    'IDENTIFICA LLC',
+    'MT. POCONO TRANSPORTATION INC'
+  ];
 
   const logoSrc = Logo;
   // top-level states ke saath
@@ -482,12 +490,14 @@ export default function DOReport() {
   };
 
 
-  // Date range state (default: last 30 days like screenshot)
+  // Date range state - no default, only set when user selects dates
   const [range, setRange] = useState({
-    startDate: addDays(new Date(), -29),
-    endDate: new Date(),
+    startDate: null,
+    endDate: null,
     key: 'selection'
   });
+  const [dateFilterApplied, setDateFilterApplied] = useState(false); // Track if date filter is applied
+  const [originalRange, setOriginalRange] = useState(null); // Store original range when opening custom range picker
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [selectedCreatedBy, setSelectedCreatedBy] = useState('');
@@ -508,9 +518,17 @@ export default function DOReport() {
   const applyPreset = (label) => {
     const [s, e] = presets[label];
     setRange({ startDate: s, endDate: e, key: 'selection' });
+    setDateFilterApplied(true); // Mark date filter as applied
     setShowPresetMenu(false);
   };
-  const ymd = (d) => format(d, 'yyyy-MM-dd'); // "YYYY-MM-DD"
+  const ymd = (d) => d ? format(d, 'yyyy-MM-dd') : null; // "YYYY-MM-DD" or null
+  
+  // Clear date filter
+  const clearDateFilter = () => {
+    setRange({ startDate: null, endDate: null, key: 'selection' });
+    setDateFilterApplied(false);
+    setOriginalRange(null);
+  };
 
   // Reset customer name input when selectedOrder changes
   useEffect(() => {
@@ -808,6 +826,13 @@ export default function DOReport() {
   const handleFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+
+    // Validate company selection before allowing file upload
+    if (!importCompany) {
+      alertify.error('Please select a company first');
+      event.target.value = ''; // Reset file input
+      return;
+    }
 
     // Validate file type
     const validTypes = [
@@ -1353,6 +1378,18 @@ export default function DOReport() {
   };
 
   const handleImport = async () => {
+    // Validate company selection
+    if (!importCompany) {
+      alertify.error('Please select a company from the dropdown');
+      return;
+    }
+
+    // Validate company is one of the allowed values
+    if (!importCompanies.includes(importCompany)) {
+      alertify.error(`Invalid company. Allowed values: ${importCompanies.join(', ')}`);
+      return;
+    }
+
     if (!validateMapping()) return;
 
     if (!fileReference) {
@@ -1524,6 +1561,7 @@ export default function DOReport() {
         fileReference: fileReference,
         columnMapping: transformedMapping,
         entityType: 'do',
+        company: importCompany, // Company name for company-wise data storage
         options: {
           skipDuplicates: skipDuplicates,
           updateExisting: updateExisting
@@ -1532,6 +1570,8 @@ export default function DOReport() {
 
       console.log('=== COMPLETE API PAYLOAD ===');
       console.log('API Payload:', JSON.stringify(apiPayload, null, 2));
+      console.log('Selected Company:', importCompany);
+      console.log('Company will be stored in addDispature field');
       
       // Check if totalCarrierFees is mapped but carrierFees array components are missing
       const hasTotalCarrierFees = Object.values(transformedMapping).includes('totalCarrierFees');
@@ -1572,17 +1612,24 @@ export default function DOReport() {
       console.log('========================');
 
       if (!result.success) {
+        // Show specific error message for company-related errors
+        if (result.message && (result.message.includes('Company') || result.message.includes('company'))) {
+          alertify.error(result.message);
+        } else {
+          alertify.error(result.message || 'Import failed');
+        }
         throw new Error(result.message || 'Import failed');
       }
 
       setImportResult(result);
       setImportStep(3);
-      alertify.success(`Import completed! ${result.summary.successfullyImported} records imported.`);
+      alertify.success(`Import completed! ${result.summary.successfullyImported} records imported for ${importCompany}.`);
       
       // Check imported data for carrierFees
       if (result.summary && result.summary.successfullyImported > 0) {
         console.log('=== CHECKING IMPORTED DATA ===');
         console.log('Import Summary:', result.summary);
+        console.log('Imported Company:', importCompany);
         
         // If result contains sample imported records, check their carrierFees
         if (result.data && result.data.sampleRecords) {
@@ -1591,19 +1638,20 @@ export default function DOReport() {
             console.log(`Record ${idx + 1} - Carrier Fees:`, {
               totalCarrierFees: record.carrier?.totalCarrierFees,
               carrierFees: record.carrier?.carrierFees,
-              workOrderNo: record.workOrderNo
+              workOrderNo: record.workOrderNo,
+              company: record.addDispature || record.company
             });
           });
         }
         console.log('=============================');
       }
       
-      // Refresh orders list
+      // Refresh orders list - use importCompany to show imported data
       const { loadNumber, carrierName } = parseSearchTerm(activeSearchTerm);
       await dispatch(fetchDOReport({ 
         page: currentPage, 
         limit: itemsPerPage, 
-        addDispature: selectedCompany || null, 
+        addDispature: importCompany || selectedCompany || null, 
         loadNumber: loadNumber,
         carrierName: carrierName,
         forceRefresh: true 
@@ -2001,27 +2049,14 @@ export default function DOReport() {
     return (fromCustomers || fromDoNum || fromOrder || fromWON || '').toLowerCase();
   };
 
-  // Helper function to exclude orders created by Shyam Singh or empId 1234
-  const excludeShyamSinghOrders = (order) => {
-    const createdByName = order.createdBySalesUser?.employeeName || order.createdBySalesUser || '';
-    const createdByEmpId = order.createdByEmpId || '';
-    return !(createdByName === 'Shyam Singh' || createdByEmpId === '1234');
-  };
-
-  // Total orders excluding Shyam Singh/1234 (for display count)
-  const totalOrdersExcludingShyam = orders.filter(excludeShyamSinghOrders);
-
   // Filter orders based on date range and created by
-  // Note: loadNumber and carrierName are now handled by API search, so we don't filter them client-side
+  // Note: loadNumber, carrierName, and addDispature (company) are now handled by API search, so we don't filter them client-side
+  // All records returned by API should be displayed - no client-side exclusion of specific users
   const filteredOrders = orders.filter(order => {
-    // Exclude orders created by Shyam Singh or empId 1234
-    if (!excludeShyamSinghOrders(order)) {
-      return false;
-    }
 
     // Only apply client-side filtering for fields not supported by API search
-    // API handles: loadNumber, carrierName
-    // Client-side handles: other fields, date range, created by, company
+    // API handles: loadNumber, carrierName, addDispature (company)
+    // Client-side handles: other fields, date range, created by
     const text = activeSearchTerm.toLowerCase();
     const { loadNumber: searchLoadNumber, carrierName: searchCarrierName } = parseSearchTerm(activeSearchTerm);
     
@@ -2048,22 +2083,23 @@ export default function DOReport() {
 
     // When doing API search by loadNumber or carrierName, skip date range filtering
     // (API search should return exact matches regardless of date)
+    // Only apply date filter if user explicitly set dates
     const created = order.createdAt || ''; // e.g., "2025-08-27"
     const inRange = (searchLoadNumber || searchCarrierName) 
       ? true  // Skip date filter for API searches
+      : !dateFilterApplied || !range.startDate || !range.endDate  // No date filter if not applied
+      ? true  // Show all dates if filter not applied
       : (created >= ymd(range.startDate) && created <= ymd(range.endDate));
 
     // Filter by Created By (match by empId)
     const matchesCreatedBy = !selectedCreatedBy || 
       (order.createdByEmpId === selectedCreatedBy);
 
-    // Filter by Company
-    const matchesCompany = !selectedCompany || 
-      (order.company === selectedCompany) ||
-      (order._fullOrderData?.company === selectedCompany) ||
-      (order._fullOrderData?.addDispature === selectedCompany);
+    // Skip client-side company filtering - API already filters by addDispature when selectedCompany is set
+    // The backend API handles company filtering via addDispature parameter, so we trust the API results
+    // This prevents double-filtering which could hide valid results due to field name mismatches
 
-    return matchesText && inRange && matchesCreatedBy && matchesCompany;
+    return matchesText && inRange && matchesCreatedBy;
   });
 
 
@@ -5682,7 +5718,9 @@ const handleUpdateOrder = async (e) => {
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <Calendar className="text-gray-400 group-hover:text-green-600 transition-colors flex-shrink-0" size={16} />
                   <span className="text-gray-700 font-medium truncate">
-                    {format(range.startDate, 'MMM dd, yyyy')} - {format(range.endDate, 'MMM dd, yyyy')}
+                    {range.startDate && range.endDate 
+                      ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                      : 'Select Date Range'}
                   </span>
                 </div>
                 <span className="text-gray-400 group-hover:text-green-600 transition-colors flex-shrink-0 ml-2">▼</span>
@@ -5701,11 +5739,26 @@ const handleUpdateOrder = async (e) => {
                   ))}
                   <div className="my-1 border-t border-gray-200" />
                   <button
-                    onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                    onClick={() => { 
+                      setOriginalRange({ ...range }); // Save current range before opening custom picker
+                      setShowPresetMenu(false); 
+                      setShowCustomRange(true); 
+                    }}
                     className="block w-full text-left px-4 py-3 hover:bg-green-50 hover:text-green-700 transition-colors font-medium text-gray-700"
                   >
                     Custom Range
                   </button>
+                  {dateFilterApplied && (
+                    <>
+                      <div className="my-1 border-t border-gray-200" />
+                      <button
+                        onClick={() => { clearDateFilter(); setShowPresetMenu(false); }}
+                        className="block w-full text-left px-4 py-3 hover:bg-red-50 hover:text-red-700 transition-colors font-medium text-gray-700"
+                      >
+                        Clear Date Filter
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -5775,12 +5828,28 @@ const handleUpdateOrder = async (e) => {
 
       {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
       {showCustomRange && (
-        <div className="fixed inset-0 z-[60] bg-black/50  flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+        <div className="fixed inset-0 z-[60] bg-black/50  flex items-center justify-center p-4" onClick={() => {
+          // Restore original range on cancel
+          if (originalRange) {
+            setRange(originalRange);
+          } else {
+            setRange({ startDate: null, endDate: null, key: 'selection' });
+          }
+          setShowCustomRange(false);
+        }}>
           <div className="bg-white rounded-2xl shadow-2xl p-6 border-2 border-gray-200" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-bold text-gray-800">Select Date Range</h3>
               <button
-                onClick={() => setShowCustomRange(false)}
+                onClick={() => {
+                  // Restore original range on cancel
+                  if (originalRange) {
+                    setRange(originalRange);
+                  } else {
+                    setRange({ startDate: null, endDate: null, key: 'selection' });
+                  }
+                  setShowCustomRange(false);
+                }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <XCircle size={24} />
@@ -5796,14 +5865,28 @@ const handleUpdateOrder = async (e) => {
             <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200">
               <button
                 type="button"
-                onClick={() => setShowCustomRange(false)}
+                onClick={() => {
+                  // Restore original range on cancel
+                  if (originalRange) {
+                    setRange(originalRange);
+                  } else {
+                    setRange({ startDate: null, endDate: null, key: 'selection' });
+                  }
+                  setShowCustomRange(false);
+                }}
                 className="px-5 py-2 border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-medium text-gray-700"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => setShowCustomRange(false)}
+                onClick={() => {
+                  if (range.startDate && range.endDate) {
+                    setDateFilterApplied(true); // Mark date filter as applied
+                  }
+                  setOriginalRange(null); // Clear original range after applying
+                  setShowCustomRange(false);
+                }}
                 className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all font-semibold shadow-lg"
               >
                 Apply Range
@@ -8789,6 +8872,7 @@ const handleUpdateOrder = async (e) => {
                     setFileReference(null);
                     setImportResult(null);
                     setExcelFile(null);
+                    setImportCompany(''); // Reset company selection
                   }}
                   className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
                 >
@@ -8802,6 +8886,30 @@ const handleUpdateOrder = async (e) => {
               {/* Step 1: File Upload */}
               {importStep === 1 && (
                 <div className="space-y-6">
+                  {/* Company Selection Dropdown */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <label htmlFor="import-company-select" className="block text-sm font-semibold text-gray-700 mb-2">
+                      Select Company <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="import-company-select"
+                      value={importCompany}
+                      onChange={(e) => setImportCompany(e.target.value)}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                    >
+                      <option value="">-- Select Company --</option>
+                      {importCompanies.map((company) => (
+                        <option key={company} value={company}>
+                          {company}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-600 mt-2">
+                      The imported data will be stored under the selected company.
+                    </p>
+                  </div>
+
                   <div className="flex justify-center mb-4">
                     <button
                       onClick={handleDownloadTemplate}
@@ -8814,7 +8922,11 @@ const handleUpdateOrder = async (e) => {
                     <Upload className="mx-auto text-gray-400 mb-4" size={48} />
                     <h3 className="text-lg font-semibold text-gray-700 mb-2">Upload Excel File</h3>
                     <p className="text-sm text-gray-500 mb-4">Supported formats: .xlsx, .xls, .xlsm (Max 10MB)</p>
-                    <label className="inline-flex items-center gap-2 px-6 py-3 bg-green-500 text-white rounded-lg cursor-pointer hover:bg-green-600 transition-colors">
+                    <label className={`inline-flex items-center gap-2 px-6 py-3 rounded-lg transition-colors ${
+                      importCompany && !importLoading
+                        ? 'bg-green-500 text-white cursor-pointer hover:bg-green-600'
+                        : 'bg-gray-400 text-white cursor-not-allowed'
+                    }`}>
                       <Upload size={18} />
                       Choose File
                       <input
@@ -8822,9 +8934,14 @@ const handleUpdateOrder = async (e) => {
                         accept=".xlsx,.xls,.xlsm"
                         onChange={handleFileSelect}
                         className="hidden"
-                        disabled={importLoading}
+                        disabled={importLoading || !importCompany}
                       />
                     </label>
+                    {!importCompany && (
+                      <p className="mt-2 text-sm text-red-600">
+                        Please select a company above to enable file upload
+                      </p>
+                    )}
                     {excelFile && (
                       <p className="mt-4 text-sm text-gray-600">
                         Selected: <span className="font-medium">{excelFile.name}</span>
@@ -8850,6 +8967,11 @@ const handleUpdateOrder = async (e) => {
                       <strong> Rows:</strong> {previewData.excelStructure?.totalRows || 0} | 
                       <strong> Columns:</strong> {previewData.excelStructure?.totalColumns || 0}
                     </p>
+                    {importCompany && (
+                      <p className="text-sm text-green-700 mt-2">
+                        <strong>Company:</strong> {importCompany}
+                      </p>
+                    )}
                   </div>
 
                   <div className="border rounded-lg overflow-hidden">
@@ -8923,7 +9045,7 @@ const handleUpdateOrder = async (e) => {
                           onChange={(e) => setSkipDuplicates(e.target.checked)}
                           className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
                         />
-                        <span className="text-sm text-gray-700">Skip Duplicates (based on Load Number)</span>
+                        <span className="text-sm text-gray-700">Skip Duplicates (based on Container No)</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -8945,6 +9067,7 @@ const handleUpdateOrder = async (e) => {
                         setColumnMapping({});
                         setPreviewData(null);
                         setFileReference(null);
+                        setExcelFile(null);
                       }}
                       className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                     >
@@ -8952,9 +9075,9 @@ const handleUpdateOrder = async (e) => {
                     </button>
                     <button
                       onClick={handleImport}
-                      disabled={importLoading || Object.keys(columnMapping).length === 0}
+                      disabled={importLoading || Object.keys(columnMapping).length === 0 || !importCompany}
                       className={`px-6 py-2 rounded-lg text-white font-semibold transition-colors ${
-                        importLoading || Object.keys(columnMapping).length === 0
+                        importLoading || Object.keys(columnMapping).length === 0 || !importCompany
                           ? 'bg-gray-400 cursor-not-allowed'
                           : 'bg-green-500 hover:bg-green-600'
                       }`}
@@ -9022,6 +9145,7 @@ const handleUpdateOrder = async (e) => {
                         <strong>Note:</strong> Make sure the required fields are mapped and contain data:
                         <ul className="list-disc list-inside mt-1 ml-2">
                           <li><strong>Load Number</strong> - Maps to Work Order Number (actual Load Number L0001, L0002, etc. is auto-generated)</li>
+                          <li><strong>Container No</strong> - Required for duplicate detection</li>
                           <li><strong>Dispatcher Name</strong> - Required field</li>
                         </ul>
                       </p>
@@ -9031,7 +9155,16 @@ const handleUpdateOrder = async (e) => {
                   {importResult.details?.duplicates?.length > 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                       <h4 className="font-semibold text-yellow-800 mb-2">Duplicate Rows (Skipped):</h4>
-                      <p className="text-sm text-yellow-700">Rows: {importResult.details.duplicates.join(', ')}</p>
+                      <div className="space-y-2">
+                        {importResult.details.duplicates.map((duplicate, idx) => (
+                          <div key={idx} className="text-sm text-yellow-700 bg-white rounded p-2 border border-yellow-200">
+                            <p><strong>Row {duplicate.row}:</strong> {duplicate.reason || `Container No "${duplicate.containerNo}" already exists for company "${duplicate.company}"`}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-yellow-600 mt-2">
+                        <strong>Note:</strong> Duplicates are detected based on Container No within the same company.
+                      </p>
                     </div>
                   )}
 
@@ -9045,6 +9178,7 @@ const handleUpdateOrder = async (e) => {
                         setFileReference(null);
                         setImportResult(null);
                         setExcelFile(null);
+                        setImportCompany(''); // Reset company selection
                       }}
                       className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
                     >
