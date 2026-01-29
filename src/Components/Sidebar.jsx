@@ -219,6 +219,85 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Manage Module"
     ]
   },
+  // Universal User Department Categories (with Reports included)
+  "CMT_UNIVERSAL": {
+    "CMT Modules": [
+      "Trucker Report",
+      "DO Details",
+      "Rate Request",
+      "Trukers",
+      "Daily Task",
+      "Tracking"
+    ],
+    "Common Modules": [
+      "Chat",
+      "Email",
+      "Dinner Status"
+    ],
+    "CMT Reports": [
+      "CMT Dept Report",
+      "Trucker Report",
+      "Rate Request Report",
+      "DO Report",
+      "All DO Assigned CMT",
+      "Assigned Rate Request"
+    ],
+    "Common Reports": [
+      "Call Data",
+      "Call Records (Id)",
+      "Report Analysis",
+      "Team Rating"
+    ]
+  },
+  "Sales_UNIVERSAL": {
+    "Sales Modules": [
+      "Daily Follow-Up",
+      "Loads",
+      "Rate Approved",
+      "Delivery Order",
+      "Add Customer",
+      "Daily Task",
+      "Tracking"
+    ],
+    "Common Modules": [
+      "Chat",
+      "Email"
+    ],
+    "Sales Reports": [
+      "Sales Dept Report",
+      "Follow Up Report"
+    ],
+    "Common Reports": [
+      "Call Data",
+      "Call Records (Id)",
+      "Report Analysis",
+      "Team Rating"
+    ]
+  },
+  "Finance_UNIVERSAL": {
+    "Finance Modules": [
+      "Accounts Receivable",
+      "Accounts Payable",
+      "Receivable Report",
+      "Payable Report",
+      "Employee Hygiene"
+    ],
+    "Common Modules": [
+      "Chat",
+      "Email",
+      "Dinner Status"
+    ],
+    "Finance Reports": [
+      "Receivable Report",
+      "Payable Report"
+    ],
+    "Common Reports": [
+      "Call Data",
+      "Call Records (Id)",
+      "Report Analysis",
+      "Team Rating"
+    ]
+  },
   "QA": {
     "Communication": [
       "Chat",
@@ -255,8 +334,17 @@ const DEPARTMENT_MODULE_CATEGORIES = {
 };
 
 // Function to get department-specific module categories
-const getDepartmentCategories = (department) => {
+const getDepartmentCategories = (department, role) => {
   const dept = department?.toLowerCase();
+  
+  // For universal_user, use special universal categories
+  if (role === "universal_user") {
+    if (dept === "cmt") return DEPARTMENT_MODULE_CATEGORIES["CMT_UNIVERSAL"];
+    if (dept === "sales") return DEPARTMENT_MODULE_CATEGORIES["Sales_UNIVERSAL"];
+    if (dept === "finance") return DEPARTMENT_MODULE_CATEGORIES["Finance_UNIVERSAL"];
+  }
+  
+  // Regular department categories
   if (dept === "hr") return DEPARTMENT_MODULE_CATEGORIES["HR"];
   if (dept === "sales") return DEPARTMENT_MODULE_CATEGORIES["Sales"];
   if (dept === "finance") return DEPARTMENT_MODULE_CATEGORIES["Finance"];
@@ -266,8 +354,8 @@ const getDepartmentCategories = (department) => {
 };
 
 // Function to categorize a module for a specific department
-const getModuleCategory = (moduleName, department) => {
-  const categories = getDepartmentCategories(department);
+const getModuleCategory = (moduleName, department, role) => {
+  const categories = getDepartmentCategories(department, role);
   if (!categories) return "Other";
   
   for (const [category, modules] of Object.entries(categories)) {
@@ -279,10 +367,19 @@ const getModuleCategory = (moduleName, department) => {
 };
 
 // Function to get all department module names
-const getAllDepartmentModules = (department) => {
-  const categories = getDepartmentCategories(department);
+const getAllDepartmentModules = (department, role) => {
+  const categories = getDepartmentCategories(department, role);
   if (!categories) return [];
   return Object.values(categories).flat();
+};
+
+// Function to get all universal user departments and their modules
+const getAllUniversalUserDepartments = () => {
+  return {
+    "CMT": DEPARTMENT_MODULE_CATEGORIES["CMT_UNIVERSAL"],
+    "Sales": DEPARTMENT_MODULE_CATEGORIES["Sales_UNIVERSAL"],
+    "Finance": DEPARTMENT_MODULE_CATEGORIES["Finance_UNIVERSAL"]
+  };
 };
 
 // Function to get department dropdown name
@@ -404,18 +501,93 @@ const REPORT_NAMES = [
   "QA Call Report"
 ];
 
+// Department-wise report categorization
+const DEPARTMENT_REPORTS = {
+  "CMT": [
+    "CMT Dept Report",
+    "Trucker Report",
+    "Rate Request Report",
+    "DO Report",
+    "All DO Assigned CMT",
+    "Assigned Rate Request"
+  ],
+  "Sales": [
+    "Sales Dept Report",
+    "Follow Up Report"
+  ],
+  "Finance": [
+    "Receivable Report",
+    "Payable Report"
+  ],
+  "HR": [
+    "Break Report",
+    "Target Reports",
+    "Emp Login Report"
+  ],
+  "QA": [
+    "QA Call Report"
+  ],
+  "Common": [
+    "Call Data",
+    "Call Records (Id)",
+    "Report Analysis",
+    "Team Rating"
+  ]
+};
+
+// Function to get reports for a specific department
+const getDepartmentReports = (department) => {
+  if (!department) return DEPARTMENT_REPORTS["Common"] || [];
+  const deptReports = DEPARTMENT_REPORTS[department] || [];
+  const commonReports = DEPARTMENT_REPORTS["Common"] || [];
+  return [...deptReports, ...commonReports];
+};
+
+// Function to categorize reports by department
+const categorizeReportsByDepartment = (reportItems) => {
+  const categorized = {};
+  
+  reportItems.forEach(item => {
+    let assigned = false;
+    
+    // Check each department
+    Object.entries(DEPARTMENT_REPORTS).forEach(([dept, reports]) => {
+      if (reports.includes(item.name)) {
+        if (!categorized[dept]) {
+          categorized[dept] = [];
+        }
+        categorized[dept].push(item);
+        assigned = true;
+      }
+    });
+    
+    // If not assigned to any department, add to Common
+    if (!assigned) {
+      if (!categorized["Common"]) {
+        categorized["Common"] = [];
+      }
+      categorized["Common"].push(item);
+    }
+  });
+  
+  return categorized;
+};
+
 const Sidebar = () => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
   const [departmentMenuItems, setDepartmentMenuItems] = useState([]);
   const [departmentCategories, setDepartmentCategories] = useState({});
+  const [allDepartmentCategories, setAllDepartmentCategories] = useState({}); // For universal_user: stores all dept categories
   const [isDepartmentMenuOpen, setIsDepartmentMenuOpen] = useState(false);
   const [openCategories, setOpenCategories] = useState({});
   const [isReportsOpen, setIsReportsOpen] = useState(true);
   const [reportMenuItems, setReportMenuItems] = useState([]);
+  const [reportCategories, setReportCategories] = useState({}); // Department-wise report categories
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userDepartment, setUserDepartment] = useState(null);
+  const [userRole, setUserRole] = useState(null); // Store user role
   
   // Time Display and Break/Meeting states
   const [loginTime, setLoginTime] = useState(() => {
@@ -568,7 +740,7 @@ const Sidebar = () => {
   };
 
   // Flyout menu handlers
-  const handleFlyoutOpen = (type, event) => {
+  const handleFlyoutOpen = (type, event, departmentName = null) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     
@@ -592,7 +764,7 @@ const Sidebar = () => {
       // Ensure flyout doesn't go above viewport
       topPosition = Math.max(20, topPosition);
     } else {
-      // Keep original simple positioning for Sales flyout
+      // Keep original simple positioning for department flyouts
       if (topPosition > viewportHeight * 0.7) {
         topPosition = Math.max(20, viewportHeight * 0.1);
       }
@@ -602,6 +774,13 @@ const Sidebar = () => {
       left: rect.right + 10,
       top: topPosition
     });
+    
+    // For universal_user and superadmin, store which department is being opened
+    if (departmentName && (userRole === "universal_user" || (userRole && userRole.toLowerCase() === "superadmin"))) {
+      setDepartmentCategories(allDepartmentCategories[departmentName] || {});
+      setUserDepartment(departmentName);
+    }
+    
     setFlyoutType(type);
     setFlyoutOpen(true);
   };
@@ -633,12 +812,17 @@ const Sidebar = () => {
           return;
         }
 
-        // Get user department
+        // Get user department and role
         const department = user?.department || "";
+        const role = (user?.role || "").toLowerCase().trim();
+        const isUniversalUser = role === "universal_user";
+        const isSuperAdmin = role === "superadmin" || role === "super admin";
         setUserDepartment(department);
-        const hasDepartmentCategories = getDepartmentCategories(department) !== null;
+        setUserRole(role); // Set role early so it's available everywhere
+        const hasDepartmentCategories = getDepartmentCategories(department, role) !== null;
 
         const allowedModuleIds = user?.allowedModules?.map(String) || [];
+        console.log("👤 User role:", role, "Is universal_user:", isUniversalUser, "Is superadmin:", isSuperAdmin);
         console.log("👤 User allowed modules (IDs):", allowedModuleIds);
         console.log("👤 User allowed modules (count):", allowedModuleIds.length);
         console.log("👤 User department:", department, "Has categories:", hasDepartmentCategories);
@@ -713,12 +897,130 @@ const Sidebar = () => {
           // Always include Companies menu item
           const companiesMenuItem = menuItems.find(item => item.name === 'Companies');
           
+          // Handle universal_user and superadmin with department-wise dropdowns
+          if (isUniversalUser || isSuperAdmin) {
+            console.log(`🔑 Processing ${isUniversalUser ? 'universal_user' : 'superadmin'} modules`);
+            
+            // Get all universal user departments
+            const universalDepts = getAllUniversalUserDepartments();
+            const allUniversalModuleNames = Object.values(universalDepts).flatMap(cats => 
+              Object.values(cats).flat()
+            );
+            
+            // Filter matched menus to only include universal user modules
+            const universalMenus = matchedMenus.filter(item => 
+              allUniversalModuleNames.includes(item.name)
+            );
+            
+            // Separate reports - all reports for universal_user
+            const reports = matchedMenus.filter(item => 
+              REPORT_NAMES.includes(item.name)
+            );
+            
+            // Categorize reports by department
+            const categorizedReports = categorizeReportsByDepartment(reports);
+            
+            // Organize modules by department
+            const departmentCategoriesMap = {};
+            
+            // Process each department
+            Object.entries(universalDepts).forEach(([deptName, categories]) => {
+              const categorized = {};
+              
+              // Process each category in the department
+              Object.entries(categories).forEach(([categoryName, moduleNames]) => {
+                const categoryItems = [];
+                
+                moduleNames.forEach(moduleName => {
+                  // First try to find in universalMenus (non-report modules)
+                  let menuItem = universalMenus.find(item => item.name === moduleName);
+                  
+                  // If not found, try in reports
+                  if (!menuItem) {
+                    menuItem = reports.find(item => item.name === moduleName);
+                  }
+                  
+                  if (menuItem) {
+                    categoryItems.push(menuItem);
+                  }
+                });
+                
+                // Add category if it has items
+                if (categoryItems.length > 0) {
+                  categorized[categoryName] = categoryItems;
+                }
+              });
+              
+              // Only add department if it has any categories
+              if (Object.keys(categorized).length > 0) {
+                departmentCategoriesMap[deptName] = categorized;
+              }
+            });
+            
+            // Set department menu items (flattened for display logic)
+            const allDeptMenus = Object.values(departmentCategoriesMap).flatMap(cats =>
+              Object.values(cats).flat()
+            );
+            
+            // Other menus (Dashboard, Tracking, Companies) - common modules
+            // For superadmin, exclude Tracking
+            const commonModules = isSuperAdmin ? ["Dashboard"] : ["Dashboard", "Tracking"];
+            const otherMenus = matchedMenus.filter(item => 
+              commonModules.includes(item.name)
+            );
+            
+            // Add Companies if available
+            if (companiesMenuItem && matchedMenus.some(m => m.name === 'Company')) {
+              const dashboardIndex = otherMenus.findIndex(item => item.name === 'Dashboard');
+              if (dashboardIndex >= 0) {
+                otherMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
+              } else {
+                otherMenus.unshift(companiesMenuItem);
+              }
+            }
+            
+            // For universal_user and superadmin, store all department categories
+            setAllDepartmentCategories(departmentCategoriesMap);
+            // Store the first department for display
+            const firstDept = Object.keys(departmentCategoriesMap)[0] || department;
+            setUserDepartment(firstDept);
+            setDepartmentMenuItems(allDeptMenus);
+            setDepartmentCategories(departmentCategoriesMap[firstDept] || {});
+            
+            // For superadmin, also show separate Reports dropdown
+            if (isSuperAdmin) {
+              console.log("✅ Setting Reports dropdown for superadmin");
+              setReportMenuItems(reports);
+              setReportCategories(categorizedReports);
+            } else {
+              // Don't show separate Reports dropdown for universal_user (reports are in department dropdowns)
+              setReportMenuItems([]);
+              setReportCategories({});
+            }
+            
+            setFilteredMenuItems(otherMenus);
+            
+            console.log(`✅ ${isUniversalUser ? 'Universal user' : 'Superadmin'} setup complete`);
+            console.log("📋 Department categories:", Object.keys(departmentCategoriesMap));
+            console.log("📋 Reports count:", reports.length);
+            if (isSuperAdmin) {
+              console.log("📋 Report categories:", Object.keys(categorizedReports));
+            }
+            
+            setLoading(false);
+            return;
+          }
+          
+          // Store role for all users
+          setUserRole(role);
+          console.log("✅ User role stored:", role);
+          
           // If no modules matched but user has allowedModules, try to show department modules
           if (matchedMenus.length === 0) {
             if (allowedModuleIds.length > 0 && hasDepartmentCategories) {
               console.warn("⚠️ No modules matched by name, but user has allowedModules. Showing department modules as fallback.");
               // Get all department module names
-              const allDeptModuleNames = getAllDepartmentModules(department);
+              const allDeptModuleNames = getAllDepartmentModules(department, role);
               // Show menu items that are in department categories
               const deptMenus = menuItems.filter(item => 
                 allDeptModuleNames.includes(item.name)
@@ -734,7 +1036,7 @@ const Sidebar = () => {
               // Categorize department modules
               const categorized = {};
               deptMenus.forEach(item => {
-                const category = getModuleCategory(item.name, department);
+                const category = getModuleCategory(item.name, department, role);
                 if (!categorized[category]) {
                   categorized[category] = [];
                 }
@@ -747,8 +1049,9 @@ const Sidebar = () => {
               setFilteredMenuItems(otherMenus);
             } else {
               console.warn("⚠️ No modules matched, showing basic menus");
+              const basicMenuNames = isSuperAdmin ? ['Dashboard'] : ['Dashboard', 'Tracking'];
               const basicMenus = menuItems.filter(item => 
-                ['Dashboard', 'Tracking'].includes(item.name)
+                basicMenuNames.includes(item.name)
               );
               setFilteredMenuItems(basicMenus);
               setDepartmentMenuItems([]);
@@ -759,7 +1062,7 @@ const Sidebar = () => {
             // For users with department categories, separate department modules and categorize them
             if (hasDepartmentCategories) {
               // Get all department module names from categories
-              const allDeptModuleNames = getAllDepartmentModules(department);
+              const allDeptModuleNames = getAllDepartmentModules(department, role);
               
               // Separate department modules from other modules
               const deptMenus = matchedMenus.filter(item => 
@@ -770,14 +1073,19 @@ const Sidebar = () => {
                 REPORT_NAMES.includes(item.name)
               );
               
+              // Categorize reports by department
+              const categorizedReports = categorizeReportsByDepartment(reports);
+              
               const otherMenus = matchedMenus.filter(item => 
-                !allDeptModuleNames.includes(item.name) && !REPORT_NAMES.includes(item.name)
+                !allDeptModuleNames.includes(item.name) && 
+                !REPORT_NAMES.includes(item.name) &&
+                !(isSuperAdmin && item.name === "Tracking")
               );
               
               // Categorize department modules
               const categorized = {};
               deptMenus.forEach(item => {
-                const category = getModuleCategory(item.name, department);
+                const category = getModuleCategory(item.name, department, role);
                 if (!categorized[category]) {
                   categorized[category] = [];
                 }
@@ -797,7 +1105,15 @@ const Sidebar = () => {
               
               setDepartmentMenuItems(deptMenus);
               setDepartmentCategories(categorized);
-              setReportMenuItems(reports);
+              // Only show Reports dropdown for superadmin
+              if (isSuperAdmin) {
+                console.log("✅ Setting Reports dropdown for superadmin");
+                setReportMenuItems(reports);
+                setReportCategories(categorizedReports);
+              } else {
+                setReportMenuItems([]);
+                setReportCategories({});
+              }
               setFilteredMenuItems(otherMenus);
             } else {
               // For users without department categories, separate reports from other menus
@@ -806,8 +1122,12 @@ const Sidebar = () => {
                 REPORT_NAMES.includes(item.name)
               );
               
+              // Categorize reports by department
+              const categorizedReports = categorizeReportsByDepartment(reports);
+              
               const otherMenus = matchedMenus.filter(item => 
-                !REPORT_NAMES.includes(item.name)
+                !REPORT_NAMES.includes(item.name) &&
+                !(isSuperAdmin && item.name === "Tracking")
               );
               
               const hasCompanies = otherMenus.some(item => item.name === 'Companies');
@@ -819,7 +1139,15 @@ const Sidebar = () => {
                   otherMenus.unshift(companiesMenuItem);
                 }
               }
-              setReportMenuItems(reports);
+              // Only show Reports dropdown for superadmin
+              if (isSuperAdmin) {
+                console.log("✅ Setting Reports dropdown for superadmin");
+                setReportMenuItems(reports);
+                setReportCategories(categorizedReports);
+              } else {
+                setReportMenuItems([]);
+                setReportCategories({});
+              }
               setFilteredMenuItems(otherMenus);
               setDepartmentMenuItems([]);
               setDepartmentCategories({});
@@ -828,8 +1156,9 @@ const Sidebar = () => {
         } else {
           console.error("❌ API response not successful:", data);
           // Fallback: show basic menus if API fails
+          const basicMenuNames = isSuperAdmin ? ['Dashboard'] : ['Dashboard', 'Tracking'];
           const basicMenus = menuItems.filter(item => 
-            ['Dashboard', 'Tracking'].includes(item.name)
+            basicMenuNames.includes(item.name)
           );
           setFilteredMenuItems(basicMenus);
           setDepartmentMenuItems([]);
@@ -839,8 +1168,9 @@ const Sidebar = () => {
       } catch (err) {
         console.error("❌ Failed to fetch modules:", err);
         // Fallback: show basic menus on error
+        const basicMenuNames = isSuperAdmin ? ['Dashboard'] : ['Dashboard', 'Tracking'];
         const basicMenus = menuItems.filter(item => 
-          ['Dashboard', 'Tracking'].includes(item.name)
+          basicMenuNames.includes(item.name)
         );
         setFilteredMenuItems(basicMenus);
         setDepartmentMenuItems([]);
@@ -979,10 +1309,14 @@ const Sidebar = () => {
                 <>
                   {(() => {
                     // Define hasDeptCategories outside the map for use in multiple places
-                    const hasDeptCategories = userDepartment && getDepartmentCategories(userDepartment) !== null;
+                    const hasDeptCategories = userDepartment && getDepartmentCategories(userDepartment, userRole) !== null;
                     return (
                       <>
                         {filteredMenuItems.map((item, idx) => {
+                          // Skip Tracking for superadmin
+                          if (userRole && (userRole.toLowerCase() === "superadmin" || userRole.toLowerCase() === "super admin") && item.name === "Tracking") {
+                            return null;
+                          }
                           // Render Dashboard first, then department dropdown for users with department categories
                     if (hasDeptCategories && item.name === "Dashboard") {
                       return (
@@ -1011,35 +1345,72 @@ const Sidebar = () => {
                               </>
                             )}
                           </NavLink>
-                          {/* Department Dropdown - placed after Dashboard */}
+                          {/* Department Dropdown(s) - placed after Dashboard */}
                           {departmentMenuItems.length > 0 && (
                             <div className="w-full">
-                              <button
-                                onClick={(e) => handleFlyoutOpen('sales', e)}
-                                className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 transition-all ${isExpanded ? "mx-2" : "mx-1"} w-full ${
-                                  departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
-                                    ? "text-white rounded-l-lg rounded-r-3xl"
-                                    : "hover:bg-gray-100 text-gray-700 rounded-lg"
-                                }`}
-                                style={
-                                  departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
-                                    ? { backgroundColor: activeBgColor }
-                                    : {}
-                                }
-                              >
-                                <img
-                                  src={
+                              {(userRole === "universal_user" || (userRole && (userRole.toLowerCase() === "superadmin" || userRole.toLowerCase() === "super admin"))) && Object.keys(allDepartmentCategories).length > 0 ? (
+                                // Multiple department dropdowns for universal_user
+                                Object.entries(allDepartmentCategories).map(([deptName, deptCats]) => {
+                                  const deptMenuItems = Object.values(deptCats).flat();
+                                  const isActive = deptMenuItems.some(deptItem => 
+                                    location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')
+                                  ) || (flyoutOpen && flyoutType === 'sales' && userDepartment === deptName);
+                                  
+                                  return (
+                                    <button
+                                      key={deptName}
+                                      onClick={(e) => handleFlyoutOpen('sales', e, deptName)}
+                                      className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 transition-all ${isExpanded ? "mx-2" : "mx-1"} w-full mb-1 ${
+                                        isActive
+                                          ? "text-white rounded-l-lg rounded-r-3xl"
+                                          : "hover:bg-gray-100 text-gray-700 rounded-lg"
+                                      }`}
+                                      style={
+                                        isActive
+                                          ? { backgroundColor: activeBgColor }
+                                          : {}
+                                      }
+                                    >
+                                      <img
+                                        src={isActive ? WhiteManageUser : ManageUser}
+                                        alt={getDepartmentDropdownName(deptName)}
+                                        className="w-5 h-5"
+                                      />
+                                      <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
+                                        {getDepartmentDropdownName(deptName)}
+                                      </span>
+                                    </button>
+                                  );
+                                })
+                              ) : (
+                                // Single department dropdown for regular users
+                                <button
+                                  onClick={(e) => handleFlyoutOpen('sales', e)}
+                                  className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 transition-all ${isExpanded ? "mx-2" : "mx-1"} w-full ${
                                     departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
-                                      ? WhiteManageUser
-                                      : ManageUser
+                                      ? "text-white rounded-l-lg rounded-r-3xl"
+                                      : "hover:bg-gray-100 text-gray-700 rounded-lg"
+                                  }`}
+                                  style={
+                                    departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
+                                      ? { backgroundColor: activeBgColor }
+                                      : {}
                                   }
-                                  alt={getDepartmentDropdownName(userDepartment)}
-                                  className="w-5 h-5"
-                                />
-                                <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
-                                  {getDepartmentDropdownName(userDepartment)}
-                                </span>
-                              </button>
+                                >
+                                  <img
+                                    src={
+                                      departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
+                                        ? WhiteManageUser
+                                        : ManageUser
+                                    }
+                                    alt={getDepartmentDropdownName(userDepartment)}
+                                    className="w-5 h-5"
+                                  />
+                                  <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
+                                    {getDepartmentDropdownName(userDepartment)}
+                                  </span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </React.Fragment>
@@ -1094,8 +1465,8 @@ const Sidebar = () => {
                       </NavLink>
                     );
                   })}
-                  {/* Reports Section - Top Level (for all users) */}
-                  {reportMenuItems.length > 0 && (
+                  {/* Reports Section - Top Level (only for superadmin) */}
+                  {reportMenuItems.length > 0 && userRole && (userRole.toLowerCase() === "superadmin" || userRole.toLowerCase() === "super admin") && (
                     <div className="w-full mt-2">
                       <button
                         onClick={(e) => handleFlyoutOpen('reports', e)}
@@ -1288,7 +1659,11 @@ const Sidebar = () => {
       {/* Sidebar Flyout Menu */}
       <SidebarFlyout
         isOpen={flyoutOpen}
-        categories={flyoutType === 'sales' ? departmentCategories : { 'Reports': reportMenuItems }}
+        categories={
+          flyoutType === 'sales' 
+            ? departmentCategories 
+            : (Object.keys(reportCategories).length > 0 ? reportCategories : { 'Reports': reportMenuItems })
+        }
         position={flyoutPosition}
         onItemClick={handleFlyoutClose}
         title={flyoutType === 'sales' ? getDepartmentDropdownName(userDepartment) : 'Reports'}
