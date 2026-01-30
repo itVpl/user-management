@@ -11,6 +11,9 @@ import {
   Clock,
   Paperclip,
   X,
+  AlertTriangle,
+  Play,
+  Calendar
 } from "lucide-react";
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
@@ -190,7 +193,7 @@ const DailyTarget = () => {
       try {
         const [salesRes, cmtRes] = await Promise.all([
           api.get("/api/v1/inhouseUser/sales/report", { params: { date } }),
-          api.get("/api/v1/inhouseUser/cmt/report",   { params: { date } }),
+          api.get("/api/v1/inhouseUser/cmt/report", { params: { date } }),
         ]);
         setSalesDept(salesRes?.data?.data || null);
         setCmtDept(cmtRes?.data?.data || null);
@@ -290,6 +293,7 @@ const DailyTarget = () => {
 
       try {
         setLoading(true);
+        setReport(null);
         setError(null);
         setServerMsg(null);
 
@@ -337,31 +341,31 @@ const DailyTarget = () => {
         try {
           // Replace {empId} placeholder with actual empId value
           const endpoint = ep.replace('{empId}', empId);
-          
+
           // Always use FormData format as per API spec
           const formData = new FormData();
           formData.append('empId', empId);
           formData.append('date', date);
           formData.append('reason', reasonText.trim());
-          
+
           // Add attachment if file is selected (field name should be 'attachments' as per API)
           if (attachmentFile) {
             formData.append('attachments', attachmentFile);
           }
-          
+
           const res = await api.patch(endpoint, formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
           });
-          
+
           if (res?.data?.success !== false) {
             success = true;
             // Update report with response data if available
             if (res?.data?.data) {
               setReport((prev) =>
-                prev ? { 
-                  ...prev, 
+                prev ? {
+                  ...prev,
                   reason: res.data.data.reason || reasonText.trim(),
                   statusMessage: res.data.data.statusMessage || prev.statusMessage || "",
                   attachments: res.data.data.attachments || []
@@ -389,11 +393,11 @@ const DailyTarget = () => {
       setIsReasonOpen(false);
       setReasonText("");
       setAttachmentFile(null);
-      
+
       // Reset file input
       const input = document.getElementById('attachmentInput');
       if (input) input.value = '';
-      
+
       // Refresh report data to show updated reason and attachments
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       if (token && canRequest && endpoint) {
@@ -557,6 +561,64 @@ const DailyTarget = () => {
   }
 
 
+  const CircularProgress = ({ percentage }) => {
+    const radius = 45;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDasharray = circumference;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+    return (
+      <div className="relative w-36 h-36 flex-shrink-0">
+        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            stroke="#f3f4f6"
+            strokeWidth="3"
+            fill="none"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            stroke="#10b981"
+            strokeWidth="3"
+            fill="none"
+            strokeDasharray={strokeDasharray}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            className="transition-all duration-300"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Progress</span>
+          <span className="text-4xl font-bold text-gray-600">{Math.round(percentage)}%</span>
+        </div>
+      </div>
+    );
+  };
+
+
+  const ProgressBar = ({ current, required, colorClass = "bg-orange-500", label, unit = "" }) => {
+    const p = percent(current, required);
+    return (
+      <div className="mb-6">
+        <div className="flex justify-between items-end mb-2">
+          <span className="text-sm font-semibold text-gray-700">{label}</span>
+          <span className="text-xs text-gray-400">
+            Required: {required} | Current: {current} | Remaining: {Math.max(0, required - current)}
+          </span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-2.5 mb-1">
+          <div className={`h-2.5 rounded-full ${colorClass}`} style={{ width: `${p}%` }}></div>
+        </div>
+        <div className="text-right text-xs font-bold text-red-500">{p}%</div>
+      </div>
+    )
+  }
+
+
   // Show full-page loader on initial load
   if (loading && !report) {
     return (
@@ -567,8 +629,8 @@ const DailyTarget = () => {
             <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
           </div>
           <div className="mt-6 text-center">
-            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Dashboard...</p>
-            <p className="text-sm text-gray-600">Please wait while we fetch your daily targets</p>
+            <p className="text-xl font-semibold text-gray-800 mb-2">Fetching {department || "Daily"} Report...</p>
+            <p className="text-sm text-gray-600">Please wait while we fetch your data</p>
           </div>
         </div>
       </div>
@@ -577,289 +639,276 @@ const DailyTarget = () => {
 
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
-            <Target className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Daily Targets</h1>
-            <p className="text-gray-600">{department} department report</p>
-          </div>
-        </div>
+    <div className="min-h-screen bg-white p-6 font-sans">
+      {/* Main Card */}
+      <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm mb-6 relative">
 
+        <div className="flex flex-col xl:flex-row justify-between xl:items-end gap-12">
 
-        {/* Full clickable date field */}
-        <div
-          className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 cursor-pointer flex items-center"
-          onClick={() => dateInputRef.current?.showPicker?.() ?? dateInputRef.current?.focus()}
-          role="button"
-          aria-label="Change date"
-        >
-          <input
-            ref={dateInputRef}
-            type="date"
-            value={date}
-            max={toDateInputValue(new Date())}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-transparent outline-none cursor-pointer"
-            aria-label="Date"
-          />
+          {/* Left Side: Header + Cards */}
+          <div className="flex-1 min-w-0">
+            {/* Header */}
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-1">Daily Target - {department}</h1>
+                <p className="text-gray-900 text-lg font-medium">
+                  {new Date(date).getDate()} {new Date(date).toLocaleString('default', { month: 'long' })} {new Date(date).getFullYear()} - {new Date(date).toLocaleDateString('en-US', { weekday: 'long' })}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500 mb-1 font-medium">Last updated</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {report?.updatedAt
+                    ? new Date(report.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : "Today"} | {report?.updatedAt
+                      ? new Date(report.updatedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+                      : "00:00"}
+                </p>
+              </div>
+            </div>
+
+            {/* Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Talk Time Card */}
+              <div className="border border-red-200 bg-white rounded-xl p-5 relative shadow-sm">
+                <div className="flex justify-between items-start mb-6">
+                  <span className="text-sm font-bold text-gray-800">Talk Time</span>
+                  <span className="px-3 py-1 bg-red-50 text-red-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-red-600"></div> Critical
+                  </span>
+                </div>
+                <div className="text-4xl font-normal text-gray-800">
+                  <span className="font-semibold">{report?.talkTime?.formatted?.split(':')[0] || "0"}/{report?.targets?.talkTime?.required || "3"}</span> <span className="text-2xl text-gray-500 font-normal">hrs</span>
+                </div>
+              </div>
+
+              {/* Delivery Orders / Truckers Card */}
+              {department === 'Sales' ? (
+                <div className="border border-green-200 bg-white rounded-xl p-5 relative shadow-sm">
+                  <div className="flex justify-between items-start mb-6">
+                    <span className="text-sm font-bold text-gray-800">Delivery Orders</span>
+                    <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-green-600"></div> Completed
+                    </span>
+                  </div>
+                  <div className="text-4xl font-semibold text-gray-800">
+                    {report?.deliveryOrdersCount || 0}/{report?.targets?.deliveryOrders?.required || 3}
+                  </div>
+                </div>
+              ) : (
+                <div className="border border-green-200 bg-white rounded-xl p-5 relative shadow-sm">
+                  <div className="flex justify-between items-start mb-6">
+                    <span className="text-sm font-bold text-gray-800">Truckers Added</span>
+                    <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-green-600"></div> Status
+                    </span>
+                  </div>
+                  <div className="text-4xl font-semibold text-gray-800">
+                    {report?.truckerCount || 0}/{report?.targets?.truckers?.required || "0"}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Side: User & Circular Progress */}
+          <div className="flex items-end gap-10 xl:pl-12 xl:border-l xl:border-gray-100 min-w-[450px]">
+            <div className="flex-1 space-y-6">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <h3 className="text-lg font-bold text-gray-800">{report?.employeeName || empId || "User"}</h3>
+                  <span className="px-3 py-1 bg-[#FDF2E3] text-[#D97706] text-xs font-bold rounded-lg whitespace-nowrap">Need Attention</span>
+                </div>
+                <p className="text-xs text-gray-400 font-medium">{report?.designation || department || "Sales Trainee"}</p>
+              </div>
+
+              {/* Linear Bars - Flat style */}
+              <div className="space-y-5">
+                {/* Talk Time Bar */}
+                <div>
+                  <div className="flex justify-between text-xs mb-2">
+                    <span className="font-semibold text-gray-600">Talk Time</span>
+                    <span className="text-[#3B82F6] font-bold">{percent(report?.talkTime?.hours || 0, report?.targets?.talkTime?.required || 3)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-100 h-2.5">
+                    <div
+                      className="bg-[#FF5722] h-2.5"
+                      style={{ width: `${Math.min(100, percent(report?.talkTime?.hours || 0, report?.targets?.talkTime?.required || 3))}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Department Bar */}
+                <div>
+                  <div className="flex justify-between text-xs mb-2">
+                    <span className="font-semibold text-gray-600">{department === 'Sales' ? 'Orders' : 'Truckers'}</span>
+                    <span className="text-[#3B82F6] font-bold">
+                      {department === 'Sales'
+                        ? percent(report?.deliveryOrdersCount || 0, report?.targets?.deliveryOrders?.required || 3)
+                        : percent(report?.truckerCount || 0, report?.targets?.truckers?.required || 3)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 h-2.5">
+                    <div
+                      className="bg-[#10B981] h-2.5"
+                      style={{
+                        width: `${Math.min(100, department === 'Sales'
+                          ? percent(report?.deliveryOrdersCount || 0, report?.targets?.deliveryOrders?.required || 3)
+                          : percent(report?.truckerCount || 0, report?.targets?.truckers?.required || 3))}%`
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Circular Progress Element */}
+            <div className="flex flex-col items-center">
+              {/* Date Picker */}
+              <div className="relative inline-block mb-4 self-start">
+                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 cursor-pointer hover:border-blue-400 transition-colors shadow-sm group">
+                  <span className="text-sm font-semibold text-gray-700 group-hover:text-blue-600">
+                    {date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-') : "Select Date"}
+                  </span>
+                  <Calendar className="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
+                </div>
+                <input
+                  type="date"
+                  value={date ? new Date(date).toLocaleDateString('en-CA') : ''}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
+
+              <CircularProgress percentage={
+                Math.round(
+                  ((percent(report?.talkTime?.hours || 0, report?.targets?.talkTime?.required || 3)) +
+                    (department === 'Sales'
+                      ? percent(report?.deliveryOrdersCount || 0, report?.targets?.deliveryOrders?.required || 3)
+                      : percent(report?.truckerCount || 0, report?.targets?.truckers?.required || 3))) / 2
+                ) || 0
+              } />
+            </div>
+
+          </div>
+
         </div>
       </div>
 
 
-      {/* ===== TOP ROW ===== */}
-      {!error && (
-        <>
-          {loading ? (
-            <div className="mb-8 grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-6 overflow-x-auto pb-1">
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
+      {/* Action Required Section - Exact Match to Screenshot */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-1">
+              <AlertTriangle className="w-6 h-6 text-red-500 fill-current bg-white" />
             </div>
-          ) : report ? (
-            <div className="mb-8 grid grid-flow-col auto-cols-[minmax(260px,1fr)] gap-6 overflow-x-auto pb-1">
-              {/* Talk Time */}
-              <Card className="p-5 text-center">
-                <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-blue-100">
-                  <Clock size={20} className="text-blue-600" />
-                </div>
-                <p className="text-xs uppercase tracking-wide text-gray-500">Talk Time</p>
-                <p className="text-2xl font-bold text-blue-700 mt-1">
-                  {report?.talkTime?.formatted || `${(report?.talkTime?.hours || 0).toFixed(2)}h`}
-                </p>
-              </Card>
-
-
-              {/* Dept-specific metric */}
-              {String(report.department).toLowerCase() === "sales" ? (
-                <Card className="p-5 text-center">
-                  <div className="w-11 h-11 bg-indigo-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-indigo-100">
-                    <TrendingUp size={20} className="text-indigo-600" />
-                  </div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Delivery Orders</p>
-                  <p className="text-2xl font-bold text-indigo-700 mt-1">{report.deliveryOrdersCount ?? 0}</p>
-                </Card>
-              ) : (
-                <Card className="p-5 text-center">
-                  <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-emerald-100">
-                    <Users size={20} className="text-emerald-600" />
-                  </div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Truckers Added</p>
-                  <p className="text-2xl font-bold text-emerald-700 mt-1">{report.truckerCount ?? 0}</p>
-                </Card>
-              )}
-
-
-              {/* Status */}
-              <Card className="p-5 text-center">
-                <div className="w-11 h-11 bg-green-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-green-100">
-                  <BarChart3 size={20} className="text-green-600" />
-                </div>
-                <p className="text-xs uppercase tracking-wide text-gray-500">Status</p>
-                <p className="text-2xl font-bold mt-1">
-                  <span className={String(report.status).toLowerCase() === "completed" ? "text-emerald-700" : "text-amber-700"}>
-                    {report.status}
-                  </span>
-                </p>
-              </Card>
-
-
-              {/* Designation */}
-              <Card className="p-5 text-center">
-                <div className="w-11 h-11 bg-gray-50 rounded-xl flex items-center justify-center mb-3 ring-1 ring-gray-100">
-                  <Target size={20} className="text-gray-700" />
-                </div>
-                <p className="text-xs uppercase tracking-wide text-gray-500">Designation</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">{report.designation || "-"}</p>
-              </Card>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Action Required</h2>
+              <p className="text-gray-600 font-medium">(You need {
+                Math.max(0, (report?.targets?.talkTime?.required || 3) - (report?.talkTime?.hours || 0)).toFixed(1)
+              } more hours of talk time today)</p>
             </div>
-          ) : null}
-        </>
-      )}
+          </div>
 
-
-      {/* Loading inline */}
-      {loading && (
-        <div className="min-h-[100px] flex items-center justify-center mb-8">
-          <div className="text-center">
-            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-            <p className="mt-3 text-gray-600">Fetching {department} report...</p>
+          <div className="flex gap-4 w-full md:w-auto self-end md:self-center">
+            <button className="flex-1 md:flex-none btn bg-blue-500 hover:bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-3 transition-all min-w-[170px]">
+              <span className="text-xl">📞</span>
+              <span className="font-semibold">Start Calling</span>
+            </button>
+            <button
+              onClick={() => setIsReasonOpen(true)}
+              className="flex-1 md:flex-none btn bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all min-w-[170px]">
+              <span className="text-xl">📝</span>
+              <span className="font-semibold">Submit Reason</span>
+            </button>
           </div>
         </div>
-      )}
 
-
-      {/* Error */}
-      {!loading && error && (
-        <Card className="p-8 text-center max-w-xl mx-auto border-red-200">
-          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4 ring-1 ring-red-100">
-            <XCircle className="w-8 h-8 text-red-600" />
+        <div className="space-y-6 px-1">
+          {/* Talk Time */}
+          <div>
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-lg font-semibold text-gray-700">Talk Time</span>
+              <span className="text-xs text-gray-400 font-medium tracking-wide">
+                Required: {report?.targets?.talkTime?.required || "100"} | Current: {report?.talkTime?.formatted?.split(':')[0] || "1"} | Remaining: {Math.max(0, (report?.targets?.talkTime?.required || 3) - (report?.talkTime?.hours || 0)).toFixed(0)}
+              </span>
+            </div>
+            {/* Plane (Rectangular) Progress Bar */}
+            <div className="w-full bg-gray-100 h-4">
+              <div
+                className="bg-orange-500 h-full"
+                style={{ width: `${percent(report?.talkTime?.hours || 0, report?.targets?.talkTime?.required || 3)}%` }}
+              ></div>
+            </div>
+            <div className="text-right mt-1">
+              <span className="text-xs font-bold text-red-500">{percent(report?.talkTime?.hours || 0, report?.targets?.talkTime?.required || 3)}%</span>
+            </div>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">Something went wrong</h3>
-          <p className="text-red-600 mb-3">{error}</p>
-          {serverMsg && (
-            <p className="text-sm text-gray-600 mb-4">
-              <span className="font-semibold">Server:</span> {serverMsg}
-            </p>
-          )}
-          <button
-            onClick={() => setDate((d) => d)}
-            className="bg-blue-600 text-white px-6 py-2 rounded-xl shadow hover:bg-blue-700 active:scale-[0.99] transition"
-          >
-            Retry
-          </button>
-        </Card>
-      )}
 
-
-      {/* Summary + Targets */}
-      {!loading && !error && report && (
-        <div className="space-y-8">
-          {/* Top Summary */}
-          <Card className="p-6">
-            <div className="flex flex-wrap items-center gap-4 justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {report.department} Report — {report.employeeName} ({report.empId})
-                </h2>
-                <p className="text-sm text-gray-600">Date: {formatDDMMYYYY(report.date || date)}</p>
-              </div>
-
-
-              {/* Right side: status + updated + Reason button */}
-              <div className="flex items-center gap-3">
-                <StatusBadge status={report.status} />
-                {report.createdAt && (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-                    <Clock className="w-4 h-4" />
-                    Updated: {new Date(report.createdAt).toLocaleString()}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReasonError(null);
-                    const prefill = report?.reason;
-                    setReasonText(isPlaceholderReason(prefill) ? "" : String(prefill || ""));
-                    setAttachmentFile(null);
-                    setIsReasonOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium bg-blue-600 text-white px-3 py-2 rounded-lg shadow hover:bg-blue-700 active:scale-[0.99] transition"
-                  aria-label="Add / update reason"
-                >
-                  Reason
-                </button>
-              </div>
+          {/* Delivery Orders / Truckers */}
+          <div>
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-lg font-semibold text-gray-700">
+                {department === 'Sales' ? "Delivery Orders" : "Truckers Added"}
+              </span>
+              <span className="text-xs text-gray-400 font-medium tracking-wide">
+                Required: {department === 'Sales' ? (report?.targets?.deliveryOrders?.required || "100") : (report?.targets?.truckers?.required || "5")} | Current: {department === 'Sales' ? (report?.deliveryOrdersCount || 0) : (report?.truckerCount || 0)} | Remaining: {0}
+              </span>
             </div>
-
-
-            {report.statusMessage && (
-              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700">
-                {report.statusMessage}
-              </div>
-            )}
-            {report.reason && !isPlaceholderReason(report.reason) && (
-              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                <strong>Reason:</strong> {report.reason}
-              </div>
-            )}
-            {report.attachments && Array.isArray(report.attachments) && report.attachments.length > 0 && (
-              <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Paperclip className="w-4 h-4 text-blue-600" />
-                  <strong className="text-sm text-blue-900">Attachments ({report.attachments.length}):</strong>
-                </div>
-                <div className="space-y-2">
-                  {report.attachments.map((att, idx) => (
-                    <a
-                      key={att._id || idx}
-                      href={att.fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-900 hover:underline"
-                    >
-                      <Paperclip className="w-3 h-3" />
-                      <span>{att.fileName || `Attachment ${idx + 1}`}</span>
-                      {att.fileSize && (
-                        <span className="text-xs text-blue-500">
-                          ({(att.fileSize / 1024).toFixed(2)} KB)
-                        </span>
-                      )}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-
-
-          {/* Targets Progress */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Targets</h3>
-            <div className="space-y-5">
-              {report.targets &&
-                Object.entries(report.targets).map(([key, tgt]) => {
-                  const p = percent(tgt?.current, tgt?.required);
-                  return (
-                    <div
-                      key={key}
-                      className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {key === "talkTime" ? (
-                            <Clock className="w-4 h-4 text-blue-600" />
-                          ) : key === "deliveryOrders" ? (
-                            <TrendingUp className="w-4 h-4 text-indigo-600" />
-                          ) : (
-                            <Users className="w-4 h-4 text-emerald-600" />
-                          )}
-                          <span className="text-sm font-semibold text-gray-900">{prettyName(key)}</span>
-                        </div>
-                        <span className="text-xs text-gray-600">
-                          Required: <b>{tgt?.required}</b>&nbsp;|&nbsp;Current: <b>{tgt?.current}</b>&nbsp;|&nbsp;Remaining:{" "}
-                          <b>{tgt?.remaining}</b>
-                        </span>
-                      </div>
-                      <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden ring-1 ring-inset ring-gray-100">
-                        <div
-                          className={`h-3 transition-all duration-500 ease-out ${p >= 100 ? "bg-emerald-500" : p >= 60 ? "bg-blue-500" : "bg-amber-400"}`}
-                          style={{ width: `${p}%` }}
-                          aria-valuenow={p}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          role="progressbar"
-                        />
-                      </div>
-                      <div className="mt-2 text-right text-xs font-medium text-gray-600">{p}%</div>
-                    </div>
-                  );
-                })}
-              {!report.targets && (
-                <div className="text-sm text-gray-600">No targets configured for this department.</div>
-              )}
+            {/* Plane (Rectangular) Progress Bar */}
+            <div className="w-full bg-gray-100 h-4">
+              <div
+                className="bg-emerald-500 h-full"
+                style={{
+                  width: `${department === 'Sales'
+                    ? percent(report?.deliveryOrdersCount || 0, report?.targets?.deliveryOrders?.required || 3)
+                    : percent(report?.truckerCount || 0, report?.targets?.truckers?.required || 3)}%`
+                }}
+              ></div>
             </div>
-          </Card>
+            <div className="text-right mt-1">
+              <span className="text-xs font-bold text-emerald-500">{department === 'Sales'
+                ? percent(report?.deliveryOrdersCount || 0, report?.targets?.deliveryOrders?.required || 3)
+                : percent(report?.truckerCount || 0, report?.targets?.truckers?.required || 3)}%
+              </span>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
 
 
-      {/* Empty state */}
-      {!loading && !error && !report && (
-        <Card className="p-8 text-center">
-          <p className="text-gray-600">
-            No data available for <b>{department}</b> on <b>{formatDDMMYYYY(date)}</b>.
+      {/* Report Section - Exact Match to Screenshot */}
+      <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-800">
+            Sales Report — {report?.employeeName || 'Shyam Singh'} ({report?.empId || '1234'})
+          </h2>
+          <div className="flex items-center gap-2">
+            {String(report?.status).toLowerCase() !== 'completed' && (
+              <AlertCircle className="w-4 h-4 text-orange-600" />
+            )}
+            <span className={`px-3 py-1 rounded-full text-xs font-bold ${String(report?.status).toLowerCase() === 'completed'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-orange-100 text-orange-700'
+              }`}>
+              {String(report?.status).toLowerCase() === 'completed' ? 'Completed' : 'Incomplete'}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+          <p className="text-gray-700 text-sm">
+            {department === 'Sales'
+              ? `Delivery Orders Completed ( ${report?.deliveryOrdersCount || 0}/1 ), But talking incomplete ( ${report?.talkTime?.formatted || "0.0"} / 3h )`
+              : `Truckers Added ( ${report?.truckerCount || 0}/1 ), But talking incomplete ( ${report?.talkTime?.formatted || "0.0"} / 3h )`
+            }
           </p>
-        </Card>
-      )}
+        </div>
+      </div>
 
 
-      {/* Reason Modal */}
+      {/* Reason Modal - Preserved Original Logic */}
       {isReasonOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -896,12 +945,13 @@ const DailyTarget = () => {
                   value={reasonText}
                   onChange={(e) => setReasonText(e.target.value)}
                   className={`w-full rounded-xl border ${reasonError ? "border-red-300" : "border-gray-200"} bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:outline-none focus:ring-2 ${reasonError ? "focus:ring-red-500/30 focus:border-red-400" : "focus:ring-blue-500/30 focus:border-blue-400"}`}
-                  placeholder=""   /* no default sample text */
+                  placeholder=""
                   aria-invalid={!!reasonError}
                   disabled={reasonLoading}
                 />
                 {reasonError && <p className="text-xs text-red-600">{reasonError}</p>}
               </div>
+
 
               {/* Attachment Section */}
               <div className="space-y-2">
@@ -922,7 +972,6 @@ const DailyTarget = () => {
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          // Check file size (max 10MB)
                           if (file.size > 10 * 1024 * 1024) {
                             setReasonError("File size should be less than 10MB");
                             return;
@@ -1004,6 +1053,3 @@ const DailyTarget = () => {
 
 
 export default DailyTarget;
-
-
-
