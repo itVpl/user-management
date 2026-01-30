@@ -804,8 +804,9 @@ const Sidebar = () => {
         if (!user || Object.keys(user).length === 0) {
           console.error("❌ No user data found");
           // Fallback: show basic menus when no user data
+          // Include Tracking for all users in fallback
           const basicMenus = menuItems.filter(item => 
-            ['Dashboard', 'Tracking',].includes(item.name)
+            ['Dashboard', 'Tracking'].includes(item.name)
           );
           setFilteredMenuItems(basicMenus);
           setLoading(false);
@@ -917,6 +918,18 @@ const Sidebar = () => {
               REPORT_NAMES.includes(item.name)
             );
             
+            // For superadmin, extract Chat, Email, Dinner Status, and Tracking to move them outside departments
+            let chatMenuItem = null;
+            let emailMenuItem = null;
+            let dinnerStatusMenuItem = null;
+            let trackingMenuItem = null;
+            if (isSuperAdmin) {
+              chatMenuItem = matchedMenus.find(item => item.name === "Chat");
+              emailMenuItem = matchedMenus.find(item => item.name === "Email");
+              dinnerStatusMenuItem = matchedMenus.find(item => item.name === "Dinner Status");
+              trackingMenuItem = matchedMenus.find(item => item.name === "Tracking");
+            }
+            
             // Categorize reports by department
             const categorizedReports = categorizeReportsByDepartment(reports);
             
@@ -932,6 +945,11 @@ const Sidebar = () => {
                 const categoryItems = [];
                 
                 moduleNames.forEach(moduleName => {
+                  // For superadmin, skip Chat, Email, Dinner Status, and Tracking in department categories
+                  if (isSuperAdmin && (moduleName === "Chat" || moduleName === "Email" || moduleName === "Dinner Status" || moduleName === "Tracking")) {
+                    return;
+                  }
+                  
                   // First try to find in universalMenus (non-report modules)
                   let menuItem = universalMenus.find(item => item.name === moduleName);
                   
@@ -958,13 +976,19 @@ const Sidebar = () => {
             });
             
             // Set department menu items (flattened for display logic)
+            // For superadmin, exclude Chat, Email, Dinner Status, and Tracking from department menus
             const allDeptMenus = Object.values(departmentCategoriesMap).flatMap(cats =>
               Object.values(cats).flat()
-            );
+            ).filter(item => {
+              if (isSuperAdmin) {
+                return item.name !== "Chat" && item.name !== "Email" && item.name !== "Dinner Status" && item.name !== "Tracking";
+              }
+              return true;
+            });
             
-            // Other menus (Dashboard, Tracking, Companies) - common modules
-            // For superadmin, exclude Tracking
-            const commonModules = isSuperAdmin ? ["Dashboard"] : ["Dashboard", "Tracking"];
+            // Other menus (Dashboard, Companies) - common modules
+            // For superadmin, Tracking will be added separately outside departments
+            const commonModules = ["Dashboard"];
             const otherMenus = matchedMenus.filter(item => 
               commonModules.includes(item.name)
             );
@@ -976,6 +1000,29 @@ const Sidebar = () => {
                 otherMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
               } else {
                 otherMenus.unshift(companiesMenuItem);
+              }
+            }
+            
+            // For superadmin, add Chat, Email, Dinner Status, and Tracking as top-level menu items (outside departments)
+            // Only add if they're not already in otherMenus (they might not be in department categories)
+            if (isSuperAdmin) {
+              // Add Tracking first (after Dashboard)
+              if (trackingMenuItem && !otherMenus.some(item => item.name === "Tracking")) {
+                const dashboardIndex = otherMenus.findIndex(item => item.name === 'Dashboard');
+                if (dashboardIndex >= 0) {
+                  otherMenus.splice(dashboardIndex + 1, 0, trackingMenuItem);
+                } else {
+                  otherMenus.push(trackingMenuItem);
+                }
+              }
+              if (chatMenuItem && !otherMenus.some(item => item.name === "Chat")) {
+                otherMenus.push(chatMenuItem);
+              }
+              if (emailMenuItem && !otherMenus.some(item => item.name === "Email")) {
+                otherMenus.push(emailMenuItem);
+              }
+              if (dinnerStatusMenuItem && !otherMenus.some(item => item.name === "Dinner Status")) {
+                otherMenus.push(dinnerStatusMenuItem);
               }
             }
             
@@ -1005,6 +1052,7 @@ const Sidebar = () => {
             console.log("📋 Reports count:", reports.length);
             if (isSuperAdmin) {
               console.log("📋 Report categories:", Object.keys(categorizedReports));
+              console.log("📋 Chat, Email, Dinner Status, and Tracking moved outside departments for superadmin");
             }
             
             setLoading(false);
@@ -1049,7 +1097,8 @@ const Sidebar = () => {
               setFilteredMenuItems(otherMenus);
             } else {
               console.warn("⚠️ No modules matched, showing basic menus");
-              const basicMenuNames = isSuperAdmin ? ['Dashboard'] : ['Dashboard', 'Tracking'];
+              // For superadmin, include Tracking in basic menus (outside departments)
+              const basicMenuNames = isSuperAdmin ? ['Dashboard', 'Tracking'] : ['Dashboard', 'Tracking'];
               const basicMenus = menuItems.filter(item => 
                 basicMenuNames.includes(item.name)
               );
@@ -1065,9 +1114,26 @@ const Sidebar = () => {
               const allDeptModuleNames = getAllDepartmentModules(department, role);
               
               // Separate department modules from other modules
-              const deptMenus = matchedMenus.filter(item => 
+              let deptMenus = matchedMenus.filter(item => 
                 allDeptModuleNames.includes(item.name)
               );
+              
+              // For superadmin, extract Chat, Email, Dinner Status, and Tracking from department modules
+              let chatMenuItem = null;
+              let emailMenuItem = null;
+              let dinnerStatusMenuItem = null;
+              let trackingMenuItem = null;
+              if (isSuperAdmin) {
+                chatMenuItem = deptMenus.find(item => item.name === "Chat");
+                emailMenuItem = deptMenus.find(item => item.name === "Email");
+                dinnerStatusMenuItem = deptMenus.find(item => item.name === "Dinner Status");
+                trackingMenuItem = matchedMenus.find(item => item.name === "Tracking");
+                // Remove Chat, Email, and Dinner Status from department menus
+                deptMenus = deptMenus.filter(item => 
+                  item.name !== "Chat" && item.name !== "Email" && item.name !== "Dinner Status"
+                );
+              }
+              
               // Separate reports from other menus - only include reports that user has permission for
               const reports = matchedMenus.filter(item => 
                 REPORT_NAMES.includes(item.name)
@@ -1079,10 +1145,10 @@ const Sidebar = () => {
               const otherMenus = matchedMenus.filter(item => 
                 !allDeptModuleNames.includes(item.name) && 
                 !REPORT_NAMES.includes(item.name) &&
-                !(isSuperAdmin && item.name === "Tracking")
+                item.name !== "Tracking" // Tracking will be added separately for superadmin
               );
               
-              // Categorize department modules
+              // Categorize department modules (Chat and Email already removed for superadmin)
               const categorized = {};
               deptMenus.forEach(item => {
                 const category = getModuleCategory(item.name, department, role);
@@ -1103,6 +1169,29 @@ const Sidebar = () => {
                 }
               }
               
+              // For superadmin, add Chat, Email, Dinner Status, and Tracking as top-level menu items (outside departments)
+              // Only add if they're not already in otherMenus (they might not be in department categories)
+              if (isSuperAdmin) {
+                // Add Tracking first (after Dashboard)
+                if (trackingMenuItem && !otherMenus.some(item => item.name === "Tracking")) {
+                  const dashboardIndex = otherMenus.findIndex(item => item.name === 'Dashboard');
+                  if (dashboardIndex >= 0) {
+                    otherMenus.splice(dashboardIndex + 1, 0, trackingMenuItem);
+                  } else {
+                    otherMenus.push(trackingMenuItem);
+                  }
+                }
+                if (chatMenuItem && !otherMenus.some(item => item.name === "Chat")) {
+                  otherMenus.push(chatMenuItem);
+                }
+                if (emailMenuItem && !otherMenus.some(item => item.name === "Email")) {
+                  otherMenus.push(emailMenuItem);
+                }
+                if (dinnerStatusMenuItem && !otherMenus.some(item => item.name === "Dinner Status")) {
+                  otherMenus.push(dinnerStatusMenuItem);
+                }
+              }
+              
               setDepartmentMenuItems(deptMenus);
               setDepartmentCategories(categorized);
               // Only show Reports dropdown for superadmin
@@ -1110,6 +1199,7 @@ const Sidebar = () => {
                 console.log("✅ Setting Reports dropdown for superadmin");
                 setReportMenuItems(reports);
                 setReportCategories(categorizedReports);
+                console.log("📋 Chat, Email, Dinner Status, and Tracking moved outside departments for superadmin");
               } else {
                 setReportMenuItems([]);
                 setReportCategories({});
@@ -1156,7 +1246,8 @@ const Sidebar = () => {
         } else {
           console.error("❌ API response not successful:", data);
           // Fallback: show basic menus if API fails
-          const basicMenuNames = isSuperAdmin ? ['Dashboard'] : ['Dashboard', 'Tracking'];
+          // For superadmin, include Tracking in basic menus (outside departments)
+          const basicMenuNames = isSuperAdmin ? ['Dashboard', 'Tracking'] : ['Dashboard', 'Tracking'];
           const basicMenus = menuItems.filter(item => 
             basicMenuNames.includes(item.name)
           );
@@ -1168,7 +1259,8 @@ const Sidebar = () => {
       } catch (err) {
         console.error("❌ Failed to fetch modules:", err);
         // Fallback: show basic menus on error
-        const basicMenuNames = isSuperAdmin ? ['Dashboard'] : ['Dashboard', 'Tracking'];
+        // For superadmin, include Tracking in basic menus (outside departments)
+        const basicMenuNames = isSuperAdmin ? ['Dashboard', 'Tracking'] : ['Dashboard', 'Tracking'];
         const basicMenus = menuItems.filter(item => 
           basicMenuNames.includes(item.name)
         );
@@ -1313,10 +1405,8 @@ const Sidebar = () => {
                     return (
                       <>
                         {filteredMenuItems.map((item, idx) => {
-                          // Skip Tracking for superadmin
-                          if (userRole && (userRole.toLowerCase() === "superadmin" || userRole.toLowerCase() === "super admin") && item.name === "Tracking") {
-                            return null;
-                          }
+                          // Tracking is now shown for superadmin (moved outside departments)
+                          // No need to skip it anymore
                           // Render Dashboard first, then department dropdown for users with department categories
                     if (hasDeptCategories && item.name === "Dashboard") {
                       return (
