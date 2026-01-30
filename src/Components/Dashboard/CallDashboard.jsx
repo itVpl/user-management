@@ -883,7 +883,7 @@ const DailyTarget = () => {
       <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">
-            Sales Report — {report?.employeeName || 'Shyam Singh'} ({report?.empId || '1234'})
+            {department} Report — {report?.employeeName || 'Shyam Singh'} ({report?.empId || '1234'})
           </h2>
           <div className="flex items-center gap-2">
             {String(report?.status).toLowerCase() !== 'completed' && (
