@@ -643,7 +643,7 @@ const DailyTarget = () => {
       {/* Main Card */}
       <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm mb-6 relative">
 
-        <div className="flex flex-col xl:flex-row justify-between xl:items-end gap-12">
+        <div className="flex flex-col xl:flex-row justify-between xl:items-stretch gap-12">
 
           {/* Left Side: Header + Cards */}
           <div className="flex-1 min-w-0">
@@ -712,7 +712,22 @@ const DailyTarget = () => {
           </div>
 
           {/* Right Side: User & Circular Progress */}
-          <div className="flex items-end gap-10 xl:pl-12 xl:border-l xl:border-gray-100 min-w-[450px]">
+          <div className="flex items-end gap-10 xl:pl-12 xl:border-l xl:border-gray-100 min-w-[450px] relative">
+            {/* Date Picker - Absolute Positioned */}
+            <div className="absolute top-0 right-0 z-10 w-[140px]">
+              <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 cursor-pointer hover:border-blue-400 transition-colors shadow-sm group w-full">
+                <span className="text-sm font-semibold text-gray-700 group-hover:text-blue-600 flex-1 truncate">
+                  {date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-') : "Select Date"}
+                </span>
+                <Calendar className="w-4 h-4 text-gray-500 group-hover:text-blue-500 flex-shrink-0" />
+              </div>
+              <input
+                type="date"
+                value={date ? new Date(date).toLocaleDateString('en-CA') : ''}
+                onChange={(e) => setDate(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+            </div>
             <div className="flex-1 space-y-6">
               <div>
                 <div className="flex items-center gap-3 mb-1">
@@ -764,21 +779,7 @@ const DailyTarget = () => {
 
             {/* Circular Progress Element */}
             <div className="flex flex-col items-center">
-              {/* Date Picker */}
-              <div className="relative inline-block mb-4 self-start">
-                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 cursor-pointer hover:border-blue-400 transition-colors shadow-sm group">
-                  <span className="text-sm font-semibold text-gray-700 group-hover:text-blue-600">
-                    {date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-') : "Select Date"}
-                  </span>
-                  <Calendar className="w-4 h-4 text-gray-500 group-hover:text-blue-500" />
-                </div>
-                <input
-                  type="date"
-                  value={date ? new Date(date).toLocaleDateString('en-CA') : ''}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-              </div>
+
 
               <CircularProgress percentage={
                 Math.round(
