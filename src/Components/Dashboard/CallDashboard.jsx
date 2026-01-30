@@ -15,6 +15,7 @@ import {
   Play,
   Calendar
 } from "lucide-react";
+import CallIcon from '@mui/icons-material/Call';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -802,7 +803,7 @@ const DailyTarget = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div className="flex items-start gap-3">
             <div className="mt-1">
-              <AlertTriangle className="w-6 h-6 text-red-500 fill-current bg-white" />
+              <AlertTriangle className="w-6 h-6 text-red-500 bg-white" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">Action Required</h2>
@@ -814,7 +815,7 @@ const DailyTarget = () => {
 
           <div className="flex gap-4 w-full md:w-auto self-end md:self-center">
             <button className="flex-1 md:flex-none btn bg-blue-500 hover:bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-3 transition-all min-w-[170px]">
-              <span className="text-xl">📞</span>
+              <span className="text-xl"> <CallIcon /></span>
               <span className="font-semibold">Start Calling</span>
             </button>
             <button
