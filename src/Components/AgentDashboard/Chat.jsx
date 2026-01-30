@@ -504,7 +504,8 @@ const ChatPage = () => {
   const [groupMessagesPage, setGroupMessagesPage] = useState(0);
   const INITIAL_MESSAGES_COUNT = 10; // Load 10 messages initially when opening individual chat
   const INITIAL_GROUP_MESSAGES_COUNT = 20; // Load 20 messages initially for group chats (reduced from 100 for better performance)
-  const MESSAGES_PER_PAGE = 30; // Load 30 messages at a time when scrolling up
+  const MESSAGES_PER_PAGE = 30; // Load 30 messages at a time when scrolling up (for group chats)
+  const OLDER_MESSAGES_PER_SCROLL = 10; // Load 10 messages at a time when scrolling up in individual chats
   
   const mentionDropdownRef = useRef(null);
   const socketRef = useRef(null);
@@ -964,9 +965,32 @@ const ChatPage = () => {
       }
 
       // Calculate pagination parameters
-      // For initial load, use INITIAL_MESSAGES_COUNT, for older messages use MESSAGES_PER_PAGE
-      const skip = loadOlder ? messagesPage * MESSAGES_PER_PAGE : 0;
-      const limit = loadOlder ? MESSAGES_PER_PAGE : INITIAL_MESSAGES_COUNT;
+      // For initial load, fetch ALL messages. For scrolling up, load 10 more messages at a time
+      let skip = 0;
+      let limit = 1000; // Large limit to fetch all available messages
+      
+      if (loadOlder) {
+        // For loading older messages, fetch ALL messages and filter client-side to get only 10 older ones
+        // This ensures we load 10 messages per scroll action
+        if (messages.length > 0) {
+          // Fetch all messages to find older ones
+          limit = 1000; // Fetch all available messages
+          const oldestMessage = messages[0];
+          const oldestTimestamp = new Date(oldestMessage.timestamp || oldestMessage.createdAt || 0).getTime();
+          
+          console.log(`📥 Loading 10 older messages: empId=${selectedEmpId}, limit=${limit}, oldestTimestamp=${oldestTimestamp}`);
+        } else {
+          // No messages yet, can't load older
+          setLoadingOlderMessages(false);
+          setHasMoreMessages(false);
+          return;
+        }
+      } else {
+        // Initial load - fetch all messages
+        console.log(`📥 Loading ALL messages on chat open: empId=${selectedEmpId}, limit=${limit}`);
+      }
+      
+      console.log(`📥 Fetching individual messages: empId=${selectedEmpId}, limit=${limit}, skip=${skip}, loadOlder=${loadOlder}`);
       
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/chat/with/${selectedEmpId}?limit=${limit}&skip=${skip}`,
@@ -1007,41 +1031,65 @@ const ChatPage = () => {
       let messagesToProcess = fetchedMessages;
       
       if (loadOlder) {
-        // Loading older messages
-        // If API returned all messages (doesn't support pagination), filter to get only older ones
-        if (messages.length > 0 && fetchedMessages.length > messages.length) {
-          // API returned all messages, find the oldest message we have and get messages before it
-          const oldestMessageId = messages[0]._id;
-          const oldestMessageIndex = fetchedMessages.findIndex(msg => msg._id === oldestMessageId);
+        // Loading older messages - filter to get only messages older than what we have
+        // Load only 10 messages per scroll action
+        if (messages.length > 0) {
+          const oldestMessage = messages[0];
+          const oldestMessageId = oldestMessage._id;
+          const oldestTimestamp = new Date(oldestMessage.timestamp || oldestMessage.createdAt || 0).getTime();
           
-          if (oldestMessageIndex > 0) {
-            // Get messages before the oldest one we have
-            const olderMessages = fetchedMessages.slice(0, oldestMessageIndex);
-            // Take only the last MESSAGES_PER_PAGE older messages
-            messagesToProcess = olderMessages.slice(-MESSAGES_PER_PAGE);
-            setHasMoreMessages(olderMessages.length > MESSAGES_PER_PAGE);
+          // Filter messages that are older than our oldest message
+          const olderMessages = fetchedMessages.filter(msg => {
+            const msgTimestamp = new Date(msg.timestamp || msg.createdAt || 0).getTime();
+            const msgId = String(msg._id || '');
+            const oldestId = String(oldestMessageId || '');
+            
+            // Include if timestamp is older OR if it's a different message with same timestamp
+            return msgTimestamp < oldestTimestamp || (msgTimestamp === oldestTimestamp && msgId !== oldestId);
+          });
+          
+          // Remove duplicates and check against existing messages
+          const existingMessageIds = new Set(messages.map(msg => String(msg._id || '')));
+          const seen = new Set();
+          const uniqueOlderMessages = olderMessages.filter(msg => {
+            const msgId = String(msg._id || '');
+            // Skip if already in our messages list or duplicate in fetched messages
+            if (!msgId || seen.has(msgId) || existingMessageIds.has(msgId)) return false;
+            seen.add(msgId);
+            return true;
+          });
+          
+          // Sort by timestamp (oldest first)
+          uniqueOlderMessages.sort((a, b) => {
+            const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+            const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+            return timeA - timeB; // Ascending order (oldest first)
+          });
+          
+          if (uniqueOlderMessages.length > 0) {
+            // Take only the first 10 older messages (oldest ones)
+            messagesToProcess = uniqueOlderMessages.slice(0, OLDER_MESSAGES_PER_SCROLL);
+            
+            // Check if there are more messages available (if we have more than 10, there might be more)
+            const hasMore = uniqueOlderMessages.length > OLDER_MESSAGES_PER_SCROLL;
+            setHasMoreMessages(hasMore);
+            
+            console.log(`📥 Loaded ${messagesToProcess.length} older messages. More available: ${hasMore}`);
           } else {
             // No older messages found
             messagesToProcess = [];
             setHasMoreMessages(false);
           }
         } else {
-          // API supports pagination or returned exactly what we need
-          if (fetchedMessages.length < MESSAGES_PER_PAGE) {
-            setHasMoreMessages(false);
-          } else {
-            setHasMoreMessages(true);
-          }
+          // No existing messages, can't determine what's "older"
+          messagesToProcess = [];
+          setHasMoreMessages(false);
         }
       } else {
-        // Initial load - take only the last INITIAL_MESSAGES_COUNT messages (10 messages)
-        if (fetchedMessages.length > INITIAL_MESSAGES_COUNT) {
-          messagesToProcess = fetchedMessages.slice(-INITIAL_MESSAGES_COUNT);
-          setHasMoreMessages(true);
-        } else {
-          messagesToProcess = fetchedMessages;
-          setHasMoreMessages(fetchedMessages.length >= INITIAL_MESSAGES_COUNT);
-        }
+        // Initial load - show ALL messages (no limit)
+        messagesToProcess = fetchedMessages;
+        // If we got less than the limit, there are no more messages
+        setHasMoreMessages(fetchedMessages.length >= limit);
       }
 
       // Process messages to add isMyMessage flag and ensure seenBy structure
@@ -4276,27 +4324,61 @@ const ChatPage = () => {
 
     let isLoading = false; // Prevent multiple simultaneous loads
 
-    const handleScroll = () => {
-      // Check if user scrolled near the top (within 200px)
-      if (container.scrollTop < 200 && hasMoreMessages && !loadingOlderMessages && !isLoading) {
-        isLoading = true;
-        // Store current scroll position and first message element
-        const previousScrollHeight = container.scrollHeight;
-        const firstMessage = container.querySelector('[data-message-id]');
-        const firstMessageId = firstMessage?.getAttribute('data-message-id');
+    const loadOlderMessages = async () => {
+      if (isLoading || loadingOlderMessages || !hasMoreMessages) return;
+      
+      console.log('📜 Loading older individual messages...', {
+        hasMoreMessages,
+        loadingOlderMessages,
+        currentMessagesCount: messages.length
+      });
+      
+      isLoading = true;
+      setLoadingOlderMessages(true);
+      
+      // Store current scroll position and first message ID for reference
+      const previousScrollHeight = container.scrollHeight;
+      const firstMessageElement = container.querySelector('[data-message-id]');
+      const firstMessageId = firstMessageElement?.getAttribute('data-message-id');
+      
+      try {
+        await fetchMessages(selectedUser.empId, true);
         
-        // Load older messages
-        fetchMessages(selectedUser.empId, true).then(() => {
-          // Restore scroll position after new messages are loaded
-          setTimeout(() => {
-            const newScrollHeight = container.scrollHeight;
-            const scrollDiff = newScrollHeight - previousScrollHeight;
+        // Restore scroll position after new messages are loaded
+        setTimeout(() => {
+          const newScrollHeight = container.scrollHeight;
+          const scrollDiff = newScrollHeight - previousScrollHeight;
+          
+          // Try to maintain position relative to the first message
+          if (firstMessageId) {
+            const newFirstMessageElement = container.querySelector(`[data-message-id="${firstMessageId}"]`);
+            if (newFirstMessageElement) {
+              newFirstMessageElement.scrollIntoView({ block: 'start', behavior: 'auto' });
+            } else {
+              // Fallback: use scroll difference
+              container.scrollTop = scrollDiff;
+            }
+          } else {
             container.scrollTop = scrollDiff;
-            isLoading = false;
-          }, 100);
-        }).catch(() => {
+          }
+          
           isLoading = false;
-        });
+          setLoadingOlderMessages(false);
+        }, 150);
+      } catch (err) {
+        console.error('❌ Failed to load older messages:', err);
+        isLoading = false;
+        setLoadingOlderMessages(false);
+      }
+    };
+
+    const handleScroll = () => {
+      const { scrollTop } = container;
+      const distanceFromTop = scrollTop;
+      
+      // Check if user scrolled near the top (within 300px) and has more messages to load
+      if (distanceFromTop < 300 && hasMoreMessages && !loadingOlderMessages && !isLoading) {
+        loadOlderMessages();
       }
     };
 
@@ -4305,7 +4387,7 @@ const ChatPage = () => {
       container.removeEventListener('scroll', handleScroll);
       isLoading = false;
     };
-  }, [selectedGroup?._id, hasMoreGroupMessages, loadingOlderGroupMessages, chatType, groupMessages.length]);
+  }, [selectedUser?.empId, hasMoreMessages, loadingOlderMessages, chatType, messages.length]);
 
   // Handle scroll to load older messages for group chat
   useEffect(() => {
