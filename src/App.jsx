@@ -101,6 +101,8 @@ const TruckerEmptyLocation = lazy(() => import("./Components/Dashboard/TruckerEm
 const BreakReport = lazy(() => import("./Components/HRDashboard/BreakReport.jsx"));
 const FollowUpReport = lazy(() => import("./Components/Sales/FollowUpReport.jsx"));
 const LandingPage = lazy(() => import("./Pages/LandingPage.jsx"));
+const CreditLimitRequests = lazy(() => import("./Components/Sales/CreditLimitRequests.jsx"));
+const CreditLimitForm = lazy(() => import("./Pages/CreditLimitForm.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -604,6 +606,7 @@ function App() {
             } 
           />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/credit-limit-form/:token" element={<CreditLimitForm />} />
 
         {/* Protected Routes */}
         <Route
@@ -690,6 +693,7 @@ function App() {
           <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
           <Route path="break-report" element={<BreakReport />} />
           <Route path="allcustomer" element={<AllCustomer />} />
+          <Route path="credit-limit-requests" element={<CreditLimitRequests />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />
           <Route path="followUpReport" element={<FollowUpReport />} />
           <Route path="RateRequestReport" element={<RateRequestReport />} />
