@@ -650,14 +650,14 @@ const DailyTarget = () => {
             {/* Header */}
             <div className="flex justify-between items-start mb-8">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-1">Daily Target - {department}</h1>
-                <p className="text-gray-900 text-lg font-medium">
+                <h1 className="text-2xl font-semibold text-gray-900 mb-1">Daily Target - {department}</h1>
+                <p className="text-gray-900 text-base font-medium">
                   {new Date(date).getDate()} {new Date(date).toLocaleString('default', { month: 'long' })} {new Date(date).getFullYear()} - {new Date(date).toLocaleDateString('en-US', { weekday: 'long' })}
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-500 mb-1 font-medium">Last updated</p>
-                <p className="text-2xl font-bold text-gray-800">
+                <p className="text-xl font-semibold text-gray-800">
                   {report?.updatedAt
                     ? new Date(report.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                     : "Today"} | {report?.updatedAt
@@ -672,13 +672,13 @@ const DailyTarget = () => {
               {/* Talk Time Card */}
               <div className="border border-red-200 bg-white rounded-xl p-5 relative shadow-sm">
                 <div className="flex justify-between items-start mb-6">
-                  <span className="text-sm font-bold text-gray-800">Talk Time</span>
+                  <span className="text-sm font-medium text-gray-800">Talk Time</span>
                   <span className="px-3 py-1 bg-red-50 text-red-700 text-xs font-bold rounded-full flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full bg-red-600"></div> Critical
                   </span>
                 </div>
                 <div className="text-4xl font-normal text-gray-800">
-                  <span className="font-semibold">{report?.talkTime?.formatted?.split(':')[0] || "0"}/{report?.targets?.talkTime?.required || "3"}</span> <span className="text-2xl text-gray-500 font-normal">hrs</span>
+                  <span className="font-normal">{report?.talkTime?.formatted?.split(':')[0] || "0"}/{report?.targets?.talkTime?.required || "3"}</span> <span className="text-2xl text-gray-500 font-normal">hrs</span>
                 </div>
               </div>
 
@@ -686,12 +686,12 @@ const DailyTarget = () => {
               {department === 'Sales' ? (
                 <div className="border border-green-200 bg-white rounded-xl p-5 relative shadow-sm">
                   <div className="flex justify-between items-start mb-6">
-                    <span className="text-sm font-bold text-gray-800">Delivery Orders</span>
+                    <span className="text-sm font-medium text-gray-800">Delivery Orders</span>
                     <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-full flex items-center gap-1.5">
                       <div className="w-2 h-2 rounded-full bg-green-600"></div> Completed
                     </span>
                   </div>
-                  <div className="text-4xl font-semibold text-gray-800">
+                  <div className="text-4xl font-normal text-gray-800">
                     {report?.deliveryOrdersCount || 0}/{report?.targets?.deliveryOrders?.required || 3}
                   </div>
                 </div>
@@ -703,7 +703,7 @@ const DailyTarget = () => {
                       <div className="w-2 h-2 rounded-full bg-green-600"></div> Status
                     </span>
                   </div>
-                  <div className="text-4xl font-semibold text-gray-800">
+                  <div className="text-4xl font-normal text-gray-800">
                     {report?.truckerCount || 0}/{report?.targets?.truckers?.required || "0"}
                   </div>
                 </div>
@@ -731,7 +731,7 @@ const DailyTarget = () => {
             <div className="flex-1 space-y-6">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <h3 className="text-lg font-bold text-gray-800">{report?.employeeName || empId || "User"}</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">{report?.employeeName || empId || "User"}</h3>
                   <span className="px-3 py-1 bg-[#FDF2E3] text-[#D97706] text-xs font-bold rounded-lg whitespace-nowrap">Need Attention</span>
                 </div>
                 <p className="text-xs text-gray-400 font-medium">{report?.designation || department || "Sales Trainee"}</p>
