@@ -61,6 +61,12 @@ const API_CONFIG = {
     QA_PENDING_MANAGER_REVIEW: '/api/v1/qa/pending-manager-review',
     QA_REPORTS: '/api/v1/qa/reports',
     QA_DAILY_REVIEW: '/api/v1/qa/daily-review',
+    
+    // Credit Limit Form endpoints
+    SEND_CREDIT_LIMIT_FORM: '/api/v1/shipper_driver/:userId/send-credit-limit-form',
+    GET_CREDIT_LIMIT_FORM: '/api/v1/shipper_driver/credit-limit-form/:token',
+    SUBMIT_CREDIT_LIMIT_FORM: '/api/v1/shipper_driver/credit-limit-form/:token',
+    GET_CREDIT_LIMIT_REQUESTS: '/api/v1/shipper_driver/credit-limit-requests',
   },
   
   // Helper function to get full URL

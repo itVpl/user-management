@@ -59,6 +59,40 @@ const SidebarFlyout = ({
 
   return (
     <>
+      {/* Custom scrollbar styles - Strong override for global scrollbar hiding */}
+      <style>{`
+        .sales-flyout-content {
+          scrollbar-width: thin !important;
+          scrollbar-color: #9ca3af transparent !important;
+          -ms-overflow-style: scrollbar !important;
+        }
+        .sales-flyout-content::-webkit-scrollbar {
+          width: 8px !important;
+          display: block !important;
+          height: 8px !important;
+        }
+        .sales-flyout-content::-webkit-scrollbar-track {
+          background: transparent !important;
+          border-radius: 4px !important;
+        }
+        .sales-flyout-content::-webkit-scrollbar-thumb {
+          background-color: #9ca3af !important;
+          border-radius: 4px !important;
+          border: 1px solid transparent !important;
+        }
+        .sales-flyout-content::-webkit-scrollbar-thumb:hover {
+          background-color: #6b7280 !important;
+        }
+        .sales-flyout-content::-webkit-scrollbar-thumb:active {
+          background-color: #4b5563 !important;
+        }
+        /* Force scrollbar visibility even when content doesn't overflow initially */
+        .sales-flyout-content {
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+      `}</style>
+      
       {/* Backdrop */}
       <div 
         className="fixed inset-0 z-40" 
@@ -83,7 +117,14 @@ const SidebarFlyout = ({
         </div>
 
         {/* Content - Better spacing */}
-        <div className={`px-5 pb-5 ${title === "CMT" ? "max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent" : ""}`}>
+        <div 
+          className="px-5 pb-5 max-h-[600px] overflow-y-auto sales-flyout-content"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#9ca3af transparent',
+            msOverflowStyle: 'scrollbar'
+          }}
+        >
           {Object.entries(categories).map(([categoryName, items]) => (
             <div key={categoryName} className="mb-4">
               {/* Category Header - Readable size */}

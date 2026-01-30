@@ -3379,10 +3379,21 @@ useEffect(() => {
                   <div className="space-y-1">
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created By</div>
                     <div className="text-sm font-semibold text-gray-800">
-                      {bidDetailsModal.load?.createdBySalesUser?.empName || 
-                       bidDetailsModal.load?.salesUserInfo?.empName ||
-                       bidDetailsModal.load?.salesUserInfo?.employeeName || 
-                       'N/A'}
+                      {(() => {
+                        const createdBy = bidDetailsModal.load?.createdBySalesUser || bidDetailsModal.load?.salesUserInfo;
+                        if (!createdBy) return 'N/A';
+                        
+                        const empName = createdBy.empName || createdBy.employeeName || '';
+                        const aliasName = createdBy.aliasName || '';
+                        
+                        if (empName && aliasName) {
+                          return `${empName} / ${aliasName}`;
+                        } else if (empName) {
+                          return empName;
+                        } else {
+                          return 'N/A';
+                        }
+                      })()}
                     </div>
                   </div>
                 </div>

@@ -84,7 +84,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">City</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Phone</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Credit Limit</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Added On</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
             </tr>
@@ -114,12 +114,8 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                   <span className="font-medium text-gray-700">{cust.email}</span>
                 </td>
                 <td className="py-2 px-4">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                    /blacklist/i.test(cust?.status)
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-green-100 text-green-800'
-                  }`}>
-                    {cust.status || 'Active'}
+                  <span className="font-semibold text-blue-600">
+                    ${cust.creditLimit ? parseFloat(cust.creditLimit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                   </span>
                 </td>
                 <td className="py-2 px-4">
@@ -130,10 +126,10 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                 <td className="py-2 px-4">
                   <button
                     onClick={() => onAction?.(cust)}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 py-1 text-xs rounded-md transition-colors border ${
                       /blacklist/i.test(cust?.status)
-                        ? 'bg-green-500 hover:bg-green-600 text-white'
-                        : 'bg-red-500 hover:bg-red-600 text-white'
+                        ? 'text-green-600 border-green-300 hover:bg-green-50'
+                        : 'text-red-600 border-red-300 hover:bg-red-50'
                     }`}
                   >
                     {/blacklist/i.test(cust?.status) ? 'Remove From Blacklist' : 'Blacklist'}
