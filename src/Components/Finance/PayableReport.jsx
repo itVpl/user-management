@@ -18,7 +18,7 @@ const isPdfUrl = (url = "") => /\.pdf$/i.test(url);
 
 const PayableReport = () => {
   const [dos, setDos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Set to true to show loading on mount
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
@@ -71,6 +71,7 @@ const PayableReport = () => {
   
   const ymd = (d) => format(d, 'yyyy-MM-dd'); // "YYYY-MM-DD"
 
+  // Auto-fetch data on component mount and when date range changes
   useEffect(() => {
     fetchAllDOs();
   }, [range]);
