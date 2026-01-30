@@ -137,6 +137,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Accounts Payable",
       "Receivable Report",
       "Payable Report",
+      "DO Report",
       "Finance Dashboard"
     ],
     "Communication": [
@@ -289,7 +290,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ],
     "Finance Reports": [
       "Receivable Report",
-      "Payable Report"
+      "Payable Report",
+      "DO Report"
     ],
     "Common Reports": [
       "Call Data",
@@ -517,7 +519,8 @@ const DEPARTMENT_REPORTS = {
   ],
   "Finance": [
     "Receivable Report",
-    "Payable Report"
+    "Payable Report",
+    "DO Report"
   ],
   "HR": [
     "Break Report",
