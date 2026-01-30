@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, User, Mail, Phone, MapPin, CheckCircle, XCircle, Clock, Building, Truck, ChevronDown, UserCheck, X, DollarSign, CreditCard } from 'lucide-react';
+import { Search, User, Mail, Phone, MapPin, CheckCircle, XCircle, Clock, Building, Truck, ChevronDown, UserCheck, X, DollarSign, CreditCard, Send } from 'lucide-react';
 import API_CONFIG from '../../config/api';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -25,6 +25,8 @@ const AllCustomer = () => {
   const [creditLimitModal, setCreditLimitModal] = useState({ visible: false, customer: null });
   const [creditLimitAmount, setCreditLimitAmount] = useState('');
   const [creditLimitSubmitting, setCreditLimitSubmitting] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -152,6 +154,7 @@ const AllCustomer = () => {
     setCreditLimitModal({ visible: false, customer: null });
     setCreditLimitAmount('');
     setCreditLimitSubmitting(false);
+    setEmailSent(false);
   };
 
   const handleCreditLimitSubmit = async () => {
@@ -192,6 +195,35 @@ const AllCustomer = () => {
       toast.error(error.response?.data?.message || 'Failed to update credit limit. Please try again.');
     } finally {
       setCreditLimitSubmitting(false);
+    }
+  };
+
+  // Send Credit Limit Form Email Handler
+  const handleSendCreditLimitFormEmail = async () => {
+    if (!creditLimitModal.customer?._id) {
+      toast.error('Customer ID is required');
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${creditLimitModal.customer._id}/send-credit-limit-form`,
+        {},
+        { headers: API_CONFIG.getAuthHeaders() }
+      );
+
+      if (response.data.success) {
+        setEmailSent(true);
+        toast.success(`Credit limit form email sent successfully to ${creditLimitModal.customer?.email || 'shipper'}!`);
+      } else {
+        toast.error(response.data.message || 'Failed to send email');
+      }
+    } catch (error) {
+      console.error('Error sending credit limit form email:', error);
+      toast.error(error.response?.data?.message || 'Failed to send email. Please try again.');
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -734,10 +766,38 @@ const AllCustomer = () => {
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
               <button
                 onClick={closeCreditLimitModal}
-                disabled={creditLimitSubmitting}
+                disabled={creditLimitSubmitting || sendingEmail}
                 className="px-6 py-2.5 rounded-xl border-2 border-gray-200 text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
               >
                 Cancel
+              </button>
+              <button
+                onClick={handleSendCreditLimitFormEmail}
+                disabled={sendingEmail || emailSent}
+                className={`px-6 py-2.5 rounded-xl font-medium shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2 ${
+                  emailSent 
+                    ? 'bg-green-600 text-white hover:shadow-green-500/30' 
+                    : sendingEmail
+                    ? 'bg-gray-400 text-white opacity-70 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-purple-600 to-indigo-500 text-white hover:shadow-purple-500/30'
+                }`}
+              >
+                {sendingEmail ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Sending...
+                  </>
+                ) : emailSent ? (
+                  <>
+                    <CheckCircle size={18} />
+                    Email Sent
+                  </>
+                ) : (
+                  <>
+                    <Send size={18} />
+                    Send Form Email
+                  </>
+                )}
               </button>
               <button
                 onClick={handleCreditLimitSubmit}
