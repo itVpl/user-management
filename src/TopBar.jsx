@@ -119,6 +119,10 @@ const Topbar = () => {
         if (departmentLower === 'sales' || departmentLower === 'cmt' || departmentLower.includes('sales') || departmentLower.includes('cmt')) {
           const finalDept = departmentLower.includes('sales') ? 'sales' : 'cmt';
           setUserDepartment(finalDept);
+        } else if (departmentLower === 'hr') {
+          setUserDepartment('hr');
+        } else if (departmentLower === 'finance' || departmentLower.includes('finance')) {
+          setUserDepartment('finance');
         }
       } catch (error) {
         console.error("Error parsing user data:", error);
@@ -150,16 +154,17 @@ const Topbar = () => {
     }
 
     const fetchChecklistData = async () => {
-      try {
-        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-        const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
-        
-        if (!token || !userString) {
-          return;
-        }
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
 
-        const userData = JSON.parse(userString);
-        const empId = userData?.empId || userData?.employeeId;
+      if (!token || !userString) {
+        return;
+      }
+
+      const userData = JSON.parse(userString);
+      const empId = userData?.empId || userData?.employeeId;
+
+      try {
         
         if (!empId) {
           return;
@@ -391,13 +396,13 @@ const Topbar = () => {
                 } else if (userDepartment === 'cmt') {
                   if (index === 0) {
                     return <img src="/icons/call.svg" className="w-10 h-10" alt="Call" />;
-                  } 
+                  }
                   else if (index === 1) {
                     return <img src="/icons/truck.svg" className="w-10 h-10" alt="Truck" />;
-                  } 
+                  }
                   else if (index === 2) {
                     return <img src="/icons/attendance.svg" className="w-10 h-10" alt="Attendance" />;
-                  } 
+                  }
                   else if (index === 3) {
                     return <img src="/icons/bid.svg" className="w-10 h-10" alt="Bid" />;
                   }
@@ -408,7 +413,7 @@ const Topbar = () => {
               return (
                 <React.Fragment key={index}>
                   {/* Checklist Item with Tooltip */}
-                  <div 
+                  <div
                     className="relative"
                     onMouseEnter={() => setHoveredIndex(index)}
                     onMouseLeave={() => setHoveredIndex(null)}
@@ -418,13 +423,13 @@ const Topbar = () => {
                         {getIcon() && <span className="text-red-600">{getIcon()}</span>}
                       </div>
                     )}
-                    
+
                     {state === 'completed' && (
                       <div className="w-10 h-10 rounded-full bg-green-100 border-2 border-green-300 flex items-center justify-center cursor-pointer hover:bg-green-200 transition">
                         {getIcon() && <span className="text-green-600">{getIcon()}</span>}
                       </div>
                     )}
-                    
+
                     {state === 'wrong' && (
                       <div className="w-10 h-10 rounded-full bg-red-100 border-2 border-red-300 flex items-center justify-center cursor-pointer hover:bg-red-200 transition">
                         {getIcon() && <span className="text-red-600">{getIcon()}</span>}
@@ -441,7 +446,7 @@ const Topbar = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Connector - last item ke baad nahi */}
                   {index < checklistItems.length - 1 && (
                     <div className="w-8 h-0.5 bg-gray-200"></div>
@@ -449,8 +454,8 @@ const Topbar = () => {
                 </React.Fragment>
               );
             })
-          ) : (
-            // Fallback static icons when no checklist data
+          ) : userDepartment !== 'hr' && userDepartment !== 'finance' ? (
+            // Fallback static icons when no checklist data (not for HR)
             <>
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
                 <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -473,7 +478,7 @@ const Topbar = () => {
                 </svg>
               </div>
             </>
-          )}
+          ) : null}
         </div>
 
         {/* Right Section - Notification + Profile */}
