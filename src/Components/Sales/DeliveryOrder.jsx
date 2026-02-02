@@ -712,8 +712,13 @@ export default function DeliveryOrder() {
             drLocs = shipperData.dropLocations || shipperData.deliveryLocations || [];
             
             // Store containerNo in shipper object for backward compatibility if not already present
+            // Also ensure shipmentNo is preserved
             if (order.containerNo && !shipperData.containerNo) {
               shipperData.containerNo = order.containerNo;
+            }
+            // Ensure shipmentNo is preserved from order level if present
+            if (order.shipmentNo && !shipperData.shipmentNo) {
+              shipperData.shipmentNo = order.shipmentNo;
             }
           } else {
             // Old API format (backward compatibility).
@@ -768,21 +773,31 @@ export default function DeliveryOrder() {
             createdBy: createdByName,
             createdByEmpId: createdByEmpId,
             createdByData: createdByData, // Store full createdBy object
-            containerNo: order.containerNo || 'N/A', // Add containerNo
+            containerNo: order.containerNo || shipperData?.containerNo || 'N/A', // Add containerNo (check both locations)
             docUpload: 'sample-doc.jpg',
             productName: shipperData?.containerType || 'N/A',
             quantity: (puW ?? drW ?? shipperData?.weight ?? 0),
             remarks: order.remarks || '',
             shipperName: shipperData?.compName || shipperData?.name || 'N/A',
-            carrierName: carrierData?.compName || carrierData?.carrierName || 'N/A',
+            shipmentNo: order.shipmentNo || shipperData?.shipmentNo || 'N/A', // Add shipmentNo for consistency
+            carrierName: carrierData?.compName || carrierData?.carrierName || carrierData?.name || 'N/A', // Check multiple possible fields
             carrierFees: carrierData?.totalCarrierFees || 0,
             createdBySalesUser: order.createdBySalesUser || 'N/A',
             supportingDocs: order.supportingDocs || [],
             addDispature: order.addDispature || '',
             // Store customers and shipper data for table display
             customers: customers,
-            shipper: shipperData,
-            carrier: carrierData,
+            shipper: {
+              ...shipperData,
+              // Ensure containerNo and shipmentNo are in shipper object for view modal consistency
+              containerNo: order.containerNo || shipperData?.containerNo || 'N/A',
+              shipmentNo: order.shipmentNo || shipperData?.shipmentNo || 'N/A'
+            },
+            carrier: {
+              ...carrierData,
+              // Ensure carrierName is consistent
+              carrierName: carrierData?.compName || carrierData?.carrierName || carrierData?.name || 'N/A'
+            },
             // Store full order data for view modal
             _fullOrderData: order
           };
@@ -3413,9 +3428,11 @@ const handleUpdateOrder = async (e) => {
     setShowAddOrderForm(false);
     setEditingOrder(null);
     
-    // Refresh the orders list
+    // Refresh the orders list - reset to first page and fetch fresh data
     setCurrentPage(1); // Reset to first page
-    await fetchOrders(searchTerm, currentPage, itemsPerPage); // Refresh orders
+    await fetchOrders(searchTerm, 1, itemsPerPage); // Refresh orders with page 1
+    // Also refresh the count data
+    await fetchAllOrdersForCount();
     
   } catch (error) {
     console.error('Update error:', error);
@@ -6907,7 +6924,12 @@ const handleUpdateOrder = async (e) => {
                         </div>
                         <div>
                           <p className="text-sm text-gray-600">Carrier Name</p>
-                          <p className="font-semibold text-gray-800">{selectedOrder.carrier?.carrierName || 'N/A'}</p>
+                          <p className="font-semibold text-gray-800">
+                            {selectedOrder.carrier?.compName || 
+                             selectedOrder.carrier?.carrierName || 
+                             selectedOrder.carrier?.name || 
+                             'N/A'}
+                          </p>
                         </div>
                       </div>
 
@@ -7009,7 +7031,11 @@ const handleUpdateOrder = async (e) => {
                         </div>
                         <div>
                           <p className="text-sm text-gray-600">Shipment No</p>
-                          <p className="font-semibold text-gray-800">{selectedOrder.shipper?.shipmentNo || 'N/A'}</p>
+                          <p className="font-semibold text-gray-800">
+                            {selectedOrder.shipmentNo || 
+                             selectedOrder.shipper?.shipmentNo || 
+                             'N/A'}
+                          </p>
                         </div>
                       </div>
 
@@ -7021,7 +7047,11 @@ const handleUpdateOrder = async (e) => {
                         </div>
                         <div>
                           <p className="text-sm text-gray-600">Container No</p>
-                          <p className="font-semibold text-gray-800">{selectedOrder.shipper?.containerNo || 'N/A'}</p>
+                          <p className="font-semibold text-gray-800">
+                            {selectedOrder.containerNo || 
+                             selectedOrder.shipper?.containerNo || 
+                             'N/A'}
+                          </p>
                         </div>
                       </div>
 
