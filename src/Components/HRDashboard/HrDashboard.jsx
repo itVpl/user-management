@@ -341,7 +341,7 @@ const HRDashboard = () => {
       {/* Main Content Grid */}
       <div className="grid lg:grid-cols-3 gap-8 mb-8">
         {/* Employee Status Overview */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+        <div className="bg-white rounded-2xl p-6 border border-gray-200">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
@@ -377,7 +377,7 @@ const HRDashboard = () => {
         </div>
 
         {/* Today's Attendance */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+        <div className="bg-white rounded-2xl p-6 border border-gray-200">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
@@ -419,12 +419,16 @@ const HRDashboard = () => {
       </div>
 
       {/* Leave Request Table */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+      <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-8"
+           style={{
+             boxShadow: '7.54px 7.54px 67.85px 0px rgba(0, 0, 0, 0.05)',
+             borderWidth: '1.31px'
+           }}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
+            {/* <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
               <Calendar className="text-white" size={20} />
-            </div>
+            </div> */}
             <h3 className="text-xl font-bold text-gray-800">Pending & Manager Approved Leave Requests</h3>
           </div>
           <div className="flex items-center gap-4">
@@ -442,15 +446,15 @@ const HRDashboard = () => {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Employee ID</th>
-                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Employee Name</th>
-                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Department</th>
-                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Type of Leave</th>
-                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Total Days</th>
-                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Leave Duration</th>
-                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Status</th>
-                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Applied Date</th>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Employee ID</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Employee Name</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Department</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Type of Leave</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Total Days</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Leave Duration</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Status</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Applied Date</th>
               </tr>
             </thead>
             <tbody>
