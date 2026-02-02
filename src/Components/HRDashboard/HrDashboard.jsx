@@ -454,14 +454,14 @@ const HRDashboard = () => {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Employee ID</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Employee Name</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Department</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Type of Leave</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Total Days</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Leave Duration</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Status</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Applied Date</th>
+                <th className="text-left py-4 px-2 text-gray-600 font-medium text-base">Employee ID</th>
+                <th className="text-left py-4 px-2 text-gray-600 font-medium text-base">Employee Name</th>
+                <th className="text-left py-4 px-2 text-gray-600 font-medium text-base">Department</th>
+                <th className="text-left py-4 px-2 text-gray-600 font-medium text-base">Type of Leave</th>
+                <th className="text-left py-4 px-2 text-gray-600 font-medium text-base">Total Days</th>
+                <th className="text-left py-4 px-8 text-gray-600 font-medium text-base">Leave Duration</th>
+                <th className="text-left py-4 px-8 text-gray-600 font-medium text-base">Status</th>
+                <th className="text-left py-4 px-2 text-gray-600 font-medium text-base">Applied Date</th>
               </tr>
             </thead>
             <tbody>
