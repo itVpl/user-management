@@ -61,7 +61,7 @@ const HRDashboard = () => {
           const currentMonthData = currentMonthRes.data?.leaves || [];
           setCurrentMonthLeaves(currentMonthData);
           setCurrentMonthTotal(currentMonthRes.data?.total || 6);
-          setCurrentMonth(currentMonthRes.data?.currentMonth || 0); 
+          setCurrentMonth(currentMonthRes.data?.currentMonth || 0);
         } catch (error) {
           console.error("Error fetching current month leaves:", error);
           setCurrentMonth(6); // Fallback to 7
@@ -227,17 +227,17 @@ const HRDashboard = () => {
   };
 
   const StatCard = ({ title, value, icon: Icon, color, gradient, subtitle }) => (
-    <div className={`bg-gradient-to-br ${gradient} rounded-xl shadow-lg p-6 border border-white/20 backdrop-blur-sm`}>
+    <div className="bg-white rounded-xl p-5 border border-gray-200">
       <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center shadow-lg`}>
+        <div className="text-left">
+          <p className="text-base text-gray-500 font-medium">{subtitle}</p>
+        </div>
+        <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center shadow-sm`}>
           <Icon className="text-white" size={24} />
         </div>
-        <div className="text-right">
-          <p className="text-sm text-white/80 font-medium">{subtitle}</p>
-        </div>
       </div>
-      <div className="text-3xl font-bold text-white mb-2">{value || 0}</div>
-      <p className="text-white/90 font-medium">{title}</p>
+      <div className="text-3xl font-bold text-gray-900 mb-2">{value || 0}</div>
+      <p className="text-teal-600 font-medium">{title}</p>
     </div>
   );
 
@@ -262,37 +262,34 @@ const HRDashboard = () => {
         <button
           onClick={() => handlePageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-            currentPage === 1
+          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === 1
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
               : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-          }`}
+            }`}
         >
           Previous
         </button>
-        
+
         {pageNumbers.map((number) => (
           <button
             key={number}
             onClick={() => handlePageChange(number)}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-              currentPage === number
+            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === number
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+              }`}
           >
             {number}
           </button>
         ))}
-        
+
         <button
           onClick={() => handlePageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-            currentPage === totalPages
+          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === totalPages
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
               : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-          }`}
+            }`}
         >
           Next
         </button>
@@ -301,9 +298,9 @@ const HRDashboard = () => {
   };
 
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 min-h-screen">
+    <div className="p-6 bg-white min-h-screen">
       {/* Header */}
-      
+
 
       {/* Top Stats Cards */}
       <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-6 mb-8">
@@ -409,8 +406,8 @@ const HRDashboard = () => {
               </div>
             </div>
             <div className="ml-6">
-              <CircularProgress 
-                percentage={Math.round((attendance.present / (attendance.present + attendance.absent + attendance.onLeave)) * 100) || 0} 
+              <CircularProgress
+                percentage={Math.round((attendance.present / (attendance.present + attendance.absent + attendance.onLeave)) * 100) || 0}
                 color="blue"
               />
             </div>
@@ -418,114 +415,114 @@ const HRDashboard = () => {
         </div>
 
         {/* Upcoming Birthdays */}
-        <UpcomingBirthdays limit={3}  />
+        <UpcomingBirthdays limit={3} />
       </div>
 
-              {/* Leave Request Table */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
-                <Calendar className="text-white" size={20} />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Pending & Manager Approved Leave Requests</h3>
+      {/* Leave Request Table */}
+      <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
+              <Calendar className="text-white" size={20} />
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                <span className="text-sm text-gray-600">Pending: {leaveStats.pendingCount}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                <span className="text-sm text-gray-600">Manager Approved: {leaveStats.managerApprovedCount}</span>
-              </div>
-              <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
+            <h3 className="text-xl font-bold text-gray-800">Pending & Manager Approved Leave Requests</h3>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+              <span className="text-sm text-gray-600">Pending: {leaveStats.pendingCount}</span>
             </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+              <span className="text-sm text-gray-600">Manager Approved: {leaveStats.managerApprovedCount}</span>
+            </div>
+            <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-4 px-4 text-blue-600 font-semibold">Employee ID</th>
-                  <th className="text-left py-4 px-4 text-blue-600 font-semibold">Employee Name</th>
-                  <th className="text-left py-4 px-4 text-blue-600 font-semibold">Department</th>
-                  <th className="text-left py-4 px-4 text-blue-600 font-semibold">Type of Leave</th>
-                  <th className="text-left py-4 px-4 text-blue-600 font-semibold">Total Days</th>
-                  <th className="text-left py-4 px-4 text-blue-600 font-semibold">Leave Duration</th>
-                  <th className="text-left py-4 px-4 text-blue-600 font-semibold">Status</th>
-                  <th className="text-left py-4 px-4 text-blue-600 font-semibold">Applied Date</th>
-                </tr>
-              </thead>
-                             <tbody>
-                 {currentRecords.map((leave, index) => {
-                   const fromDate = new Date(leave.fromDate).toLocaleDateString('en-GB');
-                   const toDate = new Date(leave.toDate).toLocaleDateString('en-GB');
-                   const appliedDate = new Date(leave.appliedAt).toLocaleDateString('en-GB');
-                  
-                  const getStatusColor = (status) => {
-                    switch(status) {
-                      case 'pending':
-                        return 'bg-orange-100 text-orange-700';
-                      case 'manager_approved':
-                        return 'bg-blue-100 text-blue-700';
-                      case 'approved':
-                        return 'bg-emerald-100 text-emerald-700';
-                      case 'rejected':
-                        return 'bg-red-100 text-red-700';
-                      default:
-                        return 'bg-gray-100 text-gray-700';
-                    }
-                  };
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Employee ID</th>
+                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Employee Name</th>
+                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Department</th>
+                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Type of Leave</th>
+                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Total Days</th>
+                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Leave Duration</th>
+                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Status</th>
+                <th className="text-left py-4 px-4 text-blue-600 font-semibold">Applied Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentRecords.map((leave, index) => {
+                const fromDate = new Date(leave.fromDate).toLocaleDateString('en-GB');
+                const toDate = new Date(leave.toDate).toLocaleDateString('en-GB');
+                const appliedDate = new Date(leave.appliedAt).toLocaleDateString('en-GB');
 
-                  const getStatusText = (status) => {
-                    switch(status) {
-                      case 'pending':
-                        return 'Pending';
-                      case 'manager_approved':
-                        return 'Manager Approved';
-                      case 'approved':
-                        return 'Approved';
-                      case 'rejected':
-                        return 'Rejected';
-                      default:
-                        return status || 'Pending';
-                    }
-                  };
+                const getStatusColor = (status) => {
+                  switch (status) {
+                    case 'pending':
+                      return 'bg-orange-100 text-orange-700';
+                    case 'manager_approved':
+                      return 'bg-blue-100 text-blue-700';
+                    case 'approved':
+                      return 'bg-emerald-100 text-emerald-700';
+                    case 'rejected':
+                      return 'bg-red-100 text-red-700';
+                    default:
+                      return 'bg-gray-100 text-gray-700';
+                  }
+                };
 
-                  return (
-                    <tr key={leave._id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
-                      <td className="py-4 px-4 text-gray-800 font-medium">{leave.empId}</td>
-                      <td className="py-4 px-4 text-gray-800">{leave.empName}</td>
-                      <td className="py-4 px-4 text-gray-800 capitalize">{leave.department}</td>
-                      <td className="py-4 px-4">
-                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium capitalize">
-                          {leave.leaveType}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-gray-800 font-medium">{leave.totalDays} day{leave.totalDays > 1 ? 's' : ''}</td>
-                      <td className="py-4 px-4 text-gray-800">{fromDate} - {toDate}</td>
-                      <td className="py-4 px-4">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(leave.status)}`}>
-                          {getStatusText(leave.status)}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-gray-800 text-sm">{appliedDate}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                const getStatusText = (status) => {
+                  switch (status) {
+                    case 'pending':
+                      return 'Pending';
+                    case 'manager_approved':
+                      return 'Manager Approved';
+                    case 'approved':
+                      return 'Approved';
+                    case 'rejected':
+                      return 'Rejected';
+                    default:
+                      return status || 'Pending';
+                  }
+                };
+
+                return (
+                  <tr key={leave._id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
+                    <td className="py-4 px-4 text-gray-800 font-medium">{leave.empId}</td>
+                    <td className="py-4 px-4 text-gray-800">{leave.empName}</td>
+                    <td className="py-4 px-4 text-gray-800 capitalize">{leave.department}</td>
+                    <td className="py-4 px-4">
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium capitalize">
+                        {leave.leaveType}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-gray-800 font-medium">{leave.totalDays} day{leave.totalDays > 1 ? 's' : ''}</td>
+                    <td className="py-4 px-4 text-gray-800">{fromDate} - {toDate}</td>
+                    <td className="py-4 px-4">
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(leave.status)}`}>
+                        {getStatusText(leave.status)}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-gray-800 text-sm">{appliedDate}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-6 flex justify-between items-center">
+          <div className="text-sm text-gray-600">
+            Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, pendingAndApprovedLeaves.length)} of {leaveStats.totalCount} pending and manager approved leave requests
           </div>
-                     <div className="mt-6 flex justify-between items-center">
-             <div className="text-sm text-gray-600">
-               Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, pendingAndApprovedLeaves.length)} of {leaveStats.totalCount} pending and manager approved leave requests
-             </div>
-             {/* <button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg">
+          {/* <button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg">
                View All Requests
              </button> */}
-           </div>
-           {totalPages > 1 && <Pagination />}
         </div>
+        {totalPages > 1 && <Pagination />}
+      </div>
 
 
     </div>

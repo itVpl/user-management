@@ -21,7 +21,7 @@ const FinanceDashboard = () => {
     accountsReceivable: 0,
     accountsPayable: 0
   });
-  
+
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [invoiceData, setInvoiceData] = useState([]);
   const [expenseData, setExpenseData] = useState([]);
@@ -34,10 +34,10 @@ const FinanceDashboard = () => {
     const fetchFinancialData = async () => {
       try {
         setLoading(true);
-        
+
         // Fetch financial overview data
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-        
+
         // Mock data for demonstration - replace with actual API calls
         const mockFinancialData = {
           presentDays: 22,
@@ -55,7 +55,7 @@ const FinanceDashboard = () => {
           accountsReceivable: 25000,
           accountsPayable: 18000
         };
-        
+
         setFinancialData(mockFinancialData);
 
         // Mock recent transactions
@@ -101,7 +101,7 @@ const FinanceDashboard = () => {
             status: 'completed'
           }
         ];
-        
+
         setRecentTransactions(mockTransactions);
 
         // Mock invoice data
@@ -131,7 +131,7 @@ const FinanceDashboard = () => {
             createdDate: '2024-01-12'
           }
         ];
-        
+
         setInvoiceData(mockInvoices);
 
         // Mock expense data
@@ -161,7 +161,7 @@ const FinanceDashboard = () => {
             vendor: 'Auto Repair Shop'
           }
         ];
-        
+
         setExpenseData(mockExpenses);
 
         // Mock budget data
@@ -191,7 +191,7 @@ const FinanceDashboard = () => {
             variance: 5000
           }
         ];
-        
+
         setBudgetData(mockBudget);
 
       } catch (error) {
@@ -244,42 +244,42 @@ const FinanceDashboard = () => {
   };
 
   const StatCard = ({ title, value, icon: Icon, color, gradient, subtitle, trend, trendValue }) => (
-    <div className={`bg-gradient-to-br ${gradient} rounded-xl shadow-lg p-6 border border-white/20 backdrop-blur-sm`}>
+    <div className={`bg-white rounded-xl p-6 border border-gray-200`}>
       <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center shadow-lg`}>
-          <Icon className="text-white" size={24} />
-        </div>
-        <div className="text-right">
-          <p className="text-sm text-white/80 font-medium">{subtitle}</p>
+        <div className="text-left">
+          <p className="text-base text-gray-500 font-medium">{subtitle}</p>
           {trend && (
-            <div className={`flex items-center gap-1 mt-1 ${trend === 'up' ? 'text-green-200' : 'text-red-200'}`}>
+            <div className={`flex items-center gap-1 mt-1 ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
               {trend === 'up' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
               <span className="text-xs">{trendValue}</span>
             </div>
           )}
         </div>
+        <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center shadow-sm`}>
+          <Icon className="text-white" size={24} />
+        </div>
       </div>
-      <div className="text-3xl font-bold text-white mb-2">
-        {title === 'Present Days' ? 
+      <div className="text-3xl font-bold text-gray-900 mb-2">
+        {title === 'Present Days' ?
           `${value || 0}` :
-          typeof value === 'number' && value >= 1000 ? 
-            `$${(value / 1000).toFixed(1)}K` : 
+          typeof value === 'number' && value >= 1000 ?
+            `$${(value / 1000).toFixed(1)}K` :
             `$${value?.toLocaleString() || 0}`
         }
       </div>
-      <p className="text-white/90 font-medium">{title}</p>
+      <p className="text-teal-600 font-medium">{title}</p>
     </div>
   );
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', { 
-      style: 'currency', 
-      currency: 'USD' 
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
     }).format(amount || 0);
   };
 
   const getStatusColor = (status) => {
-    switch(status) {
+    switch (status) {
       case 'paid':
       case 'completed':
         return 'bg-green-100 text-green-700';
@@ -293,7 +293,7 @@ const FinanceDashboard = () => {
   };
 
   const getStatusText = (status) => {
-    switch(status) {
+    switch (status) {
       case 'paid':
         return 'Paid';
       case 'pending':
@@ -328,37 +328,34 @@ const FinanceDashboard = () => {
         <button
           onClick={() => handlePageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-            currentPage === 1
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-          }`}
+          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === 1
+            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+            }`}
         >
           Previous
         </button>
-        
+
         {pageNumbers.map((number) => (
           <button
             key={number}
             onClick={() => handlePageChange(number)}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-              currentPage === number
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === number
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
           >
             {number}
           </button>
         ))}
-        
+
         <button
           onClick={() => handlePageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-            currentPage === totalPages
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-          }`}
+          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === totalPages
+            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+            }`}
         >
           Next
         </button>
@@ -380,7 +377,7 @@ const FinanceDashboard = () => {
   }
 
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 min-h-screen">
+    <div className="p-6 bg-white min-h-screen">
 
       {/* Top Stats Cards */}
       <div className="grid lg:grid-cols-3 md:grid-cols-1 gap-6 mb-8">
@@ -417,25 +414,15 @@ const FinanceDashboard = () => {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-3 gap-8 mb-8">
-        {/* Upcoming Birthdays */}
-        <div className="lg:col-span-1">
-          <UpcomingBirthdays limit={3} />
-        </div>
-        
-        {/* Placeholder for additional content */}
-        <div className="lg:col-span-2">
-          {/* Additional finance content can go here */}
-        </div>
-      </div>
+
 
       {/* Billing Table */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+      <div className="bg-white rounded-2xl p-6 border border-gray-200">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center">
+            {/* <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center">
               <Receipt className="text-white" size={20} />
-            </div>
+            </div> */}
             <h3 className="text-xl font-bold text-gray-800">Billing Details</h3>
           </div>
           <MoreHorizontal className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" size={20} />
@@ -473,6 +460,18 @@ const FinanceDashboard = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-8 mt-8">
+        {/* Upcoming Birthdays */}
+        <div className="lg:col-span-3">
+          <UpcomingBirthdays limit={3} />
+        </div>
+
+        {/* Placeholder for additional content */}
+        <div className="lg:col-span-3">
+          {/* Additional finance content can go here */}
         </div>
       </div>
     </div>
