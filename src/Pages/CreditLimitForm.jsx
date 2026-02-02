@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Building, DollarSign, FileText, CheckCircle, XCircle, AlertCircle, Loader } from 'lucide-react';
+import { Building, DollarSign, FileText, CheckCircle, XCircle, AlertCircle, Loader, Plus, X, Users, Paperclip, Upload } from 'lucide-react';
 import API_CONFIG from '../config/api';
 
 const CreditLimitForm = () => {
@@ -13,9 +13,11 @@ const CreditLimitForm = () => {
     yearsInBusiness: '',
     annualRevenue: '',
     paymentTerms: '',
-    references: '',
+    references: '', // Legacy single text reference
     additionalNotes: ''
   });
+  const [textReferences, setTextReferences] = useState([]); // Multiple text references
+  const [referenceFiles, setReferenceFiles] = useState([]); // File attachments
   const [shipperInfo, setShipperInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -23,9 +25,44 @@ const CreditLimitForm = () => {
   const [success, setSuccess] = useState(false);
   const [expired, setExpired] = useState(false);
 
+  // Debug logging on mount
+  useEffect(() => {
+    console.log('═══════════════════════════════════════');
+    console.log('🔍 FORM DEBUG CHECK');
+    console.log('═══════════════════════════════════════');
+    console.log('📋 Component Mounted - CreditLimitForm');
+    console.log('📋 Form State:', {
+      hasTextReferences: textReferences.length > 0,
+      hasReferenceFiles: referenceFiles.length > 0
+    });
+  }, []);
+
   useEffect(() => {
     fetchFormInfo();
   }, [token]);
+
+  // Debug logging after render
+  useEffect(() => {
+    // Check DOM elements after render
+    setTimeout(() => {
+      console.log('📋 DOM Elements Check:');
+      console.log('  - Add Reference Button:', document.getElementById('addReferenceBtn') ? '✅ EXISTS' : '❌ MISSING');
+      console.log('  - File Input:', document.getElementById('referenceFiles') ? '✅ EXISTS' : '❌ MISSING');
+      console.log('  - Text References Container:', document.getElementById('textReferencesContainer') ? '✅ EXISTS' : '❌ MISSING');
+      console.log('  - File Input Label:', document.getElementById('fileInputLabel') ? '✅ EXISTS' : '❌ MISSING');
+      console.log('  - Form:', document.getElementById('creditLimitForm') ? '✅ EXISTS' : '❌ MISSING');
+      
+      const form = document.getElementById('creditLimitForm');
+      if (form) {
+        console.log('📋 HTML Source Check:');
+        console.log('  - Has "addReferenceBtn":', form.innerHTML.includes('addReferenceBtn') ? '✅ YES' : '❌ NO');
+        console.log('  - Has "referenceFiles":', form.innerHTML.includes('referenceFiles') ? '✅ YES' : '❌ NO');
+        console.log('  - Has "textReferencesContainer":', form.innerHTML.includes('textReferencesContainer') ? '✅ YES' : '❌ NO');
+        console.log('  - Has "Business References" section:', form.innerHTML.includes('Business References') ? '✅ YES' : '❌ NO');
+        console.log('  - Has "Reference Files" section:', form.innerHTML.includes('Reference Files') ? '✅ YES' : '❌ NO');
+      }
+    }, 100);
+  }, [textReferences, referenceFiles]);
 
   const fetchFormInfo = async () => {
     setLoading(true);
@@ -75,6 +112,66 @@ const CreditLimitForm = () => {
     }));
   };
 
+  // Handle text reference change
+  const handleTextReferenceChange = (index, field, value) => {
+    const updated = [...textReferences];
+    updated[index] = {
+      ...updated[index],
+      [field]: value
+    };
+    setTextReferences(updated);
+  };
+
+  // Add new text reference
+  const handleAddTextReference = () => {
+    setTextReferences([...textReferences, {
+      companyName: '',
+      contactPerson: '',
+      email: '',
+      phone: '',
+      relationship: '',
+      notes: ''
+    }]);
+  };
+
+  // Remove text reference
+  const handleRemoveTextReference = (index) => {
+    setTextReferences(textReferences.filter((_, i) => i !== index));
+  };
+
+  // Handle file selection
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length + referenceFiles.length > 10) {
+      setError('Maximum 10 files allowed');
+      return;
+    }
+    
+    // Check file sizes (10MB max per file)
+    const invalidFiles = files.filter(file => file.size > 10 * 1024 * 1024);
+    if (invalidFiles.length > 0) {
+      setError('Some files exceed 10MB limit. Please select smaller files.');
+      return;
+    }
+
+    setReferenceFiles([...referenceFiles, ...files]);
+    e.target.value = ''; // Reset input
+  };
+
+  // Remove file
+  const handleRemoveFile = (index) => {
+    setReferenceFiles(referenceFiles.filter((_, i) => i !== index));
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -107,19 +204,39 @@ const CreditLimitForm = () => {
 
     setSubmitting(true);
     try {
-      const payload = {
-        requestedCreditLimit: parseFloat(formData.requestedCreditLimit),
-        businessType: formData.businessType,
-        yearsInBusiness: parseInt(formData.yearsInBusiness),
-        annualRevenue: parseFloat(formData.annualRevenue),
-        paymentTerms: formData.paymentTerms,
-        references: formData.references || '',
-        additionalNotes: formData.additionalNotes || ''
-      };
+      // Create FormData for file upload
+      const formDataToSend = new FormData();
+      formDataToSend.append('requestedCreditLimit', parseFloat(formData.requestedCreditLimit));
+      formDataToSend.append('businessType', formData.businessType);
+      formDataToSend.append('yearsInBusiness', parseInt(formData.yearsInBusiness));
+      formDataToSend.append('annualRevenue', parseFloat(formData.annualRevenue));
+      formDataToSend.append('paymentTerms', formData.paymentTerms);
+      
+      // Legacy single text reference (if no multiple references provided)
+      if (textReferences.length === 0 && formData.references) {
+        formDataToSend.append('references', formData.references);
+      }
+      
+      // Multiple text references
+      if (textReferences.length > 0) {
+        formDataToSend.append('textReferences', JSON.stringify(textReferences));
+      }
+      
+      // File attachments
+      referenceFiles.forEach((file, index) => {
+        formDataToSend.append('referenceFiles', file);
+      });
+      
+      formDataToSend.append('additionalNotes', formData.additionalNotes || '');
 
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/credit-limit-form/${token}`,
-        payload
+        formDataToSend,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
       );
 
       if (response.data.success) {
@@ -278,7 +395,7 @@ const CreditLimitForm = () => {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
+        <form id="creditLimitForm" onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-8 border border-blue-100">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
               <XCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
@@ -396,19 +513,183 @@ const CreditLimitForm = () => {
               </select>
             </div>
 
-            {/* References */}
+            {/* Legacy Text Reference (only show if no multiple references) */}
+            {textReferences.length === 0 && (
+              <div>
+                <label className="block text-gray-700 text-sm font-medium mb-2">
+                  References (Optional)
+                </label>
+                <textarea
+                  name="references"
+                  value={formData.references}
+                  onChange={handleChange}
+                  placeholder="Provide business references or credit references (optional)"
+                  rows="4"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 resize-none"
+                />
+              </div>
+            )}
+
+            {/* Multiple Text References Section */}
+            <div id="textReferencesContainer">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-gray-700 text-sm font-medium">
+                  <Users size={18} className="inline mr-2" />
+                  Business References (Text) {textReferences.length > 0 && `(${textReferences.length})`}
+                </label>
+                <button
+                  id="addReferenceBtn"
+                  type="button"
+                  onClick={handleAddTextReference}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <Plus size={16} />
+                  Add Reference
+                </button>
+              </div>
+
+              {textReferences.length > 0 && (
+                <div className="space-y-4 mt-4">
+                  {textReferences.map((ref, index) => (
+                    <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-gray-800">Reference #{index + 1}</h4>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTextReference(index)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Company Name</label>
+                          <input
+                            type="text"
+                            value={ref.companyName || ''}
+                            onChange={(e) => handleTextReferenceChange(index, 'companyName', e.target.value)}
+                            placeholder="Company name"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Contact Person</label>
+                          <input
+                            type="text"
+                            value={ref.contactPerson || ''}
+                            onChange={(e) => handleTextReferenceChange(index, 'contactPerson', e.target.value)}
+                            placeholder="Contact person name"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Email</label>
+                          <input
+                            type="email"
+                            value={ref.email || ''}
+                            onChange={(e) => handleTextReferenceChange(index, 'email', e.target.value)}
+                            placeholder="email@example.com"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Phone</label>
+                          <input
+                            type="tel"
+                            value={ref.phone || ''}
+                            onChange={(e) => handleTextReferenceChange(index, 'phone', e.target.value)}
+                            placeholder="Phone number"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Relationship</label>
+                          <select
+                            value={ref.relationship || ''}
+                            onChange={(e) => handleTextReferenceChange(index, 'relationship', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Select relationship</option>
+                            <option value="Supplier">Supplier</option>
+                            <option value="Customer">Customer</option>
+                            <option value="Bank">Bank</option>
+                            <option value="Vendor">Vendor</option>
+                            <option value="Partner">Partner</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-xs text-gray-600 mb-1">Notes</label>
+                          <textarea
+                            value={ref.notes || ''}
+                            onChange={(e) => handleTextReferenceChange(index, 'notes', e.target.value)}
+                            placeholder="Additional notes about this reference"
+                            rows="2"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* File Attachments Section */}
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-2">
-                References
+              <label id="fileInputLabel" className="block text-gray-700 text-sm font-medium mb-2">
+                <Paperclip size={18} className="inline mr-2" />
+                Reference Files (Optional)
               </label>
-              <textarea
-                name="references"
-                value={formData.references}
-                onChange={handleChange}
-                placeholder="Provide business references or credit references (optional)"
-                rows="4"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 resize-none"
-              />
+              <div className="mt-2">
+                <input
+                  id="referenceFiles"
+                  type="file"
+                  multiple
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="referenceFiles"
+                  className="flex items-center justify-center gap-2 px-6 py-3 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                >
+                  <Upload size={20} className="text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700">
+                    {referenceFiles.length > 0 
+                      ? `${referenceFiles.length} file(s) selected` 
+                      : 'Click to upload files (PDF, JPG, PNG - Max 10MB each)'}
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-2">
+                  Maximum 10 files allowed. Supported formats: PDF, JPG, PNG. Max file size: 10MB per file.
+                </p>
+              </div>
+
+              {referenceFiles.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {referenceFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <Paperclip size={16} className="text-gray-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">{file.name}</div>
+                          <div className="text-xs text-gray-500">{formatFileSize(file.size)}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(index)}
+                        className="text-red-600 hover:text-red-800 p-1 ml-2"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Additional Notes */}

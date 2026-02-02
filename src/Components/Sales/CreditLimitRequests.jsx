@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, CreditCard, Filter, Eye, Calendar, Building, DollarSign, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { Search, CreditCard, Filter, Eye, Calendar, Building, DollarSign, CheckCircle, XCircle, Clock, AlertCircle, FileText, Image, Download, Paperclip, Users, Mail, Phone } from 'lucide-react';
 import API_CONFIG from '../../config/api';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -106,6 +106,64 @@ const CreditLimitRequests = () => {
     }).format(amount || 0);
   };
 
+  // Format file size helper
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  // Get file icon based on MIME type
+  const getFileIcon = (mimeType) => {
+    if (!mimeType) return <Paperclip size={20} className="text-gray-500" />;
+    if (mimeType.includes('pdf')) return <FileText size={20} className="text-red-500" />;
+    if (mimeType.includes('image')) return <Image size={20} className="text-blue-500" />;
+    return <Paperclip size={20} className="text-gray-500" />;
+  };
+
+  // Check if file can be previewed
+  const canPreview = (mimeType) => {
+    return mimeType?.includes('pdf') || mimeType?.includes('image');
+  };
+
+  // Handle file preview/download
+  const handleFileAction = (file, action = 'preview') => {
+    if (!file.fileUrl) {
+      toast.error('File URL not available');
+      return;
+    }
+
+    if (action === 'preview' && canPreview(file.mimeType)) {
+      // Open in new tab for preview
+      window.open(file.fileUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      // Download file
+      const link = document.createElement('a');
+      link.href = file.fileUrl;
+      link.download = file.originalName || file.filename || 'download';
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  // Get relationship badge color
+  const getRelationshipBadge = (relationship) => {
+    const colors = {
+      'Supplier': 'bg-green-100 text-green-800 border-green-300',
+      'Customer': 'bg-blue-100 text-blue-800 border-blue-300',
+      'Bank': 'bg-purple-100 text-purple-800 border-purple-300',
+      'Vendor': 'bg-orange-100 text-orange-800 border-orange-300',
+      'Partner': 'bg-pink-100 text-pink-800 border-pink-300',
+      'Other': 'bg-gray-100 text-gray-800 border-gray-300'
+    };
+    
+    return colors[relationship] || colors['Other'];
+  };
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
@@ -161,6 +219,8 @@ const CreditLimitRequests = () => {
                     <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">MC/DOT No</th>
                     <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Current Limit</th>
                     <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Requested Limit</th>
+                    <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">References</th>
+                    <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Files</th>
                     <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                     <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Submitted At</th>
                     <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Sent By</th>
@@ -170,7 +230,7 @@ const CreditLimitRequests = () => {
                 <tbody className="divide-y divide-gray-100">
                   {requests.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-12 text-center">
+                      <td colSpan="10" className="py-12 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <CreditCard className="w-16 h-16 text-gray-300 mb-4" />
                           <p className="text-gray-500 text-lg">No credit limit requests found</p>
@@ -207,6 +267,35 @@ const CreditLimitRequests = () => {
                           <span className="font-semibold text-blue-600">
                             {formatCurrency(request.submittedData?.requestedCreditLimit)}
                           </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {request.submittedData?.textReferences?.length > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <Users size={12} className="mr-1" />
+                                {request.submittedData.textReferences.length} reference{request.submittedData.textReferences.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          ) : request.submittedData?.references ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <Users size={12} className="mr-1" />
+                              1 reference
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          {request.submittedData?.referenceFiles?.length > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <Paperclip size={12} className="mr-1" />
+                                {request.submittedData.referenceFiles.length} file{request.submittedData.referenceFiles.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">No files</span>
+                          )}
                         </td>
                         <td className="py-3 px-4">
                           {getStatusBadge(request.status)}
@@ -373,18 +462,151 @@ const CreditLimitRequests = () => {
                         </span>
                       </div>
                     </div>
-                    {selectedRequest.submittedData.references && (
+                    {/* Legacy Text Reference (single text field) */}
+                    {selectedRequest.submittedData.references && 
+                     (!selectedRequest.submittedData.textReferences || selectedRequest.submittedData.textReferences.length === 0) && (
                       <div>
-                        <strong>References:</strong>
+                        <strong>Text References:</strong>
                         <br />
-                        <span className="text-gray-700">{selectedRequest.submittedData.references}</span>
+                        <span className="text-gray-700 whitespace-pre-wrap">{selectedRequest.submittedData.references}</span>
                       </div>
                     )}
+                    
+                    {/* Multiple Text References */}
+                    {selectedRequest.submittedData.textReferences && selectedRequest.submittedData.textReferences.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Users size={18} className="text-gray-600" />
+                          <strong>Business References ({selectedRequest.submittedData.textReferences.length}):</strong>
+                        </div>
+                        <div className="space-y-3">
+                          {selectedRequest.submittedData.textReferences.map((ref, refIdx) => (
+                            <div
+                              key={refIdx}
+                              className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h5 className="font-semibold text-gray-900">
+                                      {ref.companyName || 'Unnamed Company'}
+                                    </h5>
+                                    {ref.relationship && (
+                                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getRelationshipBadge(ref.relationship)}`}>
+                                        {ref.relationship}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {ref.contactPerson && (
+                                    <p className="text-sm text-gray-600">
+                                      Contact Person: <span className="font-medium">{ref.contactPerson}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                {ref.email && (
+                                  <div className="flex items-center gap-2">
+                                    <Mail size={14} className="text-gray-400" />
+                                    <span className="text-gray-500 text-sm">Email:</span>
+                                    <a 
+                                      href={`mailto:${ref.email}`}
+                                      className="text-blue-600 hover:text-blue-800 hover:underline text-sm"
+                                    >
+                                      {ref.email}
+                                    </a>
+                                  </div>
+                                )}
+                                {ref.phone && (
+                                  <div className="flex items-center gap-2">
+                                    <Phone size={14} className="text-gray-400" />
+                                    <span className="text-gray-500 text-sm">Phone:</span>
+                                    <a 
+                                      href={`tel:${ref.phone}`}
+                                      className="text-blue-600 hover:text-blue-800 hover:underline text-sm"
+                                    >
+                                      {ref.phone}
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {ref.notes && (
+                                <div className="mt-3 pt-3 border-t border-gray-200">
+                                  <p className="text-sm text-gray-700">
+                                    <span className="font-medium text-gray-900">Notes:</span> {ref.notes}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* File Attachments */}
+                    {selectedRequest.submittedData.referenceFiles && selectedRequest.submittedData.referenceFiles.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Paperclip size={18} className="text-gray-600" />
+                          <strong>Reference Files ({selectedRequest.submittedData.referenceFiles.length}):</strong>
+                        </div>
+                        <div className="space-y-2">
+                          {selectedRequest.submittedData.referenceFiles.map((file, fileIdx) => (
+                            <div
+                              key={fileIdx}
+                              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="flex-shrink-0">
+                                  {getFileIcon(file.mimeType)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-gray-900 truncate" title={file.originalName || file.filename}>
+                                    {file.originalName || file.filename || `File ${fileIdx + 1}`}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-0.5">
+                                    {formatFileSize(file.fileSize)} {file.mimeType && `• ${file.mimeType.split('/')[1]?.toUpperCase() || file.mimeType}`}
+                                  </div>
+                                  {file.uploadedAt && (
+                                    <div className="text-xs text-gray-400 mt-0.5">
+                                      Uploaded: {formatDate(file.uploadedAt)}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                                {canPreview(file.mimeType) && (
+                                  <button
+                                    onClick={() => handleFileAction(file, 'preview')}
+                                    className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                    title="Preview file"
+                                  >
+                                    <Eye size={14} />
+                                    Preview
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleFileAction(file, 'download')}
+                                  className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors flex items-center gap-1"
+                                  title="Download file"
+                                >
+                                  <Download size={14} />
+                                  Download
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     {selectedRequest.submittedData.additionalNotes && (
                       <div>
                         <strong>Additional Notes:</strong>
                         <br />
-                        <span className="text-gray-700">{selectedRequest.submittedData.additionalNotes}</span>
+                        <span className="text-gray-700 whitespace-pre-wrap">{selectedRequest.submittedData.additionalNotes}</span>
                       </div>
                     )}
                   </div>

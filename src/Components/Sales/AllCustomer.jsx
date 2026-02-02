@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, User, Mail, Phone, MapPin, CheckCircle, XCircle, Clock, Building, Truck, ChevronDown, UserCheck, X, DollarSign, CreditCard, Send } from 'lucide-react';
+import { Search, User, Mail, Phone, MapPin, CheckCircle, XCircle, Clock, Building, Truck, ChevronDown, UserCheck, X, DollarSign, CreditCard, Send, FileText, Image, Download, Eye, Paperclip, Users } from 'lucide-react';
 import API_CONFIG from '../../config/api';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -27,6 +27,8 @@ const AllCustomer = () => {
   const [creditLimitSubmitting, setCreditLimitSubmitting] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [creditLimitRequests, setCreditLimitRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -36,7 +38,11 @@ const AllCustomer = () => {
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers`);
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers`,
+        { headers: API_CONFIG.getAuthHeaders() }
+      );
+      
       if (response.data && response.data.success) {
         // Sort by createdAt descending (newest first)
         const sortedData = response.data.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -46,6 +52,7 @@ const AllCustomer = () => {
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
+      toast.error(error.response?.data?.message || 'Failed to fetch customers. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -145,9 +152,40 @@ const AllCustomer = () => {
   };
 
   // Credit Limit Handlers
-  const handleAddCreditLimit = (customer) => {
+  const handleAddCreditLimit = async (customer) => {
     setCreditLimitModal({ visible: true, customer });
     setCreditLimitAmount(customer.creditLimit || '');
+    
+    // Check if customer already has credit limit requests from the table data
+    if (customer.creditLimitRequests && customer.creditLimitRequests.length > 0) {
+      setCreditLimitRequests(customer.creditLimitRequests);
+      setLoadingRequests(false);
+      return;
+    }
+    
+    // Otherwise, fetch credit limit requests for this customer
+    setCreditLimitRequests([]);
+    setLoadingRequests(true);
+    
+    try {
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers?includeCreditLimitRequests=true`,
+        { headers: API_CONFIG.getAuthHeaders() }
+      );
+      
+      if (response.data && response.data.success) {
+        const customerWithRequests = response.data.data.find(
+          (c) => c._id === customer._id || c.userId === customer.userId
+        );
+        if (customerWithRequests && customerWithRequests.creditLimitRequests) {
+          setCreditLimitRequests(customerWithRequests.creditLimitRequests);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching credit limit requests:', error);
+    } finally {
+      setLoadingRequests(false);
+    }
   };
 
   const closeCreditLimitModal = () => {
@@ -155,6 +193,8 @@ const AllCustomer = () => {
     setCreditLimitAmount('');
     setCreditLimitSubmitting(false);
     setEmailSent(false);
+    setCreditLimitRequests([]);
+    setLoadingRequests(false);
   };
 
   const handleCreditLimitSubmit = async () => {
@@ -292,6 +332,107 @@ const AllCustomer = () => {
     if (status === 'rejected') return 'bg-red-100 text-red-800';
     if (status === 'pending') return 'bg-yellow-100 text-yellow-800';
     return 'bg-blue-100 text-blue-800';
+  };
+
+  // Format currency helper
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount || 0);
+  };
+
+  // Format date helper
+  const formatDate = (dateString, includeTime = false) => {
+    if (!dateString) return '-';
+    const options = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    };
+    if (includeTime) {
+      options.hour = '2-digit';
+      options.minute = '2-digit';
+    }
+    return new Date(dateString).toLocaleDateString('en-US', options);
+  };
+
+  // Get status badge for credit limit requests
+  const getStatusBadge = (status) => {
+    const statusColors = {
+      pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      submitted: 'bg-blue-100 text-blue-800 border-blue-300',
+      approved: 'bg-green-100 text-green-800 border-green-300',
+      rejected: 'bg-red-100 text-red-800 border-red-300'
+    };
+
+    const config = statusColors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
+    
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${config}`}>
+        {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'N/A'}
+      </span>
+    );
+  };
+
+  // Format file size helper
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  // Get file icon based on MIME type
+  const getFileIcon = (mimeType) => {
+    if (!mimeType) return <Paperclip size={20} className="text-gray-500" />;
+    if (mimeType.includes('pdf')) return <FileText size={20} className="text-red-500" />;
+    if (mimeType.includes('image')) return <Image size={20} className="text-blue-500" />;
+    return <Paperclip size={20} className="text-gray-500" />;
+  };
+
+  // Check if file can be previewed
+  const canPreview = (mimeType) => {
+    return mimeType?.includes('pdf') || mimeType?.includes('image');
+  };
+
+  // Handle file preview/download
+  const handleFileAction = (file, action = 'preview') => {
+    if (!file.fileUrl) {
+      toast.error('File URL not available');
+      return;
+    }
+
+    if (action === 'preview' && canPreview(file.mimeType)) {
+      // Open in new tab for preview
+      window.open(file.fileUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      // Download file
+      const link = document.createElement('a');
+      link.href = file.fileUrl;
+      link.download = file.originalName || file.filename || 'download';
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  // Get relationship badge color
+  const getRelationshipBadge = (relationship) => {
+    const colors = {
+      'Supplier': 'bg-green-100 text-green-800 border-green-300',
+      'Customer': 'bg-blue-100 text-blue-800 border-blue-300',
+      'Bank': 'bg-purple-100 text-purple-800 border-purple-300',
+      'Vendor': 'bg-orange-100 text-orange-800 border-orange-300',
+      'Partner': 'bg-pink-100 text-pink-800 border-pink-300',
+      'Other': 'bg-gray-100 text-gray-800 border-gray-300'
+    };
+    
+    return colors[relationship] || colors['Other'];
   };
 
   return (
@@ -687,8 +828,8 @@ const AllCustomer = () => {
 
       {/* Credit Limit Modal */}
       {creditLimitModal.visible && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
-          <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-md p-8 border border-blue-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 p-4">
+          <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-8 border border-blue-100">
             <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
@@ -739,6 +880,249 @@ const AllCustomer = () => {
                 </div>
               </div>
             </div>
+
+            {/* Credit Limit Requests Section */}
+            {loadingRequests ? (
+              <div className="mb-6 flex justify-center items-center py-4">
+                <div className="w-6 h-6 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                <span className="ml-2 text-sm text-gray-600">Loading requests...</span>
+              </div>
+            ) : creditLimitRequests.length > 0 ? (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <Clock size={18} />
+                  Credit Limit Requests ({creditLimitRequests.length})
+                </h3>
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {creditLimitRequests.map((request) => (
+                    <div key={request._id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(request.status)}
+                          {request.submittedData?.submittedAt ? (
+                            <span className="text-xs text-gray-500">
+                              Submitted: {formatDate(request.submittedData.submittedAt)}
+                            </span>
+                          ) : request.createdAt ? (
+                            <span className="text-xs text-gray-500">
+                              Created: {formatDate(request.createdAt)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      
+                      {request.submittedData ? (
+                        <>
+                          <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
+                            <div>
+                              <span className="text-gray-600">Requested Amount:</span>
+                              <div className="font-semibold text-blue-600 text-base">
+                                {formatCurrency(request.submittedData.requestedCreditLimit)}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Current Limit:</span>
+                              <div className="font-semibold text-gray-700">
+                                {formatCurrency(request.submittedData.currentCreditLimit)}
+                              </div>
+                            </div>
+                            {request.submittedData.businessType && (
+                              <div>
+                                <span className="text-gray-600">Business Type:</span>
+                                <div className="text-gray-700">{request.submittedData.businessType}</div>
+                              </div>
+                            )}
+                            {request.submittedData.paymentTerms && (
+                              <div>
+                                <span className="text-gray-600">Payment Terms:</span>
+                                <div className="text-gray-700">{request.submittedData.paymentTerms}</div>
+                              </div>
+                            )}
+                            {request.submittedData.yearsInBusiness && (
+                              <div>
+                                <span className="text-gray-600">Years in Business:</span>
+                                <div className="text-gray-700">{request.submittedData.yearsInBusiness}</div>
+                              </div>
+                            )}
+                            {request.submittedData.annualRevenue && (
+                              <div>
+                                <span className="text-gray-600">Annual Revenue:</span>
+                                <div className="text-gray-700">{formatCurrency(request.submittedData.annualRevenue)}</div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Legacy Text Reference (single text field) */}
+                          {request.submittedData.references && 
+                           (!request.submittedData.textReferences || request.submittedData.textReferences.length === 0) && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <span className="text-gray-600 text-sm font-semibold">Text References:</span>
+                              <div className="text-gray-700 text-sm mt-1 whitespace-pre-wrap">{request.submittedData.references}</div>
+                            </div>
+                          )}
+                          
+                          {/* Multiple Text References */}
+                          {request.submittedData.textReferences && request.submittedData.textReferences.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Users size={16} className="text-gray-600" />
+                                <span className="text-gray-600 text-sm font-semibold">
+                                  Business References ({request.submittedData.textReferences.length})
+                                </span>
+                              </div>
+                              <div className="space-y-3">
+                                {request.submittedData.textReferences.map((ref, refIdx) => (
+                                  <div
+                                    key={refIdx}
+                                    className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                                  >
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <h5 className="font-semibold text-gray-900 text-sm">
+                                            {ref.companyName || 'Unnamed Company'}
+                                          </h5>
+                                          {ref.relationship && (
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getRelationshipBadge(ref.relationship)}`}>
+                                              {ref.relationship}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {ref.contactPerson && (
+                                          <p className="text-xs text-gray-600">
+                                            Contact: <span className="font-medium">{ref.contactPerson}</span>
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 gap-2 mt-2 text-xs">
+                                      {ref.email && (
+                                        <div className="flex items-center gap-2">
+                                          <Mail size={12} className="text-gray-400" />
+                                          <span className="text-gray-500">Email:</span>
+                                          <a 
+                                            href={`mailto:${ref.email}`}
+                                            className="text-blue-600 hover:underline"
+                                          >
+                                            {ref.email}
+                                          </a>
+                                        </div>
+                                      )}
+                                      {ref.phone && (
+                                        <div className="flex items-center gap-2">
+                                          <Phone size={12} className="text-gray-400" />
+                                          <span className="text-gray-500">Phone:</span>
+                                          <a 
+                                            href={`tel:${ref.phone}`}
+                                            className="text-blue-600 hover:underline"
+                                          >
+                                            {ref.phone}
+                                          </a>
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {ref.notes && (
+                                      <div className="mt-2 pt-2 border-t border-gray-200">
+                                        <p className="text-xs text-gray-600">
+                                          <span className="font-medium">Notes:</span> {ref.notes}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* File Attachments */}
+                          {request.submittedData.referenceFiles && request.submittedData.referenceFiles.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Paperclip size={16} className="text-gray-600" />
+                                <span className="text-gray-600 text-sm font-semibold">
+                                  Reference Files ({request.submittedData.referenceFiles.length})
+                                </span>
+                              </div>
+                              <div className="space-y-2">
+                                {request.submittedData.referenceFiles.map((file, fileIdx) => (
+                                  <div
+                                    key={fileIdx}
+                                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                      <div className="flex-shrink-0">
+                                        {getFileIcon(file.mimeType)}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium text-gray-900 truncate" title={file.originalName || file.filename}>
+                                          {file.originalName || file.filename || `File ${fileIdx + 1}`}
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                          {formatFileSize(file.fileSize)} {file.mimeType && `• ${file.mimeType.split('/')[1]?.toUpperCase() || file.mimeType}`}
+                                        </div>
+                                        {file.uploadedAt && (
+                                          <div className="text-xs text-gray-400 mt-0.5">
+                                            Uploaded: {formatDate(file.uploadedAt)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                                      {canPreview(file.mimeType) && (
+                                        <button
+                                          onClick={() => handleFileAction(file, 'preview')}
+                                          className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                          title="Preview file"
+                                        >
+                                          <Eye size={14} />
+                                          Preview
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => handleFileAction(file, 'download')}
+                                        className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors flex items-center gap-1"
+                                        title="Download file"
+                                      >
+                                        <Download size={14} />
+                                        Download
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {request.submittedData.additionalNotes && (
+                            <div className="mt-2">
+                              <span className="text-gray-600 text-sm font-semibold">Additional Notes:</span>
+                              <div className="text-gray-700 text-sm mt-1 whitespace-pre-wrap">{request.submittedData.additionalNotes}</div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="mt-3 text-sm text-gray-600">
+                          <p>Form link sent. Waiting for shipper to submit the form.</p>
+                        </div>
+                      )}
+                      
+                      {request.emailSentBy && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
+                          Email sent by: {request.emailSentBy.employeeName} ({request.emailSentBy.department})
+                          {request.emailSentAt && ` on ${formatDate(request.emailSentAt, true)}`}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-500 text-center">No credit limit requests found for this customer.</p>
+              </div>
+            )}
 
             {/* Credit Limit Input */}
             <div className="mb-6">
