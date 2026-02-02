@@ -831,15 +831,29 @@ const Sidebar = () => {
         console.log("👤 User allowed modules (count):", allowedModuleIds.length);
         console.log("👤 User department:", department, "Has categories:", hasDepartmentCategories);
 
-        const res = await fetch(`${API_CONFIG.BASE_URL}/api/v1/module`, {
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
+        // Get token explicitly for Safari compatibility (explicit header required)
+        const token = 
+          sessionStorage.getItem('token') || 
+          localStorage.getItem('token') ||
+          sessionStorage.getItem('authToken') || 
+          localStorage.getItem('authToken');
+        
+        if (!token) {
+          console.error("❌ No token found in storage");
+          throw new Error("Authentication token not found. Please login again.");
         }
 
-        const data = await res.json();
+        // Use axios with explicit Authorization header for Safari compatibility
+        // Safari requires explicit headers for cross-site requests
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/module`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          withCredentials: true, // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
+        });
+
+        const data = res.data;
 
         if (data.success && data.modules) {
           console.log("📦 Total modules from API:", data.modules.length);
@@ -1248,6 +1262,8 @@ const Sidebar = () => {
           }
         } else {
           console.error("❌ API response not successful:", data);
+          console.error("❌ Response status:", res?.status);
+          console.error("❌ Response headers:", res?.headers);
           // Fallback: show basic menus if API fails
           // For superadmin, include Tracking in basic menus (outside departments)
           const basicMenuNames = isSuperAdmin ? ['Dashboard', 'Tracking'] : ['Dashboard', 'Tracking'];
@@ -1261,6 +1277,29 @@ const Sidebar = () => {
         }
       } catch (err) {
         console.error("❌ Failed to fetch modules:", err);
+        console.error("❌ Error details:", {
+          message: err?.message,
+          response: err?.response?.data,
+          status: err?.response?.status,
+          headers: err?.response?.headers,
+          config: {
+            url: err?.config?.url,
+            headers: err?.config?.headers,
+            withCredentials: err?.config?.withCredentials
+          }
+        });
+        
+        // Check if it's an authentication error
+        if (err?.response?.status === 400 || err?.response?.status === 401) {
+          console.error("❌ Authentication failed. Token:", token ? "exists" : "missing");
+          console.error("❌ Check if token is in storage:", {
+            sessionToken: sessionStorage.getItem('token') ? 'exists' : 'missing',
+            sessionAuthToken: sessionStorage.getItem('authToken') ? 'exists' : 'missing',
+            localToken: localStorage.getItem('token') ? 'exists' : 'missing',
+            localAuthToken: localStorage.getItem('authToken') ? 'exists' : 'missing'
+          });
+        }
+        
         // Fallback: show basic menus on error
         // For superadmin, include Tracking in basic menus (outside departments)
         const basicMenuNames = isSuperAdmin ? ['Dashboard', 'Tracking'] : ['Dashboard', 'Tracking'];

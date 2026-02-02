@@ -22,8 +22,11 @@ axios.interceptors.request.use(
     // Ensure withCredentials is always true (Safari requirement)
     config.withCredentials = true;
     
+    // Always ensure headers object exists
+    config.headers = config.headers || {};
+    
     // Only add Authorization header if not already set by component
-    if (!config.headers?.Authorization) {
+    if (!config.headers.Authorization && !config.headers.authorization) {
       // Get token from storage (check all possible locations)
       const token = 
         sessionStorage.getItem('token') || 
@@ -33,8 +36,11 @@ axios.interceptors.request.use(
       
       // Add Authorization header if token exists
       if (token) {
-        config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${token}`;
+        // Also set lowercase version for compatibility
+        config.headers.authorization = `Bearer ${token}`;
+      } else {
+        console.warn('⚠️ No token found in storage for axios request:', config.url);
       }
     }
     
