@@ -94,7 +94,7 @@ const API_CONFIG = {
         ...headers,
         ...options.headers,
       },
-      withCredentials: true,
+      credentials: 'include', // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
     };
     
     try {

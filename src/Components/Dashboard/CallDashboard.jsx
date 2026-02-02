@@ -24,7 +24,7 @@ import 'alertifyjs/build/css/alertify.css';
 /* ============ AXIOS INSTANCE (JWT attach) ============ */
 const api = axios.create({
   baseURL: `${API_CONFIG.BASE_URL}`,
-  withCredentials: false,
+  withCredentials: true, // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
 });
 
 

@@ -1,7 +1,7 @@
 // src/pages/AddCustomer.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { User, Building2, FileText, PlusCircle, Eye, EyeOff, Search } from 'lucide-react';
+import { User, Building2, FileText, PlusCircle, Eye, EyeOff, Search, Mail } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -38,6 +38,54 @@ const Input = React.memo(function Input({
         {rightNode && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">{rightNode}</div>
         )}
+      </div>
+      {error && (
+        <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+});
+
+// Select/Dropdown Component
+const Select = React.memo(function Select({
+  name, label, placeholder, icon = null, required = false,
+  value, onChange, onBlur, error, options = [], inputRef = null,
+}) {
+  return (
+    <div className="w-full">
+      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor={name}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">{icon}</div>}
+        <select
+          ref={inputRef}
+          id={name}
+          name={name}
+          value={value || ''}
+          onChange={onChange}
+          onBlur={onBlur}
+          aria-invalid={!!error}
+          className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none bg-white cursor-pointer ${icon ? 'pl-10' : ''
+            } ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+        >
+          <option value="">{placeholder || 'Select an option'}</option>
+          {options.map((option, index) => (
+            <option key={index} value={typeof option === 'string' ? option : option.value}>
+              {typeof option === 'string' ? option : option.label}
+            </option>
+          ))}
+        </select>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </div>
       {error && (
         <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
@@ -200,6 +248,8 @@ const initialForm = {
   mc_dot_no: '',
   phoneNo: '',
   email: '',
+  companyEmail: '', // Company email dropdown field
+  onboardCompany: '', // Onboard company dropdown field
   password: '',
   confirmPassword: '',
   compAdd: '',
@@ -230,6 +280,42 @@ const AddCustomer = () => {
   const [todayStats, setTodayStats] = useState({ totalAdded: 0 });
   const [totalStats, setTotalStats] = useState({ totalCustomers: 0, pendingCustomers: 0 });
   const [open, setOpen] = useState(false);
+
+  // Company Email Options - Based on the three companies in the system
+  const companyEmailOptions = [
+    // V Power Logistics emails
+    'company@vpowerlogistics.com',
+    'info@vpowerlogistics.com',
+    'contact@vpower-logistics.com',
+    'support@vpowerlogistics.com',
+    'sales@vpowerlogistics.com',
+    'operations@vpowerlogistics.com',
+    'accounting@vpowerlogistics.com',
+    'hr@vpowerlogistics.com',
+    'admin@vpowerlogistics.com',
+    // IDENTIFICA LLC emails
+    'company@identifica.com',
+    'info@identifica.com',
+    'contact@identifica.com',
+    'support@identifica.com',
+    'sales@identifica.com',
+    'operations@identifica.com',
+    // MT. POCONO TRANSPORTATION INC emails
+    'company@mtpocono.com',
+    'info@mtpocono.com',
+    'contact@mtpocono.com',
+    'support@mtpocono.com',
+    'sales@mtpocono.com',
+    'operations@mtpocono.com',
+    'dispatch@mtpocono.com'
+  ];
+
+  // Onboard Company Options - The three companies in the system
+  const onboardCompanyOptions = [
+    'V Power Logistics',
+    'IDENTIFICA LLC',
+    'MT. POCONO TRANSPORTATION INC'
+  ];
 
 
   const [formData, setFormData] = useState(initialForm);
@@ -268,7 +354,10 @@ const AddCustomer = () => {
       const token = getToken();
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
+        }
       );
       if (res.data.success) {
         setCustomers(res.data.customers || []);
@@ -285,7 +374,10 @@ const AddCustomer = () => {
       const token = getToken();
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/today-count`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
+        }
       );
       if (res.data.success) setTodayStats(res.data.todayStats || {});
     } catch (error) {
@@ -431,6 +523,10 @@ const AddCustomer = () => {
         Object.entries(formData).map(([k, v]) => {
           if (typeof v !== 'string') return [k, v];
           if (k === 'password' || k === 'confirmPassword') return [k, v]; // do NOT trim
+          // Only include companyEmail if it has a value (optional field)
+          if (k === 'companyEmail' && !v.trim()) return [k, '']; // Include empty string for optional field
+          // Only include onboardCompany if it has a value (optional field)
+          if (k === 'onboardCompany' && !v.trim()) return [k, '']; // Include empty string for optional field
           return [k, v.trim()];
         })
       );
@@ -439,7 +535,10 @@ const AddCustomer = () => {
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-customer`,
         cleanedData,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
+        }
       );
 
 
@@ -558,7 +657,8 @@ const AddCustomer = () => {
       const token = getToken();
       const axiosInstance = axios.create({
         baseURL: `${API_CONFIG.BASE_URL}`,
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
 
@@ -754,6 +854,30 @@ const AddCustomer = () => {
               </div>
 
 
+              {/* Company Selection */}
+              <div className="bg-teal-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-teal-800 mb-4">Company Selection</h3>
+
+                <div className="w-full">
+                  <Select
+                    name="onboardCompany"
+                    label="Onboard Company"
+                    placeholder="Select Onboard Company"
+                    value={formData.onboardCompany}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.onboardCompany}
+                    options={onboardCompanyOptions}
+                    icon={
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    }
+                    inputRef={el => (fieldRefs.current.onboardCompany = el)}
+                  />
+                </div>
+              </div>
+
               {/* Contact Information */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-blue-800 mb-4">Contact Information</h3>
@@ -796,8 +920,29 @@ const AddCustomer = () => {
                       }
                       inputRef={el => (fieldRefs.current.phoneNo = el)}
                     />
+                  </div>
 
+                  {/* Company Email Dropdown - New Field */}
+                  {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <Select
+                      name="companyEmail"
+                      label="Company Email"
+                      placeholder="Select Company Email"
+                      value={formData.companyEmail}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.companyEmail}
+                      options={companyEmailOptions}
+                      icon={
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      }
+                      inputRef={el => (fieldRefs.current.companyEmail = el)}
+                    />
+                  </div> */}
 
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <Input
                       name="password"
                       label="Password"
