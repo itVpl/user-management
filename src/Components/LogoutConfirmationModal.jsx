@@ -59,7 +59,7 @@ const LogoutConfirmationModal = ({ isOpen, onClose, onConfirmLogout }) => {
 
       const api = axios.create({
         baseURL: API_CONFIG.BASE_URL,
-        withCredentials: false,
+        withCredentials: true, // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
       api.interceptors.request.use((config) => {
@@ -138,7 +138,7 @@ const LogoutConfirmationModal = ({ isOpen, onClose, onConfirmLogout }) => {
 
       const api = axios.create({
         baseURL: API_CONFIG.BASE_URL,
-        withCredentials: false,
+        withCredentials: true, // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
       api.interceptors.request.use((config) => {

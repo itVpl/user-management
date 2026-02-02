@@ -31,7 +31,7 @@ class ApiService {
       const response = await fetch(url, {
         method: 'GET',
         headers: this.getAuthHeaders(),
-        withCredentials: true,
+        credentials: 'include', // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
         ...options,
       });
 
@@ -58,7 +58,7 @@ class ApiService {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(body),
-        withCredentials: true,
+        credentials: 'include', // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
         ...options,
       });
 
@@ -85,7 +85,7 @@ class ApiService {
         method: 'PUT',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(body),
-        withCredentials: true,
+        credentials: 'include', // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
         ...options,
       });
 
@@ -144,7 +144,7 @@ class ApiService {
         method: 'PATCH',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(body),
-        withCredentials: true,
+        credentials: 'include', // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
         ...options,
       });
 
@@ -170,7 +170,7 @@ class ApiService {
       const response = await fetch(url, {
         method: 'DELETE',
         headers: this.getAuthHeaders(),
-        withCredentials: true,
+        credentials: 'include', // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
         ...options,
       });
 
@@ -204,7 +204,7 @@ class ApiService {
           Authorization: `Bearer ${token}`,
         },
         body: formData,
-        withCredentials: true,
+        credentials: 'include', // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
         ...options,
       });
 

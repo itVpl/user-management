@@ -516,7 +516,8 @@ const handleWorkingAddressFileChange = (idx, file) => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
       await axiosInstance.patch(`/api/v1/shipper_driver/update/${truckerId}`, {
@@ -559,7 +560,8 @@ const handleWorkingAddressFileChange = (idx, file) => {
         baseURL: `${API_CONFIG.BASE_URL}`,
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
       // Try different endpoints based on user role
@@ -629,7 +631,8 @@ const handleWorkingAddressFileChange = (idx, file) => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
       await axiosInstance.patch(`/api/v1/shipper_driver/update-status/${userId}`, {
@@ -920,7 +923,8 @@ const handleWorkingAddressFileChange = (idx, file) => {
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
       const axiosInstance = axios.create({
         baseURL: `${API_CONFIG.BASE_URL}`,
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
       // 4) API calls
@@ -1077,7 +1081,8 @@ const handleWorkingAddressFileChange = (idx, file) => {
       const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
       const axiosInstance = axios.create({
         baseURL: `${API_CONFIG.BASE_URL}`,
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
       // userId resolve (we saved _id as _id || userId earlier)
