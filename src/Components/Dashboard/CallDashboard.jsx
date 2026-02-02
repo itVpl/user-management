@@ -814,10 +814,10 @@ const DailyTarget = () => {
           </div>
 
           <div className="flex gap-4 w-full md:w-auto self-end md:self-center">
-            <button className="flex-1 md:flex-none btn bg-blue-500 hover:bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-3 transition-all min-w-[170px]">
+            {/* <button className="flex-1 md:flex-none btn bg-blue-500 hover:bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-3 transition-all min-w-[170px]">
               <span className="text-xl"> <CallIcon /></span>
               <span className="font-semibold">Start Calling</span>
-            </button>
+            </button> */}
             <button
               onClick={() => setIsReasonOpen(true)}
               className="flex-1 md:flex-none btn bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all min-w-[170px]">
