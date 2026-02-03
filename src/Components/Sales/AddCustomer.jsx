@@ -6,6 +6,126 @@ import API_CONFIG from '../../config/api.js';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+// Searchable Select Component
+const SearchableSelect = React.memo(function SearchableSelect({
+  name, label, placeholder, icon = null, required = false,
+  value, onChange, onBlur, error, options = [], inputRef = null,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const selectRef = useRef(null);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm.trim()) return options;
+    const term = searchTerm.toLowerCase();
+    return options.filter(option => {
+      const optionText = typeof option === 'string' ? option : option.label;
+      return optionText.toLowerCase().includes(term);
+    });
+  }, [options, searchTerm]);
+
+  const selectedLabel = useMemo(() => {
+    if (!value) return '';
+    const option = options.find(opt => (typeof opt === 'string' ? opt : opt.value) === value);
+    return typeof option === 'string' ? option : option?.label || '';
+  }, [value, options]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (selectRef.current && !selectRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (optionValue) => {
+    const syntheticEvent = {
+      target: { name, value: optionValue }
+    };
+    onChange(syntheticEvent);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  return (
+    <div className="w-full" ref={selectRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor={name}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">{icon}</div>}
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-left ${icon ? 'pl-10' : ''} ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'} ${!value ? 'text-gray-400' : 'text-gray-900'}`}
+        >
+          {value ? selectedLabel : (placeholder || 'Select an option')}
+        </button>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          <svg className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+
+        {isOpen && (
+          <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-h-60 overflow-hidden">
+            {/* Search Input */}
+            <div className="p-2 border-b border-gray-200">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search..."
+                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            {/* Options List */}
+            <div className="max-h-48 overflow-y-auto">
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((option, index) => {
+                  const optionValue = typeof option === 'string' ? option : option.value;
+                  const optionLabel = typeof option === 'string' ? option : option.label;
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => handleSelect(optionValue)}
+                      className={`w-full text-left px-4 py-2 hover:bg-blue-50 transition-colors ${
+                        value === optionValue ? 'bg-blue-50 font-semibold' : ''
+                      }`}
+                    >
+                      {optionLabel}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="px-4 py-3 text-gray-500 text-center text-sm">
+                  No options found
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      {error && (
+        <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+});
+
 
 /* ---------------- Reusable components ---------------- */
 const Input = React.memo(function Input({
@@ -523,14 +643,16 @@ const AddCustomer = () => {
         Object.entries(formData).map(([k, v]) => {
           if (typeof v !== 'string') return [k, v];
           if (k === 'password' || k === 'confirmPassword') return [k, v]; // do NOT trim
+          // onboardCompany - send exact value as selected from dropdown
+          // Values: 'V Power Logistics', 'IDENTIFICA LLC', 'MT. POCONO TRANSPORTATION INC'
+          if (k === 'onboardCompany') {
+            return [k, v.trim() || '']; // Trim only whitespace, preserve exact company name
+          }
           // Only include companyEmail if it has a value (optional field)
           if (k === 'companyEmail' && !v.trim()) return [k, '']; // Include empty string for optional field
-          // Only include onboardCompany if it has a value (optional field)
-          if (k === 'onboardCompany' && !v.trim()) return [k, '']; // Include empty string for optional field
           return [k, v.trim()];
         })
       );
-
 
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-customer`,
@@ -859,7 +981,7 @@ const AddCustomer = () => {
                 <h3 className="text-lg font-semibold text-teal-800 mb-4">Company Selection</h3>
 
                 <div className="w-full">
-                  <Select
+                  <SearchableSelect
                     name="onboardCompany"
                     label="Onboard Company"
                     placeholder="Select Onboard Company"
@@ -882,8 +1004,8 @@ const AddCustomer = () => {
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-blue-800 mb-4">Contact Information</h3>
 
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Row 1: Email and Phone - 2 fields per row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input
                       name="email"
                       label="Email Address"
@@ -901,7 +1023,6 @@ const AddCustomer = () => {
                       }
                       inputRef={el => (fieldRefs.current.email = el)}
                     />
-
 
                     <Input
                       name="phoneNo"
@@ -922,27 +1043,8 @@ const AddCustomer = () => {
                     />
                   </div>
 
-                  {/* Company Email Dropdown - New Field */}
-                  {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                    <Select
-                      name="companyEmail"
-                      label="Company Email"
-                      placeholder="Select Company Email"
-                      value={formData.companyEmail}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={errors.companyEmail}
-                      options={companyEmailOptions}
-                      icon={
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      }
-                      inputRef={el => (fieldRefs.current.companyEmail = el)}
-                    />
-                  </div> */}
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  {/* Password Fields - 2 fields per row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <Input
                       name="password"
                       label="Password"
@@ -971,11 +1073,7 @@ const AddCustomer = () => {
                       }
                       inputRef={el => (fieldRefs.current.password = el)}
                     />
-                  </div>
 
-
-                  {/* Confirm Password */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <Input
                       name="confirmPassword"
                       label="Confirm Password"
