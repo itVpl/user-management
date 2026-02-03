@@ -127,6 +127,11 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Team",
       "Team Rating"
     ],
+    "Reports": [
+      "Call Data",
+      "Call Records (Id)",
+      "Report Analysis"
+    ],
     "System Administration": [
       "Manage Module"
     ]
