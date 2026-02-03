@@ -1462,7 +1462,7 @@ const Sidebar = () => {
                             to={item.path}
                             title={!isExpanded ? item.name : ""}
                             className={({ isActive }) =>
-                              `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all ${isExpanded ? "mx-2" : "mx-1"} ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
+                              `sidebar-item flex items-center ${isExpanded ? "sidebar-item-expanded justify-start" : "justify-center mx-1"} gap-3 p-3 transition-all ${isActive ? "sidebar-item-active text-white" : "text-gray-700"}`
                             }
                             style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
                             end
@@ -1497,10 +1497,10 @@ const Sidebar = () => {
                                     <button
                                       key={deptName}
                                       onClick={(e) => handleFlyoutOpen('sales', e, deptName)}
-                                      className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 transition-all ${isExpanded ? "mx-2" : "mx-1"} w-full mb-1 ${
+                                      className={`sidebar-item flex items-center ${isExpanded ? "sidebar-item-expanded justify-start" : "justify-center mx-1"} gap-3 p-3 transition-all w-full mb-1 ${
                                         isActive
-                                          ? "text-white rounded-l-lg rounded-r-3xl"
-                                          : "hover:bg-gray-100 text-gray-700 rounded-lg"
+                                          ? "sidebar-item-active text-white"
+                                          : "text-gray-700"
                                       }`}
                                       style={
                                         isActive
@@ -1523,10 +1523,10 @@ const Sidebar = () => {
                                 // Single department dropdown for regular users
                                 <button
                                   onClick={(e) => handleFlyoutOpen('sales', e)}
-                                  className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 transition-all ${isExpanded ? "mx-2" : "mx-1"} w-full ${
+                                className={`sidebar-item flex items-center ${isExpanded ? "sidebar-item-expanded justify-start" : "justify-center mx-1"} gap-3 p-3 transition-all w-full ${
                                     departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
-                                      ? "text-white rounded-l-lg rounded-r-3xl"
-                                      : "hover:bg-gray-100 text-gray-700 rounded-lg"
+                                      ? "sidebar-item-active text-white"
+                                      : "text-gray-700"
                                   }`}
                                   style={
                                     departmentMenuItems.some(deptItem => location.pathname === deptItem.path || location.pathname.startsWith(deptItem.path + '/')) || (flyoutOpen && flyoutType === 'sales')
@@ -1564,7 +1564,7 @@ const Sidebar = () => {
                         key={idx}
                         title={!isExpanded ? item.name : ""}
                         className={({ isActive }) =>
-                          `flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 rounded-lg transition-all ${isExpanded ? "mx-2" : "mx-1"} ${isActive ? "text-white" : "hover:bg-gray-100 text-gray-700"}`
+                          `sidebar-item flex items-center ${isExpanded ? "sidebar-item-expanded justify-start" : "justify-center mx-1"} gap-3 p-3 transition-all ${isActive ? "sidebar-item-active text-white" : "text-gray-700"}`
                         }
                         style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
                         end
@@ -1607,10 +1607,10 @@ const Sidebar = () => {
                     <div className="w-full mt-2">
                       <button
                         onClick={(e) => handleFlyoutOpen('reports', e)}
-                        className={`flex items-center ${isExpanded ? "justify-start" : "justify-center"} gap-3 p-3 transition-all ${isExpanded ? "mx-2" : "mx-1"} w-full ${
+                        className={`sidebar-item flex items-center ${isExpanded ? "sidebar-item-expanded justify-start" : "justify-center mx-1"} gap-3 p-3 transition-all w-full ${
                           reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/')) || (flyoutOpen && flyoutType === 'reports')
-                            ? "text-white rounded-l-lg rounded-r-3xl"
-                            : "hover:bg-gray-100 text-gray-700 rounded-lg"
+                            ? "sidebar-item-active text-white"
+                            : "text-gray-700"
                         }`}
                         style={
                           reportMenuItems.some(reportItem => location.pathname === reportItem.path || location.pathname.startsWith(reportItem.path + '/')) || (flyoutOpen && flyoutType === 'reports')
@@ -1774,7 +1774,7 @@ const Sidebar = () => {
 
           <NavLink
             to="/"
-            className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors mb-1 ${isExpanded ? "mx-0" : "justify-center"}`}
+            className={`sidebar-item flex items-center gap-3 p-3 text-gray-700 cursor-pointer transition-all mb-1 ${isExpanded ? "mx-0" : "justify-center"}`}
           >
             <img src={DashboardImage} alt="Back to Home" className="w-5 h-5" />
             <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
@@ -1782,7 +1782,7 @@ const Sidebar = () => {
             </span>
           </NavLink>
           <div 
-            className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-gray-700 cursor-pointer transition-colors ${isExpanded ? "mx-0" : "justify-center"}`}
+            className={`sidebar-item flex items-center gap-3 p-3 text-gray-700 cursor-pointer transition-all ${isExpanded ? "mx-0" : "justify-center"}`}
             onClick={handleLogoutClick}
           >
             <img src={LogOut} alt="Logout" className="w-5 h-5" />

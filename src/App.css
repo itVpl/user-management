@@ -144,6 +144,29 @@
   display: none;  /* Safari and Chrome */
 }
 
+/* Sidebar menu item styles */
+.sidebar-item {
+  border-radius: 14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.sidebar-item-expanded {
+  width: calc(100% - 16px);
+  margin-left: 8px;
+  margin-right: 8px;
+}
+
+.sidebar-item:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.sidebar-item-active {
+  border-radius: 9999px;
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
+}
+
 /* Custom Alertify Styling */
 .alertify-notifier {
   z-index: 9999;
