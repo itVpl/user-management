@@ -590,10 +590,10 @@ const Dashboard = () => {
     <table className="w-full">
       <thead>
         <tr className="bg-gray-50 border-b border-gray-200">
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Shipper ID</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Load ID</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Weight</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Vehicle</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Shipper ID</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Load ID</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Weight</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Vehicle</th>
         </tr>
       </thead>
       <tbody>
@@ -936,12 +936,12 @@ const Dashboard = () => {
     <table className="w-full">
       <thead>
         <tr className="bg-gray-50 border-b border-gray-200">
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Load ID</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Bill To</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Shipper Name</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Carrier Name</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Date-Time</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-sm">Carrier Fees</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Load ID</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Bill To</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Shipper Name</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Carrier Name</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Date-Time</th>
+          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Carrier Fees</th>
         </tr>
       </thead>
       <tbody>

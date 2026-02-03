@@ -1476,8 +1476,6 @@ useEffect(() => {
         'Vehicle Type': item.vehicleType || 'N/A',
         'Rate ($)': item.rate || 0,
         'Status': item.status || 'N/A',
-        'Shipper Company': item.shipper?.compName || 'N/A',
-        'Shipper Email': item.shipper?.email || 'N/A',
         'Commodity': item.commodity || 'N/A',
         'Pickup Date': item.pickupDate ? new Date(item.pickupDate).toLocaleDateString() : 'N/A',
         'Delivery Date': item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString() : 'N/A',
