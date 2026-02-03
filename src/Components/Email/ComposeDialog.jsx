@@ -26,19 +26,26 @@ import { validateEmailRecipients, getRecipientCount, parseEmailRecipients } from
 const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAccountId }) => {
   const [emailData, setEmailData] = useState({
     to: '',
+    cc: '',
+    bcc: '',
     subject: '',
     text: '',
   });
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [emailValidation, setEmailValidation] = useState({ valid: true, invalidEmails: [] });
+  const [ccValidation, setCcValidation] = useState({ valid: true, invalidEmails: [] });
+  const [bccValidation, setBccValidation] = useState({ valid: true, invalidEmails: [] });
   const [recipientChips, setRecipientChips] = useState([]);
+  const [ccChips, setCcChips] = useState([]);
+  const [bccChips, setBccChips] = useState([]);
   const fileInputRef = useRef(null);
 
   const handleChange = (field) => (e) => {
     const value = e.target.value;
     setEmailData(prev => ({ ...prev, [field]: value }));
     
-    // Validate emails when 'to' field changes
+    // Validate emails when recipient fields change
     if (field === 'to') {
       const validation = validateEmailRecipients(value);
       setEmailValidation(validation);
@@ -50,24 +57,72 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
         return emailRegex.test(email.trim());
       });
       setRecipientChips(validEmails);
+    } else if (field === 'cc') {
+      const validation = validateEmailRecipients(value);
+      setCcValidation(validation);
+      
+      const emails = parseEmailRecipients(value);
+      const validEmails = emails.filter(email => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email.trim());
+      });
+      setCcChips(validEmails);
+    } else if (field === 'bcc') {
+      const validation = validateEmailRecipients(value);
+      setBccValidation(validation);
+      
+      const emails = parseEmailRecipients(value);
+      const validEmails = emails.filter(email => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email.trim());
+      });
+      setBccChips(validEmails);
     }
   };
 
-  const removeRecipient = (emailToRemove) => {
-    const emails = parseEmailRecipients(emailData.to);
+  const removeRecipient = (emailToRemove, field = 'to') => {
+    const currentValue = emailData[field];
+    const emails = parseEmailRecipients(currentValue);
     const updatedEmails = emails.filter(email => email.trim() !== emailToRemove.trim());
     const newValue = updatedEmails.join(', ');
-    setEmailData(prev => ({ ...prev, to: newValue }));
+    setEmailData(prev => ({ ...prev, [field]: newValue }));
+    
     const validation = validateEmailRecipients(newValue);
-    setEmailValidation(validation);
-    setRecipientChips(updatedEmails.filter(email => {
+    const validEmails = updatedEmails.filter(email => {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       return emailRegex.test(email.trim());
-    }));
+    });
+    
+    if (field === 'to') {
+      setEmailValidation(validation);
+      setRecipientChips(validEmails);
+    } else if (field === 'cc') {
+      setCcValidation(validation);
+      setCcChips(validEmails);
+    } else if (field === 'bcc') {
+      setBccValidation(validation);
+      setBccChips(validEmails);
+    }
   };
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
+    
+    // Validate file count (max 10 files)
+    if (attachments.length + files.length > 10) {
+      alert('Maximum 10 files allowed. Please remove some files first.');
+      e.target.value = '';
+      return;
+    }
+
+    // Validate file size (max 25MB each)
+    const oversizedFiles = files.filter(file => file.size > 25 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      alert(`File size exceeds 25MB limit: ${oversizedFiles.map(f => f.name).join(', ')}`);
+      e.target.value = '';
+      return;
+    }
+
     const newAttachments = files.map(file => ({
       file,
       filename: file.name,
@@ -102,22 +157,48 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
     }
     
     // Validate emails before sending
-    const validation = validateEmailRecipients(emailData.to);
-    if (!validation.valid) {
-      setEmailValidation(validation);
+    const toValidation = validateEmailRecipients(emailData.to);
+    if (!toValidation.valid) {
+      setEmailValidation(toValidation);
       return;
+    }
+    
+    if (emailData.cc) {
+      const ccValidation = validateEmailRecipients(emailData.cc);
+      if (!ccValidation.valid) {
+        setCcValidation(ccValidation);
+        return;
+      }
+    }
+    
+    if (emailData.bcc) {
+      const bccValidation = validateEmailRecipients(emailData.bcc);
+      if (!bccValidation.valid) {
+        setBccValidation(bccValidation);
+        return;
+      }
     }
     
     // Send email with File objects directly (send-files endpoint expects FormData with files)
     // API accepts comma-separated string for multiple recipients
-    onSend({
+    const emailPayload = {
       to: emailData.to.trim(), // API handles parsing comma-separated emails
       subject: emailData.subject,
       text: emailData.text,
       html: `<p>${emailData.text.replace(/\n/g, '<br/>')}</p>`,
       emailAccountId,
       attachments: attachments.map(att => att.file) // Send File objects directly
-    });
+    };
+    
+    // Add CC and BCC if provided
+    if (emailData.cc && emailData.cc.trim()) {
+      emailPayload.cc = emailData.cc.trim();
+    }
+    if (emailData.bcc && emailData.bcc.trim()) {
+      emailPayload.bcc = emailData.bcc.trim();
+    }
+    
+    onSend(emailPayload);
   };
 
   const handleClose = (event, reason) => {
@@ -129,9 +210,14 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
       return;
     }
     
-    setEmailData({ to: '', subject: '', text: '' });
+    setEmailData({ to: '', cc: '', bcc: '', subject: '', text: '' });
     setEmailValidation({ valid: true, invalidEmails: [] });
+    setCcValidation({ valid: true, invalidEmails: [] });
+    setBccValidation({ valid: true, invalidEmails: [] });
     setRecipientChips([]);
+    setCcChips([]);
+    setBccChips([]);
+    setShowCcBcc(false);
     attachments.forEach(att => {
       if (att.preview) URL.revokeObjectURL(att.preview);
     });
@@ -198,7 +284,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
                     <Chip
                       key={index}
                       label={email}
-                      onDelete={() => removeRecipient(email)}
+                      onDelete={() => removeRecipient(email, 'to')}
                       avatar={
                         <Avatar sx={{ 
                           width: 24, 
@@ -262,6 +348,164 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
               />
             </Box>
           </Box>
+          
+          {/* CC/BCC Toggle */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+            <Button
+              size="small"
+              onClick={() => setShowCcBcc(!showCcBcc)}
+              sx={{
+                textTransform: 'none',
+                color: '#1a73e8',
+                fontSize: '0.875rem',
+                '&:hover': { backgroundColor: '#e8f0fe' }
+              }}
+            >
+              {showCcBcc ? 'Hide' : 'Show'} CC & BCC
+            </Button>
+          </Box>
+          
+          {/* CC Field */}
+          {showCcBcc && (
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 2 }}>
+              <Typography variant="body2" sx={{ minWidth: 50, color: '#5f6368', fontWeight: 500, pt: 1.5 }}>
+                Cc
+              </Typography>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                {ccChips.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1 }}>
+                    {ccChips.map((email, index) => (
+                      <Chip
+                        key={index}
+                        label={email}
+                        onDelete={() => removeRecipient(email, 'cc')}
+                        avatar={
+                          <Avatar sx={{ 
+                            width: 24, 
+                            height: 24, 
+                            bgcolor: '#667eea',
+                            fontSize: '0.7rem',
+                            fontWeight: 600
+                          }}>
+                            {email.charAt(0).toUpperCase()}
+                          </Avatar>
+                        }
+                        sx={{
+                          height: 32,
+                          backgroundColor: '#e8f0fe',
+                          color: '#1a73e8',
+                          fontWeight: 500,
+                          fontSize: '0.875rem',
+                          '& .MuiChip-deleteIcon': {
+                            color: '#5f6368',
+                            fontSize: 18,
+                            '&:hover': { color: '#d93025' }
+                          },
+                          '& .MuiChip-label': {
+                            px: 1.5
+                          }
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                <TextField
+                  fullWidth
+                  placeholder="Cc (separate multiple emails with commas)"
+                  value={emailData.cc}
+                  onChange={handleChange('cc')}
+                  variant="standard"
+                  error={!ccValidation.valid && emailData.cc.length > 0}
+                  helperText={
+                    emailData.cc.length > 0 && !ccValidation.valid
+                      ? `Invalid email(s): ${ccValidation.invalidEmails.join(', ')}`
+                      : null
+                  }
+                  InputProps={{ 
+                    disableUnderline: true, 
+                    sx: { 
+                      fontSize: '0.95rem',
+                      '& input': {
+                        py: ccChips.length > 0 ? 0.5 : 1.5
+                      }
+                    } 
+                  }}
+                  FormHelperTextProps={{ sx: { fontSize: '0.7rem', mt: 0.5, ml: 0 } }}
+                />
+              </Box>
+            </Box>
+          )}
+          
+          {/* BCC Field */}
+          {showCcBcc && (
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 2 }}>
+              <Typography variant="body2" sx={{ minWidth: 50, color: '#5f6368', fontWeight: 500, pt: 1.5 }}>
+                Bcc
+              </Typography>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                {bccChips.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1 }}>
+                    {bccChips.map((email, index) => (
+                      <Chip
+                        key={index}
+                        label={email}
+                        onDelete={() => removeRecipient(email, 'bcc')}
+                        avatar={
+                          <Avatar sx={{ 
+                            width: 24, 
+                            height: 24, 
+                            bgcolor: '#667eea',
+                            fontSize: '0.7rem',
+                            fontWeight: 600
+                          }}>
+                            {email.charAt(0).toUpperCase()}
+                          </Avatar>
+                        }
+                        sx={{
+                          height: 32,
+                          backgroundColor: '#e8f0fe',
+                          color: '#1a73e8',
+                          fontWeight: 500,
+                          fontSize: '0.875rem',
+                          '& .MuiChip-deleteIcon': {
+                            color: '#5f6368',
+                            fontSize: 18,
+                            '&:hover': { color: '#d93025' }
+                          },
+                          '& .MuiChip-label': {
+                            px: 1.5
+                          }
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                <TextField
+                  fullWidth
+                  placeholder="Bcc (separate multiple emails with commas)"
+                  value={emailData.bcc}
+                  onChange={handleChange('bcc')}
+                  variant="standard"
+                  error={!bccValidation.valid && emailData.bcc.length > 0}
+                  helperText={
+                    emailData.bcc.length > 0 && !bccValidation.valid
+                      ? `Invalid email(s): ${bccValidation.invalidEmails.join(', ')}`
+                      : null
+                  }
+                  InputProps={{ 
+                    disableUnderline: true, 
+                    sx: { 
+                      fontSize: '0.95rem',
+                      '& input': {
+                        py: bccChips.length > 0 ? 0.5 : 1.5
+                      }
+                    } 
+                  }}
+                  FormHelperTextProps={{ sx: { fontSize: '0.7rem', mt: 0.5, ml: 0 } }}
+                />
+              </Box>
+            </Box>
+          )}
         </Box>
 
         {/* Subject Field */}
@@ -309,7 +553,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
         {attachments.length > 0 && (
           <Box sx={{ px: 2.5, py: 2, borderTop: '1px solid #e8eaed', backgroundColor: '#f8f9fa' }}>
             <Typography variant="subtitle2" sx={{ color: '#202124', mb: 1.5, fontWeight: 600, fontSize: '0.875rem' }}>
-              📎 Attachments ({attachments.length})
+              📎 Attachments ({attachments.length}/10)
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
               {attachments.map((att, index) => (
@@ -392,7 +636,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
         ref={fileInputRef}
         onChange={handleFileSelect}
         multiple
-        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar"
         style={{ display: 'none' }}
       />
 
@@ -411,7 +655,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
             variant="contained"
             startIcon={loading ? <CircularProgress size={18} sx={{ color: 'white' }} /> : <SendIcon />}
             onClick={handleSend}
-            disabled={!emailData.to || !emailData.subject || !emailData.text || loading || !emailValidation.valid}
+            disabled={!emailData.to || !emailData.subject || !emailData.text || loading || !emailValidation.valid || !ccValidation.valid || !bccValidation.valid}
             sx={{ 
               background: loading ? '#9aa0a6' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               textTransform: 'none', 
@@ -437,21 +681,29 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
             <IconButton 
               size="medium" 
               onClick={() => fileInputRef.current?.click()} 
+              disabled={attachments.length >= 10}
               sx={{
                 border: '1px solid #e8eaed',
                 backgroundColor: '#f8f9fa',
                 '&:hover': { 
                   backgroundColor: '#e8f0fe',
                   borderColor: '#1a73e8'
+                },
+                '&.Mui-disabled': {
+                  backgroundColor: '#f5f5f5',
+                  borderColor: '#e0e0e0'
                 }
               }}
             >
-              <AttachFileIcon sx={{ color: '#5f6368', fontSize: 20 }} />
+              <AttachFileIcon sx={{ 
+                color: attachments.length >= 10 ? '#9e9e9e' : '#5f6368', 
+                fontSize: 20 
+              }} />
             </IconButton>
           </Tooltip>
           {attachments.length > 0 && (
             <Typography variant="caption" sx={{ color: '#5f6368', fontWeight: 500 }}>
-              {attachments.length} file{attachments.length > 1 ? 's' : ''} attached
+              {attachments.length}/10 file{attachments.length > 1 ? 's' : ''} attached
             </Typography>
           )}
         </Box>

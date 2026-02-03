@@ -37,6 +37,88 @@ export const createEmailAccount = async (accountData) => {
   return response.data;
 };
 
+// Get all email accounts
+export const getAllEmailAccounts = async () => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to access this resource');
+  }
+
+  const response = await axios.get(
+    `${API_BASE_URL}/email-accounts/all`,
+    { headers: getAuthHeaders() }
+  );
+
+  return response.data;
+};
+
+// Get default email account
+export const getDefaultEmailAccount = async () => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to access this resource');
+  }
+
+  const response = await axios.get(
+    `${API_BASE_URL}/email-accounts/default`,
+    { headers: getAuthHeaders() }
+  );
+
+  return response.data;
+};
+
+// Set default email account
+export const setDefaultEmailAccount = async (accountId) => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to access this resource');
+  }
+
+  const response = await axios.put(
+    `${API_BASE_URL}/email-accounts/${accountId}/set-default`,
+    {},
+    { headers: getAuthHeaders() }
+  );
+
+  return response.data;
+};
+
+// Update email account
+export const updateEmailAccount = async (accountId, updateData) => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to access this resource');
+  }
+
+  const response = await axios.put(
+    `${API_BASE_URL}/email-accounts/${accountId}/update`,
+    updateData,
+    { headers: getAuthHeaders() }
+  );
+
+  return response.data;
+};
+
+// Delete email account
+export const deleteEmailAccount = async (accountId) => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to access this resource');
+  }
+
+  const response = await axios.delete(
+    `${API_BASE_URL}/email-accounts/${accountId}/delete`,
+    { headers: getAuthHeaders() }
+  );
+
+  return response.data;
+};
+
 // Test email connection
 export const testEmailConnection = async (accountId) => {
   const token = getAuthToken();
@@ -209,6 +291,7 @@ export const transformEmail = (email, index) => {
 // Supports multiple recipients: array or comma-separated string
 // API automatically parses and handles multiple recipients
 // Example: { to: ["email1@example.com", "email2@example.com"] } or { to: "email1@example.com, email2@example.com" }
+// Supports CC/BCC: comma-separated string or array
 export const sendEmail = async (emailData) => {
   const token = getAuthToken();
   
@@ -216,9 +299,33 @@ export const sendEmail = async (emailData) => {
     throw new Error('Please login to send emails');
   }
 
+  // Prepare payload with CC/BCC support
+  const payload = {
+    to: emailData.to,
+    subject: emailData.subject,
+    text: emailData.text || emailData.body || '',
+    html: emailData.html,
+    emailAccountId: emailData.emailAccountId,
+    attachments: emailData.attachments || []
+  };
+
+  // Add CC if provided
+  if (emailData.cc) {
+    payload.cc = Array.isArray(emailData.cc) 
+      ? emailData.cc.join(',') 
+      : emailData.cc;
+  }
+
+  // Add BCC if provided
+  if (emailData.bcc) {
+    payload.bcc = Array.isArray(emailData.bcc) 
+      ? emailData.bcc.join(',') 
+      : emailData.bcc;
+  }
+
   const response = await axios.post(
     `${API_BASE_URL}/email-inbox/send`,
-    emailData,
+    payload,
     { headers: getAuthHeaders() }
   );
 
@@ -228,6 +335,7 @@ export const sendEmail = async (emailData) => {
 // Send email with file uploads using FormData
 // Supports multiple recipients: comma-separated string (e.g., "email1@example.com, email2@example.com")
 // API automatically parses and handles multiple recipients
+// Supports CC/BCC: comma-separated string or array
 export const sendEmailWithAttachments = async (emailData) => {
   const token = getAuthToken();
   
@@ -245,6 +353,22 @@ export const sendEmailWithAttachments = async (emailData) => {
   formData.append('subject', emailData.subject);
   formData.append('text', emailData.text || emailData.body || '');
   
+  // Add CC field (optional)
+  if (emailData.cc) {
+    const ccValue = Array.isArray(emailData.cc) 
+      ? emailData.cc.join(',') 
+      : emailData.cc;
+    formData.append('cc', ccValue);
+  }
+  
+  // Add BCC field (optional)
+  if (emailData.bcc) {
+    const bccValue = Array.isArray(emailData.bcc) 
+      ? emailData.bcc.join(',') 
+      : emailData.bcc;
+    formData.append('bcc', bccValue);
+  }
+  
   // Add optional fields
   if (emailData.html) {
     formData.append('html', emailData.html);
@@ -253,7 +377,7 @@ export const sendEmailWithAttachments = async (emailData) => {
     formData.append('emailAccountId', emailData.emailAccountId);
   }
 
-  // Add file attachments
+  // Add file attachments (up to 10 files, 25MB each)
   if (emailData.attachments && emailData.attachments.length > 0) {
     emailData.attachments.forEach((attachment) => {
       // If attachment is a File object, append directly
@@ -284,6 +408,7 @@ export const sendEmailWithAttachments = async (emailData) => {
 // Reply to email with file uploads using FormData
 // Supports multiple recipients: comma-separated string (e.g., "email1@example.com, email2@example.com")
 // API automatically parses and handles multiple recipients
+// Supports CC/BCC: comma-separated string or array
 export const replyToEmailWithFiles = async (replyData) => {
   const token = getAuthToken();
   
@@ -300,6 +425,22 @@ export const replyToEmailWithFiles = async (replyData) => {
   formData.append('subject', replyData.subject);
   formData.append('text', replyData.text || replyData.body || '');
   
+  // Add CC field (optional)
+  if (replyData.cc) {
+    const ccValue = Array.isArray(replyData.cc) 
+      ? replyData.cc.join(',') 
+      : replyData.cc;
+    formData.append('cc', ccValue);
+  }
+  
+  // Add BCC field (optional)
+  if (replyData.bcc) {
+    const bccValue = Array.isArray(replyData.bcc) 
+      ? replyData.bcc.join(',') 
+      : replyData.bcc;
+    formData.append('bcc', bccValue);
+  }
+  
   // Add optional fields
   if (replyData.html) {
     formData.append('html', replyData.html);
@@ -314,7 +455,7 @@ export const replyToEmailWithFiles = async (replyData) => {
     formData.append('emailAccountId', replyData.emailAccountId);
   }
 
-  // Add file attachments
+  // Add file attachments (up to 10 files, 25MB each)
   if (replyData.attachments && replyData.attachments.length > 0) {
     replyData.attachments.forEach((attachment) => {
       // If attachment is a File object, append directly
@@ -343,6 +484,7 @@ export const replyToEmailWithFiles = async (replyData) => {
 };
 
 // Reply to email with JSON (base64 attachments)
+// Supports CC/BCC: comma-separated string or array
 export const replyToEmail = async (replyData) => {
   const token = getAuthToken();
   
@@ -350,18 +492,35 @@ export const replyToEmail = async (replyData) => {
     throw new Error('Please login to send emails');
   }
 
+  // Prepare payload with CC/BCC support
+  const payload = {
+    to: replyData.to,
+    subject: replyData.subject,
+    text: replyData.text || replyData.body,
+    html: replyData.html,
+    inReplyTo: replyData.inReplyTo,
+    references: replyData.references,
+    emailAccountId: replyData.emailAccountId,
+    attachments: replyData.attachments || []
+  };
+
+  // Add CC if provided
+  if (replyData.cc) {
+    payload.cc = Array.isArray(replyData.cc) 
+      ? replyData.cc.join(',') 
+      : replyData.cc;
+  }
+
+  // Add BCC if provided
+  if (replyData.bcc) {
+    payload.bcc = Array.isArray(replyData.bcc) 
+      ? replyData.bcc.join(',') 
+      : replyData.bcc;
+  }
+
   const response = await axios.post(
     `${API_BASE_URL}/email-inbox/reply`,
-    {
-      to: replyData.to,
-      subject: replyData.subject,
-      text: replyData.text || replyData.body,
-      html: replyData.html,
-      inReplyTo: replyData.inReplyTo,
-      references: replyData.references,
-      emailAccountId: replyData.emailAccountId,
-      attachments: replyData.attachments || []
-    },
+    payload,
     {
       headers: getAuthHeaders()
     }

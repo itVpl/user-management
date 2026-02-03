@@ -29,7 +29,23 @@ import ComposeDialog from './ComposeDialog';
 import ReplyDialog from './ReplyDialog';
 import EmailList from './EmailList';
 import EmailViewer from './EmailViewer';
-import { createEmailAccount, testEmailConnection, fetchInboxEmails, fetchSentEmails, fetchEmailByUid, transformEmail, sendEmail, sendEmailWithAttachments, replyToEmailWithFiles, replyToEmail } from './emailService';
+import AccountSwitcher from './AccountSwitcher';
+import AccountManagementDialog from './AccountManagementDialog';
+import { 
+  createEmailAccount, 
+  getAllEmailAccounts,
+  setDefaultEmailAccount,
+  deleteEmailAccount,
+  testEmailConnection, 
+  fetchInboxEmails, 
+  fetchSentEmails, 
+  fetchEmailByUid, 
+  transformEmail, 
+  sendEmail, 
+  sendEmailWithAttachments, 
+  replyToEmailWithFiles, 
+  replyToEmail 
+} from './emailService';
 import { sampleEmails } from './sampleData';
 
 const Email = () => {
@@ -44,6 +60,12 @@ const Email = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Multiple accounts state
+  const [emailAccounts, setEmailAccounts] = useState([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const [accountManagementOpen, setAccountManagementOpen] = useState(false);
+  
   // Account creation state
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
   const [accountData, setAccountData] = useState({
@@ -55,27 +77,6 @@ const Email = () => {
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState(false);
   const [createError, setCreateError] = useState(null);
-  const [createdAccountId, setCreatedAccountId] = useState(() => {
-    // First try to get from sessionStorage (from login response)
-    const userStr = sessionStorage.getItem('user');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        if (user.emailAccountId) {
-          return user.emailAccountId;
-        }
-      } catch (e) {
-        console.error('Error parsing user data:', e);
-      }
-    }
-    // Fallback to sessionStorage emailAccountId
-    const sessionAccountId = sessionStorage.getItem('emailAccountId');
-    if (sessionAccountId) {
-      return sessionAccountId;
-    }
-    // Last fallback to localStorage (for backward compatibility)
-    return localStorage.getItem('emailAccountId') || null;
-  });
   
   // Test connection state
   const [testLoading, setTestLoading] = useState(false);
@@ -103,17 +104,84 @@ const Email = () => {
     { label: 'Sent', icon: <SentIcon />, count: emails.filter(e => e.folder === 'sent').length },
   ];
 
-  // Save account ID to localStorage and load emails when it changes
+  // Load all email accounts on mount
   useEffect(() => {
-    if (createdAccountId) {
-      localStorage.setItem('emailAccountId', createdAccountId);
+    loadEmailAccounts();
+  }, []);
+
+  // Load emails when selected account changes
+  useEffect(() => {
+    if (selectedAccountId) {
       loadEmails();
+      if (selectedTab === 1) {
+        loadSentEmails();
+      }
     }
-  }, [createdAccountId]);
+  }, [selectedAccountId]);
+
+  // Load email accounts
+  const loadEmailAccounts = async () => {
+    setAccountsLoading(true);
+    try {
+      const response = await getAllEmailAccounts();
+      const accounts = response?.emailAccounts || response?.data?.emailAccounts || [];
+      setEmailAccounts(accounts);
+      
+      // Set default account if available
+      if (accounts.length > 0) {
+        const defaultAccount = accounts.find(acc => acc.isDefault) || accounts[0];
+        setSelectedAccountId(defaultAccount._id);
+        sessionStorage.setItem('emailAccountId', defaultAccount._id);
+      }
+    } catch (err) {
+      console.error('Error loading email accounts:', err);
+    } finally {
+      setAccountsLoading(false);
+    }
+  };
+
+  // Handle account switching
+  const handleAccountChange = (accountId) => {
+    setSelectedAccountId(accountId);
+    sessionStorage.setItem('emailAccountId', accountId);
+    setEmails([]); // Clear emails while loading
+  };
+
+  // Handle set default account
+  const handleSetDefaultAccount = async (accountId) => {
+    try {
+      await setDefaultEmailAccount(accountId);
+      await loadEmailAccounts(); // Reload accounts to update default status
+    } catch (err) {
+      console.error('Error setting default account:', err);
+      throw err;
+    }
+  };
+
+  // Handle delete account
+  const handleDeleteAccount = async (accountId) => {
+    try {
+      await deleteEmailAccount(accountId);
+      await loadEmailAccounts(); // Reload accounts
+      
+      // If deleted account was selected, switch to default or first account
+      if (selectedAccountId === accountId) {
+        const remainingAccounts = emailAccounts.filter(acc => acc._id !== accountId);
+        if (remainingAccounts.length > 0) {
+          const defaultAccount = remainingAccounts.find(acc => acc.isDefault) || remainingAccounts[0];
+          setSelectedAccountId(defaultAccount._id);
+        } else {
+          setSelectedAccountId(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting account:', err);
+      throw err;
+    }
+  };
 
   const loadEmails = async () => {
-    if (!createdAccountId) {
-
+    if (!selectedAccountId) {
       setEmails(sampleEmails);
       return;
     }
@@ -122,7 +190,7 @@ const Email = () => {
     setError(null);
     
     try {
-      const response = await fetchInboxEmails(createdAccountId);
+      const response = await fetchInboxEmails(selectedAccountId);
 
 
 
@@ -159,7 +227,7 @@ const Email = () => {
   };
 
   const loadSentEmails = async () => {
-    if (!createdAccountId) {
+    if (!selectedAccountId) {
       setEmails(sampleEmails.filter(e => e.folder === 'sent'));
       return;
     }
@@ -168,7 +236,7 @@ const Email = () => {
     setError(null);
     
     try {
-      const response = await fetchSentEmails(createdAccountId);
+      const response = await fetchSentEmails(selectedAccountId);
 
       // Try different response structures
       const fetchedEmails = response?.emails || 
@@ -250,13 +318,16 @@ const Email = () => {
                        response.account?.id;
       
       if (accountId) {
-
-        setCreatedAccountId(accountId);
+        setSelectedAccountId(accountId);
         setCreateSuccess(true);
+        // Reload accounts list
+        await loadEmailAccounts();
       } else {
         console.warn('⚠️ Could not find account ID in response');
         setCreateSuccess(true);
         setCreateError('Account created but ID not found. Check console for response structure.');
+        // Still reload accounts
+        await loadEmailAccounts();
       }
 
       setTimeout(() => {
@@ -273,8 +344,8 @@ const Email = () => {
   };
 
   const handleTestConnection = async () => {
-    if (!createdAccountId) {
-      setTestError('Please create an email account first');
+    if (!selectedAccountId) {
+      setTestError('Please select an email account first');
       return;
     }
 
@@ -283,7 +354,7 @@ const Email = () => {
     setTestSuccess(false);
 
     try {
-      await testEmailConnection(createdAccountId);
+      await testEmailConnection(selectedAccountId);
       setTestSuccess(true);
       setIsAccountTested(true);
       setTimeout(() => {
@@ -312,6 +383,11 @@ const Email = () => {
   };
 
   const handleEmailSelect = async (email) => {
+    if (!selectedAccountId) {
+      setError('Please select an email account first');
+      return;
+    }
+    
     // Preserve ALL original email properties to ensure correct selection
     const originalId = email.id;
     const originalUid = email.uid;
@@ -428,10 +504,10 @@ const Email = () => {
     }
     
     // Only fetch if we don't have content from list
-    if (hasValidUid && createdAccountId) {
+    if (hasValidUid && selectedAccountId) {
       try {
         // fetchEmailByUid will convert UID to string if needed
-        const response = await fetchEmailByUid(originalUid, createdAccountId);
+        const response = await fetchEmailByUid(originalUid, selectedAccountId);
 
         if (response.success && response.email) {
           const fullEmail = response.email;
@@ -532,7 +608,7 @@ const Email = () => {
         // Email has no UID, so we can't fetch full details - just use what we have
         setSelectedEmail(email);
       } else {
-        console.warn('Cannot fetch full email - missing uid or accountId:', { uid: originalUid, accountId: createdAccountId });
+        console.warn('Cannot fetch full email - missing uid or accountId:', { uid: originalUid, accountId: selectedAccountId });
       }
     }
   };
@@ -567,11 +643,11 @@ const Email = () => {
       // Always use send-files endpoint (works with or without attachments)
       await sendEmailWithAttachments({
         ...emailData,
-        emailAccountId: createdAccountId
+        emailAccountId: selectedAccountId
       });
       setSendSuccess(true);
       // Reload sent emails after sending
-      if (createdAccountId) {
+      if (selectedAccountId) {
         setTimeout(() => {
           loadSentEmails();
         }, 500);
@@ -603,13 +679,13 @@ const Email = () => {
       // Use reply-files endpoint with FormData
       const response = await replyToEmailWithFiles({
         ...replyData,
-        emailAccountId: createdAccountId
+        emailAccountId: selectedAccountId
       });
 
       if (response.success) {
         setReplySuccess(true);
         // Reload sent emails after replying
-        if (createdAccountId) {
+        if (selectedAccountId) {
           setTimeout(() => {
             loadSentEmails();
           }, 500);
@@ -724,25 +800,16 @@ const Email = () => {
           minWidth: 0,
           flexWrap: 'wrap'
         }}>
-          {createdAccountId && (
-            <Chip 
-              label={`Account: ${createdAccountId.substring(0, 8)}...`}
-              size="small"
-              sx={{ 
-                mr: 1, 
-                bgcolor: '#e8f0fe', 
-                color: '#1a73e8',
-                maxWidth: { xs: '120px', sm: '200px' },
-                '& .MuiChip-label': {
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }
-              }}
+          {emailAccounts.length > 0 && (
+            <AccountSwitcher
+              accounts={emailAccounts}
+              selectedAccountId={selectedAccountId}
+              onAccountChange={handleAccountChange}
+              sx={{ mr: 1 }}
             />
           )}
           <Tooltip title="Refresh emails">
-            <IconButton size="small" onClick={loadEmails} disabled={!createdAccountId}>
+            <IconButton size="small" onClick={loadEmails} disabled={!selectedAccountId}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>
@@ -752,21 +819,39 @@ const Email = () => {
           <Button
             variant="outlined"
             startIcon={<SettingsIcon />}
-            onClick={() => setCreateAccountOpen(true)}
-            disabled={isAccountTested}
+            onClick={() => setAccountManagementOpen(true)}
+            disabled={emailAccounts.length === 0}
             sx={{
               textTransform: 'none',
-              borderColor: isAccountTested ? '#9e9e9e' : '#1a73e8',
-              color: isAccountTested ? '#9e9e9e' : '#1a73e8',
+              borderColor: emailAccounts.length === 0 ? '#9e9e9e' : '#1a73e8',
+              color: emailAccounts.length === 0 ? '#9e9e9e' : '#1a73e8',
               fontWeight: 500,
               ml: 1,
               '&:hover': { 
-                borderColor: isAccountTested ? '#9e9e9e' : '#1557b0', 
-                backgroundColor: isAccountTested ? 'transparent' : '#e8f0fe' 
+                borderColor: emailAccounts.length === 0 ? '#9e9e9e' : '#1557b0', 
+                backgroundColor: emailAccounts.length === 0 ? 'transparent' : '#e8f0fe' 
               },
               '&.Mui-disabled': {
                 borderColor: '#e0e0e0',
                 color: '#9e9e9e'
+              }
+            }}
+          >
+            Manage Accounts
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<SettingsIcon />}
+            onClick={() => setCreateAccountOpen(true)}
+            sx={{
+              textTransform: 'none',
+              borderColor: '#1a73e8',
+              color: '#1a73e8',
+              fontWeight: 500,
+              ml: 1,
+              '&:hover': { 
+                borderColor: '#1557b0', 
+                backgroundColor: '#e8f0fe' 
               }
             }}
           >
@@ -779,7 +864,7 @@ const Email = () => {
               setTestDialogOpen(true);
               setTimeout(() => handleTestConnection(), 100);
             }}
-            disabled={!createdAccountId}
+            disabled={!selectedAccountId}
             sx={{
               textTransform: 'none',
               backgroundColor: '#34a853',
@@ -832,7 +917,7 @@ const Email = () => {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => setComposeOpen(true)}
-              disabled={!createdAccountId}
+              disabled={!selectedAccountId}
               sx={{
                 width: '100%',
                 borderRadius: '24px',
@@ -903,6 +988,15 @@ const Email = () => {
       </Box>
 
       {/* Dialogs */}
+      <AccountManagementDialog
+        open={accountManagementOpen}
+        onClose={() => setAccountManagementOpen(false)}
+        accounts={emailAccounts}
+        onSetDefault={handleSetDefaultAccount}
+        onDelete={handleDeleteAccount}
+        loading={accountsLoading}
+      />
+
       <CreateAccountDialog
         open={createAccountOpen}
         onClose={() => setCreateAccountOpen(false)}
@@ -912,7 +1006,7 @@ const Email = () => {
         createLoading={createLoading}
         createSuccess={createSuccess}
         createError={createError}
-        createdAccountId={createdAccountId}
+        createdAccountId={selectedAccountId}
       />
 
       <TestConnectionDialog
@@ -921,7 +1015,7 @@ const Email = () => {
         testLoading={testLoading}
         testSuccess={testSuccess}
         testError={testError}
-        createdAccountId={createdAccountId}
+        createdAccountId={selectedAccountId}
       />
 
       <ComposeDialog
@@ -931,7 +1025,7 @@ const Email = () => {
         loading={sendLoading}
         success={sendSuccess}
         error={sendError}
-        emailAccountId={createdAccountId}
+        emailAccountId={selectedAccountId}
       />
 
       <ReplyDialog
@@ -946,7 +1040,7 @@ const Email = () => {
         loading={replyLoading}
         success={replySuccess}
         error={replyError}
-        emailAccountId={createdAccountId}
+        emailAccountId={selectedAccountId}
         originalEmail={replyToEmail}
       />
 
