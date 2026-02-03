@@ -68,7 +68,6 @@ const CONVERSION_BADGE = {
 
 const UserCallDashboard = () => {
   const [records, setRecords] = useState([]);
-  const [callerName, setCallerName] = useState("");
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().split("T")[0]
   );
@@ -84,16 +83,6 @@ const UserCallDashboard = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
-
-  // Optional: Excel Export (kept ready)
-  const exportToExcel = () => {
-    if (records.length === 0) return;
-    const worksheet = XLSX.utils.json_to_sheet(records);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Call Records");
-    const fileName = `CallRecords_${selectedDate}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
-  };
 
   const fetchData = async (alias, date) => {
     const start = new Date(`${date}T00:00:00`);
@@ -126,7 +115,7 @@ const UserCallDashboard = () => {
         return;
       }
 
-      setCallerName(rawData[0].callerName || alias);
+
 
       let totalTalkTimeMS = 0;
       let incoming = 0;
@@ -219,7 +208,7 @@ const UserCallDashboard = () => {
   }, [selectedDate]);
 
   return (
-    <>
+    <div className="p-6">
       {/* Stat Cards */}
       <div className="flex justify-between items-center mb-6 mt-4">
         <div className="flex items-center gap-6">
@@ -416,7 +405,7 @@ const UserCallDashboard = () => {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
