@@ -893,7 +893,7 @@ const Dashboard = () => {
               value={doData.todayStats.totalAdded}
               icon={GroupIcon}
               color="bg-blue-500"
-              subtitle="Added Today"
+              subtitle="Total DO"
               trend="up"
               trendValue="8.5%"
               noBackground={true}
@@ -903,7 +903,7 @@ const Dashboard = () => {
               value={callStats.total}
               icon={InfoOutlineSharpIcon}
               backgroundColor="#FCC962"
-              subtitle="Pending DOs"
+              subtitle="Total Calls"
               trend="up"
               trendValue="8.5%"
             />
@@ -912,7 +912,7 @@ const Dashboard = () => {
               value={doData.todayStats.approved}
               icon={CheckCircleOutlineSharpIcon}
               color="bg-green-500"
-              subtitle="Completed Today"
+              subtitle="Today’s DO"
               trend="up"
               trendValue="8.5%"
             />
