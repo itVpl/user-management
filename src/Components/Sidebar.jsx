@@ -262,7 +262,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Rate Approved",
       "Delivery Order",
       "Add Customer",
-      "All Customers"
+      "All Customers",
       "Daily Task",
       "Tracking"
     ],
