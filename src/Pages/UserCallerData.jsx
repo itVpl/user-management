@@ -216,7 +216,7 @@ const UserCallDashboard = () => {
   }, [selectedDate]);
 
   return (
-    <div className="bg-gray-50/50 p-4 sm:p-6">
+    <div className="bg-white p-4 sm:p-6">
       {/* Today's Call Performance */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
         <div className="flex items-center gap-2 mb-4">
