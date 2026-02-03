@@ -53,8 +53,12 @@ const ReplyDialog = ({
   // Initialize reply data when dialog opens or originalEmail changes
   useEffect(() => {
     if (open && originalEmail) {
-      // Pre-fill reply fields
-      const replyTo = originalEmail.from || '';
+      // Extract email address from "Name <email@domain.com>" format or use as-is
+      const fromEmail = originalEmail.from || '';
+      const parsedEmails = parseEmailRecipients(fromEmail);
+      // Use the first valid email address, or the original string if parsing fails
+      const replyTo = parsedEmails.length > 0 ? parsedEmails[0] : fromEmail;
+      
       const replySubject = originalEmail.subject?.startsWith('Re:') 
         ? originalEmail.subject 
         : `Re: ${originalEmail.subject || ''}`;
@@ -67,7 +71,7 @@ const ReplyDialog = ({
         text: '',
       });
       
-      // Initialize recipient chips
+      // Initialize recipient chips with parsed emails
       if (replyTo) {
         const emails = parseEmailRecipients(replyTo);
         const validEmails = emails.filter(email => {
@@ -75,7 +79,23 @@ const ReplyDialog = ({
           return emailRegex.test(email.trim());
         });
         setRecipientChips(validEmails);
+        
+        // Validate immediately
+        const validation = validateEmailRecipients(replyTo);
+        setEmailValidation(validation);
+      } else {
+        setEmailValidation({ valid: false, invalidEmails: [], emails: [] });
+        setRecipientChips([]);
       }
+    } else if (open && !originalEmail) {
+      // Reset if dialog opens without an email
+      setReplyData({ to: '', cc: '', bcc: '', subject: '', text: '' });
+      setEmailValidation({ valid: true, invalidEmails: [] });
+      setCcValidation({ valid: true, invalidEmails: [] });
+      setBccValidation({ valid: true, invalidEmails: [] });
+      setRecipientChips([]);
+      setCcChips([]);
+      setBccChips([]);
     }
   }, [open, originalEmail]);
 

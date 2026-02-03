@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Box,
   List,
@@ -16,11 +16,30 @@ import {
 
 // Group emails by date
 const getDateGroup = (timestamp) => {
+  if (!timestamp) {
+    return 'Older';
+  }
+  
   const now = new Date();
-  const emailDate = new Date(timestamp);
+  const emailDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  
+  // Validate date
+  if (isNaN(emailDate.getTime())) {
+    console.warn('getDateGroup: Invalid timestamp:', timestamp);
+    return 'Older';
+  }
+  
+  // Get today's date at midnight (without time)
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const emailDay = new Date(emailDate.getFullYear(), emailDate.getMonth(), emailDate.getDate());
+  
+  // Calculate difference in days
   const daysDiff = Math.floor((today - emailDay) / (1000 * 60 * 60 * 24));
+
+  // Handle future dates (shouldn't happen, but handle gracefully)
+  if (daysDiff < 0) {
+    return 'Today'; // Treat future dates as today
+  }
 
   if (daysDiff === 0) {
     return 'Today';
@@ -52,6 +71,21 @@ const groupEmailsByDate = (emailList) => {
     }
   });
 
+  // Sort emails within each group by timestamp (newest first)
+  Object.keys(grouped).forEach(groupKey => {
+    grouped[groupKey].sort((a, b) => {
+      const dateA = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp);
+      const dateB = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp);
+      
+      // Handle invalid dates
+      if (isNaN(dateA.getTime())) return 1;
+      if (isNaN(dateB.getTime())) return -1;
+      
+      // Sort descending (newest first)
+      return dateB.getTime() - dateA.getTime();
+    });
+  });
+
   // Return groups in order with their emails
   return [
     { label: 'Today', emails: grouped['Today'] },
@@ -65,11 +99,46 @@ const groupEmailsByDate = (emailList) => {
 const EmailList = ({ 
   emails, 
   loading, 
+  loadingMore,
+  hasMore,
+  onLoadMore,
   selectedEmail, 
   onEmailSelect, 
   onToggleStar,
   formatTimestamp 
 }) => {
+  const scrollContainerRef = useRef(null);
+  const loadingTriggerRef = useRef(null);
+
+  // Infinite scroll handler
+  useEffect(() => {
+    if (!onLoadMore || loadingMore || !hasMore) return;
+
+    // Find the scrollable parent container
+    const findScrollContainer = (element) => {
+      if (!element) return null;
+      const style = window.getComputedStyle(element);
+      if (style.overflow === 'auto' || style.overflowY === 'auto' || style.overflow === 'scroll' || style.overflowY === 'scroll') {
+        return element;
+      }
+      return findScrollContainer(element.parentElement);
+    };
+
+    const scrollContainer = findScrollContainer(scrollContainerRef.current);
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      // Trigger load more when user scrolls to within 300px of bottom
+      if (scrollHeight - scrollTop - clientHeight < 300) {
+        onLoadMore();
+      }
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, [onLoadMore, loadingMore, hasMore, emails.length]);
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -81,7 +150,7 @@ const EmailList = ({
   const groupedEmails = groupEmailsByDate(emails);
 
   return (
-    <List sx={{ p: 0 }}>
+    <List ref={scrollContainerRef} sx={{ p: 0 }}>
       {groupedEmails.map((group) => (
         <React.Fragment key={group.label}>
           {/* Date Header */}
@@ -195,6 +264,22 @@ const EmailList = ({
           })}
         </React.Fragment>
       ))}
+      
+      {/* Loading more indicator */}
+      {loadingMore && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <CircularProgress size={24} />
+        </Box>
+      )}
+      
+      {/* End of list indicator */}
+      {!hasMore && emails.length > 0 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+          <Typography variant="caption" sx={{ color: '#5f6368' }}>
+            No more emails to load
+          </Typography>
+        </Box>
+      )}
     </List>
   );
 };

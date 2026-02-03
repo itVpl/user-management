@@ -148,14 +148,29 @@ export const fetchInboxEmails = async (accountId, limit = 50, page = 1) => {
 
   const inboxUrl = `${API_BASE_URL}/email-inbox/inbox?limit=${limit}&page=${page}&emailAccountId=${accountId}`;
 
-  const response = await axios.get(
-    inboxUrl,
-    { headers: getAuthHeaders() }
-  );
+  try {
+    const response = await axios.get(
+      inboxUrl,
+      { 
+        headers: getAuthHeaders(),
+        timeout: 35000 // 35 seconds timeout (slightly longer than backend's 30s)
+      }
+    );
 
-  console.log('Full Inbox Response:', JSON.stringify(response.data, null, 2));
-  
-  return response.data;
+    console.log('Full Inbox Response:', JSON.stringify(response.data, null, 2));
+    
+    return response.data;
+  } catch (error) {
+    // Handle timeout errors
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      throw new Error('Request timed out. The email server is taking too long to respond. Please try again.');
+    }
+    // Handle backend timeout errors
+    if (error.response?.data?.message?.includes('timeout') || error.response?.data?.message?.includes('timed out')) {
+      throw new Error(error.response.data.message || 'IMAP request timed out. Please try again.');
+    }
+    throw error;
+  }
 };
 
 // Fetch sent emails
@@ -168,14 +183,29 @@ export const fetchSentEmails = async (accountId, limit = 50, page = 1) => {
 
   const sentUrl = `${API_BASE_URL}/email-inbox/sent?limit=${limit}&page=${page}&emailAccountId=${accountId}`;
 
-  const response = await axios.get(
-    sentUrl,
-    { headers: getAuthHeaders() }
-  );
+  try {
+    const response = await axios.get(
+      sentUrl,
+      { 
+        headers: getAuthHeaders(),
+        timeout: 35000 // 35 seconds timeout (slightly longer than backend's 30s)
+      }
+    );
 
-  console.log('Full Sent Response:', JSON.stringify(response.data, null, 2));
+    console.log('Full Sent Response:', JSON.stringify(response.data, null, 2));
   
-  return response.data;
+    return response.data;
+  } catch (error) {
+    // Handle timeout errors
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      throw new Error('Request timed out. The email server is taking too long to respond. Please try again.');
+    }
+    // Handle backend timeout errors
+    if (error.response?.data?.message?.includes('timeout') || error.response?.data?.message?.includes('timed out')) {
+      throw new Error(error.response.data.message || 'IMAP request timed out. Please try again.');
+    }
+    throw error;
+  }
 };
 
 // Fetch single email by UID
@@ -191,30 +221,77 @@ export const fetchEmailByUid = async (uid, accountId) => {
   
   const emailUrl = `${API_BASE_URL}/email-inbox/${uidString}?emailAccountId=${accountId}`;
 
-  const response = await axios.get(
-    emailUrl,
-    { headers: getAuthHeaders() }
-  );
+  try {
+    const response = await axios.get(
+      emailUrl,
+      { 
+        headers: getAuthHeaders(),
+        timeout: 35000 // 35 seconds timeout
+      }
+    );
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    // Handle timeout errors
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      throw new Error('Request timed out. The email server is taking too long to respond. Please try again.');
+    }
+    // Handle backend timeout errors
+    if (error.response?.data?.message?.includes('timeout') || error.response?.data?.message?.includes('timed out')) {
+      throw new Error(error.response.data.message || 'IMAP request timed out. Please try again.');
+    }
+    throw error;
+  }
 };
 
 // Parse date string from API format: "DD/MM/YYYY, HH:MM:SS am/pm"
 const parseEmailDate = (dateString) => {
-  if (!dateString) return new Date();
+  if (!dateString) {
+    console.warn('parseEmailDate: No date string provided');
+    return null;
+  }
   
-  // If it's already a Date object, return it
-  if (dateString instanceof Date) return dateString;
+  // If it's already a Date object, validate and return it
+  if (dateString instanceof Date) {
+    if (isNaN(dateString.getTime())) {
+      console.warn('parseEmailDate: Invalid Date object:', dateString);
+      return null;
+    }
+    return dateString;
+  }
   
   // If it's a number (timestamp), convert it
-  if (typeof dateString === 'number') return new Date(dateString);
+  if (typeof dateString === 'number') {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      console.warn('parseEmailDate: Invalid timestamp:', dateString);
+      return null;
+    }
+    return date;
+  }
   
-  // Parse format: "19/12/2025, 12:35:26 am"
+  // Parse format: "3/2/2026, 10:40:12 pm" or "DD/MM/YYYY, HH:MM:SS am/pm" (supports single/double digit day/month)
   try {
-    const match = dateString.match(/(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})\s*(am|pm)/i);
+    // Updated regex to handle single or double digit day/month: (\d{1,2}) instead of (\d{2})
+    const match = dateString.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})\s*(am|pm)/i);
     if (match) {
       const [, day, month, year, hour, minute, second, ampm] = match;
       let hour24 = parseInt(hour, 10);
+      
+      // Validate parsed values
+      const dayNum = parseInt(day, 10);
+      const monthNum = parseInt(month, 10);
+      const yearNum = parseInt(year, 10);
+      
+      if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12 || yearNum < 1900 || yearNum > 2100) {
+        console.warn('parseEmailDate: Invalid date values:', { day: dayNum, month: monthNum, year: yearNum });
+        // Try standard parsing as fallback
+        const fallbackDate = new Date(dateString);
+        if (!isNaN(fallbackDate.getTime())) {
+          return fallbackDate;
+        }
+        return null;
+      }
       
       // Convert to 24-hour format
       if (ampm.toLowerCase() === 'pm' && hour24 !== 12) {
@@ -223,23 +300,88 @@ const parseEmailDate = (dateString) => {
         hour24 = 0;
       }
       
+      // IMPORTANT: Format is DD/MM/YYYY (day/month/year), not MM/DD/YYYY
       // Create date (month is 0-indexed in JavaScript Date)
-      return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour24, parseInt(minute, 10), parseInt(second, 10));
+      // So dayNum is the day, monthNum is the month
+      const parsedDate = new Date(yearNum, monthNum - 1, dayNum, hour24, parseInt(minute, 10), parseInt(second, 10));
+      
+      // Validate the created date
+      if (isNaN(parsedDate.getTime())) {
+        console.warn('parseEmailDate: Created invalid date from:', dateString);
+        return null;
+      }
+      
+      // Log for debugging (first few emails)
+      console.log(`parseEmailDate: Parsed "${dateString}" as DD/MM/YYYY -> ${dayNum}/${monthNum}/${yearNum} = ${parsedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`);
+      
+      return parsedDate;
     }
     
-    // Fallback to standard Date parsing
-    return new Date(dateString);
+    // Try parsing ISO format (e.g., "2025-02-03T12:35:26Z")
+    const isoDate = new Date(dateString);
+    if (!isNaN(isoDate.getTime())) {
+      return isoDate;
+    }
+    
+    // Try parsing other common formats
+    // Format: "Feb 2, 2025" or "Mar 2, 2025"
+    const monthNameMatch = dateString.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})/i);
+    if (monthNameMatch) {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthName = monthNameMatch[1];
+      const day = parseInt(monthNameMatch[2], 10);
+      const year = parseInt(monthNameMatch[3], 10);
+      const monthIndex = monthNames.findIndex(m => m.toLowerCase() === monthName.toLowerCase());
+      
+      if (monthIndex !== -1 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+        const parsedDate = new Date(year, monthIndex, day);
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate;
+        }
+      }
+    }
+    
+    console.warn('parseEmailDate: Could not parse date string:', dateString);
+    return null;
   } catch (e) {
-    console.error('Error parsing date:', dateString, e);
-    return new Date();
+    console.error('parseEmailDate: Error parsing date:', dateString, e);
+    return null;
   }
 };
 
 // Transform API email to app format
 export const transformEmail = (email, index) => {
-  // Parse the date field from API
-  const emailDate = email.date || email.timestamp || email.createdAt;
+  // Parse the date field from API - try multiple possible fields
+  const emailDate = email.date || email.timestamp || email.createdAt || email.receivedAt;
   const parsedDate = parseEmailDate(emailDate);
+  
+  // If date parsing failed, log warning with full email data for debugging
+  if (!parsedDate && emailDate) {
+    console.warn('transformEmail: Failed to parse date for email:', {
+      id: email._id || email.id,
+      subject: email.subject,
+      dateString: emailDate,
+      dateType: typeof emailDate,
+      rawEmail: {
+        date: email.date,
+        timestamp: email.timestamp,
+        createdAt: email.createdAt,
+        receivedAt: email.receivedAt
+      }
+    });
+  }
+  
+  // Use parsed date or fallback to current date (but log it)
+  const finalDate = parsedDate || new Date();
+  
+  // Log successful parsing for first few emails to verify format
+  if (index < 3 && parsedDate) {
+    console.log(`transformEmail: Successfully parsed date for email ${index + 1}:`, {
+      original: emailDate,
+      parsed: finalDate.toISOString(),
+      formatted: finalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    });
+  }
   
   // Handle UID - can be number, string, or empty string
   // Preserve the original UID value (number or string) for API calls
@@ -274,7 +416,7 @@ export const transformEmail = (email, index) => {
     body: email.body || email.text || email.content || '', // Map 'content' field from API to 'body'
     html: email.html || email.htmlBody || email.htmlContent || '',
     content: email.content || email.body || email.text || '', // Also preserve 'content' field
-    timestamp: parsedDate,
+    timestamp: finalDate,
     date: email.date, // Preserve original date string
     isRead: email.isRead || email.read || email.seen || false,
     isStarred: email.isStarred || email.starred || false,

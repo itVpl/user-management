@@ -60,6 +60,11 @@ const Email = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  
   // Multiple accounts state
   const [emailAccounts, setEmailAccounts] = useState([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
@@ -112,12 +117,23 @@ const Email = () => {
   // Load emails when selected account changes
   useEffect(() => {
     if (selectedAccountId) {
-      loadEmails();
+      // Reset pagination when account changes
+      setCurrentPage(1);
+      setHasMore(true);
+      setEmails([]);
+      loadEmails(1, true); // Load first page, reset emails
       if (selectedTab === 1) {
-        loadSentEmails();
+        loadSentEmails(1, true);
       }
     }
   }, [selectedAccountId]);
+  
+  // Reset pagination when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+    setHasMore(true);
+    setEmails([]);
+  }, [selectedTab]);
 
   // Load email accounts
   const loadEmailAccounts = async () => {
@@ -180,17 +196,23 @@ const Email = () => {
     }
   };
 
-  const loadEmails = async () => {
+  const loadEmails = async (page = 1, reset = false) => {
     if (!selectedAccountId) {
       setEmails(sampleEmails);
       return;
     }
 
-    setLoading(true);
+    // Set loading state (full loading for first page, loadingMore for subsequent pages)
+    if (page === 1 || reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     setError(null);
     
     try {
-      const response = await fetchInboxEmails(selectedAccountId);
+      // Load 30 emails per page
+      const response = await fetchInboxEmails(selectedAccountId, 30, page);
 
 
 
@@ -202,41 +224,68 @@ const Email = () => {
                            response?.data || 
                            [];
 
-      console.log('First email from API (before transform):', fetchedEmails[0]);
+      console.log(`Loaded inbox page ${page}: ${fetchedEmails.length} emails`);
       
       if (fetchedEmails.length > 0) {
         const transformedEmails = fetchedEmails.map((email, index) => {
           const transformed = transformEmail(email, index);
-
           return transformed;
         });
 
-
-        setEmails(transformedEmails);
+        if (reset || page === 1) {
+          // Replace emails for first page or reset
+          setEmails(transformedEmails);
+        } else {
+          // Append emails for subsequent pages
+          setEmails(prev => [...prev, ...transformedEmails]);
+        }
+        
+        // Check if there are more emails to load
+        setHasMore(fetchedEmails.length === 30);
       } else {
-
-        setEmails(sampleEmails);
+        setHasMore(false);
+        if (reset || page === 1) {
+          setEmails(sampleEmails);
+        }
       }
     } catch (err) {
       console.error('Error loading emails:', err);
-      setError(err.message || 'Failed to load emails');
-      setEmails(sampleEmails);
+      const errorMessage = err.message || 'Failed to load emails';
+      
+      // Check if it's a timeout error
+      if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
+        setError(`⏱️ ${errorMessage}. The email server may be slow. You can try refreshing.`);
+      } else {
+        setError(errorMessage);
+      }
+      
+      if (reset || page === 1) {
+        setEmails(sampleEmails);
+      }
+      // Don't set hasMore to false on error - allow retry
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const loadSentEmails = async () => {
+  const loadSentEmails = async (page = 1, reset = false) => {
     if (!selectedAccountId) {
       setEmails(sampleEmails.filter(e => e.folder === 'sent'));
       return;
     }
 
-    setLoading(true);
+    // Set loading state (full loading for first page, loadingMore for subsequent pages)
+    if (page === 1 || reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     setError(null);
     
     try {
-      const response = await fetchSentEmails(selectedAccountId);
+      // Load 30 emails per page
+      const response = await fetchSentEmails(selectedAccountId, 30, page);
 
       // Try different response structures
       const fetchedEmails = response?.emails || 
@@ -249,8 +298,7 @@ const Email = () => {
       const userEmail = emailAccount?.email || '';
       const displayName = emailAccount?.displayName || 'You';
 
-      console.log('Sent emails from API (before transform):', fetchedEmails[0]);
-      console.log('Email account info:', emailAccount);
+      console.log(`Loaded sent page ${page}: ${fetchedEmails.length} emails`);
       
       if (fetchedEmails.length > 0) {
         const transformedEmails = fetchedEmails.map((email, index) => {
@@ -279,18 +327,60 @@ const Email = () => {
           };
         });
 
-        setEmails(transformedEmails);
+        if (reset || page === 1) {
+          // Replace emails for first page or reset
+          setEmails(transformedEmails);
+        } else {
+          // Append emails for subsequent pages
+          setEmails(prev => [...prev, ...transformedEmails]);
+        }
+        
+        // Check if there are more emails to load
+        setHasMore(fetchedEmails.length === 30);
       } else {
-        // Show empty sent folder
-        setEmails([]);
+        // No more emails
+        setHasMore(false);
+        if (reset || page === 1) {
+          setEmails([]);
+        }
       }
     } catch (err) {
       console.error('Error loading sent emails:', err);
-      setError(err.message || 'Failed to load sent emails');
-      setEmails([]);
+      const errorMessage = err.message || 'Failed to load sent emails';
+      
+      // Check if it's a timeout error
+      if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
+        setError(`⏱️ ${errorMessage}. The email server may be slow. You can try refreshing.`);
+      } else {
+        setError(errorMessage);
+      }
+      
+      if (reset || page === 1) {
+        setEmails([]);
+      }
+      // Don't set hasMore to false on error - allow retry
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  };
+  
+  // Load more sent emails (next page)
+  const loadMoreSentEmails = async () => {
+    if (loadingMore || !hasMore || !selectedAccountId) return;
+    
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    await loadSentEmails(nextPage, false);
+  };
+  
+  // Load more emails (next page)
+  const loadMoreEmails = async () => {
+    if (loadingMore || !hasMore || !selectedAccountId) return;
+    
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    await loadEmails(nextPage, false);
   };
 
   const handleCreateAccount = async () => {
@@ -371,14 +461,17 @@ const Email = () => {
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
     setSelectedEmail(null);
+    setCurrentPage(1);
+    setHasMore(true);
+    setEmails([]);
     
     // Load emails based on selected tab
     if (newValue === 0) {
       // Inbox tab
-      loadEmails();
+      loadEmails(1, true);
     } else if (newValue === 1) {
       // Sent tab
-      loadSentEmails();
+      loadSentEmails(1, true);
     }
   };
 
@@ -721,7 +814,18 @@ const Email = () => {
       );
     }
 
-    return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Sort by timestamp (newest first), handling invalid dates
+    return filtered.sort((a, b) => {
+      const dateA = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp);
+      const dateB = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp);
+      
+      // Handle invalid dates - put them at the end
+      if (isNaN(dateA.getTime())) return 1;
+      if (isNaN(dateB.getTime())) return -1;
+      
+      // Sort descending (newest first)
+      return dateB.getTime() - dateA.getTime();
+    });
   };
 
   const formatTimestamp = (timestamp) => {
@@ -809,7 +913,19 @@ const Email = () => {
             />
           )}
           <Tooltip title="Refresh emails">
-            <IconButton size="small" onClick={loadEmails} disabled={!selectedAccountId}>
+            <IconButton 
+              size="small" 
+              onClick={() => {
+                setCurrentPage(1);
+                setHasMore(true);
+                if (selectedTab === 0) {
+                  loadEmails(1, true);
+                } else {
+                  loadSentEmails(1, true);
+                }
+              }} 
+              disabled={!selectedAccountId}
+            >
               <RefreshIcon />
             </IconButton>
           </Tooltip>
@@ -885,7 +1001,33 @@ const Email = () => {
 
       {/* Error Display */}
       {error && (
-        <Alert severity="error" sx={{ m: 2 }} onClose={() => setError(null)}>
+        <Alert 
+          severity="error" 
+          sx={{ m: 2 }} 
+          onClose={() => setError(null)}
+          action={
+            error.toLowerCase().includes('timeout') && (
+              <Button 
+                color="inherit" 
+                size="small" 
+                onClick={() => {
+                  setError(null);
+                  if (selectedTab === 0) {
+                    setCurrentPage(1);
+                    setHasMore(true);
+                    loadEmails(1, true);
+                  } else {
+                    setCurrentPage(1);
+                    setHasMore(true);
+                    loadSentEmails(1, true);
+                  }
+                }}
+              >
+                Retry
+              </Button>
+            )
+          }
+        >
           {error}
         </Alert>
       )}
@@ -978,6 +1120,9 @@ const Email = () => {
             <EmailList
               emails={getFilteredEmails()}
               loading={loading}
+              loadingMore={loadingMore}
+              hasMore={hasMore}
+              onLoadMore={selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails}
               selectedEmail={selectedEmail}
               onEmailSelect={handleEmailSelect}
               onToggleStar={toggleStar}
