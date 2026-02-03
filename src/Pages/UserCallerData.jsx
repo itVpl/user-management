@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
-import { Phone, CheckCircle, XCircle, BarChart3, Clock, FileText, Users, MessageSquare, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Phone, CheckCircle, XCircle, BarChart3, Clock, FileText, Users, MessageSquare, Download, ChevronLeft, ChevronRight, AlertTriangle, X, Info } from "lucide-react";
 import API_CONFIG from "../config/api";
 import { format } from "date-fns";
 
@@ -84,6 +84,9 @@ const UserCallDashboard = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
+  // Notification state
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
 
   const fetchData = async (alias, date) => {
     const start = new Date(`${date}T00:00:00`);
@@ -182,10 +185,39 @@ const UserCallDashboard = () => {
   };
 
   const exportToExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(records);
+    if (records.length === 0) {
+      setNotification({
+        show: true,
+        message: "No data available to export. Please select a date with call records.",
+        type: 'warning'
+      });
+      setTimeout(() => setNotification({ show: false, message: '', type: 'info' }), 4000);
+      return;
+    }
+
+    // Prepare data with proper headers
+    const headers = ["Date", "Called No", "Call Time", "Call Duration", "Call Status", "Conversion Status"];
+    const data = records.map(record => [
+      record.date,
+      record.callee,
+      record.callTime,
+      record.callDuration,
+      record.callStatus,
+      record.conversionStatus
+    ]);
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Call Records");
     XLSX.writeFile(workbook, `Call_Records_${selectedDate}.xlsx`);
+
+    // Show success notification
+    setNotification({
+      show: true,
+      message: "Excel file downloaded successfully!",
+      type: 'success'
+    });
+    setTimeout(() => setNotification({ show: false, message: '', type: 'info' }), 3000);
   };
 
   // Pagination derived
@@ -217,6 +249,54 @@ const UserCallDashboard = () => {
 
   return (
     <div className="bg-white p-4 sm:p-6">
+      {/* Notification Toast */}
+      {notification.show && (
+        <div className="fixed top-4 right-4 z-50 animate-fade-in">
+          <div className={`max-w-sm p-4 rounded-lg shadow-lg border ${
+            notification.type === 'success'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : notification.type === 'warning'
+              ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+              : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}>
+            <div className="flex items-center">
+              <div className={`flex-shrink-0 w-5 h-5 ${
+                notification.type === 'success'
+                  ? 'text-green-400'
+                  : notification.type === 'warning'
+                  ? 'text-yellow-400'
+                  : 'text-blue-400'
+              }`}>
+                {notification.type === 'success' ? (
+                  <CheckCircle size={20} />
+                ) : notification.type === 'warning' ? (
+                  <AlertTriangle size={20} />
+                ) : (
+                  <Info size={20} />
+                )}
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium">{notification.message}</p>
+              </div>
+              <div className="ml-auto pl-3">
+                <button
+                  onClick={() => setNotification({ show: false, message: '', type: 'info' })}
+                  className={`inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                    notification.type === 'success'
+                      ? 'text-green-500 hover:bg-green-100 focus:ring-green-600'
+                      : notification.type === 'warning'
+                      ? 'text-yellow-500 hover:bg-yellow-100 focus:ring-yellow-600'
+                      : 'text-blue-500 hover:bg-blue-100 focus:ring-blue-600'
+                  }`}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Today's Call Performance */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
         <div className="flex items-center gap-2 mb-4">
