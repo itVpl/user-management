@@ -14,13 +14,53 @@ const AccountSwitcher = ({ accounts, selectedAccountId, onAccountChange, sx = {}
   const selectedAccount = accounts.find(acc => acc._id === selectedAccountId);
 
   return (
-    <FormControl size="small" sx={{ minWidth: 200, ...sx }}>
+    <FormControl size="small" sx={{ minWidth: 240, ...sx }}>
       <Select
         value={selectedAccountId || ''}
         onChange={(e) => onAccountChange(e.target.value)}
         displayEmpty
+        renderValue={(value) => {
+          const account = accounts.find(acc => acc._id === value);
+          if (!account) return 'Select Account';
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Avatar
+                sx={{
+                  width: 24,
+                  height: 24,
+                  bgcolor: account.isDefault ? '#1a73e8' : '#5f6368',
+                  fontSize: '0.75rem',
+                }}
+              >
+                {account.email?.charAt(0).toUpperCase() || '?'}
+              </Avatar>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.875rem', lineHeight: 1.2 }}>
+                  {account.displayName || account.email?.split('@')[0]?.toUpperCase() || 'Account'}
+                </Typography>
+                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: '#5f6368', lineHeight: 1 }}>
+                  {account.email}
+                </Typography>
+              </Box>
+              {account.isDefault && (
+                <Chip
+                  label="Default"
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: '0.65rem',
+                    bgcolor: '#1a73e8',
+                    color: 'white',
+                    fontWeight: 500,
+                    ml: 0.5,
+                  }}
+                />
+              )}
+            </Box>
+          );
+        }}
         sx={{
-          height: 32,
+          height: 40,
           backgroundColor: '#e8f0fe',
           borderRadius: 1,
           '& .MuiOutlinedInput-notchedOutline': {
@@ -33,7 +73,7 @@ const AccountSwitcher = ({ accounts, selectedAccountId, onAccountChange, sx = {}
             borderColor: '#1a73e8',
           },
           '& .MuiSelect-select': {
-            py: 0.5,
+            py: 0.75,
             px: 1.5,
             display: 'flex',
             alignItems: 'center',

@@ -139,14 +139,27 @@ export const testEmailConnection = async (accountId) => {
 };
 
 // Fetch inbox emails
-export const fetchInboxEmails = async (accountId, limit = 50, page = 1) => {
+export const fetchInboxEmails = async (accountId, limit = 200, page = 1) => {
   const token = getAuthToken();
   
   if (!token) {
     throw new Error('Please login to access emails');
   }
 
-  const inboxUrl = `${API_BASE_URL}/email-inbox/inbox?limit=${limit}&page=${page}&emailAccountId=${accountId}`;
+  // Build query parameters - include preview for better list view
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    page: page.toString(),
+    includePreview: 'true', // Get preview snippets
+    includeContent: 'false', // Don't fetch full content for list view (faster)
+    includeAttachmentContent: 'true' // Include attachment content for instant downloads
+  });
+  
+  if (accountId) {
+    params.append('emailAccountId', accountId);
+  }
+
+  const inboxUrl = `${API_BASE_URL}/email-inbox/inbox?${params.toString()}`;
 
   try {
     const response = await axios.get(
@@ -158,6 +171,17 @@ export const fetchInboxEmails = async (accountId, limit = 50, page = 1) => {
     );
 
     console.log('Full Inbox Response:', JSON.stringify(response.data, null, 2));
+    
+    // Log attachment data for debugging
+    const emails = response.data?.emails || response.data?.data || [];
+    if (emails.length > 0) {
+      console.log('Inbox emails attachment check:', emails.slice(0, 3).map(e => ({
+        subject: e.subject,
+        hasAttachments: e.hasAttachments,
+        attachmentCount: e.attachmentCount,
+        attachments: e.attachments
+      })));
+    }
     
     return response.data;
   } catch (error) {
@@ -174,14 +198,31 @@ export const fetchInboxEmails = async (accountId, limit = 50, page = 1) => {
 };
 
 // Fetch sent emails
-export const fetchSentEmails = async (accountId, limit = 50, page = 1) => {
+export const fetchSentEmails = async (accountId, limit = 30, page = 1) => {
   const token = getAuthToken();
   
   if (!token) {
     throw new Error('Please login to access emails');
   }
 
-  const sentUrl = `${API_BASE_URL}/email-inbox/sent?limit=${limit}&page=${page}&emailAccountId=${accountId}`;
+  // Build query parameters according to API documentation
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    includePreview: 'true',
+    includeContent: 'false', // Don't fetch full content for list view (faster)
+    includeAttachmentContent: 'true' // Include attachment content for instant downloads
+  });
+  
+  if (accountId) {
+    params.append('emailAccountId', accountId);
+  }
+  
+  // Note: API doesn't support pagination with page parameter, but we can use limit
+  // For pagination, we'll need to calculate skip = (page - 1) * limit
+  // But since API doesn't support skip, we'll fetch all and paginate client-side
+  // Or use limit to get more emails per request
+
+  const sentUrl = `${API_BASE_URL}/email-inbox/sent?${params.toString()}`;
 
   try {
     const response = await axios.get(
@@ -209,7 +250,7 @@ export const fetchSentEmails = async (accountId, limit = 50, page = 1) => {
 };
 
 // Fetch single email by UID
-export const fetchEmailByUid = async (uid, accountId) => {
+export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeThread = true) => {
   const token = getAuthToken();
 
   if (!token) {
@@ -219,14 +260,30 @@ export const fetchEmailByUid = async (uid, accountId) => {
   // Convert UID to string (handles both number and string UIDs)
   const uidString = String(uid);
   
-  const emailUrl = `${API_BASE_URL}/email-inbox/${uidString}?emailAccountId=${accountId}`;
+  // Build query parameters - IMPORTANT: Use folder=SENT for sent emails
+  const params = new URLSearchParams({
+    folder: folder.toUpperCase(), // INBOX or SENT
+    includeContent: 'true', // Get full content for detail view
+    includeThread: includeThread ? 'true' : 'false' // Request full conversation thread (can be slow)
+  });
+  
+  if (accountId) {
+    params.append('emailAccountId', accountId);
+  }
+  
+  const emailUrl = `${API_BASE_URL}/email-inbox/${uidString}?${params.toString()}`;
 
   try {
+    // Thread requests take longer - increase timeout to 60 seconds
+    const timeout = includeThread ? 60000 : 35000;
+    
+    console.log(`⏱️ Fetching email ${uidString} with ${includeThread ? 'thread' : 'single'} mode (timeout: ${timeout}ms)`);
+    
     const response = await axios.get(
       emailUrl,
       { 
         headers: getAuthHeaders(),
-        timeout: 35000 // 35 seconds timeout
+        timeout: timeout
       }
     );
 
@@ -234,7 +291,10 @@ export const fetchEmailByUid = async (uid, accountId) => {
   } catch (error) {
     // Handle timeout errors
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      throw new Error('Request timed out. The email server is taking too long to respond. Please try again.');
+      const errorMsg = includeThread 
+        ? 'Thread request timed out. Building conversation threads can take longer. Please try again or check your connection.'
+        : 'Request timed out. The email server is taking too long to respond. Please try again.';
+      throw new Error(errorMsg);
     }
     // Handle backend timeout errors
     if (error.response?.data?.message?.includes('timeout') || error.response?.data?.message?.includes('timed out')) {
@@ -409,13 +469,37 @@ export const transformEmail = (email, index) => {
   return {
     id: uniqueId,
     uid: validUid, // Preserve original UID (number or string) for API calls, null if empty
-    from: email.from || email.sender || 'unknown@example.com',
-    fromName: email.fromName || email.senderName || email.from || 'Unknown Sender',
-    to: email.to || email.recipient || 'you@example.com',
+    from: (() => {
+      const rawFrom = email.from || email.sender || 'unknown@example.com';
+      // Extract email from "Name" <email@domain.com> format
+      const emailMatch = rawFrom.match(/<([^>]+)>/);
+      if (emailMatch) {
+        return emailMatch[1]; // Return just the email
+      }
+      // Remove quotes if present
+      return rawFrom.replace(/^["']|["']$/g, '').trim();
+    })(),
+    fromName: (() => {
+      // First try fromName/senderName fields
+      if (email.fromName || email.senderName) {
+        const rawName = email.fromName || email.senderName;
+        return rawName.replace(/^["']|["']$/g, '').trim();
+      }
+      // Extract name from "Name" <email@domain.com> format in from field
+      const rawFrom = email.from || email.sender || '';
+      const nameMatch = rawFrom.match(/^["']?([^"']+)["']?\s*</);
+      if (nameMatch) {
+        return nameMatch[1].trim();
+      }
+      // Fallback: use from field (email) or default
+      return rawFrom || 'Unknown Sender';
+    })(),
+    to: email.to || email.recipient || '',
     subject: email.subject || 'No Subject',
-    body: email.body || email.text || email.content || '', // Map 'content' field from API to 'body'
+    body: email.body || email.text || email.content || email.contentPreview || '', // Map 'content' field from API to 'body'
     html: email.html || email.htmlBody || email.htmlContent || '',
-    content: email.content || email.body || email.text || '', // Also preserve 'content' field
+    content: email.content || email.contentPreview || email.body || email.text || '', // Also preserve 'content' field
+    contentPreview: email.contentPreview || '', // Preview snippet for sent emails
     timestamp: finalDate,
     date: email.date, // Preserve original date string
     isRead: email.isRead || email.read || email.seen || false,
@@ -425,7 +509,9 @@ export const transformEmail = (email, index) => {
     attachments: email.attachments || [],
     hasAttachments: email.hasAttachments || (email.attachments && email.attachments.length > 0),
     attachmentCount: email.attachmentCount || (email.attachments ? email.attachments.length : 0),
-    messageId: email.messageId || email.messageID || email.message_id || null // Preserve messageId for threading
+    messageId: email.messageId || email.messageID || email.message_id || null, // Preserve messageId for threading
+    inReplyTo: email.inReplyTo || email.inReplyToHeader || null, // Preserve In-Reply-To header for threading
+    references: email.references || email.referencesHeader || null // Preserve References header for threading
   };
 };
 
