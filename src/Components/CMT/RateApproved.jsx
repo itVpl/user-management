@@ -15,7 +15,9 @@ const sanitizeAlphaNum = (v) => (v || '').replace(/[^a-zA-Z0-9]/g, ''); // A-Z a
 const sanitizeAlpha = (v) => (v || '').replace(/[^a-zA-Z\s]/g, '').replace(/\s{2,}/g, ' '); // alphabets + single spaces
 
 export default function RateApproved() {
-  const [approvedRates, setApprovedRates] = useState([]);
+  const [pendingRates, setPendingRates] = useState([]);
+  const [completedRates, setCompletedRates] = useState([]);
+  const [acceptedRates, setAcceptedRates] = useState([]);
   const [viewDoc, setViewDoc] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
   const [modalType, setModalType] = useState(null);
@@ -131,6 +133,13 @@ export default function RateApproved() {
   const [customersLoading, setCustomersLoading] = useState(false);
   const [salesUserId, setSalesUserId] = useState(''); // Will be set from sessionStorage
   const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'completed', 'accepted', 'manager-approved', or 'manager-rejected'
+  const [pendingLoaded, setPendingLoaded] = useState(false);
+  const [completedLoaded, setCompletedLoaded] = useState(false);
+  const [acceptedLoaded, setAcceptedLoaded] = useState(false);
+  const [managerApprovedLoaded, setManagerApprovedLoaded] = useState(false);
+  const [managerRejectedLoaded, setManagerRejectedLoaded] = useState(false);
+  const [initialPrefetchDone, setInitialPrefetchDone] = useState(false);
+  const [tabSwitchingLoading, setTabSwitchingLoading] = useState(false);
 
   // Form state for Add Rate Approved
   const [formData, setFormData] = useState({
@@ -186,9 +195,11 @@ export default function RateApproved() {
     }
   };
 
-  const fetchCompletedRates = async () => {
+  const fetchCompletedRates = async ({ withLoading = true } = {}) => {
     try {
-      setLoading(true);
+      if (withLoading) {
+        setLoading(true);
+      }
       const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending/emp/${userEmpId}`, {
@@ -268,14 +279,14 @@ export default function RateApproved() {
         }));
 
 
-        setApprovedRates(transformedRates);
+        setCompletedRates(transformedRates);
         setTabCounts(prev => ({ ...prev, approved: transformedRates.length }));
 
         // Force a re-render by updating the search term
         setSearchTerm('');
       } else {
         console.error('Completed rates API response format error:', response.data);
-        setApprovedRates([]);
+        setCompletedRates([]);
         setTabCounts(prev => ({ ...prev, approved: 0 }));
       }
     } catch (error) {
@@ -287,10 +298,13 @@ export default function RateApproved() {
         data: error.response?.data,
         url: error.config?.url
       });
-      setApprovedRates([]);
+      setCompletedRates([]);
       setTabCounts(prev => ({ ...prev, approved: 0 }));
     } finally {
-      setLoading(false);
+      if (withLoading) {
+        setLoading(false);
+      }
+      setCompletedLoaded(true);
     }
   };
 
@@ -383,6 +397,7 @@ export default function RateApproved() {
       setTabCounts(prev => ({ ...prev, managerApproved: 0 }));
     } finally {
       setManagerBidsLoading(false);
+      setManagerApprovedLoaded(true);
     }
   };
 
@@ -470,6 +485,7 @@ export default function RateApproved() {
       setTabCounts(prev => ({ ...prev, managerRejected: 0 }));
     } finally {
       setManagerBidsLoading(false);
+      setManagerRejectedLoaded(true);
     }
   };
 
@@ -506,9 +522,11 @@ export default function RateApproved() {
       setSubmitting(false);
     }
   };
-  const fetchAcceptedBids = async () => {
+  const fetchAcceptedBids = async ({ withLoading = true } = {}) => {
     try {
-      setLoading(true);
+      if (withLoading) {
+        setLoading(true);
+      }
       const userEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/accepted-by-inhouse?empId=${userEmpId}`, {
@@ -649,14 +667,14 @@ export default function RateApproved() {
         });
 
 
-        setApprovedRates(transformedBids);
+        setAcceptedRates(transformedBids);
         setTabCounts(prev => ({ ...prev, accepted: transformedBids.length }));
 
         // Force a re-render by updating the search term
         setSearchTerm('');
       } else {
         console.error('Accepted bids API response format error:', response.data);
-        setApprovedRates([]);
+        setAcceptedRates([]);
         setTabCounts(prev => ({ ...prev, accepted: 0 }));
       }
     } catch (error) {
@@ -668,10 +686,13 @@ export default function RateApproved() {
         data: error.response?.data,
         url: error.config?.url
       });
-      setApprovedRates([]);
+      setAcceptedRates([]);
       setTabCounts(prev => ({ ...prev, accepted: 0 }));
     } finally {
-      setLoading(false);
+      if (withLoading) {
+        setLoading(false);
+      }
+      setAcceptedLoaded(true);
     }
   };
 
@@ -702,18 +723,24 @@ export default function RateApproved() {
     }
   }, []);
 
-  useEffect(() => { 
-    fetchApprovedRates();
-  }, []);
+  const updateActiveTabRates = (updater) => {
+    if (activeTab === 'pending') {
+      setPendingRates(updater);
+    } else if (activeTab === 'completed') {
+      setCompletedRates(updater);
+    } else if (activeTab === 'accepted') {
+      setAcceptedRates(updater);
+    }
+  };
 
   const handleStatusUpdate = async (status) => {
     try {
       const { id } = selectedRate;
       // Simulate API call
       setTimeout(() => {
-        setApprovedRates(approvedRates.map(rate =>
-          rate.id === id ? { ...rate, status } : rate
-        ));
+        updateActiveTabRates(prevRates =>
+          prevRates.map(rate => (rate.id === id ? { ...rate, status } : rate))
+        );
         setModalType(null);
         setReason('');
         setSelectedRate(null);
@@ -733,15 +760,25 @@ export default function RateApproved() {
     return 'bg-blue-100 text-blue-700';
   };
 
-  // Filter rates based on search term
+  const activeTabRates = activeTab === 'pending'
+    ? pendingRates
+    : activeTab === 'completed'
+      ? completedRates
+      : activeTab === 'accepted'
+        ? acceptedRates
+        : activeTab === 'manager-approved'
+          ? managerApprovedBids
+          : managerRejectedBids;
 
-  const filteredRates = approvedRates.filter(rate => {
-    const matches = rate.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rate.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rate.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rate.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rate.truckerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (rate.shipperName && rate.shipperName.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Filter rates based on search term
+  const filteredRates = activeTabRates.filter(rate => {
+    const searchLower = searchTerm.toLowerCase();
+    const matches = (rate.id || '').toLowerCase().includes(searchLower) ||
+      (rate.shipmentNumber || '').toLowerCase().includes(searchLower) ||
+      (rate.origin || '').toLowerCase().includes(searchLower) ||
+      (rate.destination || '').toLowerCase().includes(searchLower) ||
+      (rate.truckerName || '').toLowerCase().includes(searchLower) ||
+      ((rate.shipperName || '').toLowerCase().includes(searchLower));
 
     if (searchTerm && matches) {
 
@@ -913,8 +950,10 @@ export default function RateApproved() {
   };
 
   // Define fetchAllData at the component level
-  const fetchAllData = async () => {
-    setLoading(true);
+  const fetchAllData = async ({ withLoading = true } = {}) => {
+    if (withLoading) {
+      setLoading(true);
+    }
     try {
       const [approvedData, pendingData, salesUserBids] = await Promise.all([
         fetchApprovedRates(),
@@ -935,7 +974,7 @@ export default function RateApproved() {
       );
 
 
-      setApprovedRates(uniqueRates);
+      setPendingRates(uniqueRates);
       const pendingTotal = uniqueRates.filter(rate => rate.status === 'pending').length;
       setTabCounts(prev => ({ ...prev, pending: pendingTotal }));
     } catch (error) {
@@ -943,7 +982,10 @@ export default function RateApproved() {
       alertify.error('Error refreshing data');
       setTabCounts(prev => ({ ...prev, pending: 0 }));
     } finally {
-      setLoading(false);
+      if (withLoading) {
+        setLoading(false);
+      }
+      setPendingLoaded(true);
     }
   };
 
@@ -1157,18 +1199,46 @@ export default function RateApproved() {
   }, [showCustomerDropdown]);
   // Replace the existing useEffect
   useEffect(() => {
-    if (activeTab === 'pending') {
-      fetchAllData();
-    } else if (activeTab === 'completed') {
-      fetchCompletedRates();
-    } else if (activeTab === 'accepted') {
-      fetchAcceptedBids();
-    } else if (activeTab === 'manager-approved') {
-      fetchManagerApprovedBids();
-    } else if (activeTab === 'manager-rejected') {
-      fetchManagerRejectedBids();
+    const prefetchAllTabs = async () => {
+      await Promise.allSettled([
+        fetchAllData({ withLoading: true }),
+        fetchCompletedRates({ withLoading: false }),
+        fetchAcceptedBids({ withLoading: false }),
+        fetchManagerApprovedBids(),
+        fetchManagerRejectedBids()
+      ]);
+      setInitialPrefetchDone(true);
+    };
+
+    prefetchAllTabs();
+  }, []);
+
+  useEffect(() => {
+    if (!initialPrefetchDone) {
+      return;
     }
-  }, [activeTab]);
+    if (activeTab === 'pending') {
+      if (!pendingLoaded) {
+        fetchAllData();
+      }
+    } else if (activeTab === 'completed') {
+      if (!completedLoaded) {
+        fetchCompletedRates();
+      }
+    } else if (activeTab === 'accepted') {
+      if (!acceptedLoaded) {
+        fetchAcceptedBids();
+      }
+    } else if (activeTab === 'manager-approved') {
+      if (!managerApprovedLoaded) {
+        fetchManagerApprovedBids();
+      }
+    } else if (activeTab === 'manager-rejected') {
+      if (!managerRejectedLoaded) {
+        fetchManagerRejectedBids();
+      }
+    }
+  }, [activeTab, pendingLoaded, completedLoaded, acceptedLoaded, managerApprovedLoaded, managerRejectedLoaded, initialPrefetchDone]);
 
   // Auto-scroll to bottom when negotiation history updates
   useEffect(() => {
@@ -2146,21 +2216,25 @@ export default function RateApproved() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4">
       {/* Tabs + Search + Quick Stats Wrapper */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-6 w-full">
+      <div className="bg-white rounded-2xl border border-gray-200 p-3 mb-6 w-full">
         {/* Tabs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 w-full">
           <button
-            onClick={() => setActiveTab('pending')}
-            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'pending'
+            onClick={() => {
+              setTabSwitchingLoading(true);
+              setActiveTab('pending');
+              setTimeout(() => setTabSwitchingLoading(false), 600);
+            }}
+            className={`w-full px-4 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'pending'
               ? 'bg-white border-blue-400'
               : 'bg-white border-gray-200'
               }`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-600">Pending Bids</p>
+                <p className="text-base font-semibold text-gray-600">Pending Bids</p>
                 <p className="text-2xl font-bold text-gray-900">{pendingCount}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center">
@@ -2169,15 +2243,19 @@ export default function RateApproved() {
             </div>
           </button>
           <button
-            onClick={() => setActiveTab('completed')}
-            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'completed'
+            onClick={() => {
+              setTabSwitchingLoading(true);
+              setActiveTab('completed');
+              setTimeout(() => setTabSwitchingLoading(false), 300);
+            }}
+            className={`w-full px-4 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'completed'
               ? 'bg-white border-blue-400'
               : 'bg-white border-gray-200'
               }`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-600">Approved Rates</p>
+                <p className="text-base font-semibold text-gray-600">Approved Rates</p>
                 <p className="text-2xl font-bold text-gray-900">{approvedCount}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center">
@@ -2187,14 +2265,14 @@ export default function RateApproved() {
           </button>
           <button
             onClick={() => setActiveTab('accepted')}
-            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'accepted'
+            className={`w-full px-4 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'accepted'
               ? 'bg-white border-blue-400'
               : 'bg-white border-gray-200'
               }`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-600">Accepted Bids</p>
+                <p className="text-base font-semibold text-gray-600">Accepted Bids</p>
                 <p className="text-2xl font-bold text-gray-900">{acceptedCount}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center">
@@ -2203,15 +2281,19 @@ export default function RateApproved() {
             </div>
           </button>
           <button
-            onClick={() => setActiveTab('manager-approved')}
-            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'manager-approved'
+            onClick={() => {
+              setTabSwitchingLoading(true);
+              setActiveTab('manager-approved');
+              setTimeout(() => setTabSwitchingLoading(false), 300);
+            }}
+            className={`w-full px-4 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'manager-approved'
               ? 'bg-white border-blue-400'
               : 'bg-white border-gray-200'
               }`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-600">Manager Approved</p>
+                <p className="text-base font-semibold text-gray-600">Manager Approved</p>
                 <p className="text-2xl font-bold text-gray-900">{managerApprovedCount}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-teal-50 flex items-center justify-center">
@@ -2221,14 +2303,14 @@ export default function RateApproved() {
           </button>
           <button
             onClick={() => setActiveTab('manager-rejected')}
-            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'manager-rejected'
+            className={`w-full px-4 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'manager-rejected'
               ? 'bg-white border-blue-400'
               : 'bg-white border-gray-200'
               }`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-600">Manager Rejected</p>
+                <p className="text-base font-semibold text-gray-600">Manager Rejected</p>
                 <p className="text-2xl font-bold text-gray-900">{managerRejectedCount}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-rose-50 flex items-center justify-center">
@@ -2276,7 +2358,7 @@ export default function RateApproved() {
                 >
                 <p className="text-sm font-bold text-gray-700">Today</p>
                 <span className="text-3xl font-bold text-green-500">
-                  {approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}
+                  {pendingRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}
                 </span>
               </div>
             </div>
@@ -2305,14 +2387,14 @@ export default function RateApproved() {
                 style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
               >
                 <p className="text-sm font-bold text-gray-700">Total Completed</p>
-                <span className="text-3xl font-bold text-green-500">{approvedRates.length}</span>
+                <span className="text-3xl font-bold text-green-500">{completedRates.length}</span>
               </div>
               <div
                 className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
                 style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
               >
                 <p className="text-sm font-bold text-gray-700">Today's Completed</p>
-                <span className="text-3xl font-bold text-green-500">{approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}</span>
+                <span className="text-3xl font-bold text-green-500">{completedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}</span>
               </div>
               <div
                 className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
@@ -2359,7 +2441,7 @@ export default function RateApproved() {
                 style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
               >
                 <p className="text-sm font-bold text-gray-700">Today's Accepted</p>
-                <span className="text-3xl font-bold text-green-500">{approvedRates.filter(rate => rate.acceptedAt === new Date().toISOString().split('T')[0]).length}</span>
+                <span className="text-3xl font-bold text-green-500">{acceptedRates.filter(rate => rate.acceptedAt === new Date().toISOString().split('T')[0]).length}</span>
               </div>
               <div
                 className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
@@ -2367,7 +2449,7 @@ export default function RateApproved() {
               >
                 <p className="text-sm font-bold text-gray-700">Total Value</p>
                 <span className="text-3xl font-bold text-green-500">
-                  ${approvedRates.reduce((sum, rate) => sum + (rate.rate || 0), 0).toLocaleString()}
+                  ${acceptedRates.reduce((sum, rate) => sum + (rate.rate || 0), 0).toLocaleString()}
                 </span>
               </div>
             </div>
@@ -2469,8 +2551,24 @@ export default function RateApproved() {
         )}
       </div>
 
+      {/* Tab Switching Loader */}
+      {tabSwitchingLoading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">
+              Loading {activeTab === 'pending' ? 'Pending Bids' :
+                           activeTab === 'completed' ? 'Approved Rates' :
+                           activeTab === 'accepted' ? 'Accepted Bids' :
+                           activeTab === 'manager-approved' ? 'Manager Approved' :
+                           activeTab === 'manager-rejected' ? 'Manager Rejected' : 'Tab'}...
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Tab Content */}
-      {activeTab === 'pending' && (
+      {!tabSwitchingLoading && activeTab === 'pending' && (
         <div className="space-y-4">
           {viewDoc && selectedRate ? (
             <div className="bg-white rounded-2xl p-8 max-w-3xl mx-auto">
@@ -2583,110 +2681,117 @@ export default function RateApproved() {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden px-3">
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden px-2">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                   <thead>
                     <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Origin</th>
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Destination</th>
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Rate</th>
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Trucker</th>
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide">CMT User</th>
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Date & Time</th>
-                      <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Action</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Origin</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Destination</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Rate</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Shipper</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Trucker</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">CMT User</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Date & Time</th>
+                      <th className="text-center text-gray-800 py-3 px-4 font-bold tracking-wide rounded-r-xl">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {currentRates.map((rate) => (
                       <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
-                        <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                        <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                           <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
                           <div className="text-xs text-gray-400">{rate.loadId}</div>
                         </td>
-                        <td className="py-3 px-6 border-y border-gray-200">
+                        <td className="py-3 px-4 border-y border-gray-200">
                           <div className="text-sm text-gray-800">{rate.origin}</div>
                           <div className="text-xs text-gray-400">{rate.origin.split(', ')[1] || ''}</div>
                         </td>
-                        <td className="py-3 px-6 border-y border-gray-200">
+                        <td className="py-3 px-4 border-y border-gray-200">
                           <div className="text-sm text-gray-800">{rate.destination}</div>
                           <div className="text-xs text-gray-400">{rate.destination.split(', ')[1] || ''}</div>
                         </td>
-                        <td className="py-3 px-6 border-y border-gray-200">
+                        <td className="py-3 px-4 border-y border-gray-200">
                           <span className="text-sm font-semibold text-green-600">${rate.rate.toLocaleString()}</span>
                         </td>
-                        <td className="py-3 px-6 border-y border-gray-200">
+                        <td className="py-3 px-4 border-y border-gray-200">
                           <div className="text-sm text-gray-800">{rate.shipperInfo?.compName || 'N/A'}</div>
                           {rate.shipperInfo?.mc_dot_no && (
                             <div className="text-xs text-gray-400">MC: {rate.shipperInfo.mc_dot_no}</div>
                           )}
                         </td>
-                        <td className="py-3 px-6 border-y border-gray-200">
+                        <td className="py-3 px-4 border-y border-gray-200">
                           <div className="text-sm text-gray-800">{rate.truckerName}</div>
                           {rate.carrierInfo && (
                             <div className="text-xs text-gray-400">MC: {rate.carrierInfo.mcDotNo}</div>
                           )}
                         </td>
-                        <td className="py-3 px-6 border-y border-gray-200">
+                        <td className="py-3 px-4 border-y border-gray-200">
                           <div className="text-sm text-gray-800">{rate.placedByCMTUser?.employeeName || 'N/A'}</div>
                           {rate.placedByCMTUser?.empId && (
                             <div className="text-xs text-gray-400">ID: {rate.placedByCMTUser.empId}</div>
                           )}
                         </td>
-                        <td className="py-3 px-6 border-y border-gray-200">
+                        <td className="py-3 px-4 border-y border-gray-200">
                           <div className="text-sm text-gray-800">{rate.createdAt || 'N/A'}</div>
                           <div className="text-xs text-gray-400">
                             {rate.createdAt ? new Date(rate.createdAt).toLocaleTimeString() : 'N/A'}
                           </div>
                         </td>
-                        <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
+                        <td className="py-3 px-4 border-y border-r border-gray-200 rounded-r-xl">
                           <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                const loadId = rate.actualLoadId || rate.loadId?.replace(/^L-/, '') || rate.loadId || rate.rateNum;
-                                const receiverEmpId = rate.salesUserInfo?.empId || rate.load?.createdBySalesUser?.empId;
-                                const receiverName = rate.salesUserInfo?.empName || rate.salesUserInfo?.employeeName || rate.load?.createdBySalesUser?.empName || 'Sales User';
+                          <button
+  onClick={() => {
+    const loadId = rate.actualLoadId || rate.loadId?.replace(/^L-/, '') || rate.loadId || rate.rateNum;
+    const receiverEmpId = rate.salesUserInfo?.empId || rate.load?.createdBySalesUser?.empId;
+    const receiverName =
+      rate.salesUserInfo?.empName ||
+      rate.salesUserInfo?.employeeName ||
+      rate.load?.createdBySalesUser?.empName ||
+      'Sales User';
 
-                                if (!receiverEmpId) {
-                                  alertify.error('Unable to determine receiver. Please check the bid information.');
-                                  return;
-                                }
+    if (!receiverEmpId) {
+      alertify.error('Unable to determine receiver. Please check the bid information.');
+      return;
+    }
 
-                                if (!loadId) {
-                                  alertify.error('Unable to determine load ID. Please check the bid information.');
-                                  return;
-                                }
+    if (!loadId) {
+      alertify.error('Unable to determine load ID. Please check the bid information.');
+      return;
+    }
 
-                                setChatModal({
-                                  visible: true,
-                                  loadId: loadId,
-                                  receiverEmpId: receiverEmpId,
-                                  receiverName: receiverName
-                                });
-                              }}
-                              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition"
-                              title="Chat"
-                            >
-                              Chat
-                            </button>
-                            <button
-                              onClick={() => {
-                                setMarginAmount(0);
-                                setEditableMessage(rate.remarks || '');
-                                setFinalPriceMode(false);
-                                setFinalPriceAmount(0);
-                                setApprovalModal({ visible: true, type: 'manual', rate });
-                              }}
-                              disabled={actionLoading[rate.rateNum]}
-                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${actionLoading[rate.rateNum] === 'manual'
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-green-500 text-white hover:bg-green-600'
-                                }`}
-                            >
-                              {actionLoading[rate.rateNum] === 'manual' ? 'Approving...' : 'Add Margin'}
-                            </button>
+    setChatModal({
+      visible: true,
+      loadId,
+      receiverEmpId,
+      receiverName
+    });
+  }}
+  className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500 text-white transition-all duration-300 transform hover:scale-105 mr-2"
+  title="Chat"
+>
+  Chat
+</button>
+
+<button
+  onClick={() => {
+    setMarginAmount(0);
+    setEditableMessage(rate.remarks || '');
+    setFinalPriceMode(false);
+    setFinalPriceAmount(0);
+    setApprovalModal({ visible: true, type: 'manual', rate });
+  }}
+  disabled={actionLoading[rate.rateNum]}
+  className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold whitespace-nowrap rounded-lg transition-all duration-300 transform hover:scale-105 ${
+    actionLoading[rate.rateNum] === 'manual'
+      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+      : 'bg-green-500 text-white hover:bg-green-600'
+  }`}
+>
+  {actionLoading[rate.rateNum] === 'manual' ? 'Approving...' : 'Add Margin'}
+</button>
+
                           </div>
                         </td>
                       </tr>
@@ -2713,7 +2818,7 @@ export default function RateApproved() {
             <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border border-gray-200">
               <div className="text-sm text-gray-600">
                 Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} pending bids
-                {searchTerm && ` (filtered from ${approvedRates.length} total)`}
+                {searchTerm && ` (filtered from ${activeTabRates.length} total)`}
               </div>
 
               <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2">
@@ -2797,45 +2902,45 @@ export default function RateApproved() {
       {/* Completed Rates Tab Content */}
       {activeTab === 'completed' && (
         <div>
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-2">
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Intermediate Rate</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Trucker</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Date & Time</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Action</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Origin</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Destination</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Original Rate</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Intermediate Rate</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Shipper</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Trucker</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Date & Time</th>
+                    <th className="text-center text-gray-800 py-3 px-4 font-bold tracking-wide rounded-r-xl">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentRates.map((rate, index) => (
                     <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
-                      <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                      <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                         <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
                         <div className="text-xs text-gray-400">{rate.loadId}</div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <span className="font-medium text-gray-700">{rate.origin}</span>
                           <p className="text-xs text-gray-500">{rate.origin.split(', ')[1] || ''}</p>
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <span className="font-medium text-gray-700">{rate.destination}</span>
                           <p className="text-xs text-gray-500">{rate.destination.split(', ')[1] || ''}</p>
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <span className="font-bold text-blue-600">${rate.originalRate?.toLocaleString() || '0'}</span>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                       <div>
   <span className="font-bold text-green-600">
     ${Number(rate.intermediateRate || 0).toLocaleString()}
@@ -2854,7 +2959,7 @@ export default function RateApproved() {
 </div>
 
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
                           {rate.shipperInfo?.mc_dot_no && (
@@ -2862,7 +2967,7 @@ export default function RateApproved() {
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.truckerName}</p>
                           {rate.carrierInfo && (
@@ -2870,7 +2975,7 @@ export default function RateApproved() {
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.createdAt || 'N/A'}</p>
                           <p className="text-xs text-gray-500">
@@ -2878,7 +2983,7 @@ export default function RateApproved() {
                           </p>
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
+                      <td className="py-3 px-4 border-y border-r border-gray-200 rounded-r-xl">
                         <div className="flex gap-2">
                           {/* <button
                             onClick={() => {
@@ -2915,12 +3020,12 @@ export default function RateApproved() {
                                 setFinalPriceModal({ visible: true, rate });
                               }}
                               disabled={actionLoading[rate.rateNum]}
-                              className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum]
+                              className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl whitespace-nowrap transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum]
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 : 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700'
                                 }`}
                             >
-                              <DollarSign size={12} />
+                              {/* <DollarSign size={12} /> */}
                               <span>Enter Final Price</span>
                             </button>
                           )}
@@ -2928,9 +3033,9 @@ export default function RateApproved() {
                             onClick={() => handleNegotiateBid(rate)}
                             className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white hover:from-orange-600 hover:to-amber-700"
                           >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {/* <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                            </svg>
+                            </svg> */}
                             <span>Negotiate</span>
                           </button>
                           {/* Accept Bid button commented out for Approved Rates tab */}
@@ -2964,46 +3069,46 @@ export default function RateApproved() {
       )}
 
       {/* Accepted Bids Tab Content */}
-      {activeTab === 'accepted' && (
+      {!tabSwitchingLoading && activeTab === 'accepted' && (
         <div>
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-2">
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Intermediate Rate</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Trucker</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Date & Time</th>
+                    <th className="text-left whitespace-nowrap text-gray-800 py-3 px-4 font-bold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Origin</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Destination</th>
+                    <th className="text-left whitespace-nowrap text-gray-800 py-3 px-4 font-bold tracking-wide">Original Rate</th>
+                    <th className="text-left whitespace-nowrap text-gray-800 py-3 px-4 font-bold tracking-wide">Intermediate Rate</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Shipper</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Trucker</th>
+                    <th className="text-left whitespace-nowrap text-gray-800 py-3 px-4 font-bold tracking-wide rounded-r-xl">Date & Time</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentRates.map((rate, index) => (
                     <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
-                      <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                      <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                         <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
                         <div className="text-xs text-gray-400">{rate.loadId}</div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <span className="font-medium text-gray-700">{rate.origin}</span>
                           <p className="text-xs text-gray-500">{rate.origin.split(', ')[1] || ''}</p>
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <span className="font-medium text-gray-700">{rate.destination}</span>
                           <p className="text-xs text-gray-500">{rate.destination.split(', ')[1] || ''}</p>
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <span className="font-bold text-blue-600">${rate.originalRate?.toLocaleString() || '0'}</span>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                                               <div>
   <span className="font-bold text-green-600">
     ${Number(rate.intermediateRate || 0).toLocaleString()}
@@ -3021,7 +3126,7 @@ export default function RateApproved() {
   )}
 </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
                           {rate.shipperInfo?.mc_dot_no && (
@@ -3029,7 +3134,7 @@ export default function RateApproved() {
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-gray-200">
+                      <td className="py-3 px-4 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.truckerName}</p>
                           {rate.carrierInfo && (
@@ -3037,7 +3142,7 @@ export default function RateApproved() {
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
+                      <td className="py-3 px-4 border-y border-r border-gray-200 rounded-r-xl">
                         <div>
                           <p className="font-medium text-gray-700">{rate.acceptedAt || rate.createdAt || 'N/A'}</p>
                           <p className="text-xs text-gray-500">
@@ -3069,22 +3174,22 @@ export default function RateApproved() {
       {activeTab === 'manager-approved' && (
         <div>
           {/* Manager Approved Bids Table */}
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-2">
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Current Rate</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Rate Diff %</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Carrier</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Driver Info</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Approved Date</th>
-                    {/* <th className="text-left py-3 px-6 font-semibold tracking-wide">Action</th> */}
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Origin</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Destination</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Original Rate</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Current Rate</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Rate Diff %</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Shipper</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Carrier</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Driver Info</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-r-xl">Approved Date</th>
+                    {/* <th className="text-left py-3 px-4 font-semibold tracking-wide">Action</th> */}
                   </tr>
                 </thead>
                 <tbody>
@@ -3106,64 +3211,55 @@ export default function RateApproved() {
                       </td>
                     </tr>
                   ) : (
-                    managerApprovedBids
-                      .filter(bid => {
-                        const searchLower = searchTerm.toLowerCase();
-                        return bid.id.toLowerCase().includes(searchLower) ||
-                          bid.shipmentNumber.toLowerCase().includes(searchLower) ||
-                          bid.origin.toLowerCase().includes(searchLower) ||
-                          bid.destination.toLowerCase().includes(searchLower) ||
-                          bid.truckerName.toLowerCase().includes(searchLower) ||
-                          (bid.shipperName && bid.shipperName.toLowerCase().includes(searchLower));
-                      })
+                    filteredRates
                       .slice(startIndex, endIndex)
                       .map((bid, index) => (
                         <tr key={bid.id} className="bg-white hover:bg-gray-50/60 transition-colors">
-                          <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                          <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                             <div className="text-sm font-semibold text-gray-800">{bid.id}</div>
                             <div className="text-xs text-gray-400">{bid.loadId}</div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <span className="font-medium text-gray-700">{bid.origin}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <span className="font-medium text-gray-700">{bid.destination}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <span className="font-medium text-gray-600">${bid.originalRate.toLocaleString()}</span>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <span className="font-bold text-green-600">${bid.currentRate.toLocaleString()}</span>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <span className={`font-bold ${parseFloat(bid.rateDifferencePercentage) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                               {bid.rateDifferencePercentage}%
                             </span>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.shipperName}</p>
                               <p className="text-xs text-gray-500">MC: {bid.shipperInfo?.mc_dot_no || 'N/A'}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.truckerName}</p>
                               <p className="text-xs text-gray-500">MC: {bid.carrierInfo?.mcDotNo || 'N/A'}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.driverName}</p>
                               <p className="text-xs text-gray-500">Phone: {bid.driverPhone}</p>
                               <p className="text-xs text-gray-500">Vehicle: {bid.vehicleNumber}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
+                          <td className="py-3 px-4 border-y border-r border-gray-200 rounded-r-xl">
                             <div>
                               <p className="font-medium text-gray-700">{bid.approvedAt}</p>
                               <p className="text-xs text-gray-500">By: {bid.approvedBy}</p>
@@ -3188,25 +3284,25 @@ export default function RateApproved() {
       )}
 
       {/* Manager Rejected Bids Tab Content */}
-      {activeTab === 'manager-rejected' && (
+      {!tabSwitchingLoading && activeTab === 'manager-rejected' && (
         <div>
           {/* Manager Rejected Bids Table */}
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-2">
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Current Rate</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Rate Diff %</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Carrier</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Rejection Reason</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Rejected Date</th>
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Action</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Origin</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Destination</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Original Rate</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Current Rate</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Rate Diff %</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Shipper</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Carrier</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Rejection Reason</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Rejected Date</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide rounded-r-xl">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3228,70 +3324,61 @@ export default function RateApproved() {
                       </td>
                     </tr>
                   ) : (
-                    managerRejectedBids
-                      .filter(bid => {
-                        const searchLower = searchTerm.toLowerCase();
-                        return bid.id.toLowerCase().includes(searchLower) ||
-                          bid.shipmentNumber.toLowerCase().includes(searchLower) ||
-                          bid.origin.toLowerCase().includes(searchLower) ||
-                          bid.destination.toLowerCase().includes(searchLower) ||
-                          bid.truckerName.toLowerCase().includes(searchLower) ||
-                          (bid.shipperName && bid.shipperName.toLowerCase().includes(searchLower));
-                      })
+                    filteredRates
                       .slice(startIndex, endIndex)
                       .map((bid, index) => (
                         <tr key={bid.id} className="bg-white hover:bg-gray-50/60 transition-colors">
-                          <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                          <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                             <div className="text-sm font-semibold text-gray-800">{bid.id}</div>
                             <div className="text-xs text-gray-400">{bid.loadId}</div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <span className="font-medium text-gray-700">{bid.origin}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <span className="font-medium text-gray-700">{bid.destination}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <span className="font-medium text-gray-600">${bid.originalRate.toLocaleString()}</span>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <span className="font-bold text-red-600">${bid.currentRate.toLocaleString()}</span>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <span className={`font-bold ${parseFloat(bid.rateDifferencePercentage) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                               {bid.rateDifferencePercentage}%
                             </span>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.shipperName}</p>
                               <p className="text-xs text-gray-500">MC: {bid.shipperInfo?.mc_dot_no || 'N/A'}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.truckerName}</p>
                               <p className="text-xs text-gray-500">MC: {bid.carrierInfo?.mcDotNo || 'N/A'}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div className="max-w-xs">
                               <p className="text-sm text-red-600 truncate" title={bid.rejectionReason}>
                                 {bid.rejectionReason}
                               </p>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-gray-200">
+                          <td className="py-3 px-4 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.rejectedAt}</p>
                               <p className="text-xs text-gray-500">By: {bid.rejectedBy}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
+                          <td className="py-3 px-4 border-y border-r border-gray-200 rounded-r-xl">
                             <button
                               onClick={() => handleViewBid(bid)}
                               className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-1 rounded-lg text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
@@ -3314,7 +3401,7 @@ export default function RateApproved() {
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} bids/rates
-            {searchTerm && ` (filtered from ${approvedRates.length} total)`}
+            {searchTerm && ` (filtered from ${activeTabRates.length} total)`}
           </div>
 
           <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2">
