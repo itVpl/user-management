@@ -42,6 +42,13 @@ export default function RateApproved() {
   const [managerApprovedBids, setManagerApprovedBids] = useState([]);
   const [managerRejectedBids, setManagerRejectedBids] = useState([]);
   const [managerBidsLoading, setManagerBidsLoading] = useState(false);
+  const [tabCounts, setTabCounts] = useState({
+    pending: 0,
+    approved: 0,
+    accepted: 0,
+    managerApproved: 0,
+    managerRejected: 0
+  });
 
   // Final Price Modal State for rejected bids
   const [finalPriceModal, setFinalPriceModal] = useState({
@@ -262,12 +269,14 @@ export default function RateApproved() {
 
 
         setApprovedRates(transformedRates);
+        setTabCounts(prev => ({ ...prev, approved: transformedRates.length }));
 
         // Force a re-render by updating the search term
         setSearchTerm('');
       } else {
         console.error('Completed rates API response format error:', response.data);
         setApprovedRates([]);
+        setTabCounts(prev => ({ ...prev, approved: 0 }));
       }
     } catch (error) {
       console.error('Error fetching completed rates:', error);
@@ -279,6 +288,7 @@ export default function RateApproved() {
         url: error.config?.url
       });
       setApprovedRates([]);
+      setTabCounts(prev => ({ ...prev, approved: 0 }));
     } finally {
       setLoading(false);
     }
@@ -360,14 +370,17 @@ export default function RateApproved() {
         }));
 
         setManagerApprovedBids(transformedBids);
+        setTabCounts(prev => ({ ...prev, managerApproved: transformedBids.length }));
       } else {
         console.error('Manager approved bids API response format error:', response.data);
         setManagerApprovedBids([]);
+        setTabCounts(prev => ({ ...prev, managerApproved: 0 }));
       }
     } catch (error) {
       console.error('Error fetching manager approved bids:', error);
       alertify.error('Error fetching manager approved bids');
       setManagerApprovedBids([]);
+      setTabCounts(prev => ({ ...prev, managerApproved: 0 }));
     } finally {
       setManagerBidsLoading(false);
     }
@@ -444,14 +457,17 @@ export default function RateApproved() {
         }));
 
         setManagerRejectedBids(transformedBids);
+        setTabCounts(prev => ({ ...prev, managerRejected: transformedBids.length }));
       } else {
         console.error('Manager rejected bids API response format error:', response.data);
         setManagerRejectedBids([]);
+        setTabCounts(prev => ({ ...prev, managerRejected: 0 }));
       }
     } catch (error) {
       console.error('Error fetching manager rejected bids:', error);
       alertify.error('Error fetching manager rejected bids');
       setManagerRejectedBids([]);
+      setTabCounts(prev => ({ ...prev, managerRejected: 0 }));
     } finally {
       setManagerBidsLoading(false);
     }
@@ -634,12 +650,14 @@ export default function RateApproved() {
 
 
         setApprovedRates(transformedBids);
+        setTabCounts(prev => ({ ...prev, accepted: transformedBids.length }));
 
         // Force a re-render by updating the search term
         setSearchTerm('');
       } else {
         console.error('Accepted bids API response format error:', response.data);
         setApprovedRates([]);
+        setTabCounts(prev => ({ ...prev, accepted: 0 }));
       }
     } catch (error) {
       console.error('Error fetching accepted bids:', error);
@@ -651,6 +669,7 @@ export default function RateApproved() {
         url: error.config?.url
       });
       setApprovedRates([]);
+      setTabCounts(prev => ({ ...prev, accepted: 0 }));
     } finally {
       setLoading(false);
     }
@@ -917,9 +936,12 @@ export default function RateApproved() {
 
 
       setApprovedRates(uniqueRates);
+      const pendingTotal = uniqueRates.filter(rate => rate.status === 'pending').length;
+      setTabCounts(prev => ({ ...prev, pending: pendingTotal }));
     } catch (error) {
       console.error('Error fetching data:', error);
       alertify.error('Error refreshing data');
+      setTabCounts(prev => ({ ...prev, pending: 0 }));
     } finally {
       setLoading(false);
     }
@@ -1041,6 +1063,12 @@ export default function RateApproved() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentRates = filteredRates.slice(startIndex, endIndex);
+
+  const pendingCount = tabCounts.pending;
+  const approvedCount = tabCounts.approved;
+  const acceptedCount = tabCounts.accepted;
+  const managerApprovedCount = tabCounts.managerApproved;
+  const managerRejectedCount = tabCounts.managerRejected;
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -1604,11 +1632,11 @@ export default function RateApproved() {
   if (previewImg) {
     return (
       <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
-        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4">
-          <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl shadow-lg" />
+        <div className="relative bg-white rounded-2xl overflow-hidden p-4">
+          <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl" />
           <button
             onClick={() => setPreviewImg(null)}
-            className="absolute left-4 top-4 bg-white p-2 rounded-full shadow hover:bg-blue-100"
+            className="absolute left-4 top-4 bg-white p-2 rounded-full hover:bg-blue-100"
           >
             <FaArrowLeft />
           </button>
@@ -1620,7 +1648,7 @@ export default function RateApproved() {
   if (modalType) {
     return (
       <div className="fixed inset-0 z-50 backdrop-blue-sm bg-black/30 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center">
+        <div className="bg-white p-8 rounded-2xl w-[400px] relative flex flex-col items-center">
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
@@ -1630,7 +1658,7 @@ export default function RateApproved() {
             onChange={(e) => setReason(e.target.value)}
           />
           <button
-            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full font-semibold shadow hover:from-blue-700 hover:to-purple-700 transition"
+            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full font-semibold hover:from-blue-700 hover:to-purple-700 transition"
             onClick={() => handleStatusUpdate(modalType === 'approval' ? 'approved' : modalType === 'rejection' ? 'rejected' : 'resubmit')}
           >
             Submit
@@ -1644,7 +1672,7 @@ export default function RateApproved() {
   if (acceptBidModal.visible) {
     return (
       <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[95vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1694,7 +1722,7 @@ export default function RateApproved() {
                   
                   {/* Dropdown */}
                   {showCustomerDropdown && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg max-h-60 overflow-y-auto">
                       {customersLoading ? (
                         <div className="px-4 py-3 text-gray-500 text-center">
                           Loading customers...
@@ -1929,7 +1957,7 @@ export default function RateApproved() {
             animation: fadeIn 0.3s ease-out;
           }
         `}</style>
-        <div className="bg-gray-100 rounded-xl shadow-2xl max-w-2xl w-full h-[85vh] flex flex-col overflow-hidden">
+        <div className="bg-gray-100 rounded-xl max-w-2xl w-full h-[85vh] flex flex-col overflow-hidden">
           {/* Header - WhatsApp Style */}
           <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -2018,7 +2046,7 @@ export default function RateApproved() {
                     </p>
                     
                     <div
-                      className={`max-w-[80%] rounded-lg px-3 py-2 shadow-sm ${
+                      className={`max-w-[80%] rounded-lg px-3 py-2 ${
                         isInhouse
                           ? 'bg-green-500 text-white rounded-br-none'
                           : 'bg-white text-gray-800 rounded-bl-none border border-gray-200'
@@ -2119,143 +2147,350 @@ export default function RateApproved() {
 
   return (
     <div className="p-6">
-      {/* Tabs */}
-      <div className="flex items-center gap-4 mb-6 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('pending')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'pending'
-            ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <Clock size={18} />
-            <span>Pending Bids</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('completed')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'completed'
-            ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} />
-            <span>Approved Rates</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('accepted')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'accepted'
-            ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} />
-            <span>Accepted Bids</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('manager-approved')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'manager-approved'
-            ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} />
-            <span>Manager Approved</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('manager-rejected')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'manager-rejected'
-            ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <XCircle size={18} />
-            <span>Manager Rejected</span>
-          </div>
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'pending' && (
-        <div>
-          {/* Pending Bids Content */}
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                    <Clock className="text-yellow-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Pending Bids</p>
-                    <p className="text-xl font-bold text-gray-800">{approvedRates.filter(rate => rate.status === 'pending').length}</p>
-                  </div>
-                </div>
+      {/* Tabs + Search + Quick Stats Wrapper */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-6 w-full">
+        {/* Tabs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'pending'
+              ? 'bg-white border-blue-400'
+              : 'bg-white border-gray-200'
+              }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-600">Pending Bids</p>
+                <p className="text-2xl font-bold text-gray-900">{pendingCount}</p>
               </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="text-blue-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Approved</p>
-                    <p className="text-xl font-bold text-blue-600">{approvedRates.filter(rate => rate.status === 'approved').length}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                    <Calendar className="text-purple-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Today</p>
-                    <p className="text-xl font-bold text-purple-600">{approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}</p>
-                  </div>
-                </div>
+              <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center">
+                <Clock className="text-red-500" size={18} />
               </div>
             </div>
-            <div className="flex items-center gap-4">
+          </button>
+          <button
+            onClick={() => setActiveTab('completed')}
+            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'completed'
+              ? 'bg-white border-blue-400'
+              : 'bg-white border-gray-200'
+              }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-600">Approved Rates</p>
+                <p className="text-2xl font-bold text-gray-900">{approvedCount}</p>
+              </div>
+              <div className="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center">
+                <CheckCircle className="text-green-500" size={18} />
+              </div>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('accepted')}
+            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'accepted'
+              ? 'bg-white border-blue-400'
+              : 'bg-white border-gray-200'
+              }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-600">Accepted Bids</p>
+                <p className="text-2xl font-bold text-gray-900">{acceptedCount}</p>
+              </div>
+              <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center">
+                <CheckCircle className="text-emerald-500" size={18} />
+              </div>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('manager-approved')}
+            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'manager-approved'
+              ? 'bg-white border-blue-400'
+              : 'bg-white border-gray-200'
+              }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-600">Manager Approved</p>
+                <p className="text-2xl font-bold text-gray-900">{managerApprovedCount}</p>
+              </div>
+              <div className="w-9 h-9 rounded-full bg-teal-50 flex items-center justify-center">
+                <CheckCircle className="text-teal-500" size={18} />
+              </div>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('manager-rejected')}
+            className={`w-full px-6 py-4 rounded-2xl border transition-all duration-200 text-left ${activeTab === 'manager-rejected'
+              ? 'bg-white border-blue-400'
+              : 'bg-white border-gray-200'
+              }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-600">Manager Rejected</p>
+                <p className="text-2xl font-bold text-gray-900">{managerRejectedCount}</p>
+              </div>
+              <div className="w-9 h-9 rounded-full bg-rose-50 flex items-center justify-center">
+                <XCircle className="text-rose-500" size={18} />
+              </div>
+            </div>
+          </button>
+        </div>
+
+        {activeTab === 'pending' && (
+          <div className="mt-3 space-y-3">
+            {/* Search */}
+            <div className="bg-white rounded-2xl w-full">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search Employee"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 pr-10 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div
+                  className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                  style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+                >
+                <p className="text-sm font-bold text-gray-700">Total pending bids</p>
+                <span className="text-3xl font-bold text-green-500">{pendingCount}</span>
+              </div>
+                <div
+                  className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                  style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+                >
+                <p className="text-sm font-bold text-gray-700">Approved</p>
+                <span className="text-3xl font-bold text-green-500">{approvedCount}</span>
+              </div>
+                <div
+                  className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                  style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+                >
+                <p className="text-sm font-bold text-gray-700">Today</p>
+                <span className="text-3xl font-bold text-green-500">
+                  {approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'completed' && (
+          <div className="mt-3 space-y-3">
+            {/* Search */}
+            <div className="bg-white rounded-2xl w-full">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  placeholder="Search pending bids..."
+                  placeholder="Search completed rates..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 pl-9 pr-10 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
             </div>
-          </div>
 
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Total Completed</p>
+                <span className="text-3xl font-bold text-green-500">{approvedRates.length}</span>
+              </div>
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Today's Completed</p>
+                <span className="text-3xl font-bold text-green-500">{approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}</span>
+              </div>
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <button
+                  onClick={handleExportToCSV}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200"
+                >
+                  <FaDownload size={16} />
+                  <span className="text-sm font-semibold">Export to CSV</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'accepted' && (
+          <div className="mt-3 space-y-3">
+            {/* Search */}
+            <div className="bg-white rounded-2xl w-full">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search accepted bids..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 pl-9 pr-10 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Total Accepted</p>
+                <span className="text-3xl font-bold text-green-500">{acceptedCount}</span>
+              </div>
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Today's Accepted</p>
+                <span className="text-3xl font-bold text-green-500">{approvedRates.filter(rate => rate.acceptedAt === new Date().toISOString().split('T')[0]).length}</span>
+              </div>
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Total Value</p>
+                <span className="text-3xl font-bold text-green-500">
+                  ${approvedRates.reduce((sum, rate) => sum + (rate.rate || 0), 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'manager-approved' && (
+          <div className="mt-3 space-y-3">
+            <div className="bg-white rounded-2xl w-full">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search manager approved bids..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 pl-9 pr-10 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Manager Approved</p>
+                <span className="text-3xl font-bold text-green-500">{managerApprovedBids.length}</span>
+              </div>
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Total Value</p>
+                <span className="text-3xl font-bold text-green-500">
+                  ${managerApprovedBids.reduce((sum, bid) => sum + (bid.currentRate || 0), 0).toLocaleString()}
+                </span>
+              </div>
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <button
+                  onClick={handleExportToCSV}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+                >
+                  <FaDownload size={16} />
+                  <span className="text-sm font-semibold">Export to CSV</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'manager-rejected' && (
+          <div className="mt-3 space-y-3">
+            <div className="bg-white rounded-2xl w-full">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search manager rejected bids..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 pl-9 pr-10 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Manager Rejected</p>
+                <span className="text-3xl font-bold text-green-500">{managerRejectedBids.length}</span>
+              </div>
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <p className="text-sm font-bold text-gray-700">Total Value</p>
+                <span className="text-3xl font-bold text-green-500">
+                  ${managerRejectedBids.reduce((sum, bid) => sum + (bid.currentRate || 0), 0).toLocaleString()}
+                </span>
+              </div>
+              <div
+                className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between"
+                style={{ boxShadow: '3.08px 3.08px 3.08px 0px #338ACD1A inset' }}
+              >
+                <button
+                  onClick={handleExportToCSV}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+                >
+                  <FaDownload size={16} />
+                  <span className="text-sm font-semibold">Export to CSV</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'pending' && (
+        <div className="space-y-4">
           {viewDoc && selectedRate ? (
-            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
+            <div className="bg-white rounded-2xl p-8 max-w-3xl mx-auto">
               <div className="flex justify-between items-center mb-8">
                 <div className="flex gap-4">
                   <button
                     onClick={() => setModalType('approval')}
-                    className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full shadow hover:from-green-600 hover:to-green-800 transition"
+                    className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full hover:from-green-600 hover:to-green-800 transition"
                   >
                     <CheckCircle size={18} /> Approve
                   </button>
                   <button
                     onClick={() => setModalType('rejection')}
-                    className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full shadow hover:from-red-600 hover:to-red-800 transition"
+                    className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full hover:from-red-600 hover:to-red-800 transition"
                   >
                     <XCircle size={18} /> Reject
                   </button>
                   <button
                     onClick={() => setModalType('resubmit')}
-                    className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full shadow hover:from-blue-600 hover:to-purple-700 transition"
+                    className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full hover:from-blue-600 hover:to-purple-700 transition"
                   >
                     <Clock size={18} /> Re-submission
                   </button>
@@ -2271,7 +2506,7 @@ export default function RateApproved() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50 to-white shadow flex flex-col gap-2">
+                <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50 to-white flex flex-col gap-2">
                   <div className="flex items-center gap-2 mb-2">
                     <Building className="text-green-500" size={20} />
                     <h3 className="text-lg font-bold text-green-700">Rate Info</h3>
@@ -2340,7 +2575,7 @@ export default function RateApproved() {
                   <img
                     src={`${API_CONFIG.BASE_URL}/${selectedRate.docUpload}`}
                     alt="Uploaded Doc"
-                    className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
+                    className="rounded-xl max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
                     onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedRate.docUpload}`)}
                   />
                   <div className="text-xs text-gray-400 mt-2">Click image to preview</div>
@@ -2348,89 +2583,72 @@ export default function RateApproved() {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden px-3">
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                    <tr>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CMT User</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+                  <thead>
+                    <tr className="bg-gray-100 text-xs uppercase text-gray-600">
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Origin</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Destination</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Rate</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Trucker</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide">CMT User</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide">Date & Time</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {currentRates.map((rate, index) => (
-                      <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                        <td className="py-2 px-3">
-                          <span className="font-medium text-gray-700">{rate.id}</span>
+                    {currentRates.map((rate) => (
+                      <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
+                        <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                          <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
+                          <div className="text-xs text-gray-400">{rate.loadId}</div>
                         </td>
-                        <td className="py-2 px-3">
-                          <span className="font-medium text-gray-700">{rate.loadId}</span>
+                        <td className="py-3 px-6 border-y border-gray-200">
+                          <div className="text-sm text-gray-800">{rate.origin}</div>
+                          <div className="text-xs text-gray-400">{rate.origin.split(', ')[1] || ''}</div>
                         </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <span className="font-medium text-gray-700">{rate.origin}</span>
-                            <p className="text-xs text-gray-500">{rate.origin.split(', ')[1] || ''}</p>
+                        <td className="py-3 px-6 border-y border-gray-200">
+                          <div className="text-sm text-gray-800">{rate.destination}</div>
+                          <div className="text-xs text-gray-400">{rate.destination.split(', ')[1] || ''}</div>
+                        </td>
+                        <td className="py-3 px-6 border-y border-gray-200">
+                          <span className="text-sm font-semibold text-green-600">${rate.rate.toLocaleString()}</span>
+                        </td>
+                        <td className="py-3 px-6 border-y border-gray-200">
+                          <div className="text-sm text-gray-800">{rate.shipperInfo?.compName || 'N/A'}</div>
+                          {rate.shipperInfo?.mc_dot_no && (
+                            <div className="text-xs text-gray-400">MC: {rate.shipperInfo.mc_dot_no}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-6 border-y border-gray-200">
+                          <div className="text-sm text-gray-800">{rate.truckerName}</div>
+                          {rate.carrierInfo && (
+                            <div className="text-xs text-gray-400">MC: {rate.carrierInfo.mcDotNo}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-6 border-y border-gray-200">
+                          <div className="text-sm text-gray-800">{rate.placedByCMTUser?.employeeName || 'N/A'}</div>
+                          {rate.placedByCMTUser?.empId && (
+                            <div className="text-xs text-gray-400">ID: {rate.placedByCMTUser.empId}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-6 border-y border-gray-200">
+                          <div className="text-sm text-gray-800">{rate.createdAt || 'N/A'}</div>
+                          <div className="text-xs text-gray-400">
+                            {rate.createdAt ? new Date(rate.createdAt).toLocaleTimeString() : 'N/A'}
                           </div>
                         </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <span className="font-medium text-gray-700">{rate.destination}</span>
-                            <p className="text-xs text-gray-500">{rate.destination.split(', ')[1] || ''}</p>
-                          </div>
-                        </td>
-                        <td className="py-2 px-3">
-                          <span className="font-bold text-green-600">${rate.rate.toLocaleString()}</span>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
-                            {rate.shipperInfo?.mc_dot_no && (
-                              <p className="text-xs text-gray-500">MC: {rate.shipperInfo.mc_dot_no}</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <p className="font-medium text-gray-700">{rate.truckerName}</p>
-                            {rate.carrierInfo && (
-                              <p className="text-xs text-gray-500">MC: {rate.carrierInfo.mcDotNo}</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <p className="font-medium text-gray-700">{rate.placedByCMTUser?.employeeName || 'N/A'}</p>
-                            {rate.placedByCMTUser?.empId && (
-                              <p className="text-xs text-gray-500">ID: {rate.placedByCMTUser.empId}</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <p className="font-medium text-gray-700">{rate.createdAt || 'N/A'}</p>
-                            <p className="text-xs text-gray-500">
-                              {rate.createdAt ? new Date(rate.createdAt).toLocaleTimeString() : 'N/A'}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="py-2 px-3">
+                        <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
                           <div className="flex gap-2">
-                            {/* Chat Button */}
                             <button
                               onClick={() => {
-                                // Use actualLoadId if available, otherwise try to extract from loadId
                                 const loadId = rate.actualLoadId || rate.loadId?.replace(/^L-/, '') || rate.loadId || rate.rateNum;
                                 const receiverEmpId = rate.salesUserInfo?.empId || rate.load?.createdBySalesUser?.empId;
                                 const receiverName = rate.salesUserInfo?.empName || rate.salesUserInfo?.employeeName || rate.load?.createdBySalesUser?.empName || 'Sales User';
-                                
+
                                 if (!receiverEmpId) {
                                   alertify.error('Unable to determine receiver. Please check the bid information.');
                                   return;
@@ -2448,57 +2666,27 @@ export default function RateApproved() {
                                   receiverName: receiverName
                                 });
                               }}
-                              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+                              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition"
                               title="Chat"
                             >
-                              <MessageCircle size={14} />
-                              <span>Chat</span>
+                              Chat
                             </button>
-                            {/* Manual Approve Button */}
                             <button
                               onClick={() => {
-                                setMarginAmount(0); // Reset margin when opening modal
-                                setEditableMessage(rate.remarks || ''); // Initialize editable message
-                                setFinalPriceMode(false); // Reset final price mode
-                                setFinalPriceAmount(0); // Reset final price
+                                setMarginAmount(0);
+                                setEditableMessage(rate.remarks || '');
+                                setFinalPriceMode(false);
+                                setFinalPriceAmount(0);
                                 setApprovalModal({ visible: true, type: 'manual', rate });
                               }}
                               disabled={actionLoading[rate.rateNum]}
-                              className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum] === 'manual'
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                                : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
+                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${actionLoading[rate.rateNum] === 'manual'
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-green-500 text-white hover:bg-green-600'
                                 }`}
                             >
-                              {actionLoading[rate.rateNum] === 'manual' ? (
-                                <span className="flex items-center gap-2">
-                                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                  <span>Approving...</span>
-                                </span>
-                              ) : (
-                                <>
-                                  <CheckCircle size={12} className="animate-pulse" />
-                                  <span>Add Margin</span>
-                                </>
-                              )}
+                              {actionLoading[rate.rateNum] === 'manual' ? 'Approving...' : 'Add Margin'}
                             </button>
-                            {/* Enter Final Price Button - Only show in Approved Rates tab */}
-                            {activeTab === 'completed' && (
-                              <button
-                                onClick={() => {
-                                  setFinalPriceModalAmount(0); // Reset final price amount
-                                  setFinalPriceModalMessage(rate.remarks || ''); // Initialize message
-                                  setFinalPriceModal({ visible: true, rate });
-                                }}
-                                disabled={actionLoading[rate.rateNum]}
-                                className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum]
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                                  : 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg hover:from-purple-600 hover:to-indigo-700 hover:shadow-xl'
-                                  }`}
-                              >
-                                <DollarSign size={12} />
-                                <span>Enter Final Price</span>
-                              </button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -2520,18 +2708,15 @@ export default function RateApproved() {
             </div>
           )}
 
-
-
           {/* Enhanced Pagination */}
           {totalPages > 1 && filteredRates.length > 0 && (
-            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border border-gray-200">
               <div className="text-sm text-gray-600">
                 Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} pending bids
                 {searchTerm && ` (filtered from ${approvedRates.length} total)`}
               </div>
 
-              <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
-                {/* Previous Button */}
+              <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
@@ -2543,9 +2728,7 @@ export default function RateApproved() {
                   Previous
                 </button>
 
-                {/* Page Numbers */}
                 <div className="flex items-center gap-1">
-                  {/* First Page */}
                   {currentPage > 3 && (
                     <>
                       <button
@@ -2560,7 +2743,6 @@ export default function RateApproved() {
                     </>
                   )}
 
-                  {/* Current Page Range */}
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
                     .filter(page => {
                       if (totalPages <= 7) return true;
@@ -2573,7 +2755,7 @@ export default function RateApproved() {
                         key={page}
                         onClick={() => handlePageChange(page)}
                         className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
                           : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
                           }`}
                       >
@@ -2581,7 +2763,6 @@ export default function RateApproved() {
                       </button>
                     ))}
 
-                  {/* Last Page */}
                   {currentPage < totalPages - 2 && totalPages > 7 && (
                     <>
                       {currentPage < totalPages - 3 && (
@@ -2597,7 +2778,6 @@ export default function RateApproved() {
                   )}
                 </div>
 
-                {/* Next Button */}
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
@@ -2617,95 +2797,45 @@ export default function RateApproved() {
       {/* Completed Rates Tab Content */}
       {activeTab === 'completed' && (
         <div>
-          {/* Completed Rates Content */}
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="text-green-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Completed</p>
-                    <p className="text-xl font-bold text-gray-800">{approvedRates.length}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <Calendar className="text-blue-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Today's Completed</p>
-                    <p className="text-xl font-bold text-blue-600">{approvedRates.filter(rate => rate.createdAt === new Date().toISOString().split('T')[0]).length}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search completed rates..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={handleExportToCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-              >
-                <FaDownload size={16} />
-                <span className="text-sm font-semibold">Export to CSV</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+              <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+                <thead>
+                  <tr className="bg-gray-100 text-xs uppercase text-gray-600">
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Intermediate Rate</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Trucker</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Date & Time</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentRates.map((rate, index) => (
-                    <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{rate.id}</span>
+                    <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
+                      <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                        <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
+                        <div className="text-xs text-gray-400">{rate.loadId}</div>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{rate.loadId}</span>
-                      </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <span className="font-medium text-gray-700">{rate.origin}</span>
                           <p className="text-xs text-gray-500">{rate.origin.split(', ')[1] || ''}</p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <span className="font-medium text-gray-700">{rate.destination}</span>
                           <p className="text-xs text-gray-500">{rate.destination.split(', ')[1] || ''}</p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <span className="font-bold text-blue-600">${rate.originalRate?.toLocaleString() || '0'}</span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                       <div>
   <span className="font-bold text-green-600">
     ${Number(rate.intermediateRate || 0).toLocaleString()}
@@ -2724,7 +2854,7 @@ export default function RateApproved() {
 </div>
 
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
                           {rate.shipperInfo?.mc_dot_no && (
@@ -2732,7 +2862,7 @@ export default function RateApproved() {
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.truckerName}</p>
                           {rate.carrierInfo && (
@@ -2740,7 +2870,7 @@ export default function RateApproved() {
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.createdAt || 'N/A'}</p>
                           <p className="text-xs text-gray-500">
@@ -2748,7 +2878,7 @@ export default function RateApproved() {
                           </p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
                         <div className="flex gap-2">
                           {/* <button
                             onClick={() => {
@@ -2760,8 +2890,8 @@ export default function RateApproved() {
                             }}
                             disabled={actionLoading[rate.rateNum]}
                             className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum] === 'manual'
-                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                              : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
                               }`}
                           >
                             {actionLoading[rate.rateNum] === 'manual' ? (
@@ -2786,8 +2916,8 @@ export default function RateApproved() {
                               }}
                               disabled={actionLoading[rate.rateNum]}
                               className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 ${actionLoading[rate.rateNum]
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                                : 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg hover:from-purple-600 hover:to-indigo-700 hover:shadow-xl'
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700'
                                 }`}
                             >
                               <DollarSign size={12} />
@@ -2796,7 +2926,7 @@ export default function RateApproved() {
                           )}
                           <button
                             onClick={() => handleNegotiateBid(rate)}
-                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700 hover:shadow-xl"
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white hover:from-orange-600 hover:to-amber-700"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -2806,7 +2936,7 @@ export default function RateApproved() {
                           {/* Accept Bid button commented out for Approved Rates tab */}
                           {/* <button
                             onClick={() => handleAcceptBid(rate)}
-                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700 hover:shadow-xl"
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700"
                           >
                             <CheckCircle size={12} />
                             <span>Accept Bid</span>
@@ -2836,98 +2966,44 @@ export default function RateApproved() {
       {/* Accepted Bids Tab Content */}
       {activeTab === 'accepted' && (
         <div>
-          {/* Accepted Bids Content */}
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="text-blue-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Accepted</p>
-                    <p className="text-xl font-bold text-gray-800">{approvedRates.length}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                    <Calendar className="text-green-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Today's Accepted</p>
-                    <p className="text-xl font-bold text-green-600">{approvedRates.filter(rate => rate.acceptedAt === new Date().toISOString().split('T')[0]).length}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                    <DollarSign className="text-purple-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Value</p>
-                    <p className="text-xl font-bold text-purple-600">${approvedRates.reduce((sum, rate) => sum + (rate.rate || 0), 0).toLocaleString()}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search accepted bids..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Intermediate Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Trucker</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
+              <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+                <thead>
+                  <tr className="bg-gray-100 text-xs uppercase text-gray-600">
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Intermediate Rate</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Trucker</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Date & Time</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentRates.map((rate, index) => (
-                    <tr key={rate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{rate.id}</span>
+                    <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
+                      <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                        <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
+                        <div className="text-xs text-gray-400">{rate.loadId}</div>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{rate.loadId}</span>
-                      </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <span className="font-medium text-gray-700">{rate.origin}</span>
                           <p className="text-xs text-gray-500">{rate.origin.split(', ')[1] || ''}</p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <span className="font-medium text-gray-700">{rate.destination}</span>
                           <p className="text-xs text-gray-500">{rate.destination.split(', ')[1] || ''}</p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <span className="font-bold text-blue-600">${rate.originalRate?.toLocaleString() || '0'}</span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                                               <div>
   <span className="font-bold text-green-600">
     ${Number(rate.intermediateRate || 0).toLocaleString()}
@@ -2945,7 +3021,7 @@ export default function RateApproved() {
   )}
 </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.shipperInfo?.compName || 'N/A'}</p>
                           {rate.shipperInfo?.mc_dot_no && (
@@ -2953,7 +3029,7 @@ export default function RateApproved() {
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-gray-200">
                         <div>
                           <p className="font-medium text-gray-700">{rate.truckerName}</p>
                           {rate.carrierInfo && (
@@ -2961,7 +3037,7 @@ export default function RateApproved() {
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
                         <div>
                           <p className="font-medium text-gray-700">{rate.acceptedAt || rate.createdAt || 'N/A'}</p>
                           <p className="text-xs text-gray-500">
@@ -2992,73 +3068,23 @@ export default function RateApproved() {
       {/* Manager Approved Bids Tab Content */}
       {activeTab === 'manager-approved' && (
         <div>
-          {/* Manager Approved Bids Content */}
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="text-green-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Manager Approved</p>
-                    <p className="text-xl font-bold text-green-600">{managerApprovedBids.length}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <DollarSign className="text-blue-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Value</p>
-                    <p className="text-xl font-bold text-blue-600">
-                      ${managerApprovedBids.reduce((sum, bid) => sum + (bid.currentRate || 0), 0).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search manager approved bids..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={handleExportToCSV}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
-              >
-                <FaDownload size={16} />
-                Export CSV
-              </button>
-            </div>
-          </div>
-
           {/* Manager Approved Bids Table */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Current Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate Diff %</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Driver Info</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved Date</th>
-                    {/* <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th> */}
+              <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+                <thead>
+                  <tr className="bg-gray-100 text-xs uppercase text-gray-600">
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Current Rate</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Rate Diff %</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Carrier</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Driver Info</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Approved Date</th>
+                    {/* <th className="text-left py-3 px-6 font-semibold tracking-wide">Action</th> */}
                   </tr>
                 </thead>
                 <tbody>
@@ -3092,54 +3118,52 @@ export default function RateApproved() {
                       })
                       .slice(startIndex, endIndex)
                       .map((bid, index) => (
-                        <tr key={bid.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{bid.id}</span>
+                        <tr key={bid.id} className="bg-white hover:bg-gray-50/60 transition-colors">
+                          <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                            <div className="text-sm font-semibold text-gray-800">{bid.id}</div>
+                            <div className="text-xs text-gray-400">{bid.loadId}</div>
                           </td>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{bid.loadId}</span>
-                          </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <span className="font-medium text-gray-700">{bid.origin}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <span className="font-medium text-gray-700">{bid.destination}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <span className="font-medium text-gray-600">${bid.originalRate.toLocaleString()}</span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <span className="font-bold text-green-600">${bid.currentRate.toLocaleString()}</span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <span className={`font-bold ${parseFloat(bid.rateDifferencePercentage) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                               {bid.rateDifferencePercentage}%
                             </span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.shipperName}</p>
                               <p className="text-xs text-gray-500">MC: {bid.shipperInfo?.mc_dot_no || 'N/A'}</p>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.truckerName}</p>
                               <p className="text-xs text-gray-500">MC: {bid.carrierInfo?.mcDotNo || 'N/A'}</p>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.driverName}</p>
                               <p className="text-xs text-gray-500">Phone: {bid.driverPhone}</p>
                               <p className="text-xs text-gray-500">Vehicle: {bid.vehicleNumber}</p>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
                             <div>
                               <p className="font-medium text-gray-700">{bid.approvedAt}</p>
                               <p className="text-xs text-gray-500">By: {bid.approvedBy}</p>
@@ -3166,73 +3190,23 @@ export default function RateApproved() {
       {/* Manager Rejected Bids Tab Content */}
       {activeTab === 'manager-rejected' && (
         <div>
-          {/* Manager Rejected Bids Content */}
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                    <XCircle className="text-red-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Manager Rejected</p>
-                    <p className="text-xl font-bold text-red-600">{managerRejectedBids.length}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <DollarSign className="text-blue-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Value</p>
-                    <p className="text-xl font-bold text-blue-600">
-                      ${managerRejectedBids.reduce((sum, bid) => sum + (bid.currentRate || 0), 0).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search manager rejected bids..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={handleExportToCSV}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
-              >
-                <FaDownload size={16} />
-                Export CSV
-              </button>
-            </div>
-          </div>
-
           {/* Manager Rejected Bids Table */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Current Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate Diff %</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rejection Reason</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rejected Date</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+              <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+                <thead>
+                  <tr className="bg-gray-100 text-xs uppercase text-gray-600">
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Current Rate</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Rate Diff %</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Shipper</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Carrier</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Rejection Reason</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide">Rejected Date</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-r-xl">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3266,60 +3240,58 @@ export default function RateApproved() {
                       })
                       .slice(startIndex, endIndex)
                       .map((bid, index) => (
-                        <tr key={bid.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{bid.id}</span>
+                        <tr key={bid.id} className="bg-white hover:bg-gray-50/60 transition-colors">
+                          <td className="py-3 px-6 border-y border-l border-gray-200 rounded-l-xl">
+                            <div className="text-sm font-semibold text-gray-800">{bid.id}</div>
+                            <div className="text-xs text-gray-400">{bid.loadId}</div>
                           </td>
-                          <td className="py-2 px-3">
-                            <span className="font-medium text-gray-700">{bid.loadId}</span>
-                          </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <span className="font-medium text-gray-700">{bid.origin}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <span className="font-medium text-gray-700">{bid.destination}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <span className="font-medium text-gray-600">${bid.originalRate.toLocaleString()}</span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <span className="font-bold text-red-600">${bid.currentRate.toLocaleString()}</span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <span className={`font-bold ${parseFloat(bid.rateDifferencePercentage) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                               {bid.rateDifferencePercentage}%
                             </span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.shipperName}</p>
                               <p className="text-xs text-gray-500">MC: {bid.shipperInfo?.mc_dot_no || 'N/A'}</p>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.truckerName}</p>
                               <p className="text-xs text-gray-500">MC: {bid.carrierInfo?.mcDotNo || 'N/A'}</p>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div className="max-w-xs">
                               <p className="text-sm text-red-600 truncate" title={bid.rejectionReason}>
                                 {bid.rejectionReason}
                               </p>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-gray-200">
                             <div>
                               <p className="font-medium text-gray-700">{bid.rejectedAt}</p>
                               <p className="text-xs text-gray-500">By: {bid.rejectedBy}</p>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-3 px-6 border-y border-r border-gray-200 rounded-r-xl">
                             <button
                               onClick={() => handleViewBid(bid)}
                               className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-1 rounded-lg text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
@@ -3339,13 +3311,13 @@ export default function RateApproved() {
 
       {/* Enhanced Pagination */}
       {totalPages > 1 && filteredRates.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} bids/rates
             {searchTerm && ` (filtered from ${approvedRates.length} total)`}
           </div>
 
-          <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2">
             {/* Previous Button */}
             <button
               onClick={() => handlePageChange(currentPage - 1)}
@@ -3388,7 +3360,7 @@ export default function RateApproved() {
                     key={page}
                     onClick={() => handlePageChange(page)}
                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
-                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
                       : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
                       }`}
                   >
@@ -3436,7 +3408,7 @@ export default function RateApproved() {
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto hide-scrollbar"
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {/* Header */}
@@ -3626,7 +3598,7 @@ export default function RateApproved() {
               scrollbar-width: none;
             }
           `}</style>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto approval-modal-scroll">
+          <div className="bg-white rounded-3xl w-full max-w-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto approval-modal-scroll">
             {/* Header with gradient */}
             <div className={`p-6 text-white ${approvalModal.type === 'manual' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-purple-600'}`}>
               <div className="flex justify-between items-center">
@@ -3729,7 +3701,7 @@ export default function RateApproved() {
                     <img
                       src={approvalModal.rate.attachment}
                       alt="Bid Attachment"
-                      className="w-full h-32 object-cover rounded-lg border-2 border-gray-200 shadow-sm"
+                      className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
                       onError={(e) => {
                         e.target.style.display = 'none';
                         e.target.nextSibling.style.display = 'flex';
@@ -3775,7 +3747,7 @@ export default function RateApproved() {
                     <label className="text-sm font-semibold text-gray-700">Rate Breakdown</label>
                   </div>
                   <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm whitespace-nowrap">
                       <thead className="bg-blue-100">
                         <tr>
                           <th className="text-left py-2 px-3 text-blue-800 font-semibold">Charge Name</th>
@@ -3984,8 +3956,8 @@ export default function RateApproved() {
                   disabled={!!actionLoading[approvalModal.rate?.rateNum]}
                   className={`flex-1 px-4 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 ${
                     approvalModal.type === 'manual'
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
-                      : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
+                      : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
                   } ${actionLoading[approvalModal.rate?.rateNum] ? 'opacity-70 cursor-not-allowed transform-none' : ''}`}
                 >
                   {actionLoading[approvalModal.rate?.rateNum] ? (
@@ -4013,7 +3985,7 @@ export default function RateApproved() {
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto hide-scrollbar"
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {/* Header */}
@@ -4187,7 +4159,7 @@ export default function RateApproved() {
       {/* Final Price Modal */}
       {finalPriceModal.visible && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/50 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -4381,8 +4353,8 @@ export default function RateApproved() {
                       const maxAllowedAmount = baseRate + tenPercentOfBase;
                       
                       return finalPrice > 0 && finalPrice <= maxAllowedAmount
-                        ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 shadow-lg hover:shadow-xl'
-                        : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl';
+                        ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700'
+                        : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700';
                     })()
                   } ${actionLoading[finalPriceModal.rate?.rateNum] ? 'opacity-70 cursor-not-allowed transform-none' : ''}`}
                 >
