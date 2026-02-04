@@ -2585,10 +2585,10 @@ export default function RateApproved() {
           ) : (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden px-3">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+                <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                   <thead>
                     <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                      <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
                       <th className="text-left py-3 px-6 font-semibold tracking-wide">Origin</th>
                       <th className="text-left py-3 px-6 font-semibold tracking-wide">Destination</th>
                       <th className="text-left py-3 px-6 font-semibold tracking-wide">Rate</th>
@@ -2799,10 +2799,10 @@ export default function RateApproved() {
         <div>
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+              <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
@@ -2968,10 +2968,10 @@ export default function RateApproved() {
         <div>
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+              <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
@@ -3071,10 +3071,10 @@ export default function RateApproved() {
           {/* Manager Approved Bids Table */}
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+              <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
@@ -3193,10 +3193,10 @@ export default function RateApproved() {
           {/* Manager Rejected Bids Table */}
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden px-3">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm whitespace-nowrap border-separate border-spacing-y-3 border-spacing-x-0">
+              <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl whitespace-nowrap">Bid ID / Load ID</th>
+                    <th className="text-left py-3 px-6 font-semibold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Origin</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide w-48">Destination</th>
                     <th className="text-left py-3 px-6 font-semibold tracking-wide">Original Rate</th>
@@ -3747,7 +3747,7 @@ export default function RateApproved() {
                     <label className="text-sm font-semibold text-gray-700">Rate Breakdown</label>
                   </div>
                   <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
-                    <table className="w-full text-sm whitespace-nowrap">
+                    <table className="w-full text-sm">
                       <thead className="bg-blue-100">
                         <tr>
                           <th className="text-left py-2 px-3 text-blue-800 font-semibold">Charge Name</th>
