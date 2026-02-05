@@ -26,6 +26,7 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
+  Eye,
 } from "lucide-react";
 
 import API_CONFIG from "../../config/api.js";
@@ -4683,17 +4684,17 @@ export default function Loads() {
                     className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
                   >
                     <td className="py-4 px-4 align-middle">
-                      <span className="text-gray-600 text-base font-medium whitespace-nowrap">
+                      <span className="text-gray-600 text-sm font-medium whitespace-nowrap">
                         {load.id}
                       </span>
                     </td>
 
                     <td className="py-4 px-4 align-middle">
                       <div className="flex flex-col">
-                         <span className="text-gray-900 text-base font-medium leading-tight">
+                         <span className="text-gray-900 text-sm font-medium leading-tight">
                             {load.origin.split(',')[0]}
                          </span>
-                         <span className="text-gray-500 text-sm">
+                         <span className="text-gray-500 text-xs">
                             {load.origin.split(',').slice(1).join(',')}
                          </span>
                       </div>
@@ -4701,10 +4702,10 @@ export default function Loads() {
 
                     <td className="py-4 px-4 align-middle">
                        <div className="flex flex-col">
-                         <span className="text-gray-900 text-base font-medium leading-tight">
+                         <span className="text-gray-900 text-sm font-medium leading-tight">
                             {load.destination.split(',')[0]}
                          </span>
-                         <span className="text-gray-500 text-sm">
+                         <span className="text-gray-500 text-xs">
                             {load.destination.split(',').slice(1).join(',')}
                          </span>
                       </div>
@@ -4712,26 +4713,26 @@ export default function Loads() {
 
                     <td className="py-4 px-4 align-middle">
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-900 text-base">
+                        <span className="font-medium text-gray-900 text-sm">
                           {load.shipper?.compName || "N/A"}
                         </span>
-                        <span className="text-gray-400 text-sm mt-0.5">
+                        <span className="text-gray-400 text-xs mt-0.5">
                           MC: {load.shipper?.mc_dot_no || "M123456"}
                         </span>
                       </div>
                     </td>
 
                     <td className="py-4 px-4 align-middle">
-                      <span className="font-bold text-gray-900 text-base">
+                      <span className="font-bold text-gray-900 text-sm">
                         ${load.rate.toLocaleString()}
                       </span>
                     </td>
 
                     <td className="py-4 px-4 align-middle">
-                      <div className={`inline-block px-4 py-1.5 border rounded-md text-base font-medium text-center min-w-[100px] whitespace-nowrap ${
-                        load.status === 'completed' || load.status === 'delivered' ? 'border-blue-400 text-blue-500' :
-                        load.status === 'assigned' || load.status === 'in-transit' ? 'border-orange-400 text-orange-500' :
-                        'border-green-400 text-green-500'
+                      <div className={`inline-block px-4 py-1.5 rounded-md text-sm font-medium text-center min-w-[100px] whitespace-nowrap ${
+                        load.status === 'completed' || load.status === 'delivered' ? 'text-blue-500' :
+                        load.status === 'assigned' || load.status === 'in-transit' ? 'text-orange-500' :
+                        'text-green-500'
                       }`}>
                          {load.status === "completed" || load.status === "delivered" ? "Completed" :
                           load.status === "in-transit" || load.status === "in transit" ? "In Transit" :
@@ -4743,24 +4744,32 @@ export default function Loads() {
                     </td>
 
                     <td className="py-4 px-4 align-middle">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleViewLoad(load)}
+                          className="px-3 py-1 border border-blue-500 text-blue-500 rounded-md text-sm font-medium hover:bg-blue-50 transition-colors flex items-center gap-1"
+                        >
+                          {/* <Eye size={12} /> */}
+                          View
+                        </button>
+
                         <button
                           onClick={() => handleEditLoad(load)}
-                          className="px-4 py-1.5 border border-green-500 text-green-500 rounded-md text-base font-medium hover:bg-green-50 transition-colors"
+                          className="px-3 py-1 border border-green-500 text-green-500 rounded-md text-sm font-medium hover:bg-green-50 transition-colors"
                         >
                           Edit
                         </button>
 
                         <button
                           onClick={() => handleDuplicateLoad(load)}
-                          className="px-4 py-1.5 border border-purple-500 text-purple-500 rounded-md text-base font-medium hover:bg-purple-50 transition-colors"
+                          className="px-3 py-1 border border-purple-500 text-purple-500 rounded-md text-sm font-medium hover:bg-purple-50 transition-colors"
                         >
                           Duplicate
                         </button>
 
                         <button
                           onClick={() => handleDeleteLoad(load)}
-                          className="px-4 py-1.5 border border-red-500 text-red-500 rounded-md text-base font-medium hover:bg-red-50 transition-colors"
+                          className="px-3 py-1 border border-red-500 text-red-500 rounded-md text-sm font-medium hover:bg-red-50 transition-colors"
                         >
                           Reject
                         </button>
