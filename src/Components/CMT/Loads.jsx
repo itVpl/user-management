@@ -24,6 +24,8 @@ import {
   Copy,
   Trash2,
   Bell,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import API_CONFIG from "../../config/api.js";
@@ -4350,6 +4352,39 @@ export default function Loads() {
     );
   }
 
+  const getPaginationRange = () => {
+    const delta = 1;
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const range = [];
+    const rangeWithDots = [];
+    const left = currentPage - delta;
+    const right = currentPage + delta + 1;
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= left && i < right)) {
+        range.push(i);
+      }
+    }
+
+    let l;
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push("...");
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+
+    return rangeWithDots;
+  };
+
   return (
     <div className="p-6">
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
@@ -4383,7 +4418,7 @@ export default function Loads() {
 >
   {/* LEFT: count */}
   <div className="flex items-center gap-3">
-    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold">
+    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
       {totalCount}
     </div>
   </div>
@@ -4410,7 +4445,7 @@ export default function Loads() {
 >
   {/* LEFT: count */}
   <div className="flex items-center gap-3">
-    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold">
+    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
       {otrCount}
     </div>
   </div>
@@ -4439,7 +4474,7 @@ export default function Loads() {
             >
               {/* LEFT: count */}
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                   {drayageCount}
                 </div>
               </div>
@@ -4463,7 +4498,7 @@ export default function Loads() {
               resetLoadForm();
               setShowLoadCreationModal(true);
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl flex items-center justify-between gap-3 font-medium transition-colors min-w-[500px] h-full"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-6 rounded-xl flex items-center justify-between gap-3 font-medium transition-colors min-w-[500px] h-full"
           >
             {activeTab === "ALL" ? "Add Loads" : `Add ${activeTab}`}
             <div className="bg-white rounded-full p-0.5">
@@ -4628,16 +4663,16 @@ export default function Loads() {
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Loads</h2>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse border-spacing-0">
               <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-sm">Load ID</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-sm">Origin</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-sm">Destination</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-sm">Shipper</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-sm">Rate</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-sm">Status</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-sm">Action</th>
+                <tr className="bg-[#F1F4F9]">
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base rounded-l-2xl">Load ID</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Origin</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Destination</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Shipper</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Rate</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base rounded-r-2xl">Action</th>
                 </tr>
               </thead>
 
@@ -4648,17 +4683,17 @@ export default function Loads() {
                     className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
                   >
                     <td className="py-4 px-4 align-middle">
-                      <span className="text-gray-600 text-sm font-medium">
+                      <span className="text-gray-600 text-base font-medium whitespace-nowrap">
                         {load.id}
                       </span>
                     </td>
 
                     <td className="py-4 px-4 align-middle">
                       <div className="flex flex-col">
-                         <span className="text-gray-900 text-sm font-medium leading-tight">
+                         <span className="text-gray-900 text-base font-medium leading-tight">
                             {load.origin.split(',')[0]}
                          </span>
-                         <span className="text-gray-500 text-xs">
+                         <span className="text-gray-500 text-sm">
                             {load.origin.split(',').slice(1).join(',')}
                          </span>
                       </div>
@@ -4666,10 +4701,10 @@ export default function Loads() {
 
                     <td className="py-4 px-4 align-middle">
                        <div className="flex flex-col">
-                         <span className="text-gray-900 text-sm font-medium leading-tight">
+                         <span className="text-gray-900 text-base font-medium leading-tight">
                             {load.destination.split(',')[0]}
                          </span>
-                         <span className="text-gray-500 text-xs">
+                         <span className="text-gray-500 text-sm">
                             {load.destination.split(',').slice(1).join(',')}
                          </span>
                       </div>
@@ -4677,23 +4712,23 @@ export default function Loads() {
 
                     <td className="py-4 px-4 align-middle">
                       <div className="flex flex-col">
-                        <span className="font-bold text-gray-900 text-sm">
+                        <span className="font-medium text-gray-900 text-base">
                           {load.shipper?.compName || "N/A"}
                         </span>
-                        <span className="text-gray-400 text-xs mt-0.5">
+                        <span className="text-gray-400 text-sm mt-0.5">
                           MC: {load.shipper?.mc_dot_no || "M123456"}
                         </span>
                       </div>
                     </td>
 
                     <td className="py-4 px-4 align-middle">
-                      <span className="font-bold text-gray-900 text-sm">
+                      <span className="font-bold text-gray-900 text-base">
                         ${load.rate.toLocaleString()}
                       </span>
                     </td>
 
                     <td className="py-4 px-4 align-middle">
-                      <div className={`inline-block px-4 py-1.5 border rounded-md text-sm font-medium text-center min-w-[100px] ${
+                      <div className={`inline-block px-4 py-1.5 border rounded-md text-base font-medium text-center min-w-[100px] whitespace-nowrap ${
                         load.status === 'completed' || load.status === 'delivered' ? 'border-blue-400 text-blue-500' :
                         load.status === 'assigned' || load.status === 'in-transit' ? 'border-orange-400 text-orange-500' :
                         'border-green-400 text-green-500'
@@ -4711,21 +4746,21 @@ export default function Loads() {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => handleEditLoad(load)}
-                          className="px-4 py-1.5 border border-green-500 text-green-500 rounded-md text-sm font-medium hover:bg-green-50 transition-colors"
+                          className="px-4 py-1.5 border border-green-500 text-green-500 rounded-md text-base font-medium hover:bg-green-50 transition-colors"
                         >
                           Edit
                         </button>
 
                         <button
                           onClick={() => handleDuplicateLoad(load)}
-                          className="px-4 py-1.5 border border-purple-500 text-purple-500 rounded-md text-sm font-medium hover:bg-purple-50 transition-colors"
+                          className="px-4 py-1.5 border border-purple-500 text-purple-500 rounded-md text-base font-medium hover:bg-purple-50 transition-colors"
                         >
                           Duplicate
                         </button>
 
                         <button
                           onClick={() => handleDeleteLoad(load)}
-                          className="px-4 py-1.5 border border-red-500 text-red-500 rounded-md text-sm font-medium hover:bg-red-50 transition-colors"
+                          className="px-4 py-1.5 border border-red-500 text-red-500 rounded-md text-base font-medium hover:bg-red-50 transition-colors"
                         >
                           Reject
                         </button>
@@ -4759,76 +4794,61 @@ export default function Loads() {
 
       {/* Pagination */}
 
-    {totalPages > 1 && filteredLoads.length > 0 && (
-
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-
+      {totalPages > 1 && filteredLoads.length > 0 && (
+        <div className="flex justify-between items-center p-2">
           <div className="text-sm text-gray-600">
-
             Showing {startIndex + 1} to {Math.min(endIndex, filteredLoads.length)} of {filteredLoads.length} loads
-
             {searchTerm && ` (filtered from ${loads.length} total)`}
-
           </div>
 
-          <div className="flex gap-2">
-
+          <div className="flex items-center gap-2">
             <button
-
               onClick={() => handlePageChange(currentPage - 1)}
-
               disabled={currentPage === 1}
-
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium focus:outline-none"
             >
-
-              Previous
-
+              <ChevronLeft size={16} /> Previous
             </button>
 
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <div className="flex items-center gap-1">
+              {getPaginationRange().map((page, index) => {
+                if (page === "...") {
+                  return (
+                    <span
+                      key={`dots-${index}`}
+                      className="w-8 h-8 flex items-center justify-center text-gray-400"
+                    >
+                      ...
+                    </span>
+                  );
+                }
 
-              <button
-
-                key={page}
-
-                onClick={() => handlePageChange(page)}
-
-                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-
-                  ? 'bg-blue-500 text-white border-blue-500'
-
-                  : 'border-gray-300 hover:bg-gray-50'
-
-                  }`}
-
-              >
-
-                {page}
-
-              </button>
-
-            ))}
+                return (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all focus:outline-none
+                      ${
+                        currentPage === page
+                          ? "bg-white border border-black text-black shadow-sm"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+            </div>
 
             <button
-
               onClick={() => handlePageChange(currentPage + 1)}
-
               disabled={currentPage === totalPages}
-
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium focus:outline-none"
             >
-
-              Next
-
+              Next <ChevronRight size={16} />
             </button>
-
           </div>
-
         </div>
-
       )}
 
       {/* Add Load Modal */}
