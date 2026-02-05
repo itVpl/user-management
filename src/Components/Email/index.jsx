@@ -4,7 +4,6 @@ import {
   Typography,
   Button,
   IconButton,
-  TextField,
   Alert,
   Chip,
   Tooltip,
@@ -13,7 +12,6 @@ import {
   Dialog,
 } from '@mui/material';
 import {
-  Search as SearchIcon,
   FilterList as FilterListIcon,
   Refresh as RefreshIcon,
   Add as AddIcon,
@@ -29,8 +27,25 @@ import ComposeDialog from './ComposeDialog';
 import ReplyDialog from './ReplyDialog';
 import EmailList from './EmailList';
 import EmailViewer from './EmailViewer';
-import { createEmailAccount, testEmailConnection, fetchInboxEmails, fetchSentEmails, fetchEmailByUid, transformEmail, sendEmail, sendEmailWithAttachments, replyToEmailWithFiles, replyToEmail } from './emailService';
-import { sampleEmails } from './sampleData';
+import AccountSwitcher from './AccountSwitcher';
+import AccountManagementDialog from './AccountManagementDialog';
+import { 
+  createEmailAccount, 
+  getAllEmailAccounts,
+  setDefaultEmailAccount,
+  deleteEmailAccount,
+  testEmailConnection, 
+  fetchInboxEmails, 
+  fetchSentEmails, 
+  fetchEmailByUid, 
+  transformEmail, 
+  sendEmail, 
+  sendEmailWithAttachments, 
+  replyToEmailWithFiles, 
+  replyToEmail 
+} from './emailService';
+import { groupEmailsByThread } from './threadUtils';
+import API_CONFIG from '../../config/api';
 
 const Email = () => {
   const theme = useTheme();
@@ -44,6 +59,17 @@ const Email = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  
+  // Multiple accounts state
+  const [emailAccounts, setEmailAccounts] = useState([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const [accountManagementOpen, setAccountManagementOpen] = useState(false);
+  
   // Account creation state
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
   const [accountData, setAccountData] = useState({
@@ -55,27 +81,6 @@ const Email = () => {
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState(false);
   const [createError, setCreateError] = useState(null);
-  const [createdAccountId, setCreatedAccountId] = useState(() => {
-    // First try to get from sessionStorage (from login response)
-    const userStr = sessionStorage.getItem('user');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        if (user.emailAccountId) {
-          return user.emailAccountId;
-        }
-      } catch (e) {
-        console.error('Error parsing user data:', e);
-      }
-    }
-    // Fallback to sessionStorage emailAccountId
-    const sessionAccountId = sessionStorage.getItem('emailAccountId');
-    if (sessionAccountId) {
-      return sessionAccountId;
-    }
-    // Last fallback to localStorage (for backward compatibility)
-    return localStorage.getItem('emailAccountId') || null;
-  });
   
   // Test connection state
   const [testLoading, setTestLoading] = useState(false);
@@ -103,26 +108,176 @@ const Email = () => {
     { label: 'Sent', icon: <SentIcon />, count: emails.filter(e => e.folder === 'sent').length },
   ];
 
-  // Save account ID to localStorage and load emails when it changes
+  // Load all email accounts on mount
   useEffect(() => {
-    if (createdAccountId) {
-      localStorage.setItem('emailAccountId', createdAccountId);
-      loadEmails();
+    loadEmailAccounts();
+  }, []);
+
+  // Load emails when selected account changes
+  useEffect(() => {
+    if (selectedAccountId) {
+      // Reset pagination when account changes
+      setCurrentPage(1);
+      setHasMore(true);
+      setEmails([]);
+      loadEmails(1, true); // Load first page, reset emails
+      if (selectedTab === 1) {
+        loadSentEmails(1, true);
+      }
     }
-  }, [createdAccountId]);
+  }, [selectedAccountId]);
+  
+  // Reset pagination when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+    setHasMore(true);
+    setEmails([]);
+  }, [selectedTab]);
 
-  const loadEmails = async () => {
-    if (!createdAccountId) {
+  // Load email accounts
+  const loadEmailAccounts = async () => {
+    setAccountsLoading(true);
+    try {
+      const response = await getAllEmailAccounts();
+      const accounts = response?.emailAccounts || response?.data?.emailAccounts || [];
+      setEmailAccounts(accounts);
+      
+      // Set default account if available
+      if (accounts.length > 0) {
+        const defaultAccount = accounts.find(acc => acc.isDefault) || accounts[0];
+        setSelectedAccountId(defaultAccount._id);
+        sessionStorage.setItem('emailAccountId', defaultAccount._id);
+      }
+    } catch (err) {
+      console.error('Error loading email accounts:', err);
+    } finally {
+      setAccountsLoading(false);
+    }
+  };
 
-      setEmails(sampleEmails);
+  // Handle account switching
+  const handleAccountChange = (accountId) => {
+    setSelectedAccountId(accountId);
+    sessionStorage.setItem('emailAccountId', accountId);
+    setEmails([]); // Clear emails while loading
+  };
+
+  // Handle set default account
+  const handleSetDefaultAccount = async (accountId) => {
+    try {
+      await setDefaultEmailAccount(accountId);
+      await loadEmailAccounts(); // Reload accounts to update default status
+    } catch (err) {
+      console.error('Error setting default account:', err);
+      throw err;
+    }
+  };
+
+  // Handle delete account
+  const handleDeleteAccount = async (accountId) => {
+    try {
+      await deleteEmailAccount(accountId);
+      await loadEmailAccounts(); // Reload accounts
+      
+      // If deleted account was selected, switch to default or first account
+      if (selectedAccountId === accountId) {
+        const remainingAccounts = emailAccounts.filter(acc => acc._id !== accountId);
+        if (remainingAccounts.length > 0) {
+          const defaultAccount = remainingAccounts.find(acc => acc.isDefault) || remainingAccounts[0];
+          setSelectedAccountId(defaultAccount._id);
+        } else {
+          setSelectedAccountId(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting account:', err);
+      throw err;
+    }
+  };
+
+  // Helper function to deduplicate threads by UID
+  const deduplicateThreadsByUid = (threads) => {
+    const seenUids = new Set();
+    const uniqueThreads = [];
+    const threadMap = new Map(); // Map by threadId to merge threads with same ID
+    
+    threads.forEach(thread => {
+      // Get all UIDs in this thread
+      const threadUids = thread.messages && Array.isArray(thread.messages)
+        ? thread.messages.map(m => String(m.uid || m.id || '')).filter(Boolean)
+        : thread.uid ? [String(thread.uid)] : [];
+      
+      // Check if any UID is already seen
+      const hasDuplicate = threadUids.some(uid => seenUids.has(uid));
+      
+      if (!hasDuplicate && threadUids.length > 0) {
+        // No duplicates - add this thread
+        const threadKey = thread.threadId || thread.id || thread.uid;
+        
+        if (threadKey && threadMap.has(threadKey)) {
+          // Merge with existing thread with same threadId
+          const existing = threadMap.get(threadKey);
+          const allMessages = [...(existing.messages || [existing]), ...(thread.messages || [thread])];
+          // Remove duplicates by UID
+          const uniqueMessages = Array.from(
+            new Map(allMessages.map(msg => [String(msg.uid || msg.id || ''), msg])).values()
+          ).filter(msg => msg.uid || msg.id); // Filter out messages without UID
+          
+          threadMap.set(threadKey, {
+            ...thread,
+            messages: uniqueMessages,
+            messageCount: uniqueMessages.length
+          });
+          
+          // Update seen UIDs
+          uniqueMessages.forEach(msg => {
+            const uid = String(msg.uid || msg.id || '');
+            if (uid) seenUids.add(uid);
+          });
+        } else if (threadKey) {
+          threadMap.set(threadKey, thread);
+          // Mark UIDs as seen
+          threadUids.forEach(uid => seenUids.add(uid));
+        } else {
+          // No threadKey but has UIDs - add as standalone
+          uniqueThreads.push(thread);
+          threadUids.forEach(uid => seenUids.add(uid));
+        }
+      } else if (hasDuplicate) {
+        console.warn(`⚠️ Skipping duplicate thread (deduplication):`, {
+          threadId: thread.threadId || thread.id || thread.uid,
+          uids: threadUids,
+          subject: thread.subject
+        });
+      }
+    });
+    
+    // Combine map values and standalone threads
+    const result = [...Array.from(threadMap.values()), ...uniqueThreads];
+    console.log(`✅ Deduplicated threads: ${threads.length} → ${result.length}`);
+    return result;
+  };
+
+  const loadEmails = async (page = 1, reset = false) => {
+    if (!selectedAccountId) {
+      setEmails([]);
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
+    // Set loading state (full loading for first page, loadingMore for subsequent pages)
+    if (page === 1 || reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     setError(null);
     
     try {
-      const response = await fetchInboxEmails(createdAccountId);
+      // Load more emails per page - increase limits to load more emails faster
+      // First page: 200 emails, subsequent pages: 100 emails
+      const limit = page === 1 ? 200 : 100; // Load 200 on first page, 100 on subsequent pages
+      const response = await fetchInboxEmails(selectedAccountId, limit, page);
 
 
 
@@ -134,41 +289,261 @@ const Email = () => {
                            response?.data || 
                            [];
 
-      console.log('First email from API (before transform):', fetchedEmails[0]);
+      console.log(`📬 Loaded inbox page ${page}: ${fetchedEmails.length} emails (limit: ${limit})`);
       
-      if (fetchedEmails.length > 0) {
-        const transformedEmails = fetchedEmails.map((email, index) => {
+      // First, deduplicate fetched emails by UID before transformation
+      const seenUids = new Set();
+      const uniqueFetchedEmails = fetchedEmails.filter(email => {
+        const uid = String(email.uid || email.id || '');
+        if (!uid || uid === 'undefined' || uid === 'null') {
+          console.warn('⚠️ Email without valid UID:', email.subject);
+          return true; // Keep emails without UID for now
+        }
+        if (seenUids.has(uid)) {
+          console.warn(`⚠️ Duplicate email detected (UID: ${uid}):`, email.subject);
+          return false; // Skip duplicate
+        }
+        seenUids.add(uid);
+        return true;
+      });
+      
+      console.log(`📧 Deduplicated fetched emails: ${fetchedEmails.length} → ${uniqueFetchedEmails.length}`);
+      
+      // Check if backend is limiting results
+      if (uniqueFetchedEmails.length < limit && page === 1) {
+        console.warn(`⚠️ Backend returned ${uniqueFetchedEmails.length} emails but limit was ${limit}. Backend might be limiting results.`);
+      }
+      
+      if (uniqueFetchedEmails.length > 0) {
+        
+        const transformedEmails = uniqueFetchedEmails.map((email, index) => {
           const transformed = transformEmail(email, index);
-
-          return transformed;
+          // Explicitly preserve attachment data from API response (same as sent emails)
+          const emailWithAttachments = {
+            ...transformed,
+            // Preserve attachments from API response
+            attachments: email.attachments || transformed.attachments || [],
+            hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : transformed.hasAttachments,
+            attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : transformed.attachmentCount,
+            // Preserve threading headers
+            messageId: email.messageId || email.messageID || email.message_id || transformed.messageId || null,
+            inReplyTo: email.inReplyTo || email.inReplyToHeader || null,
+            references: email.references || email.referencesHeader || null
+          };
+          
+          // Log attachment data for first few emails to debug
+          if (index < 3) {
+            console.log(`Inbox email ${index + 1} attachments:`, {
+              hasAttachments: email.hasAttachments,
+              attachmentCount: email.attachmentCount,
+              attachments: email.attachments,
+              transformedAttachments: emailWithAttachments.attachments
+            });
+          }
+          return emailWithAttachments;
         });
 
-
-        setEmails(transformedEmails);
+        // Group emails by thread (Gmail-style conversation threading)
+        // Debug: Log threading headers before grouping
+        console.log('🔍 Threading headers check:', transformedEmails.slice(0, 3).map(e => ({
+          uid: e.uid,
+          subject: e.subject,
+          hasMessageId: !!e.messageId,
+          hasInReplyTo: !!e.inReplyTo,
+          hasReferences: !!e.references,
+          messageId: e.messageId,
+          inReplyTo: e.inReplyTo,
+          references: e.references
+        })));
+        
+        const threadedEmails = groupEmailsByThread(transformedEmails);
+        
+        console.log(`📧 Grouped ${transformedEmails.length} emails into ${threadedEmails.length} threads`);
+        
+        // Debug: Log thread details
+        threadedEmails.slice(0, 3).forEach((thread, idx) => {
+          console.log(`Thread ${idx + 1}:`, {
+            threadId: thread.threadId,
+            messageCount: thread.messageCount,
+            participants: thread.participants,
+            subject: thread.subject,
+            messageUids: thread.messages.map(m => m.uid)
+          });
+        });
+        
+        if (reset || page === 1) {
+          // Replace emails for first page or reset
+          // Deduplicate by UID to prevent duplicates
+          const uniqueThreads = deduplicateThreadsByUid(threadedEmails);
+          console.log(`✅ Deduplicated: ${threadedEmails.length} → ${uniqueThreads.length} threads`);
+          setEmails(uniqueThreads);
+        } else {
+          // Append emails for subsequent pages
+          // Need to merge threads - combine threads with same threadId AND deduplicate by UID
+          setEmails(prev => {
+            // First, deduplicate existing emails by UID
+            const prevUnique = deduplicateThreadsByUid(prev);
+            
+            const prevMap = new Map();
+            const seenUids = new Set(); // Track all UIDs we've seen
+            
+            // Build map of existing threads and track UIDs
+            prevUnique.forEach(email => {
+              const key = email.threadId || email.id || email.uid;
+              if (key) {
+                prevMap.set(key, email);
+                // Track all UIDs in this thread
+                if (email.messages && Array.isArray(email.messages)) {
+                  email.messages.forEach(msg => {
+                    if (msg.uid) seenUids.add(String(msg.uid));
+                  });
+                } else if (email.uid) {
+                  seenUids.add(String(email.uid));
+                }
+              }
+            });
+            
+            // Process new threads and filter out duplicates
+            const newThreads = [];
+            threadedEmails.forEach(thread => {
+              const key = thread.threadId || thread.id || thread.uid;
+              
+              // Check if any message UID in this thread already exists
+              const threadUids = thread.messages && Array.isArray(thread.messages)
+                ? thread.messages.map(m => String(m.uid || m.id || '')).filter(Boolean)
+                : thread.uid ? [String(thread.uid)] : [];
+              
+              const hasDuplicate = threadUids.some(uid => uid && seenUids.has(uid));
+              
+              if (key && prevMap.has(key)) {
+                // Merge messages from both threads
+                const existing = prevMap.get(key);
+                const allMessages = [...(existing.messages || [existing]), ...(thread.messages || [thread])];
+                // Remove duplicates by UID
+                const uniqueMessages = Array.from(
+                  new Map(allMessages.map(msg => [String(msg.uid || msg.id || ''), msg])).values()
+                ).filter(msg => msg.uid || msg.id); // Filter out messages without UID
+                
+                prevMap.set(key, {
+                  ...thread,
+                  messages: uniqueMessages,
+                  messageCount: uniqueMessages.length
+                });
+                // Update seen UIDs
+                uniqueMessages.forEach(msg => {
+                  const uid = String(msg.uid || msg.id || '');
+                  if (uid && uid !== 'undefined' && uid !== 'null') {
+                    seenUids.add(uid);
+                  }
+                });
+              } else if (key && !hasDuplicate && threadUids.length > 0) {
+                // New thread, no duplicates
+                prevMap.set(key, thread);
+                threadUids.forEach(uid => {
+                  if (uid && uid !== 'undefined' && uid !== 'null') {
+                    seenUids.add(uid);
+                  }
+                });
+                newThreads.push(thread);
+              } else if (hasDuplicate) {
+                // Duplicate detected - skip this thread
+                console.warn(`⚠️ Skipping duplicate thread (pagination merge):`, {
+                  threadId: key,
+                  uids: threadUids,
+                  subject: thread.subject
+                });
+              }
+            });
+            
+            const result = Array.from(prevMap.values());
+            console.log(`✅ Merged pages: ${prevUnique.length} + ${newThreads.length} new = ${result.length} total threads`);
+            return result;
+          });
+        }
+        
+        // Check if there are more emails to load
+        // Strategy: Keep loading as long as we get emails, only stop when we get 0
+        // This ensures we load ALL emails even if backend returns fewer per page than requested
+        const expectedCount = page === 1 ? 200 : 100;
+        // Only stop loading if we got 0 emails OR if backend explicitly says no more
+        // If backend has a 'hasMore' field, use it; otherwise, assume more if we got emails
+        const backendIndicatesNoMore = response?.hasMore === false || response?.data?.hasMore === false;
+        // IMPORTANT: Continue loading if we got fewer emails than expected BUT still got some emails
+        // This handles cases where backend returns partial results (e.g., 50 emails when limit is 200)
+        // Only stop if we got exactly 0 emails OR backend explicitly says no more
+        const hasMoreEmails = uniqueFetchedEmails.length > 0 && !backendIndicatesNoMore;
+        setHasMore(hasMoreEmails);
+        
+        // Log detailed pagination info for debugging email count mismatches
+        const totalEmailsLoaded = (reset || page === 1) ? threadedEmails.length : (emails.length + threadedEmails.length);
+        console.log(`📊 Pagination check:`, {
+          page,
+          fetchedCount: uniqueFetchedEmails.length,
+          originalCount: fetchedEmails.length,
+          expectedCount,
+          hasMore: hasMoreEmails,
+          totalEmailsSoFar: totalEmailsLoaded,
+          totalThreads: threadedEmails.length,
+          backendHasMore: response?.hasMore ?? response?.data?.hasMore,
+          backendIndicatesNoMore,
+          note: uniqueFetchedEmails.length > 0 
+            ? 'Got emails, will continue loading more on scroll' 
+            : 'No emails returned, stopping pagination',
+          // Log date range of loaded emails for debugging
+          dateRange: uniqueFetchedEmails.length > 0 ? {
+            oldest: uniqueFetchedEmails[uniqueFetchedEmails.length - 1]?.date || uniqueFetchedEmails[uniqueFetchedEmails.length - 1]?.timestamp,
+            newest: uniqueFetchedEmails[0]?.date || uniqueFetchedEmails[0]?.timestamp
+          } : null
+        });
+        
+        // Warn if we got fewer emails than expected on first page
+        if (page === 1 && uniqueFetchedEmails.length < expectedCount && uniqueFetchedEmails.length > 0) {
+          console.warn(`⚠️ First page returned ${uniqueFetchedEmails.length} emails (expected ${expectedCount}). This might indicate backend is limiting results or there are fewer emails available.`);
+        }
       } else {
-
-        setEmails(sampleEmails);
+        setHasMore(false);
+        if (reset || page === 1) {
+          setEmails([]);
+        }
       }
     } catch (err) {
       console.error('Error loading emails:', err);
-      setError(err.message || 'Failed to load emails');
-      setEmails(sampleEmails);
+      const errorMessage = err.message || 'Failed to load emails';
+      
+      // Check if it's a timeout error
+      if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
+        setError(`⏱️ ${errorMessage}. The email server may be slow. You can try refreshing.`);
+      } else {
+        setError(errorMessage);
+      }
+      
+      if (reset || page === 1) {
+        setEmails(sampleEmails);
+      }
+      // Don't set hasMore to false on error - allow retry
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const loadSentEmails = async () => {
-    if (!createdAccountId) {
-      setEmails(sampleEmails.filter(e => e.folder === 'sent'));
+  const loadSentEmails = async (page = 1, reset = false) => {
+    if (!selectedAccountId) {
+      setEmails([]);
       return;
     }
 
-    setLoading(true);
+    // Set loading state (full loading for first page, loadingMore for subsequent pages)
+    if (page === 1 || reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     setError(null);
     
     try {
-      const response = await fetchSentEmails(createdAccountId);
+      // Load 30 emails per page
+      const response = await fetchSentEmails(selectedAccountId, 30, page);
 
       // Try different response structures
       const fetchedEmails = response?.emails || 
@@ -181,48 +556,156 @@ const Email = () => {
       const userEmail = emailAccount?.email || '';
       const displayName = emailAccount?.displayName || 'You';
 
-      console.log('Sent emails from API (before transform):', fetchedEmails[0]);
-      console.log('Email account info:', emailAccount);
+      console.log(`Loaded sent page ${page}: ${fetchedEmails.length} emails`);
+      console.log('Sent emails API response:', {
+        emailAccount: emailAccount,
+        firstEmail: fetchedEmails[0],
+        totalEmails: fetchedEmails.length
+      });
       
-      if (fetchedEmails.length > 0) {
-        const transformedEmails = fetchedEmails.map((email, index) => {
+      // First, deduplicate fetched emails by UID before transformation
+      const seenUids = new Set();
+      const uniqueFetchedEmails = fetchedEmails.filter(email => {
+        const uid = String(email.uid || email.id || '');
+        if (!uid || uid === 'undefined' || uid === 'null') {
+          console.warn('⚠️ Sent email without valid UID:', email.subject);
+          return true; // Keep emails without UID for now
+        }
+        if (seenUids.has(uid)) {
+          console.warn(`⚠️ Duplicate sent email detected (UID: ${uid}):`, email.subject);
+          return false; // Skip duplicate
+        }
+        seenUids.add(uid);
+        return true;
+      });
+      
+      console.log(`📧 Deduplicated fetched sent emails: ${fetchedEmails.length} → ${uniqueFetchedEmails.length}`);
+      
+      if (uniqueFetchedEmails.length > 0) {
+        const transformedEmails = uniqueFetchedEmails.map((email, index) => {
           const transformed = transformEmail(email, index);
           // Preserve original UID from API response (can be number or string)
           const originalUid = email.uid !== null && email.uid !== undefined && email.uid !== '' 
             ? email.uid 
             : transformed.uid;
           
-          // For sent emails, set from to the user's email and ensure folder is 'sent'
-          // Preserve content, attachments, and other fields directly from API response
+          // For sent emails:
+          // - "to" field contains recipients (not "from")
+          // - "from" should be the user's email
+          // - Preserve contentPreview if available
           return {
             ...transformed,
             // Explicitly preserve UID from API response
             uid: originalUid,
             from: userEmail || transformed.from,
-            fromName: displayName || transformed.fromName,
+            fromName: displayName || transformed.fromName || 'You',
+            // For sent emails, "to" field is the recipient (from API)
+            to: email.to || transformed.to || '',
             folder: 'sent',
-            // Preserve content field from API (it's already in the list response)
-            content: email.content || transformed.content || transformed.body,
-            body: email.content || transformed.body || transformed.content, // Map content to body
-            // Preserve attachments from API response
+            // Preserve contentPreview from API (preview snippet)
+            contentPreview: email.contentPreview || '',
+            // Preserve content field from API (full content if includeContent=true)
+            content: email.content || email.contentPreview || transformed.content || transformed.body,
+            body: email.content || email.contentPreview || transformed.body || transformed.content, // Map content to body
+            html: email.html || transformed.html || '',
+            // Preserve attachments from API response with download URLs
             attachments: email.attachments || transformed.attachments || [],
             hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : transformed.hasAttachments,
             attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : transformed.attachmentCount
           };
         });
 
-        setEmails(transformedEmails);
+        if (reset || page === 1) {
+          // Replace emails for first page or reset
+          // Deduplicate by UID
+          const seenUids = new Set();
+          const uniqueEmails = transformedEmails.filter(email => {
+            const uid = String(email.uid || email.id || '');
+            if (!uid || uid === 'undefined' || uid === 'null') return true;
+            if (seenUids.has(uid)) {
+              console.warn(`⚠️ Duplicate sent email after transform (UID: ${uid}):`, email.subject);
+              return false;
+            }
+            seenUids.add(uid);
+            return true;
+          });
+          console.log(`✅ Deduplicated sent emails: ${transformedEmails.length} → ${uniqueEmails.length}`);
+          setEmails(uniqueEmails);
+        } else {
+          // Append emails for subsequent pages - deduplicate against existing
+          setEmails(prev => {
+            const prevUids = new Set(prev.map(e => String(e.uid || e.id || '')).filter(Boolean));
+            const newUniqueEmails = transformedEmails.filter(email => {
+              const uid = String(email.uid || email.id || '');
+              if (!uid || uid === 'undefined' || uid === 'null') return true;
+              if (prevUids.has(uid)) {
+                console.warn(`⚠️ Duplicate sent email in pagination (UID: ${uid}):`, email.subject);
+                return false;
+              }
+              prevUids.add(uid);
+              return true;
+            });
+            console.log(`✅ Merged sent emails: ${prev.length} + ${newUniqueEmails.length} new = ${prev.length + newUniqueEmails.length} total`);
+            return [...prev, ...newUniqueEmails];
+          });
+        }
+        
+        // Check if there are more emails to load
+        // If we got fewer emails than requested, there are no more
+        const expectedCount = 30; // Sent emails use 30 per page
+        setHasMore(uniqueFetchedEmails.length >= expectedCount);
+        
+        console.log(`📊 Sent emails pagination:`, {
+          page,
+          fetchedCount: uniqueFetchedEmails.length,
+          originalCount: fetchedEmails.length,
+          expectedCount,
+          hasMore: uniqueFetchedEmails.length >= expectedCount
+        });
       } else {
-        // Show empty sent folder
-        setEmails([]);
+        // No more emails
+        setHasMore(false);
+        if (reset || page === 1) {
+          setEmails([]);
+        }
       }
     } catch (err) {
       console.error('Error loading sent emails:', err);
-      setError(err.message || 'Failed to load sent emails');
-      setEmails([]);
+      const errorMessage = err.message || 'Failed to load sent emails';
+      
+      // Check if it's a timeout error
+      if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
+        setError(`⏱️ ${errorMessage}. The email server may be slow. You can try refreshing.`);
+      } else {
+        setError(errorMessage);
+      }
+      
+      if (reset || page === 1) {
+        setEmails([]);
+      }
+      // Don't set hasMore to false on error - allow retry
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  };
+  
+  // Load more sent emails (next page)
+  const loadMoreSentEmails = async () => {
+    if (loadingMore || !hasMore || !selectedAccountId) return;
+    
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    await loadSentEmails(nextPage, false);
+  };
+  
+  // Load more emails (next page)
+  const loadMoreEmails = async () => {
+    if (loadingMore || !hasMore || !selectedAccountId) return;
+    
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    await loadEmails(nextPage, false);
   };
 
   const handleCreateAccount = async () => {
@@ -250,13 +733,16 @@ const Email = () => {
                        response.account?.id;
       
       if (accountId) {
-
-        setCreatedAccountId(accountId);
+        setSelectedAccountId(accountId);
         setCreateSuccess(true);
+        // Reload accounts list
+        await loadEmailAccounts();
       } else {
         console.warn('⚠️ Could not find account ID in response');
         setCreateSuccess(true);
         setCreateError('Account created but ID not found. Check console for response structure.');
+        // Still reload accounts
+        await loadEmailAccounts();
       }
 
       setTimeout(() => {
@@ -273,8 +759,8 @@ const Email = () => {
   };
 
   const handleTestConnection = async () => {
-    if (!createdAccountId) {
-      setTestError('Please create an email account first');
+    if (!selectedAccountId) {
+      setTestError('Please select an email account first');
       return;
     }
 
@@ -283,7 +769,7 @@ const Email = () => {
     setTestSuccess(false);
 
     try {
-      await testEmailConnection(createdAccountId);
+      await testEmailConnection(selectedAccountId);
       setTestSuccess(true);
       setIsAccountTested(true);
       setTimeout(() => {
@@ -300,18 +786,76 @@ const Email = () => {
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
     setSelectedEmail(null);
+    setCurrentPage(1);
+    setHasMore(true);
+    setEmails([]);
     
     // Load emails based on selected tab
     if (newValue === 0) {
       // Inbox tab
-      loadEmails();
+      loadEmails(1, true);
     } else if (newValue === 1) {
       // Sent tab
-      loadSentEmails();
+      loadSentEmails(1, true);
     }
   };
 
   const handleEmailSelect = async (email) => {
+    // Check if this is a thread (has messages array)
+    if (email.isThread && email.messages && Array.isArray(email.messages) && email.messages.length > 1) {
+      console.log('🧵 Thread selected:', {
+        threadId: email.threadId,
+        messageCount: email.messageCount,
+        messages: email.messages.length
+      });
+      
+      // Use the latest message as the base, but include all messages for thread view
+      const latestMessage = email.latestMessage || email.messages[email.messages.length - 1];
+      
+      // Set selected email with thread data
+      setSelectedEmail({
+        ...latestMessage,
+        threadMessages: email.messages,
+        messages: email.messages,
+        messageCount: email.messageCount,
+        threadId: email.threadId,
+        subject: email.subject,
+        // Use thread-level attachments (combined from all messages)
+        attachments: email.attachments || latestMessage.attachments || [],
+        hasAttachments: email.hasAttachments || latestMessage.hasAttachments,
+        attachmentCount: email.attachmentCount || latestMessage.attachmentCount || 0
+      });
+      
+      // Fetch full thread details if needed
+      if (latestMessage.uid && selectedAccountId) {
+        try {
+          const folder = latestMessage.folder === 'sent' ? 'SENT' : 'INBOX';
+          const response = await fetchEmailByUid(latestMessage.uid, selectedAccountId, folder, true);
+          
+          if (response.success && response.email && response.email.messages) {
+            // Update with full thread data from backend
+            setSelectedEmail(prev => ({
+              ...prev,
+              threadMessages: response.email.messages,
+              messages: response.email.messages,
+              messageCount: response.email.messageCount || response.email.messages.length
+            }));
+          }
+        } catch (err) {
+          console.warn('Failed to fetch full thread, using cached messages:', err);
+          // Continue with cached messages
+        }
+      }
+      
+      return;
+    }
+    
+    // Continue with normal email selection (single email)
+    if (!selectedAccountId) {
+      setError('Please select an email account first');
+      return;
+    }
+    
     // Preserve ALL original email properties to ensure correct selection
     const originalId = email.id;
     const originalUid = email.uid;
@@ -347,33 +891,92 @@ const Email = () => {
     const hasContentFromList = email.content || email.body;
     const isSentEmail = emailFolder === 'sent';
     
-    // For sent emails, ALWAYS use content from list - never fetch
-    if (isSentEmail && hasContentFromList) {
-      console.log('✅ Sent email with content - using list data directly (no fetch)');
-      const selectedEmailData = {
-        ...email,
-        id: originalId,
-        uid: originalUid,
-        subject: originalSubject,
-        from: originalFrom,
-        fromName: email.fromName || email.from,
-        timestamp: originalTimestamp,
-        folder: 'sent',
-        body: email.content || email.body || email.text || '',
-        content: email.content || email.body || email.text || '',
-        attachments: email.attachments || [],
-        hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : (email.attachments?.length > 0),
-        attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : (email.attachments?.length || 0)
-      };
-      console.log('✅ Setting sent email:', {
-        id: selectedEmailData.id,
-        uid: selectedEmailData.uid,
-        subject: selectedEmailData.subject,
-        contentPreview: selectedEmailData.content.substring(0, 50)
-      });
-      setSelectedEmail(selectedEmailData);
-      return;
-    }
+      // For sent emails, use contentPreview if available, or fetch full details
+      if (isSentEmail) {
+        // If we have contentPreview or content, use it
+        if (hasContentFromList || email.contentPreview) {
+          console.log('✅ Sent email with content/preview - using list data');
+          const selectedEmailData = {
+            ...email,
+            id: originalId,
+            uid: originalUid,
+            subject: originalSubject,
+            from: originalFrom,
+            fromName: email.fromName || email.from || 'You',
+            to: email.to || '', // Preserve "to" field for sent emails
+            timestamp: originalTimestamp,
+            folder: 'sent',
+            body: email.content || email.contentPreview || email.body || email.text || '',
+            content: email.content || email.contentPreview || email.body || email.text || '',
+            contentPreview: email.contentPreview || '',
+            html: email.html || '',
+            attachments: email.attachments || [],
+            hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : (email.attachments?.length > 0),
+            attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : (email.attachments?.length || 0)
+          };
+          console.log('✅ Setting sent email:', {
+            id: selectedEmailData.id,
+            uid: selectedEmailData.uid,
+            subject: selectedEmailData.subject,
+            to: selectedEmailData.to,
+            contentPreview: selectedEmailData.contentPreview || selectedEmailData.content.substring(0, 50)
+          });
+          setSelectedEmail(selectedEmailData);
+          
+          // If we don't have full content, fetch it in background
+          if (!email.content && hasValidUid && selectedAccountId) {
+            // Fetch full content in background using folder=SENT
+            fetchEmailByUid(originalUid, selectedAccountId, 'SENT', false) // Don't fetch thread in background
+              .then(response => {
+                if (response.success && response.email) {
+                  setSelectedEmail(prev => ({
+                    ...prev,
+                    content: response.email.content || prev.content,
+                    body: response.email.content || prev.body,
+                    html: response.email.html || prev.html,
+                    cc: response.email.cc || prev.cc,
+                    bcc: response.email.bcc || prev.bcc
+                  }));
+                }
+              })
+              .catch(err => console.error('Error fetching sent email details:', err));
+          }
+          return;
+        }
+        
+        // If no content/preview, fetch full details
+        if (hasValidUid && selectedAccountId) {
+          try {
+            const response = await fetchEmailByUid(originalUid, selectedAccountId, 'SENT', false); // Don't fetch thread in background
+            if (response.success && response.email) {
+              const fullEmail = response.email;
+              setSelectedEmail({
+                ...email,
+                id: originalId,
+                uid: originalUid,
+                subject: originalSubject,
+                from: originalFrom,
+                fromName: email.fromName || email.from || 'You',
+                to: fullEmail.to || email.to || '',
+                timestamp: originalTimestamp,
+                folder: 'sent',
+                body: fullEmail.content || fullEmail.body || '',
+                content: fullEmail.content || fullEmail.body || '',
+                html: fullEmail.html || '',
+                cc: fullEmail.cc || '',
+                bcc: fullEmail.bcc || '',
+                attachments: fullEmail.attachments || email.attachments || [],
+                hasAttachments: fullEmail.hasAttachments !== undefined ? fullEmail.hasAttachments : (fullEmail.attachments?.length > 0),
+                attachmentCount: fullEmail.attachmentCount !== undefined ? fullEmail.attachmentCount : (fullEmail.attachments?.length || 0)
+              });
+              return;
+            }
+          } catch (err) {
+            console.error('Error fetching sent email details:', err);
+            // Fall through to use basic email data
+          }
+        }
+      }
     
     console.log('🔵 Email selection details:', {
       id: originalId,
@@ -428,13 +1031,100 @@ const Email = () => {
     }
     
     // Only fetch if we don't have content from list
-    if (hasValidUid && createdAccountId) {
+    if (hasValidUid && selectedAccountId) {
       try {
         // fetchEmailByUid will convert UID to string if needed
-        const response = await fetchEmailByUid(originalUid, createdAccountId);
+        // IMPORTANT: Use folder=SENT for sent emails, folder=INBOX for inbox emails
+        const folder = isSentEmail ? 'SENT' : 'INBOX';
+        
+        // Try to fetch with thread first (60s timeout)
+        let response;
+        try {
+          response = await fetchEmailByUid(originalUid, selectedAccountId, folder, true);
+        } catch (threadError) {
+          // If thread request times out, try without thread (faster, 35s timeout)
+          if (threadError.message?.includes('timeout') || threadError.message?.includes('timed out')) {
+            console.warn('⚠️ Thread request timed out, fetching single email instead...');
+            response = await fetchEmailByUid(originalUid, selectedAccountId, folder, false);
+          } else {
+            throw threadError; // Re-throw if it's not a timeout error
+          }
+        }
 
         if (response.success && response.email) {
-          const fullEmail = response.email;
+          // Log the API URL being called
+          console.log('🌐 API Endpoint Called:', {
+            url: `${API_CONFIG.BASE_URL}/api/v1/email-inbox/${originalUid}?emailAccountId=${selectedAccountId}&folder=${folder}&includeContent=true&includeThread=true`,
+            method: 'GET',
+            uid: originalUid,
+            folder: folder,
+            includeThread: true
+          });
+          
+          // Debug: Log raw API response INCLUDING ATTACHMENTS
+          console.log('🔍 Raw API Response:', {
+            hasMessages: !!response.email.messages,
+            messagesCount: response.email.messages?.length || 0,
+            messages: response.email.messages?.map(m => {
+              // Check ALL possible attachment fields
+              const attachments = m.attachments || m.attachment || m.files || m.Attachments || [];
+              
+              return {
+                uid: m.uid,
+                subject: m.subject,
+                hasBody: !!m.body,
+                hasContent: !!m.content,
+                hasHtml: !!m.html,
+                bodyLength: m.body?.length || 0,
+                contentLength: m.content?.length || 0,
+                htmlLength: m.html?.length || 0,
+                date: m.date,
+                // ATTACHMENT DEBUGGING - Check all fields
+                hasAttachments: m.hasAttachments,
+                attachmentCount: m.attachmentCount,
+                attachmentsField: m.attachments,
+                attachmentField: m.attachment,
+                filesField: m.files,
+                AttachmentsField: m.Attachments,
+                attachmentsArray: attachments,
+                attachmentsLength: Array.isArray(attachments) ? attachments.length : 0,
+                attachmentDetails: Array.isArray(attachments) ? attachments.map(a => ({
+                  filename: a.filename || a.name || 'unnamed',
+                  size: a.size,
+                  contentType: a.contentType,
+                  downloadUrl: a.downloadUrl,
+                  index: a.index
+                })) : [],
+                allKeys: Object.keys(m),
+                // Check if attachmentCount doesn't match array length
+                mismatch: m.attachmentCount && Array.isArray(attachments) && m.attachmentCount !== attachments.length
+              };
+            }) || 'No messages array',
+            singleEmail: !response.email.messages ? {
+              uid: response.email.uid,
+              hasBody: !!response.email.body,
+              hasContent: !!response.email.content,
+              hasHtml: !!response.email.html,
+              allKeys: Object.keys(response.email)
+            } : null
+          });
+          
+          // Check if backend returned thread (messages array) or single email
+          // Backend now ALWAYS returns messages array when includeThread=true (even for single messages)
+          const hasThread = response.email.messages && Array.isArray(response.email.messages) && response.email.messages.length > 0;
+          const fullEmail = hasThread ? response.email.messages[response.email.messages.length - 1] : response.email;
+          const threadMessages = hasThread ? response.email.messages : null;
+          
+          // Log thread info for debugging
+          if (hasThread) {
+            console.log('✅ Backend returned thread:', {
+              messageCount: response.email.messageCount || threadMessages.length,
+              messagesInArray: threadMessages.length,
+              threadId: response.email.threadId,
+              firstMessageUid: threadMessages[0]?.uid,
+              lastMessageUid: threadMessages[threadMessages.length - 1]?.uid
+            });
+          }
           
           // Validate that the fetched email matches the selected one by UID
           const fetchedUid = fullEmail.uid;
@@ -474,6 +1164,138 @@ const Email = () => {
           
           const transformedFullEmail = transformEmail(fullEmail);
           
+          // Transform thread messages if available
+          let transformedThreadMessages = null;
+          if (hasThread && threadMessages) {
+            console.log('🧵 Processing thread messages:', threadMessages.length);
+            transformedThreadMessages = threadMessages.map((msg, idx) => {
+              const transformed = transformEmail(msg, idx);
+              
+              // Debug: Log raw message data INCLUDING ATTACHMENTS
+              console.log(`📨 Thread message ${idx + 1}:`, {
+                uid: msg.uid,
+                subject: msg.subject,
+                hasBody: !!msg.body,
+                hasContent: !!msg.content,
+                hasHtml: !!msg.html,
+                bodyLength: msg.body?.length || 0,
+                contentLength: msg.content?.length || 0,
+                htmlLength: msg.html?.length || 0,
+                // ATTACHMENT DEBUGGING
+                hasAttachments: msg.hasAttachments,
+                attachmentCount: msg.attachmentCount,
+                attachmentsArray: msg.attachments,
+                attachmentsLength: msg.attachments?.length || 0,
+                attachmentsDetails: msg.attachments?.map(a => ({
+                  filename: a.filename || a.name,
+                  size: a.size,
+                  contentType: a.contentType,
+                  downloadUrl: a.downloadUrl
+                })) || [],
+                rawMsgKeys: Object.keys(msg)
+              });
+              
+              // CRITICAL: Preserve body/content/html directly from API response
+              // Priority: API response > transformed (which might be empty)
+              const finalBody = msg.body || msg.content || msg.text || transformed.body || '';
+              const finalContent = msg.content || msg.body || msg.text || transformed.content || '';
+              const finalHtml = msg.html || msg.htmlBody || msg.htmlContent || transformed.html || '';
+              
+              // CRITICAL: Preserve attachments from API response (check multiple possible fields)
+              // Check all possible attachment fields
+              const apiAttachments = msg.attachments || msg.attachment || msg.files || msg.Attachments || [];
+              const transformedAttachments = transformed.attachments || [];
+              
+              // Use API attachments if available, otherwise use transformed
+              // But also merge if both exist (API might have more complete data)
+              let finalAttachments = [];
+              
+              if (Array.isArray(apiAttachments) && apiAttachments.length > 0) {
+                // Use API attachments (most reliable)
+                finalAttachments = apiAttachments;
+              } else if (Array.isArray(transformedAttachments) && transformedAttachments.length > 0) {
+                // Fallback to transformed attachments
+                finalAttachments = transformedAttachments;
+              }
+              
+              // If attachmentCount says there are more attachments than we have, log warning
+              const reportedCount = msg.attachmentCount !== undefined ? msg.attachmentCount : (msg.hasAttachments ? 1 : 0);
+              if (reportedCount > finalAttachments.length) {
+                console.warn(`⚠️ Message ${idx + 1} (uid: ${msg.uid}): attachmentCount=${reportedCount} but only ${finalAttachments.length} attachments in array!`, {
+                  msgKeys: Object.keys(msg),
+                  apiAttachments: apiAttachments,
+                  transformedAttachments: transformedAttachments,
+                  hasAttachments: msg.hasAttachments,
+                  attachmentCount: msg.attachmentCount
+                });
+              }
+              
+              // Determine attachment count - use reported count if higher than array length
+              const finalAttachmentCount = Math.max(
+                finalAttachments.length,
+                msg.attachmentCount !== undefined ? msg.attachmentCount : 0,
+                transformed.attachmentCount || 0
+              );
+              
+              const finalHasAttachments = finalAttachments.length > 0 || 
+                                         msg.hasAttachments === true || 
+                                         finalAttachmentCount > 0;
+              
+              console.log(`✅ Message ${idx + 1} attachments preserved:`, {
+                uid: msg.uid,
+                subject: msg.subject,
+                apiAttachmentsCount: apiAttachments.length,
+                transformedAttachmentsCount: transformedAttachments.length,
+                finalAttachmentsCount: finalAttachments.length,
+                reportedAttachmentCount: msg.attachmentCount,
+                finalAttachmentCount,
+                finalHasAttachments,
+                attachmentFilenames: finalAttachments.map(a => ({
+                  filename: a.filename || a.name || 'unnamed',
+                  size: a.size,
+                  contentType: a.contentType,
+                  downloadUrl: a.downloadUrl
+                })),
+                rawMsgAttachmentKeys: msg.attachments ? Object.keys(msg.attachments[0] || {}) : 'no attachments'
+              });
+              
+              return {
+                ...transformed,
+                // Preserve all original message properties
+                uid: msg.uid || transformed.uid,
+                from: msg.from || transformed.from,
+                fromName: msg.fromName || transformed.fromName,
+                to: msg.to || transformed.to,
+                subject: msg.subject || transformed.subject,
+                // CRITICAL: Use API response body/content/html directly
+                body: finalBody,
+                content: finalContent,
+                html: finalHtml,
+                date: msg.date || transformed.date,
+                timestamp: transformed.timestamp,
+                // CRITICAL: Preserve attachments from API - use API response first
+                attachments: finalAttachments,
+                hasAttachments: finalHasAttachments,
+                attachmentCount: finalAttachmentCount,
+                messageId: msg.messageId || msg.messageID || msg.message_id || transformed.messageId || null,
+                inReplyTo: msg.inReplyTo || null,
+                references: msg.references || null
+              };
+            });
+            console.log('✅ Transformed thread messages:', transformedThreadMessages.map(m => ({
+              uid: m.uid,
+              subject: m.subject,
+              bodyLength: m.body?.length || 0,
+              htmlLength: m.html?.length || 0,
+              hasContent: !!(m.body || m.html),
+              // ATTACHMENT DEBUGGING
+              hasAttachments: m.hasAttachments,
+              attachmentCount: m.attachmentCount,
+              attachmentsLength: m.attachments?.length || 0,
+              attachmentFilenames: m.attachments?.map(a => a.filename || a.name || 'unnamed') || []
+            })));
+          }
+          
           // Only use fetched email content if UID matches
           // Always preserve original email's key properties (subject, from, etc.)
           // Priority: Original email content from list > Fetched email content
@@ -497,10 +1319,16 @@ const Email = () => {
             attachments: fullEmail.attachments?.length > 0 ? fullEmail.attachments : (email.attachments || []),
             hasAttachments: fullEmail.hasAttachments || (fullEmail.attachments?.length > 0) || email.hasAttachments,
             attachmentCount: fullEmail.attachmentCount || (fullEmail.attachments?.length || 0) || email.attachmentCount,
-            messageId: fullEmail.messageId || fullEmail.messageID || fullEmail.message_id || email.messageId || null
+            messageId: fullEmail.messageId || fullEmail.messageID || fullEmail.message_id || email.messageId || null,
+            // Include thread messages if available (transformed)
+            threadMessages: transformedThreadMessages,
+            messages: transformedThreadMessages, // Also include as 'messages' for compatibility
+            messageCount: transformedThreadMessages ? transformedThreadMessages.length : 1
           };
           
           console.log('📧 Final email to display:', {
+            hasThread: !!transformedThreadMessages,
+            threadMessageCount: transformedThreadMessages?.length || 0,
             id: updatedEmail.id,
             uid: updatedEmail.uid,
             subject: updatedEmail.subject,
@@ -522,7 +1350,18 @@ const Email = () => {
       } catch (err) {
         console.error('Error fetching full email:', err);
         console.error('Error details:', err.response?.data || err.message);
-        // Keep the basic email info if fetch fails
+        
+        // Show user-friendly error message
+        const errorMessage = err.message || 'Failed to load email details';
+        if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
+          setError('⏱️ Email request timed out. Showing available content. Thread view may be limited.');
+        } else {
+          setError(`⚠️ ${errorMessage}. Showing available content.`);
+        }
+        
+        // Still display the email with whatever data we have from the list
+        // This ensures the user can still see the email even if fetching full details fails
+        setSelectedEmail(email);
       }
     } else {
       // Check if UID is empty/invalid
@@ -532,7 +1371,7 @@ const Email = () => {
         // Email has no UID, so we can't fetch full details - just use what we have
         setSelectedEmail(email);
       } else {
-        console.warn('Cannot fetch full email - missing uid or accountId:', { uid: originalUid, accountId: createdAccountId });
+        console.warn('Cannot fetch full email - missing uid or accountId:', { uid: originalUid, accountId: selectedAccountId });
       }
     }
   };
@@ -567,11 +1406,11 @@ const Email = () => {
       // Always use send-files endpoint (works with or without attachments)
       await sendEmailWithAttachments({
         ...emailData,
-        emailAccountId: createdAccountId
+        emailAccountId: selectedAccountId
       });
       setSendSuccess(true);
       // Reload sent emails after sending
-      if (createdAccountId) {
+      if (selectedAccountId) {
         setTimeout(() => {
           loadSentEmails();
         }, 500);
@@ -603,13 +1442,13 @@ const Email = () => {
       // Use reply-files endpoint with FormData
       const response = await replyToEmailWithFiles({
         ...replyData,
-        emailAccountId: createdAccountId
+        emailAccountId: selectedAccountId
       });
 
       if (response.success) {
         setReplySuccess(true);
         // Reload sent emails after replying
-        if (createdAccountId) {
+        if (selectedAccountId) {
           setTimeout(() => {
             loadSentEmails();
           }, 500);
@@ -637,15 +1476,18 @@ const Email = () => {
       filtered = filtered.filter(email => email.folder === tabFolders[selectedTab]);
     }
 
-    if (searchQuery) {
-      filtered = filtered.filter(email => 
-        email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        email.fromName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        email.body.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Sort by timestamp (newest first), handling invalid dates
+    return filtered.sort((a, b) => {
+      const dateA = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp);
+      const dateB = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp);
+      
+      // Handle invalid dates - put them at the end
+      if (isNaN(dateA.getTime())) return 1;
+      if (isNaN(dateB.getTime())) return -1;
+      
+      // Sort descending (newest first)
+      return dateB.getTime() - dateA.getTime();
+    });
   };
 
   const formatTimestamp = (timestamp) => {
@@ -693,80 +1535,95 @@ const Email = () => {
       width: '100%'
     }}>
       {/* Gmail-style Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #e0e0e0', backgroundColor: 'white', minHeight: 64 }}>
-        <Typography variant="h6" sx={{ fontWeight: 400, color: '#5f6368', mr: 4 }}>
-          V Power Mail
-        </Typography>
-        <Box sx={{ flexGrow: 1, maxWidth: 600, position: 'relative' }}>
-          <TextField
-            placeholder="Search mail"
-            size="small"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ color: '#5f6368', mr: 1 }} />,
-              sx: {
-                backgroundColor: '#f1f3f4',
-                borderRadius: '24px',
-                '& fieldset': { border: 'none' },
-                '&:hover': { backgroundColor: '#e8eaed' }
-              }
-            }}
-            sx={{ width: '100%' }}
-          />
-        </Box>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        px: 2, 
+        py: 1.5, 
+        borderBottom: '1px solid #e0e0e0', 
+        backgroundColor: 'white', 
+        minHeight: 56,
+        boxShadow: 'inset 0 -1px 0 0 rgba(100,121,143,0.122)'
+      }}>
+        {/* Menu Icon */}
+        <IconButton 
+          size="small" 
+          sx={{ 
+            mr: 1,
+            color: '#5f6368',
+            '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' }
+          }}
+        >
+          <FilterListIcon />
+        </IconButton>
+        
+        {/* Right side actions - Gmail style */}
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center', 
-          gap: 1, 
+          gap: 0.5, 
           ml: 'auto',
-          flexShrink: 0,
-          minWidth: 0,
-          flexWrap: 'wrap'
+          flexShrink: 0
         }}>
-          {createdAccountId && (
-            <Chip 
-              label={`Account: ${createdAccountId.substring(0, 8)}...`}
-              size="small"
-              sx={{ 
-                mr: 1, 
-                bgcolor: '#e8f0fe', 
-                color: '#1a73e8',
-                maxWidth: { xs: '120px', sm: '200px' },
-                '& .MuiChip-label': {
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }
-              }}
-            />
+          {/* Account Switcher - Moved to right */}
+          {emailAccounts.length > 0 && (
+            <Box sx={{ mr: 2 }}>
+              <AccountSwitcher
+                accounts={emailAccounts}
+                selectedAccountId={selectedAccountId}
+                onAccountChange={handleAccountChange}
+              />
+            </Box>
           )}
-          <Tooltip title="Refresh emails">
-            <IconButton size="small" onClick={loadEmails} disabled={!createdAccountId}>
-              <RefreshIcon />
+          <Tooltip title="Refresh">
+            <IconButton 
+              size="small" 
+              onClick={() => {
+                setCurrentPage(1);
+                setHasMore(true);
+                if (selectedTab === 0) {
+                  loadEmails(1, true);
+                } else {
+                  loadSentEmails(1, true);
+                }
+              }} 
+              disabled={!selectedAccountId}
+              sx={{
+                color: '#5f6368',
+                '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' }
+              }}
+            >
+              <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <IconButton size="small">
-            <FilterListIcon />
-          </IconButton>
+          <Tooltip title="Settings">
+            <IconButton 
+              size="small"
+              onClick={() => setAccountManagementOpen(true)}
+              disabled={emailAccounts.length === 0}
+              sx={{
+                color: '#5f6368',
+                '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' }
+              }}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Button
             variant="outlined"
             startIcon={<SettingsIcon />}
             onClick={() => setCreateAccountOpen(true)}
-            disabled={isAccountTested}
             sx={{
               textTransform: 'none',
-              borderColor: isAccountTested ? '#9e9e9e' : '#1a73e8',
-              color: isAccountTested ? '#9e9e9e' : '#1a73e8',
+              borderColor: '#1a73e8',
+              color: '#1a73e8',
               fontWeight: 500,
               ml: 1,
+              fontSize: '0.875rem',
+              py: 0.75,
               '&:hover': { 
-                borderColor: isAccountTested ? '#9e9e9e' : '#1557b0', 
-                backgroundColor: isAccountTested ? 'transparent' : '#e8f0fe' 
-              },
-              '&.Mui-disabled': {
-                borderColor: '#e0e0e0',
-                color: '#9e9e9e'
+                borderColor: '#1557b0', 
+                backgroundColor: '#e8f0fe' 
               }
             }}
           >
@@ -779,13 +1636,15 @@ const Email = () => {
               setTestDialogOpen(true);
               setTimeout(() => handleTestConnection(), 100);
             }}
-            disabled={!createdAccountId}
+            disabled={!selectedAccountId}
             sx={{
               textTransform: 'none',
               backgroundColor: '#34a853',
               color: 'white',
               fontWeight: 500,
               ml: 1,
+              fontSize: '0.875rem',
+              py: 0.75,
               '&:hover': { backgroundColor: '#2d8e47' },
               '&.Mui-disabled': {
                 backgroundColor: '#e0e0e0',
@@ -800,7 +1659,33 @@ const Email = () => {
 
       {/* Error Display */}
       {error && (
-        <Alert severity="error" sx={{ m: 2 }} onClose={() => setError(null)}>
+        <Alert 
+          severity="error" 
+          sx={{ m: 2 }} 
+          onClose={() => setError(null)}
+          action={
+            error.toLowerCase().includes('timeout') && (
+              <Button 
+                color="inherit" 
+                size="small" 
+                onClick={() => {
+                  setError(null);
+                  if (selectedTab === 0) {
+                    setCurrentPage(1);
+                    setHasMore(true);
+                    loadEmails(1, true);
+                  } else {
+                    setCurrentPage(1);
+                    setHasMore(true);
+                    loadSentEmails(1, true);
+                  }
+                }}
+              >
+                Retry
+              </Button>
+            )
+          }
+        >
           {error}
         </Alert>
       )}
@@ -827,28 +1712,39 @@ const Email = () => {
           flexDirection: 'column',
           flexShrink: 0
         }}>
+          {/* Gmail-style Compose Button */}
           <Box sx={{ p: 2 }}>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => setComposeOpen(true)}
-              disabled={!createdAccountId}
+              disabled={!selectedAccountId}
               sx={{
                 width: '100%',
                 borderRadius: '24px',
                 textTransform: 'none',
                 fontWeight: 500,
                 py: 1.5,
+                px: 1.5,
                 backgroundColor: '#c2e7ff',
                 color: '#001d35',
-                '&:hover': { backgroundColor: '#a8d8ff' },
-                '&.Mui-disabled': { backgroundColor: '#e0e0e0', color: '#9e9e9e' }
+                boxShadow: '0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
+                '&:hover': { 
+                  backgroundColor: '#a8d8ff',
+                  boxShadow: '0 1px 3px 0 rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15)'
+                },
+                '&.Mui-disabled': { 
+                  backgroundColor: '#e0e0e0', 
+                  color: '#9e9e9e',
+                  boxShadow: 'none'
+                }
               }}
             >
               Compose
             </Button>
           </Box>
-          <Box sx={{ flexGrow: 1, px: 1 }}>
+          {/* Gmail-style Navigation */}
+          <Box sx={{ flexGrow: 1, px: 0.5 }}>
             {tabs.map((tab, index) => (
               <Box
                 key={index}
@@ -857,20 +1753,45 @@ const Email = () => {
                   display: 'flex',
                   alignItems: 'center',
                   px: 2,
-                  py: 1.5,
+                  py: 1,
                   borderRadius: '0 24px 24px 0',
                   cursor: 'pointer',
                   backgroundColor: selectedTab === index ? '#fce8e6' : 'transparent',
-                  color: selectedTab === index ? '#d93025' : '#5f6368',
-                  '&:hover': { backgroundColor: selectedTab === index ? '#fce8e6' : '#f1f3f4' }
+                  color: selectedTab === index ? '#d93025' : '#202124',
+                  '&:hover': { 
+                    backgroundColor: selectedTab === index ? '#fce8e6' : '#f1f3f4' 
+                  },
+                  transition: 'background-color 0.15s'
                 }}
               >
-                <Box sx={{ mr: 2, display: 'flex', alignItems: 'center' }}>{tab.icon}</Box>
-                <Typography variant="body2" sx={{ flexGrow: 1, fontWeight: selectedTab === index ? 500 : 400 }}>
+                <Box sx={{ 
+                  mr: 2, 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  color: selectedTab === index ? '#d93025' : '#5f6368'
+                }}>
+                  {tab.icon}
+                </Box>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    flexGrow: 1, 
+                    fontWeight: selectedTab === index ? 600 : 400,
+                    fontSize: '0.875rem'
+                  }}
+                >
                   {tab.label}
                 </Typography>
                 {tab.count > 0 && (
-                  <Typography variant="caption" sx={{ color: '#5f6368', fontWeight: 500, ml: 1 }}>
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      color: selectedTab === index ? '#d93025' : '#5f6368', 
+                      fontWeight: 500, 
+                      ml: 1,
+                      fontSize: '0.75rem'
+                    }}
+                  >
                     {tab.count}
                   </Typography>
                 )}
@@ -891,8 +1812,12 @@ const Email = () => {
         }}>
           <Box sx={{ flexGrow: 1, overflow: 'auto', width: '100%' }}>
             <EmailList
+              userEmail={emailAccounts.find(acc => acc._id === selectedAccountId)?.email || ''}
               emails={getFilteredEmails()}
               loading={loading}
+              loadingMore={loadingMore}
+              hasMore={hasMore}
+              onLoadMore={selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails}
               selectedEmail={selectedEmail}
               onEmailSelect={handleEmailSelect}
               onToggleStar={toggleStar}
@@ -903,6 +1828,15 @@ const Email = () => {
       </Box>
 
       {/* Dialogs */}
+      <AccountManagementDialog
+        open={accountManagementOpen}
+        onClose={() => setAccountManagementOpen(false)}
+        accounts={emailAccounts}
+        onSetDefault={handleSetDefaultAccount}
+        onDelete={handleDeleteAccount}
+        loading={accountsLoading}
+      />
+
       <CreateAccountDialog
         open={createAccountOpen}
         onClose={() => setCreateAccountOpen(false)}
@@ -912,7 +1846,7 @@ const Email = () => {
         createLoading={createLoading}
         createSuccess={createSuccess}
         createError={createError}
-        createdAccountId={createdAccountId}
+        createdAccountId={selectedAccountId}
       />
 
       <TestConnectionDialog
@@ -921,7 +1855,7 @@ const Email = () => {
         testLoading={testLoading}
         testSuccess={testSuccess}
         testError={testError}
-        createdAccountId={createdAccountId}
+        createdAccountId={selectedAccountId}
       />
 
       <ComposeDialog
@@ -931,7 +1865,7 @@ const Email = () => {
         loading={sendLoading}
         success={sendSuccess}
         error={sendError}
-        emailAccountId={createdAccountId}
+        emailAccountId={selectedAccountId}
       />
 
       <ReplyDialog
@@ -946,7 +1880,7 @@ const Email = () => {
         loading={replyLoading}
         success={replySuccess}
         error={replyError}
-        emailAccountId={createdAccountId}
+        emailAccountId={selectedAccountId}
         originalEmail={replyToEmail}
       />
 
@@ -971,6 +1905,9 @@ const Email = () => {
           onDelete={deleteEmail}
           onClose={() => setSelectedEmail(null)}
           onReply={handleReply}
+          emailAccountId={selectedAccountId}
+          folder={selectedTab === 0 ? 'INBOX' : 'SENT'}
+          emailAccounts={emailAccounts}
         />
       </Dialog>
     </Box>

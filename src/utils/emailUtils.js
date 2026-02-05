@@ -3,15 +3,51 @@
  */
 
 /**
+ * Extracts email address from formats like:
+ * - "Name <email@domain.com>" -> "email@domain.com"
+ * - "email@domain.com" -> "email@domain.com"
+ * - "<email@domain.com>" -> "email@domain.com"
+ * 
+ * @param {string} emailString - Email string that may contain name
+ * @returns {string} - Extracted email address
+ */
+export const extractEmailAddress = (emailString) => {
+  if (!emailString || typeof emailString !== 'string') return emailString || '';
+  
+  const trimmed = emailString.trim();
+  
+  // Check for format: "Name <email@domain.com>" or "<email@domain.com>"
+  const angleBracketMatch = trimmed.match(/<([^>]+)>/);
+  if (angleBracketMatch) {
+    return angleBracketMatch[1].trim();
+  }
+  
+  // Check for format: "Name email@domain.com" (less common, space-separated)
+  const emailRegex = /([^\s<>]+@[^\s<>]+\.[^\s<>]+)/;
+  const emailMatch = trimmed.match(emailRegex);
+  if (emailMatch) {
+    return emailMatch[1].trim();
+  }
+  
+  // If no special format found, return as-is (might be plain email)
+  return trimmed;
+};
+
+/**
  * Validates a single email address
- * @param {string} email - Email address to validate
+ * @param {string} email - Email address to validate (can be in "Name <email>" format)
  * @returns {boolean} - True if valid email format
  */
 export const isValidEmail = (email) => {
   if (!email || typeof email !== 'string') return false;
+  
+  // Extract email address first (handles "Name <email>" format)
+  const extractedEmail = extractEmailAddress(email);
+  
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim());
+  return emailRegex.test(extractedEmail.trim());
 };
+
 
 /**
  * Parses multiple email addresses from various input formats
@@ -19,10 +55,11 @@ export const isValidEmail = (email) => {
  * - Comma-separated string: "email1@example.com, email2@example.com"
  * - Array: ["email1@example.com", "email2@example.com"]
  * - Single email: "email1@example.com"
+ * - Name format: "Name <email@example.com>"
  * - Bracket notation: "[email1@example.com, email2@example.com]"
  * 
  * @param {string|string[]} input - Email input (string or array)
- * @returns {string[]} - Array of valid email addresses
+ * @returns {string[]} - Array of valid email addresses (extracted from name format if needed)
  */
 export const parseEmailRecipients = (input) => {
   if (!input) return [];
@@ -31,7 +68,10 @@ export const parseEmailRecipients = (input) => {
   
   // Handle array input
   if (Array.isArray(input)) {
-    emails = input.map(email => typeof email === 'string' ? email.trim() : String(email).trim());
+    emails = input.map(email => {
+      const emailStr = typeof email === 'string' ? email.trim() : String(email).trim();
+      return extractEmailAddress(emailStr);
+    });
   } 
   // Handle string input
   else if (typeof input === 'string') {
@@ -41,8 +81,11 @@ export const parseEmailRecipients = (input) => {
       cleaned = cleaned.slice(1, -1).trim();
     }
     
-    // Split by comma and trim each email
-    emails = cleaned.split(',').map(email => email.trim()).filter(email => email.length > 0);
+    // Split by comma and extract email from each part
+    emails = cleaned.split(',').map(email => {
+      const trimmed = email.trim();
+      return extractEmailAddress(trimmed);
+    }).filter(email => email.length > 0);
   }
   
   // Filter out empty strings and return
