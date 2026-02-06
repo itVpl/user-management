@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -296,9 +296,8 @@ const Email = () => {
     setError(null);
     
     try {
-      // Load more emails per page - increase limits to load more emails faster
-      // First page: 200 emails, subsequent pages: 100 emails
-      const limit = page === 1 ? 200 : 100; // Load 200 on first page, 100 on subsequent pages
+      // Load 25 emails per page for better performance and pagination
+      const limit = 25; // Load 25 emails per page
       const response = await fetchInboxEmails(selectedAccountId, limit, page);
 
 
@@ -488,12 +487,12 @@ const Email = () => {
         // Check if there are more emails to load
         // Strategy: Keep loading as long as we get emails, only stop when we get 0
         // This ensures we load ALL emails even if backend returns fewer per page than requested
-        const expectedCount = page === 1 ? 200 : 100;
+        const expectedCount = 25;
         // Only stop loading if we got 0 emails OR if backend explicitly says no more
         // If backend has a 'hasMore' field, use it; otherwise, assume more if we got emails
         const backendIndicatesNoMore = response?.hasMore === false || response?.data?.hasMore === false;
         // IMPORTANT: Continue loading if we got fewer emails than expected BUT still got some emails
-        // This handles cases where backend returns partial results (e.g., 50 emails when limit is 200)
+        // This handles cases where backend returns partial results (e.g., 20 emails when limit is 25)
         // Only stop if we got exactly 0 emails OR backend explicitly says no more
         const hasMoreEmails = uniqueFetchedEmails.length > 0 && !backendIndicatesNoMore;
         setHasMore(hasMoreEmails);
@@ -721,22 +720,32 @@ const Email = () => {
   };
   
   // Load more sent emails (next page)
-  const loadMoreSentEmails = async () => {
-    if (loadingMore || !hasMore || !selectedAccountId) return;
+  const loadMoreSentEmails = useCallback(async () => {
+    // Prevent duplicate calls - check multiple conditions
+    if (loadingMore || !hasMore || !selectedAccountId || loading) {
+      console.log('loadMoreSentEmails: Skipping duplicate call', { loadingMore, hasMore, selectedAccountId, loading });
+      return;
+    }
     
     const nextPage = currentPage + 1;
+    console.log('loadMoreSentEmails: Loading page', nextPage);
     setCurrentPage(nextPage);
     await loadSentEmails(nextPage, false);
-  };
+  }, [loadingMore, hasMore, selectedAccountId, currentPage, loading]);
   
   // Load more emails (next page)
-  const loadMoreEmails = async () => {
-    if (loadingMore || !hasMore || !selectedAccountId) return;
+  const loadMoreEmails = useCallback(async () => {
+    // Prevent duplicate calls - check multiple conditions
+    if (loadingMore || !hasMore || !selectedAccountId || loading) {
+      console.log('loadMoreEmails: Skipping duplicate call', { loadingMore, hasMore, selectedAccountId, loading });
+      return;
+    }
     
     const nextPage = currentPage + 1;
+    console.log('loadMoreEmails: Loading page', nextPage);
     setCurrentPage(nextPage);
     await loadEmails(nextPage, false);
-  };
+  }, [loadingMore, hasMore, selectedAccountId, currentPage, loading]);
 
   // Load emails filtered by label
   const loadEmailsByLabel = async () => {

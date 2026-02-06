@@ -200,6 +200,8 @@ const EmailList = ({
 }) => {
   const scrollContainerRef = useRef(null);
   const loadingTriggerRef = useRef(null);
+  const isLoadingRef = useRef(false); // Track if a load is in progress to prevent duplicate calls
+  const scrollTimeoutRef = useRef(null); // For debouncing scroll events
   const [selectedEmails, setSelectedEmails] = useState(new Set());
   
   // ⭐ Internal state for label-filtered emails
@@ -397,7 +399,10 @@ const EmailList = ({
 
   // Infinite scroll handler
   useEffect(() => {
-    if (!onLoadMore || loadingMore || !hasMore) return;
+    if (!onLoadMore || loadingMore || !hasMore) {
+      isLoadingRef.current = false;
+      return;
+    }
 
     // Find the scrollable parent container
     const findScrollContainer = (element) => {
@@ -413,23 +418,43 @@ const EmailList = ({
     if (!scrollContainer) return;
 
     const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-      // Trigger load more when user scrolls to within 500px of bottom (more aggressive)
-      // Also trigger if we're already at the bottom (scrollHeight - scrollTop - clientHeight <= 10)
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      if (distanceFromBottom < 500 || distanceFromBottom <= 10) {
-        onLoadMore();
+      // Clear any pending scroll timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
       }
+
+      // Debounce scroll events to prevent multiple rapid calls
+      scrollTimeoutRef.current = setTimeout(() => {
+        // Double-check conditions before calling onLoadMore
+        if (isLoadingRef.current || loadingMore || !hasMore || !onLoadMore) {
+          return;
+        }
+
+        const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        
+        // Trigger load more when user scrolls to within 500px of bottom
+        if (distanceFromBottom < 500) {
+          // Set loading flag immediately to prevent duplicate calls
+          isLoadingRef.current = true;
+          onLoadMore();
+        }
+      }, 150); // Debounce scroll events by 150ms
     };
     
     // Also check on mount if we're already near the bottom (e.g., if there are few emails)
     const checkInitialScroll = () => {
+      if (isLoadingRef.current || loadingMore || !hasMore || !onLoadMore) {
+        return;
+      }
+
       const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       if (distanceFromBottom < 500) {
         // Small delay to avoid immediate trigger
         setTimeout(() => {
-          if (hasMore && !loadingMore) {
+          if (hasMore && !loadingMore && !isLoadingRef.current && onLoadMore) {
+            isLoadingRef.current = true;
             onLoadMore();
           }
         }, 500);
@@ -437,11 +462,28 @@ const EmailList = ({
     };
     
     // Check initial scroll position after a short delay
-    setTimeout(checkInitialScroll, 1000);
+    const initialCheckTimeout = setTimeout(checkInitialScroll, 1000);
 
-    scrollContainer.addEventListener('scroll', handleScroll);
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, [onLoadMore, loadingMore, hasMore, emails.length]);
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      if (initialCheckTimeout) {
+        clearTimeout(initialCheckTimeout);
+      }
+      isLoadingRef.current = false;
+    };
+  }, [onLoadMore, loadingMore, hasMore]); // Removed emails.length to prevent re-attaching listeners on every email load
+
+  // Reset loading flag when loadingMore changes to false
+  useEffect(() => {
+    if (!loadingMore) {
+      isLoadingRef.current = false;
+    }
+  }, [loadingMore]);
 
   if (loading) {
     return (

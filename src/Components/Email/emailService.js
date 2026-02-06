@@ -139,7 +139,7 @@ export const testEmailConnection = async (accountId) => {
 };
 
 // Fetch inbox emails
-export const fetchInboxEmails = async (accountId, limit = 200, page = 1) => {
+export const fetchInboxEmails = async (accountId, limit = 25, page = 1) => {
   const token = getAuthToken();
   
   if (!token) {
