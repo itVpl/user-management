@@ -1,7 +1,7 @@
 // src/pages/AddCustomer.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { User, Building2, FileText, PlusCircle, Eye, EyeOff, Search, Mail } from 'lucide-react';
+import { User, Building2, FileText, PlusCircle, Eye, EyeOff, Search, Mail, X, Calendar, MapPin, Phone, CreditCard, Clock, CheckCircle, XCircle, Building, MessageSquare } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -223,7 +223,24 @@ const Select = React.memo(function Select({
 const CustomerTable = React.memo(function CustomerTable({ customers, onAction }) {
   const [page, setPage] = useState(1);
   const pageSize = 50;
-
+  const [viewModal, setViewModal] = useState({ open: false, customer: null, data: null, loading: false });
+  const [followUpHistory, setFollowUpHistory] = useState({ data: null, loading: false });
+  const [followUpModal, setFollowUpModal] = useState({ open: false, customer: null });
+  const [followUpForm, setFollowUpForm] = useState({
+    followUpMethod: 'call',
+    followUpNotes: '',
+    followUpDate: new Date().toISOString().slice(0, 16),
+    nextFollowUpDate: ''
+  });
+  const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
+  const [followUpErrors, setFollowUpErrors] = useState({});
+  const [prospectForm, setProspectForm] = useState({
+    remark: '',
+    prospectStatus: 'Warm',
+    attachment: null
+  });
+  const [prospectSubmitting, setProspectSubmitting] = useState(false);
+  const [prospectErrors, setProspectErrors] = useState({});
 
   const totalPages = Math.max(1, Math.ceil(customers.length / pageSize));
 
@@ -238,6 +255,338 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
     return customers.slice(start, start + pageSize);
   }, [customers, page]);
 
+  const handleView = async (customer) => {
+    // Prioritize userId (UUID) over _id
+    const customerId = customer.userId || customer._id || customer.id;
+    if (!customerId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+
+    setViewModal({ open: true, customer, data: null, loading: true });
+    setFollowUpHistory({ data: null, loading: true });
+    
+    try {
+      const token = getToken();
+      
+      // Fetch customer details and follow-up history in parallel
+      const [customerResponse, followUpResponse] = await Promise.all([
+        axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${customerId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true
+          }
+        ),
+        axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${customerId}/follow-up-history`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true
+          }
+        ).catch(err => {
+          // If follow-up history fails, just log and continue
+          console.warn('Failed to fetch follow-up history:', err);
+          return { data: { success: false } };
+        })
+      ]);
+
+      if (customerResponse.data && customerResponse.data.success) {
+        const customerData = customerResponse.data.data;
+        setViewModal({ open: true, customer, data: customerData, loading: false });
+        
+        // Initialize prospect form - if prospectDetails is array, use latest entry
+        if (customerData.prospectDetails) {
+          if (Array.isArray(customerData.prospectDetails) && customerData.prospectDetails.length > 0) {
+            // Get latest entry (most recent createdAt or prospectDate)
+            const latestProspect = customerData.prospectDetails.sort((a, b) => {
+              const dateA = new Date(a.createdAt || a.prospectDate || 0);
+              const dateB = new Date(b.createdAt || b.prospectDate || 0);
+              return dateB - dateA;
+            })[0];
+            
+            setProspectForm({
+              remark: latestProspect.remark || '',
+              prospectStatus: latestProspect.prospectStatus || 'Warm',
+              attachment: null
+            });
+          } else if (customerData.prospectDetails.remark || customerData.prospectDetails.prospectStatus) {
+            // Handle old format (object instead of array)
+            setProspectForm({
+              remark: customerData.prospectDetails.remark || '',
+              prospectStatus: customerData.prospectDetails.prospectStatus || 'Warm',
+              attachment: null
+            });
+          } else {
+            setProspectForm({
+              remark: '',
+              prospectStatus: 'Warm',
+              attachment: null
+            });
+          }
+        } else {
+          setProspectForm({
+            remark: '',
+            prospectStatus: 'Warm',
+            attachment: null
+          });
+        }
+      } else {
+        toast.error('Failed to fetch customer details');
+        setViewModal({ open: false, customer: null, data: null, loading: false });
+        setFollowUpHistory({ data: null, loading: false });
+      }
+
+      if (followUpResponse.data && followUpResponse.data.success) {
+        setFollowUpHistory({ data: followUpResponse.data.data, loading: false });
+      } else {
+        setFollowUpHistory({ data: null, loading: false });
+      }
+    } catch (error) {
+      console.error('Error fetching customer details:', error);
+      toast.error(error.response?.data?.message || 'Failed to fetch customer details');
+      setViewModal({ open: false, customer: null, data: null, loading: false });
+      setFollowUpHistory({ data: null, loading: false });
+    }
+  };
+
+  const closeViewModal = () => {
+    setViewModal({ open: false, customer: null, data: null, loading: false });
+    setFollowUpHistory({ data: null, loading: false });
+    setProspectForm({
+      remark: '',
+      prospectStatus: 'Warm',
+      attachment: null
+    });
+    setProspectErrors({});
+  };
+
+  const handleFollowUp = (customer) => {
+    setFollowUpModal({ open: true, customer });
+    setFollowUpForm({
+      followUpMethod: 'call',
+      followUpNotes: '',
+      followUpDate: new Date().toISOString().slice(0, 16),
+      nextFollowUpDate: ''
+    });
+    setFollowUpErrors({});
+  };
+
+  const closeFollowUpModal = () => {
+    setFollowUpModal({ open: false, customer: null });
+    setFollowUpForm({
+      followUpMethod: 'call',
+      followUpNotes: '',
+      followUpDate: new Date().toISOString().slice(0, 16),
+      nextFollowUpDate: ''
+    });
+    setFollowUpErrors({});
+    setFollowUpSubmitting(false);
+  };
+
+  const handleFollowUpSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validation
+    const errors = {};
+    if (!followUpForm.followUpNotes.trim()) {
+      errors.followUpNotes = 'Follow-up notes are required';
+    }
+    if (!followUpForm.followUpMethod) {
+      errors.followUpMethod = 'Follow-up method is required';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setFollowUpErrors(errors);
+      return;
+    }
+
+    // Prioritize userId (UUID) over _id
+    const customerId = followUpModal.customer?.userId || followUpModal.customer?._id || followUpModal.customer?.id;
+    if (!customerId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+
+    setFollowUpSubmitting(true);
+    setFollowUpErrors({});
+
+    try {
+      const token = getToken();
+      const payload = {
+        followUpMethod: followUpForm.followUpMethod,
+        followUpNotes: followUpForm.followUpNotes.trim(),
+        followUpDate: followUpForm.followUpDate ? new Date(followUpForm.followUpDate).toISOString() : new Date().toISOString(),
+      };
+      
+      if (followUpForm.nextFollowUpDate) {
+        payload.nextFollowUpDate = new Date(followUpForm.nextFollowUpDate).toISOString();
+      }
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${customerId}/follow-up`,
+        payload,
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        toast.success('Follow-up added successfully!');
+        closeFollowUpModal();
+        
+        // Refresh follow-up history if view modal is open for the same customer
+        if (viewModal.open && viewModal.customer) {
+          // Prioritize userId (UUID) over _id
+          const currentCustomerId = viewModal.customer.userId || viewModal.customer._id || viewModal.customer.id;
+          if (currentCustomerId === customerId) {
+            try {
+              const followUpResponse = await axios.get(
+                `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${customerId}/follow-up-history`,
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                  withCredentials: true
+                }
+              );
+              if (followUpResponse.data && followUpResponse.data.success) {
+                setFollowUpHistory({ data: followUpResponse.data.data, loading: false });
+              }
+            } catch (err) {
+              console.warn('Failed to refresh follow-up history:', err);
+            }
+          }
+        }
+      } else {
+        toast.error(response.data?.message || 'Failed to add follow-up');
+      }
+    } catch (error) {
+      console.error('Error adding follow-up:', error);
+      toast.error(error.response?.data?.message || 'Failed to add follow-up. Please try again.');
+    } finally {
+      setFollowUpSubmitting(false);
+    }
+  };
+
+  const handleProspectInput = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'attachment') {
+      const file = files?.[0] || null;
+      setProspectForm(prev => ({ ...prev, attachment: file }));
+      if (file) {
+        setProspectErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.attachment;
+          return newErrors;
+        });
+      }
+      return;
+    }
+    setProspectForm(prev => ({ ...prev, [name]: value }));
+    if (value) {
+      setProspectErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleProspectSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validation
+    const errors = {};
+    if (!prospectForm.remark.trim()) {
+      errors.remark = 'Remark is required';
+    }
+    if (!prospectForm.prospectStatus) {
+      errors.prospectStatus = 'Prospect status is required';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setProspectErrors(errors);
+      return;
+    }
+
+    // Prioritize userId (UUID) from API data, fallback to customer object
+    const customerId = viewModal.data?.userId || viewModal.customer?.userId || viewModal.data?._id || viewModal.customer?._id || viewModal.customer?.id;
+    if (!customerId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+
+    setProspectSubmitting(true);
+    setProspectErrors({});
+
+    try {
+      const token = getToken();
+      const formData = new FormData();
+      
+      // Add prospectDetails as JSON string
+      const prospectDetails = {
+        remark: prospectForm.remark.trim(),
+        prospectStatus: prospectForm.prospectStatus
+      };
+      formData.append('prospectDetails', JSON.stringify(prospectDetails));
+      
+      // Add attachment if provided
+      if (prospectForm.attachment) {
+        formData.append('prospectAttachments', prospectForm.attachment);
+      }
+
+      const response = await axios.patch(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/update/${customerId}`,
+        formData,
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        toast.success('Prospect information updated successfully!');
+        
+        // Refresh customer data using userId
+        const refreshCustomerId = viewModal.data?.userId || customerId;
+        try {
+          const customerResponse = await axios.get(
+            `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${refreshCustomerId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true
+            }
+          );
+          if (customerResponse.data && customerResponse.data.success) {
+            setViewModal(prev => ({ ...prev, data: customerResponse.data.data }));
+          }
+        } catch (err) {
+          console.warn('Failed to refresh customer data:', err);
+        }
+        
+        // Reset form
+        setProspectForm({
+          remark: '',
+          prospectStatus: 'Warm',
+          attachment: null
+        });
+      } else {
+        toast.error(response.data?.message || 'Failed to update prospect information');
+      }
+    } catch (error) {
+      console.error('Error updating prospect information:', error);
+      toast.error(error.response?.data?.message || 'Failed to update prospect information. Please try again.');
+    } finally {
+      setProspectSubmitting(false);
+    }
+  };
+
 
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -246,13 +595,10 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Company Name</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">MC/DOT</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Country</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">State</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">City</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Phone</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">MC DOT</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Credit Limit</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Remaining Days</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Added On</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
             </tr>
@@ -264,19 +610,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                   <span className="font-medium text-gray-700">{cust.compName}</span>
                 </td>
                 <td className="py-2 px-4">
-                  <span className="font-medium text-gray-700">{cust.mc_dot_no}</span>
-                </td>
-                <td className="py-2 px-4">
-                  <span className="font-medium text-gray-700">{cust.country}</span>
-                </td>
-                <td className="py-2 px-4">
-                  <span className="font-medium text-gray-700">{cust.state}</span>
-                </td>
-                <td className="py-2 px-4">
-                  <span className="font-medium text-gray-700">{cust.city}</span>
-                </td>
-                <td className="py-2 px-4">
-                  <span className="font-medium text-gray-700">{cust.phoneNo}</span>
+                  <span className="font-medium text-gray-700">{cust.mc_dot_no || 'N/A'}</span>
                 </td>
                 <td className="py-2 px-4">
                   <span className="font-medium text-gray-700">{cust.email}</span>
@@ -287,27 +621,57 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                   </span>
                 </td>
                 <td className="py-2 px-4">
+                  <span className={`font-semibold ${
+                    cust.timeline?.daysRemaining !== undefined && cust.timeline.daysRemaining !== null
+                      ? cust.timeline.daysRemaining <= 30
+                        ? 'text-red-600'
+                        : cust.timeline.daysRemaining <= 60
+                        ? 'text-orange-600'
+                        : 'text-green-600'
+                      : 'text-gray-500'
+                  }`}>
+                    {cust.timeline?.daysRemaining !== undefined && cust.timeline.daysRemaining !== null
+                      ? `${cust.timeline.daysRemaining} days`
+                      : 'N/A'}
+                  </span>
+                </td>
+                <td className="py-2 px-4">
                   <span className="font-medium text-gray-700">
                     {cust.addedAt ? new Date(cust.addedAt).toLocaleDateString() : 'N/A'}
                   </span>
                 </td>
                 <td className="py-2 px-4">
-                  <button
-                    onClick={() => onAction?.(cust)}
-                    className={`px-3 py-1 text-xs rounded-md transition-colors border ${
-                      /blacklist/i.test(cust?.status)
-                        ? 'text-green-600 border-green-300 hover:bg-green-50'
-                        : 'text-red-600 border-red-300 hover:bg-red-50'
-                    }`}
-                  >
-                    {/blacklist/i.test(cust?.status) ? 'Remove From Blacklist' : 'Blacklist'}
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => handleView(cust)}
+                      className="px-3 py-1 text-xs rounded-md transition-colors border border-blue-300 text-blue-600 hover:bg-blue-50"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={() => handleFollowUp(cust)}
+                      className="px-3 py-1 text-xs rounded-md transition-colors border border-green-300 text-green-600 hover:bg-green-50 flex items-center gap-1"
+                    >
+                      <MessageSquare size={12} />
+                      Follow Up
+                    </button>
+                    <button
+                      onClick={() => onAction?.(cust)}
+                      className={`px-3 py-1 text-xs rounded-md transition-colors border ${
+                        /blacklist/i.test(cust?.status)
+                          ? 'text-green-600 border-green-300 hover:bg-green-50'
+                          : 'text-red-600 border-red-300 hover:bg-red-50'
+                      }`}
+                    >
+                      {/blacklist/i.test(cust?.status) ? 'Remove From Blacklist' : 'Blacklist'}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
             {pageData.length === 0 && (
               <tr>
-                <td className="py-12 text-center text-gray-500" colSpan="10">
+                <td className="py-12 text-center text-gray-500" colSpan="7">
                   <div className="flex flex-col items-center">
                     <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500 text-lg">No customer data available</p>
@@ -357,9 +721,583 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
           </div>
         </div>
       )}
+
+      {/* View Customer Modal */}
+      {viewModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeViewModal}>
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl flex justify-between items-center sticky top-0 z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <User className="text-white" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Customer Details</h2>
+                  <p className="text-blue-100 text-sm">{viewModal.customer?.compName || 'Loading...'}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeViewModal}
+                className="text-white hover:text-gray-200 text-2xl font-bold transition-colors"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            {viewModal.loading ? (
+              <div className="flex justify-center items-center py-20">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading customer details...</p>
+                </div>
+              </div>
+            ) : viewModal.data ? (
+              <div className="p-6 space-y-6">
+                {/* Basic Information */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Building className="text-blue-600" size={20} />
+                    Basic Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Company Name</p>
+                      <p className="font-semibold text-gray-800">{viewModal.data.compName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">MC/DOT Number</p>
+                      <p className="font-semibold text-gray-800">{viewModal.data.mc_dot_no || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">User Type</p>
+                      <p className="font-semibold text-gray-800 capitalize">{viewModal.data.userType || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Email</p>
+                      <p className="font-semibold text-gray-800 flex items-center gap-1">
+                        <Mail size={14} className="text-gray-400" />
+                        {viewModal.data.email || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Phone Number</p>
+                      <p className="font-semibold text-gray-800 flex items-center gap-1">
+                        <Phone size={14} className="text-gray-400" />
+                        {viewModal.data.phoneNo || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Credit Limit</p>
+                      <p className="font-semibold text-blue-600 flex items-center gap-1">
+                        <CreditCard size={14} />
+                        ${viewModal.data.creditLimit ? parseFloat(viewModal.data.creditLimit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600">Onboard Company</p>
+                          <p className="font-semibold text-gray-800">{viewModal.data.onboardCompany || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Type</p>
+                          <p className="font-semibold text-gray-800 capitalize">{viewModal.data.type || viewModal.data.userType || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address Information */}
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <MapPin className="text-green-600" size={20} />
+                    Address Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <p className="text-sm text-gray-600">Company Address</p>
+                      <p className="font-semibold text-gray-800">{viewModal.data.compAdd || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Country</p>
+                      <p className="font-semibold text-gray-800">{viewModal.data.country || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">State</p>
+                      <p className="font-semibold text-gray-800">{viewModal.data.state || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">City</p>
+                      <p className="font-semibold text-gray-800">{viewModal.data.city || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Zipcode</p>
+                      <p className="font-semibold text-gray-800">{viewModal.data.zipcode || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Prospect Information - Show for both prospect and final_customer */}
+                {(viewModal.data.type === 'prospect' || viewModal.data.userType === 'prospect' || 
+                  viewModal.data.type === 'final_customer' || viewModal.data.userType === 'final_customer') && (
+                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <FileText className="text-amber-600" size={20} />
+                      Prospect Information
+                    </h3>
+                    
+                    {/* Display existing prospect data if available - Handle as array */}
+                    {viewModal.data.prospectDetails && Array.isArray(viewModal.data.prospectDetails) && viewModal.data.prospectDetails.length > 0 && (
+                      <div className="mb-6 space-y-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3">Prospect History ({viewModal.data.prospectDetails.length} entries)</h4>
+                        {viewModal.data.prospectDetails.map((prospect, prospectIdx) => (
+                          <div key={prospect._id || prospectIdx} className="bg-white rounded-lg p-4 border border-amber-200 hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-gray-500">Entry #{prospectIdx + 1}</span>
+                                {prospect.prospectStatus && (
+                                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
+                                    prospect.prospectStatus === 'Hot' ? 'bg-red-100 text-red-800' :
+                                    prospect.prospectStatus === 'Warm' ? 'bg-orange-100 text-orange-800' :
+                                    'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {prospect.prospectStatus}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {prospect.prospectDate ? new Date(prospect.prospectDate).toLocaleString() :
+                                 prospect.createdAt ? new Date(prospect.createdAt).toLocaleString() : 'N/A'}
+                              </div>
+                            </div>
+                            
+                            {prospect.remark && (
+                              <div className="mb-3">
+                                <p className="text-xs text-gray-600 mb-1">Remark:</p>
+                                <p className="text-sm text-gray-800 whitespace-pre-wrap">{prospect.remark}</p>
+                              </div>
+                            )}
+                            
+                            {prospect.attachments && Array.isArray(prospect.attachments) && prospect.attachments.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-amber-100">
+                                <p className="text-xs text-gray-600 mb-2">Attachments ({prospect.attachments.length}):</p>
+                                <div className="space-y-2">
+                                  {prospect.attachments.map((attachment, attachIdx) => {
+                                    // Use filename to construct correct URL, fallback to path if filename not available
+                                    const attachmentUrl = attachment.filename 
+                                      ? `https://vpl-freight-images.s3.eu-north-1.amazonaws.com/${attachment.filename}`
+                                      : attachment.path;
+                                    
+                                    return (
+                                      <div key={attachment._id || attachIdx} className="flex items-center gap-2">
+                                        <a 
+                                          href={attachmentUrl} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                                        >
+                                          <FileText size={14} />
+                                          {attachment.originalName || attachment.filename || 'View Attachment'}
+                                        </a>
+                                        {attachment.size && (
+                                          <span className="text-xs text-gray-500">
+                                            ({(attachment.size / 1024).toFixed(2)} KB)
+                                          </span>
+                                        )}
+                                        {attachment.uploadedAt && (
+                                          <span className="text-xs text-gray-400">
+                                            • {new Date(attachment.uploadedAt).toLocaleDateString()}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Prospect Form - Disable if type is final_customer */}
+                    {(() => {
+                      const isFinalCustomer = viewModal.data.type === 'final_customer' || viewModal.data.userType === 'final_customer';
+                      return (
+                        <form onSubmit={handleProspectSubmit} className="space-y-4">
+                          {/* Remark */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Remarks <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                              name="remark"
+                              value={prospectForm.remark}
+                              onChange={handleProspectInput}
+                              placeholder="Enter prospect remarks..."
+                              rows={4}
+                              disabled={isFinalCustomer}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all resize-none ${
+                                prospectErrors.remark ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                              } ${isFinalCustomer ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''}`}
+                            />
+                            {prospectErrors.remark && (
+                              <p className="text-red-500 text-xs mt-1">{prospectErrors.remark}</p>
+                            )}
+                          </div>
+
+                          {/* Prospect Status */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Prospect Status <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="prospectStatus"
+                              value={prospectForm.prospectStatus}
+                              onChange={handleProspectInput}
+                              disabled={isFinalCustomer}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all appearance-none bg-white ${
+                                prospectErrors.prospectStatus ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                              } ${isFinalCustomer ? 'bg-gray-100 cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                            >
+                              <option value="Warm">Warm</option>
+                              <option value="Hot">Hot</option>
+                              <option value="Cold">Cold</option>
+                            </select>
+                            {prospectErrors.prospectStatus && (
+                              <p className="text-red-500 text-xs mt-1">{prospectErrors.prospectStatus}</p>
+                            )}
+                          </div>
+
+                          {/* Attachment */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Attachment (Optional)
+                            </label>
+                            <input
+                              type="file"
+                              name="attachment"
+                              onChange={handleProspectInput}
+                              accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx"
+                              disabled={isFinalCustomer}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all ${
+                                prospectErrors.attachment ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                              } ${isFinalCustomer ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''}`}
+                            />
+                            {prospectForm.attachment && (
+                              <p className="text-xs text-gray-600 mt-1">
+                                Selected: {prospectForm.attachment.name}
+                              </p>
+                            )}
+                            {prospectErrors.attachment && (
+                              <p className="text-red-500 text-xs mt-1">{prospectErrors.attachment}</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">Images/PDF/DOC/DOCX up to 10MB</p>
+                          </div>
+
+                          {/* Submit Button */}
+                          <div className="flex justify-end pt-4 border-t border-amber-200">
+                            <button
+                              type="submit"
+                              disabled={prospectSubmitting || isFinalCustomer}
+                              className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${
+                                (prospectSubmitting || isFinalCustomer)
+                                  ? 'bg-gray-400 cursor-not-allowed'
+                                  : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-lg hover:shadow-xl'
+                              }`}
+                            >
+                              {prospectSubmitting ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  Submitting...
+                                </>
+                              ) : (
+                                <>
+                                  <FileText size={18} />
+                                  Update Prospect Information
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Follow Up History */}
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <MessageSquare className="text-purple-600" size={20} />
+                    Follow Up History
+                    {followUpHistory.data && (
+                      <span className="text-sm font-normal text-gray-600">
+                        ({followUpHistory.data.totalFollowUps || 0} total)
+                      </span>
+                    )}
+                  </h3>
+                  
+                  {followUpHistory.loading ? (
+                    <div className="flex justify-center items-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                    </div>
+                  ) : followUpHistory.data && followUpHistory.data.followUpHistory && followUpHistory.data.followUpHistory.length > 0 ? (
+                    <div className="space-y-4">
+                      {followUpHistory.data.followUpHistory.map((followUp, idx) => (
+                        <div key={followUp._id || idx} className="bg-white rounded-lg p-4 border border-purple-200 hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-1 rounded-full text-xs font-semibold capitalize ${
+                                followUp.followUpMethod === 'call' ? 'bg-blue-100 text-blue-800' :
+                                followUp.followUpMethod === 'email' ? 'bg-green-100 text-green-800' :
+                                followUp.followUpMethod === 'meeting' ? 'bg-purple-100 text-purple-800' :
+                                followUp.followUpMethod === 'whatsapp' ? 'bg-emerald-100 text-emerald-800' :
+                                followUp.followUpMethod === 'visit' ? 'bg-orange-100 text-orange-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {followUp.followUpMethod || 'N/A'}
+                              </span>
+                              {followUp.nextFollowUpDate && (
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+                                  Next: {new Date(followUp.nextFollowUpDate).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {followUp.followUpDate ? new Date(followUp.followUpDate).toLocaleString() : 
+                               followUp.createdAt ? new Date(followUp.createdAt).toLocaleString() : 'N/A'}
+                            </span>
+                          </div>
+                          
+                          <div className="mb-2">
+                            <p className="text-sm text-gray-600 mb-1">Notes:</p>
+                            <p className="text-gray-800 whitespace-pre-wrap">{followUp.followUpNotes || 'No notes'}</p>
+                          </div>
+                          
+                          {followUp.performedBy && (
+                            <div className="mt-3 pt-3 border-t border-purple-100">
+                              <p className="text-xs text-gray-500">
+                                Performed by: <span className="font-semibold text-gray-700">
+                                  {followUp.performedBy.employeeName || 'N/A'} ({followUp.performedBy.empId || 'N/A'})
+                                </span>
+                                {followUp.performedBy.department && (
+                                  <span className="text-gray-500"> - {followUp.performedBy.department}</span>
+                                )}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500">No follow-up history available</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Reassignment History */}
+                {viewModal.data.reassignmentHistory && viewModal.data.reassignmentHistory.length > 0 && (
+                  <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <User className="text-teal-600" size={20} />
+                      Reassignment History
+                    </h3>
+                    <div className="space-y-3">
+                      {viewModal.data.reassignmentHistory.map((reassign, idx) => (
+                        <div key={idx} className="bg-white rounded-lg p-4 border border-teal-200">
+                          <p className="text-sm text-gray-600">Reassignment #{idx + 1}</p>
+                          <p className="font-semibold text-gray-800">{JSON.stringify(reassign, null, 2)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-6 text-center text-gray-500">
+                <p>No data available</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Follow Up Modal */}
+      {followUpModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeFollowUpModal}>
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6 rounded-t-3xl flex justify-between items-center sticky top-0 z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <MessageSquare className="text-white" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Add Follow Up</h2>
+                  <p className="text-green-100 text-sm">{followUpModal.customer?.compName || 'Customer'}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeFollowUpModal}
+                className="text-white hover:text-gray-200 text-2xl font-bold transition-colors"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleFollowUpSubmit} className="p-6 space-y-6">
+              {/* Customer Info */}
+              <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600">Company Name</p>
+                    <p className="font-semibold text-gray-800">{followUpModal.customer?.compName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Email</p>
+                    <p className="font-semibold text-gray-800">{followUpModal.customer?.email || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Phone</p>
+                    <p className="font-semibold text-gray-800">{followUpModal.customer?.phoneNo || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">MC/DOT</p>
+                    <p className="font-semibold text-gray-800">{followUpModal.customer?.mc_dot_no || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Follow Up Method */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Follow Up Method <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={followUpForm.followUpMethod}
+                  onChange={(e) => setFollowUpForm({ ...followUpForm, followUpMethod: e.target.value })}
+                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all ${
+                    followUpErrors.followUpMethod ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                  }`}
+                >
+                  <option value="call">Call</option>
+                  <option value="email">Email</option>
+                  <option value="meeting">Meeting</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="visit">Visit</option>
+                  <option value="other">Other</option>
+                </select>
+                {followUpErrors.followUpMethod && (
+                  <p className="text-red-500 text-xs mt-1">{followUpErrors.followUpMethod}</p>
+                )}
+              </div>
+
+              {/* Follow Up Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Follow Up Notes <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={followUpForm.followUpNotes}
+                  onChange={(e) => setFollowUpForm({ ...followUpForm, followUpNotes: e.target.value })}
+                  placeholder="Enter follow-up notes..."
+                  rows={5}
+                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all resize-none ${
+                    followUpErrors.followUpNotes ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                  }`}
+                />
+                {followUpErrors.followUpNotes && (
+                  <p className="text-red-500 text-xs mt-1">{followUpErrors.followUpNotes}</p>
+                )}
+              </div>
+
+              {/* Follow Up Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Follow Up Date
+                </label>
+                <input
+                  type="datetime-local"
+                  value={followUpForm.followUpDate}
+                  onChange={(e) => setFollowUpForm({ ...followUpForm, followUpDate: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                />
+                <p className="text-xs text-gray-500 mt-1">Leave empty to use current date/time</p>
+              </div>
+
+              {/* Next Follow Up Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Next Follow Up Date (Optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={followUpForm.nextFollowUpDate}
+                  onChange={(e) => setFollowUpForm({ ...followUpForm, nextFollowUpDate: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                />
+                <p className="text-xs text-gray-500 mt-1">Schedule the next follow-up date</p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeFollowUpModal}
+                  disabled={followUpSubmitting}
+                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={followUpSubmitting}
+                  className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${
+                    followUpSubmitting
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
+                  }`}
+                >
+                  {followUpSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare size={18} />
+                      Add Follow Up
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
+
+
+const getToken = () =>
+  sessionStorage.getItem('token') ||
+  localStorage.getItem('token') ||
+  sessionStorage.getItem('authToken') ||
+  localStorage.getItem('authToken') ||
+  null;
 
 
 /* ---------------- Page ---------------- */
@@ -378,14 +1316,6 @@ const initialForm = {
   city: '',
   zipcode: '',
 };
-
-
-const getToken = () =>
-  sessionStorage.getItem('token') ||
-  localStorage.getItem('token') ||
-  sessionStorage.getItem('authToken') ||
-  localStorage.getItem('authToken') ||
-  null;
 
 
 // Regex rules

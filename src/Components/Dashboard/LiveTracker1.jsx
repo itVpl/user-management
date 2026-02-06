@@ -105,6 +105,7 @@ const getRouteColorByStatus = (status) => {
 
 export default function ConsignmentTracker() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [consignments, setConsignments] = useState([]);
   const [selectedShipment, setSelectedShipment] = useState(null);
@@ -174,20 +175,123 @@ export default function ConsignmentTracker() {
       return;
     }
 
-    try {
-      const response = await axios.get(
-        `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson`
-      );
+    // Use overview=full to get detailed route geometry (not simplified)
+    const url = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&alternatives=false`;
+    console.log("🛣️ Fetching route from OSRM:", url);
 
-      if (response.data.routes && response.data.routes.length > 0) {
-        const coordinates = response.data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
-        setRouteCoordinates(coordinates);
+    try {
+      // Use fetch API instead of axios to avoid CORS issues with credentials
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        mode: 'cors', // Explicitly set CORS mode
+        credentials: 'omit', // Don't send credentials
+        headers: {
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const data = await response.json();
+      console.log("✅ OSRM Response:", data);
+
+      // Check for successful response
+      if (data && data.code === 'Ok' && data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        
+        // Check if geometry exists and has coordinates
+        if (route.geometry && route.geometry.coordinates && route.geometry.coordinates.length > 0) {
+          // Convert GeoJSON coordinates [lon, lat] to Leaflet format [lat, lon]
+          const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+          
+          // Ensure we have at least 2 points (start and end)
+          if (coordinates.length >= 2) {
+            console.log("✅ Route coordinates set:", coordinates.length, "points");
+            console.log("✅ Route distance:", route.distance, "meters");
+            console.log("✅ Route duration:", route.duration, "seconds");
+            setRouteCoordinates(coordinates);
+            return; // Successfully set route, exit function
+          } else {
+            console.warn("⚠️ Route has insufficient coordinates:", coordinates.length);
+          }
+        } else {
+          console.warn("⚠️ Route geometry is missing or empty");
+        }
+      } else {
+        // Check if there's an error code
+        if (data && data.code) {
+          console.warn("⚠️ OSRM returned error code:", data.code, data.message || '');
+        } else {
+          console.warn("⚠️ No valid routes found in OSRM response:", data);
+        }
+      }
+      
+      // If we reach here, OSRM didn't provide a valid route
+      // Try alternative: use simplified route or fallback
+      console.warn("⚠️ Falling back to simplified route request");
+      try {
+        const simplifiedUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=simplified&geometries=geojson`;
+        
+        const simplifiedController = new AbortController();
+        const simplifiedTimeoutId = setTimeout(() => simplifiedController.abort(), 10000);
+        
+        const simplifiedResponse = await fetch(simplifiedUrl, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'omit',
+          headers: {
+            'Accept': 'application/json'
+          },
+          signal: simplifiedController.signal
+        });
+
+        clearTimeout(simplifiedTimeoutId);
+
+        if (simplifiedResponse.ok) {
+          const simplifiedData = await simplifiedResponse.json();
+          
+          if (simplifiedData && simplifiedData.routes && simplifiedData.routes.length > 0) {
+            const route = simplifiedData.routes[0];
+            if (route.geometry && route.geometry.coordinates && route.geometry.coordinates.length > 0) {
+              const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+              console.log("✅ Simplified route coordinates set:", coordinates.length, "points");
+              setRouteCoordinates(coordinates);
+              return;
+            }
+          }
+        }
+      } catch (simplifiedError) {
+        console.warn("⚠️ Simplified route also failed:", simplifiedError);
+      }
+      
+      // Last resort: straight line fallback
+      console.warn("📏 Using straight line fallback as last resort");
+      setRouteCoordinates([
+        [origin.lat, origin.lon],
+        [destination.lat, destination.lon]
+      ]);
+      
     } catch (error) {
-      console.error("Error fetching route:", error);
-      // Fallback to straight line if routing fails (only if coordinates are valid)
+      console.error("❌ Error fetching route:", error);
+      console.error("❌ Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        code: error.code
+      });
+      
+      // Only use fallback if it's a network error, not if coordinates are invalid
       if (origin.lat != null && origin.lon != null &&
           destination.lat != null && destination.lon != null) {
+        console.warn("⚠️ OSRM API error - using straight line fallback");
         setRouteCoordinates([
           [origin.lat, origin.lon],
           [destination.lat, destination.lon]
@@ -231,13 +335,29 @@ export default function ConsignmentTracker() {
       }
 
       // Fetch route from current location to nearest point
-      const response = await axios.get(
-        `https://router.project-osrm.org/route/v1/driving/${currentLocation.lon},${currentLocation.lat};${nearestPoint[1]},${nearestPoint[0]}?overview=full&geometries=geojson`
-      );
+      const currentLocationUrl = `https://router.project-osrm.org/route/v1/driving/${currentLocation.lon},${currentLocation.lat};${nearestPoint[1]},${nearestPoint[0]}?overview=full&geometries=geojson`;
+      
+      const currentLocationController = new AbortController();
+      const currentLocationTimeoutId = setTimeout(() => currentLocationController.abort(), 10000);
+      
+      const response = await fetch(currentLocationUrl, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          'Accept': 'application/json'
+        },
+        signal: currentLocationController.signal
+      });
 
-      if (response.data.routes && response.data.routes.length > 0) {
-        const coordinates = response.data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
-        setCurrentLocationRoute(coordinates);
+      clearTimeout(currentLocationTimeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.routes && data.routes.length > 0) {
+          const coordinates = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+          setCurrentLocationRoute(coordinates);
+        }
       }
     } catch (error) {
       console.error("Error fetching current location route:", error);
@@ -257,6 +377,10 @@ export default function ConsignmentTracker() {
 
   const fetchConsignments = async () => {
     try {
+      // Clear previous route coordinates at the start
+      setRouteCoordinates([]);
+      setCurrentLocationRoute([]);
+      
       let res;
 
       // Get auth token for API call
@@ -269,8 +393,8 @@ export default function ConsignmentTracker() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      if (searchTerm.trim()) {
-        res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${searchTerm}`, {
+      if (debouncedSearchTerm.trim()) {
+        res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${debouncedSearchTerm}`, {
           headers: headers
         });
       } else {
@@ -292,8 +416,11 @@ export default function ConsignmentTracker() {
       if (track) {
         // Extract location data from the API structure
         // origins and destinations are directly on tracking, not on track.load
-        const originData = track.origins?.[0];
-        const destinationData = track.destinations?.[0];
+        // Use the LAST origin (final pickup) and FIRST destination (first delivery)
+        const originsArray = track.origins || [];
+        const destinationsArray = track.destinations || [];
+        const originData = originsArray.length > 0 ? originsArray[originsArray.length - 1] : null; // Last origin
+        const destinationData = destinationsArray.length > 0 ? destinationsArray[0] : null; // First destination
         
         // Create proper location names
         const originName = originData ? `${originData.city}, ${originData.state}` : (track.originName || "Origin Location");
@@ -303,16 +430,33 @@ export default function ConsignmentTracker() {
         let originLatLng = null;
         let destinationLatLng = null;
         
-        if (originData && originData.lat && originData.lon) {
+        if (originData && typeof originData.lat === 'number' && typeof originData.lon === 'number' && 
+            originData.lat !== 0 && originData.lon !== 0) {
           originLatLng = { lat: originData.lat, lon: originData.lon };
         } else if (track.originLatLng && track.originLatLng.lat !== 0) {
           originLatLng = track.originLatLng;
         }
         
-        if (destinationData && destinationData.lat && destinationData.lon) {
+        if (destinationData && typeof destinationData.lat === 'number' && typeof destinationData.lon === 'number' && 
+            destinationData.lat !== 0 && destinationData.lon !== 0) {
           destinationLatLng = { lat: destinationData.lat, lon: destinationData.lon };
         } else if (track.destinationLatLng && track.destinationLatLng.lat !== 0) {
           destinationLatLng = track.destinationLatLng;
+        }
+        
+        // Debug logging
+        console.log("📍 Origins array:", originsArray.length, "items");
+        console.log("📍 Destinations array:", destinationsArray.length, "items");
+        console.log("📍 Selected Origin:", originData);
+        console.log("📍 Selected Destination:", destinationData);
+        console.log("📍 Origin LatLng:", originLatLng);
+        console.log("📍 Destination LatLng:", destinationLatLng);
+        
+        // Check if origin and destination are the same (would cause routing issues)
+        if (originLatLng && destinationLatLng && 
+            originLatLng.lat === destinationLatLng.lat && 
+            originLatLng.lon === destinationLatLng.lon) {
+          console.warn("⚠️ Origin and destination are the same - cannot create route");
         }
         
         // Create enhanced tracking data with proper location info
@@ -337,10 +481,22 @@ export default function ConsignmentTracker() {
 
 
         // Fetch the road route if we have valid origin and destination coordinates
-        if (enhancedTrack.originLatLng && enhancedTrack.destinationLatLng) {
-          fetchRoute(enhancedTrack.originLatLng, enhancedTrack.destinationLatLng);
+        if (originLatLng && destinationLatLng) {
+          // Check if origin and destination are exactly the same (within very small threshold)
+          const latDiff = Math.abs(originLatLng.lat - destinationLatLng.lat);
+          const lonDiff = Math.abs(originLatLng.lon - destinationLatLng.lon);
+          const isSameLocation = latDiff < 0.0001 && lonDiff < 0.0001; // Very small threshold (about 11 meters)
+          
+          if (isSameLocation) {
+            console.warn("⚠️ Origin and destination are too close - skipping route fetch");
+            setRouteCoordinates([]);
+          } else {
+            console.log("🛣️ Fetching route with:", { origin: originLatLng, destination: destinationLatLng });
+            fetchRoute(originLatLng, destinationLatLng);
+          }
         } else {
-          console.warn("Invalid coordinates - cannot fetch route");
+          console.warn("❌ Invalid coordinates - cannot fetch route", { originLatLng, destinationLatLng });
+          setRouteCoordinates([]);
         }
 
         // Fetch current location route after main route is loaded
@@ -413,12 +569,32 @@ export default function ConsignmentTracker() {
     }
   };
 
-  // Initial + 10s interval fetch
+  // Debounce searchTerm to prevent multiple API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Initial + 10s interval fetch - use debouncedSearchTerm
   useEffect(() => {
     fetchConsignments();
     const interval = setInterval(fetchConsignments, 30000); // every 30s (reduced from 10s to prevent 429 errors)
     return () => clearInterval(interval);
-  }, [searchTerm]);
+  }, [debouncedSearchTerm]);
+
+  // Debug: Log route coordinates changes
+  useEffect(() => {
+    if (routeCoordinates.length > 0) {
+      console.log("🗺️ Route coordinates updated:", routeCoordinates.length, "points");
+      console.log("🗺️ First point:", routeCoordinates[0]);
+      console.log("🗺️ Last point:", routeCoordinates[routeCoordinates.length - 1]);
+    } else {
+      console.log("🗺️ Route coordinates cleared");
+    }
+  }, [routeCoordinates]);
 
   function RecenterMap({ lat, lng }) {
     const map = useMap();
@@ -545,7 +721,10 @@ export default function ConsignmentTracker() {
         {/* Search Bar */}
         <form
           className="relative mb-8"
-          onSubmit={(e) => { e.preventDefault(); fetchConsignments(); }}
+          onSubmit={(e) => { 
+            e.preventDefault(); 
+            setDebouncedSearchTerm(searchTerm); // Update immediately on submit
+          }}
         >
           {/* Input Field (LEFT ICON REMOVED) */}
           <input
@@ -553,7 +732,12 @@ export default function ConsignmentTracker() {
             placeholder="Search by Shipment Number..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); fetchConsignments(); } }}
+            onKeyDown={(e) => { 
+              if (e.key === 'Enter') { 
+                e.preventDefault(); 
+                setDebouncedSearchTerm(searchTerm); // Update immediately on Enter
+              } 
+            }}
             className="w-full pl-5 pr-16 py-4 border-2 border-white/30 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 bg-white/60 backdrop-blur-xl shadow-lg hover:shadow-xl hover:bg-white/80"
           />
 
@@ -562,7 +746,10 @@ export default function ConsignmentTracker() {
             {searchTerm && (
               <button
                 type="button"
-                onClick={() => { setSearchTerm(''); fetchConsignments(); }}
+                onClick={() => { 
+                  setSearchTerm(''); 
+                  setDebouncedSearchTerm(''); // Clear debounced term immediately
+                }}
                 className="w-8 h-8 bg-gradient-to-br from-red-500 to-pink-500 rounded-xl flex items-center justify-center hover:scale-110 transition-all duration-200 shadow-lg hover:shadow-xl"
                 title="Clear"
               >
@@ -761,12 +948,14 @@ export default function ConsignmentTracker() {
           )}
 
           {/* Main Road Route Polyline */}
-          {routeCoordinates.length > 0 && (
+          {routeCoordinates.length > 0 && trackingData && (
             <Polyline
+              key={`route-${routeCoordinates.length}-${trackingData._id || trackingData.shipmentNumber}`}
               positions={routeCoordinates}
               color={getRouteColorByStatus(trackingData?.status)}
-              weight={4}
-              opacity={0.9}
+              weight={5}
+              opacity={0.8}
+              smoothFactor={1}
             />
           )}
 

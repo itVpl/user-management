@@ -127,6 +127,12 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Team",
       "Team Rating"
     ],
+    "Tracking": [
+      "Tracking"
+    ],
+    "Company Management": [
+      "Sub Company"
+    ],
     "Reports": [
       "Call Data",
       "Call Records (Id)",
@@ -173,6 +179,9 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Assign Load",
       "DO Reassign",
       "Trucker Reassign"
+    ],
+    "Company Management": [
+      "Sub Company"
     ],
     "Communication": [
       "Chat",
@@ -265,6 +274,9 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "All Customers",
       "Daily Task",
       "Tracking"
+    ],
+    "Company Management": [
+      "Sub Company"
     ],
     "Common Modules": [
       "Chat",
@@ -411,6 +423,7 @@ const menuItems = [
   { name: "Fleet", icon: Fleet, whiteIcon: WhiteFleet, path: "/Fleet" },
   { name: "LoadBoard", icon: LoadBoard, whiteIcon: WhiteLoadBoard, path: "/load-board" },
   { name: "Loads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/Loads" },
+  { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
   { name: "Manage Module", icon: ManageModule, whiteIcon: WhiteManageModule, path: "/modules" },
   { name: "Daily Task", icon: DailyTarget, whiteIcon: DailyTargetWhite, path: "/DailyTask" },
   { name: "Call Data", icon: BlueCall, whiteIcon: WhiteCall, path: "/call-dashboard" },
@@ -483,6 +496,7 @@ const menuItems = [
   { name: "All DO Assigned CMT", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-do-assigned-cmt" },
   { name: "Emp Login Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/emp-login-report" },
   { name: "Assigned Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigned-rate-request" },
+  { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
   
   
 ];
