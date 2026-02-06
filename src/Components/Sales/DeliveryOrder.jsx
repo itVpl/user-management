@@ -5284,7 +5284,7 @@ const handleUpdateOrder = async (e) => {
                     onClick={() => handlePageChange(page)}
                     className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
                       currentPage === page
-                        ? 'bg-white border border-gray-200 shadow-sm text-gray-900'
+                        ? 'bg-white border border-black shadow-sm text-black'
                         : 'text-gray-600 hover:bg-gray-50'
                     }`}
                   >
