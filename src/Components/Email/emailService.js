@@ -304,6 +304,59 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
   }
 };
 
+// Fetch emails by label ID
+export const fetchEmailsByLabel = async (labelId, accountId, folder = null) => {
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('Please login to access emails');
+  }
+
+  // Build query parameters - include details for full email information
+  const params = new URLSearchParams({
+    includeDetails: 'true' // Get full email details including attachments, content preview, etc.
+  });
+  
+  if (accountId) {
+    params.append('emailAccountId', accountId);
+  }
+  
+  // Add folder filter if provided (INBOX or SENT)
+  if (folder) {
+    params.append('folder', folder.toUpperCase());
+  }
+
+  const labelUrl = `${API_BASE_URL}/email-labels/${labelId}/emails?${params.toString()}`;
+
+  try {
+    const response = await axios.get(
+      labelUrl,
+      { 
+        headers: getAuthHeaders(),
+        timeout: 35000 // 35 seconds timeout
+      }
+    );
+
+    console.log('Fetched emails by label:', {
+      labelId,
+      folder,
+      emailCount: response.data?.emails?.length || 0
+    });
+    
+    return response.data;
+  } catch (error) {
+    // Handle timeout errors
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      throw new Error('Request timed out. The email server is taking too long to respond. Please try again.');
+    }
+    // Handle backend timeout errors
+    if (error.response?.data?.message?.includes('timeout') || error.response?.data?.message?.includes('timed out')) {
+      throw new Error(error.response.data.message || 'IMAP request timed out. Please try again.');
+    }
+    throw error;
+  }
+};
+
 // Parse date string from API format: "DD/MM/YYYY, HH:MM:SS am/pm"
 const parseEmailDate = (dateString) => {
   if (!dateString) {
@@ -511,7 +564,8 @@ export const transformEmail = (email, index) => {
     attachmentCount: email.attachmentCount || (email.attachments ? email.attachments.length : 0),
     messageId: email.messageId || email.messageID || email.message_id || null, // Preserve messageId for threading
     inReplyTo: email.inReplyTo || email.inReplyToHeader || null, // Preserve In-Reply-To header for threading
-    references: email.references || email.referencesHeader || null // Preserve References header for threading
+    references: email.references || email.referencesHeader || null, // Preserve References header for threading
+    labels: email.labels || [] // Preserve labels from API response
   };
 };
 

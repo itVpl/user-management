@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Box,
   List,
@@ -11,6 +11,7 @@ import {
   Avatar,
   Chip,
   Button,
+  Alert,
 } from '@mui/material';
 import {
   Star as StarIcon,
@@ -22,6 +23,8 @@ import {
   TableChart as ExcelIcon,
   InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
+import { fetchEmailsByLabel as fetchEmailsByLabelAPI, transformEmail } from './emailService';
+import { groupEmailsByThread } from './threadUtils';
 
 // Get file type icon component based on contentType or filename
 const getFileIconComponent = (attachment) => {
@@ -179,8 +182,8 @@ const groupEmailsByDate = (emailList) => {
 };
 
 const EmailList = ({ 
-  emails, 
-  loading, 
+  emails: emailsProp, // Regular emails from parent (when no label filter)
+  loading: loadingProp, 
   loadingMore,
   hasMore,
   onLoadMore,
@@ -188,11 +191,209 @@ const EmailList = ({
   onEmailSelect, 
   onToggleStar,
   formatTimestamp,
-  userEmail = '' // User's email address to show "me" instead
+  userEmail = '', // User's email address to show "me" instead
+  // ⭐ NEW PROPS for label filtering
+  selectedLabelId = null,
+  folder = 'INBOX', // 'INBOX' or 'SENT'
+  emailAccountId = null,
+  onClearLabelFilter = null // Callback to clear label filter
 }) => {
   const scrollContainerRef = useRef(null);
   const loadingTriggerRef = useRef(null);
   const [selectedEmails, setSelectedEmails] = useState(new Set());
+  
+  // ⭐ Internal state for label-filtered emails
+  const [filteredEmails, setFilteredEmails] = useState([]);
+  const [filteredLoading, setFilteredLoading] = useState(false);
+  const [filterError, setFilterError] = useState(null);
+  
+  // ⭐ Determine which emails and loading state to use
+  const isLabelFiltered = selectedLabelId !== null;
+  const emails = isLabelFiltered ? filteredEmails : emailsProp;
+  const loading = isLabelFiltered ? filteredLoading : loadingProp;
+
+  // ⭐ THE KEY FUNCTION: Fetch emails filtered by label
+  const fetchEmailsByLabel = useCallback(async () => {
+    if (!selectedLabelId || !emailAccountId) {
+      setFilteredEmails([]);
+      setFilteredLoading(false);
+      return;
+    }
+
+    try {
+      setFilteredLoading(true);
+      console.log('EmailList: Fetching emails for label:', {
+        selectedLabelId,
+        emailAccountId,
+        folder
+      });
+
+      // Call API to get emails for this label
+      let response = await fetchEmailsByLabelAPI(selectedLabelId, emailAccountId, folder);
+
+      console.log('EmailList: API Response (with folder):', {
+        success: response?.success,
+        emailCount: response?.emails?.length || 0,
+        dataEmailCount: response?.data?.emails?.length || 0,
+        count: response?.count,
+        folder: folder,
+        responseKeys: Object.keys(response || {}),
+        fullResponse: response
+      });
+
+      // API returns response.data from axios, so response is already the data object
+      // Structure: { emails: [...], count: 1, totalMappings: 1, message: "..." }
+      let fetchedEmails = response?.emails || response?.data?.emails || [];
+      
+      console.log('EmailList: Extracted emails array:', {
+        length: fetchedEmails.length,
+        firstEmail: fetchedEmails[0] ? {
+          uid: fetchedEmails[0].uid,
+          subject: fetchedEmails[0].subject,
+          folder: fetchedEmails[0].folder,
+          labels: fetchedEmails[0].labels
+        } : null
+      });
+
+      // If no emails found with folder filter, try without folder filter
+      // (in case the email was labeled but folder info doesn't match)
+      if (fetchedEmails.length === 0 && folder) {
+        console.log('EmailList: No emails found with folder filter, trying without folder...');
+        try {
+          response = await fetchEmailsByLabelAPI(selectedLabelId, emailAccountId, null);
+          console.log('EmailList: API Response (without folder):', {
+            success: response?.success,
+            emailCount: response?.emails?.length || 0,
+            dataEmailCount: response?.data?.emails?.length || 0,
+            fullResponse: response
+          });
+          fetchedEmails = response?.emails || response?.data?.emails || [];
+          
+          if (fetchedEmails.length > 0) {
+            console.log('EmailList: Found emails without folder filter! Filtering by folder in frontend...');
+            // Filter by folder in frontend
+            fetchedEmails = fetchedEmails.filter(email => {
+              const emailFolder = email.folder?.toUpperCase() || 'INBOX';
+              return emailFolder === folder.toUpperCase();
+            });
+            console.log(`EmailList: After frontend folder filter: ${fetchedEmails.length} emails`);
+          }
+        } catch (fallbackErr) {
+          console.warn('EmailList: Fallback fetch without folder also failed:', fallbackErr);
+        }
+      }
+
+      console.log('EmailList: Fetched emails array:', fetchedEmails);
+
+      if (fetchedEmails.length > 0) {
+        // Transform emails using the same transformEmail function
+        const transformedEmails = fetchedEmails.map((email, index) => {
+          const transformed = transformEmail(email, index);
+          
+          // Preserve labels from API response
+          return {
+            ...transformed,
+            labels: email.labels || []
+          };
+        });
+
+        console.log('EmailList: Transformed emails:', transformedEmails.length);
+
+        // For inbox emails, group by thread (same as regular inbox emails)
+        // For sent emails, keep as individual emails
+        let finalEmails = [];
+        if (folder === 'INBOX' || folder === 'inbox') {
+          // Group emails by thread (Gmail-style conversation threading)
+          const threadedEmails = groupEmailsByThread(transformedEmails);
+          console.log(`EmailList: Grouped ${transformedEmails.length} label-filtered emails into ${threadedEmails.length} threads`, {
+            beforeThreading: transformedEmails.map(e => ({ uid: e.uid, subject: e.subject })),
+            afterThreading: threadedEmails.map(e => ({ uid: e.uid, subject: e.subject, messageCount: e.messageCount }))
+          });
+          
+          // If threading results in empty array, use original emails
+          if (threadedEmails.length === 0 && transformedEmails.length > 0) {
+            console.warn('EmailList: Threading resulted in empty array, using original emails');
+            finalEmails = transformedEmails;
+          } else {
+            finalEmails = threadedEmails;
+          }
+          console.log('EmailList: Setting filtered emails (threaded):', finalEmails.length);
+        } else {
+          // For sent emails, keep as individual emails (no threading)
+          // Deduplicate by UID
+          const seenUids = new Set();
+          const uniqueEmails = transformedEmails.filter(email => {
+            const uid = String(email.uid || email.id || '');
+            if (!uid || uid === 'undefined' || uid === 'null') return true;
+            if (seenUids.has(uid)) {
+              return false;
+            }
+            seenUids.add(uid);
+            return true;
+          });
+          console.log(`EmailList: Deduplicated sent emails: ${transformedEmails.length} → ${uniqueEmails.length}`);
+          finalEmails = uniqueEmails;
+          console.log('EmailList: Setting filtered emails (sent):', finalEmails.length);
+        }
+        
+        // Final verification before setting state
+        console.log('EmailList: Final filtered emails to set:', {
+          count: finalEmails.length,
+          folder: folder,
+          firstEmail: finalEmails[0] ? {
+            uid: finalEmails[0].uid,
+            subject: finalEmails[0].subject,
+            isThread: finalEmails[0].isThread,
+            messageCount: finalEmails[0].messageCount
+          } : null
+        });
+        setFilteredEmails(finalEmails);
+      } else {
+        // No emails with this label
+        console.warn('EmailList: No emails found with label:', {
+          selectedLabelId,
+          emailAccountId,
+          folder,
+          responseStructure: response
+        });
+        setFilteredEmails([]);
+        setFilterError(null); // Clear error if API returns empty array (this is valid)
+      }
+    } catch (err) {
+      console.error('EmailList: Error fetching emails by label:', {
+        error: err,
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        selectedLabelId,
+        emailAccountId,
+        folder
+      });
+      setFilteredEmails([]);
+      setFilterError(err.message || 'Failed to load emails by label');
+    } finally {
+      setFilteredLoading(false);
+    }
+  }, [selectedLabelId, emailAccountId, folder]);
+
+  // ⭐ KEY: Watch for label selection changes and fetch filtered emails
+  useEffect(() => {
+    console.log('EmailList: selectedLabelId changed:', {
+      selectedLabelId,
+      emailAccountId,
+      folder
+    });
+    
+    if (selectedLabelId && emailAccountId) {
+      // Label is selected → Fetch filtered emails
+      fetchEmailsByLabel();
+    } else if (!selectedLabelId) {
+      // No label selected → Clear filtered emails (use emailsProp from parent)
+      setFilteredEmails([]);
+      setFilteredLoading(false);
+      setFilterError(null);
+    }
+  }, [selectedLabelId, emailAccountId, folder, fetchEmailsByLabel]);
 
   // Infinite scroll handler
   useEffect(() => {
@@ -253,7 +454,49 @@ const EmailList = ({
   const groupedEmails = groupEmailsByDate(emails);
 
   return (
-    <List ref={scrollContainerRef} sx={{ p: 0, backgroundColor: 'white' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Filter Banner - Show when label is selected */}
+      {selectedLabelId && (
+        <>
+          <Alert 
+            severity="info" 
+            sx={{ m: 2, mb: 1 }} 
+            action={
+              onClearLabelFilter && (
+                <Button 
+                  color="inherit" 
+                  size="small" 
+                  onClick={onClearLabelFilter}
+                >
+                  Clear Filter
+                </Button>
+              )
+            }
+          >
+            Showing emails filtered by label. Emails are displayed in the same format as regular listing.
+          </Alert>
+          {/* Show error if API call failed */}
+          {filterError && (
+            <Alert severity="error" sx={{ m: 2, mb: 1 }}>
+              Error loading emails: {filterError}
+            </Alert>
+          )}
+        </>
+      )}
+
+      {/* Empty State */}
+      {!loading && emails.length === 0 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, flexGrow: 1 }}>
+          <Typography variant="body2" sx={{ color: '#5f6368' }}>
+            {selectedLabelId
+              ? 'No emails found with this label'
+              : 'No emails found'}
+          </Typography>
+        </Box>
+      )}
+
+      {/* Email List */}
+      <List ref={scrollContainerRef} sx={{ p: 0, backgroundColor: 'white', flexGrow: 1, overflow: 'auto' }}>
       {groupedEmails.map((group) => (
         <React.Fragment key={group.label}>
           {/* Date Header - Gmail style */}
@@ -535,7 +778,7 @@ const EmailList = ({
                   
                   {/* Subject and Preview */}
                   <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <Typography 
                         variant="body2" 
                         sx={{ 
@@ -549,6 +792,33 @@ const EmailList = ({
                       >
                         {email.subject || '(No Subject)'}
                       </Typography>
+                      
+                      {/* Email Labels */}
+                      {email.labels && email.labels.length > 0 && (
+                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {email.labels.map((label, labelIndex) => (
+                            <Chip
+                              key={label.id || label._id || labelIndex}
+                              label={label.name}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                backgroundColor: label.color || '#667eea',
+                                color: '#ffffff',
+                                borderRadius: 1,
+                                '& .MuiChip-label': {
+                                  px: 0.75,
+                                  py: 0
+                                },
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                      
                       {(email.contentPreview || email.body) && (
                         <Typography 
                           variant="body2" 
@@ -713,6 +983,7 @@ const EmailList = ({
         </Box>
       )}
     </List>
+    </Box>
   );
 };
 

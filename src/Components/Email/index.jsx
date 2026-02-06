@@ -29,6 +29,7 @@ import EmailList from './EmailList';
 import EmailViewer from './EmailViewer';
 import AccountSwitcher from './AccountSwitcher';
 import AccountManagementDialog from './AccountManagementDialog';
+import LabelsSidebar from './LabelsSidebar';
 import { 
   createEmailAccount, 
   getAllEmailAccounts,
@@ -38,6 +39,7 @@ import {
   fetchInboxEmails, 
   fetchSentEmails, 
   fetchEmailByUid, 
+  fetchEmailsByLabel,
   transformEmail, 
   sendEmail, 
   sendEmailWithAttachments, 
@@ -102,6 +104,9 @@ const Email = () => {
   const [replyError, setReplyError] = useState(null);
   const [replyToEmail, setReplyToEmail] = useState(null);
 
+  // Label filtering state
+  const [selectedLabelId, setSelectedLabelId] = useState(null);
+
   // Tab configuration
   const tabs = [
     { label: 'Inbox', icon: <InboxIcon />, count: emails.filter(e => !e.isRead && e.folder === 'inbox').length },
@@ -133,6 +138,23 @@ const Email = () => {
     setHasMore(true);
     setEmails([]);
   }, [selectedTab]);
+
+  // Load emails when label selection changes
+  // Note: EmailList component now handles label filtering internally
+  // This useEffect only handles reloading normal emails when label filter is cleared
+  useEffect(() => {
+    if (!selectedLabelId && selectedAccountId) {
+      // Clear label filter - reload normal emails
+      setCurrentPage(1);
+      setHasMore(true);
+      setEmails([]);
+      if (selectedTab === 0) {
+        loadEmails(1, true);
+      } else {
+        loadSentEmails(1, true);
+      }
+    }
+  }, [selectedLabelId, selectedAccountId]);
 
   // Load email accounts
   const loadEmailAccounts = async () => {
@@ -328,7 +350,9 @@ const Email = () => {
             // Preserve threading headers
             messageId: email.messageId || email.messageID || email.message_id || transformed.messageId || null,
             inReplyTo: email.inReplyTo || email.inReplyToHeader || null,
-            references: email.references || email.referencesHeader || null
+            references: email.references || email.referencesHeader || null,
+            // Preserve labels from API response
+            labels: email.labels || transformed.labels || []
           };
           
           // Log attachment data for first few emails to debug
@@ -510,9 +534,11 @@ const Email = () => {
       console.error('Error loading emails:', err);
       const errorMessage = err.message || 'Failed to load emails';
       
-      // Check if it's a timeout error
+      // Don't show timeout errors to users - silently handle them
       if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
-        setError(`⏱️ ${errorMessage}. The email server may be slow. You can try refreshing.`);
+        // Silently handle timeout - don't show error message
+        console.warn('Email request timed out, but continuing silently');
+        setError(null);
       } else {
         setError(errorMessage);
       }
@@ -611,7 +637,9 @@ const Email = () => {
             // Preserve attachments from API response with download URLs
             attachments: email.attachments || transformed.attachments || [],
             hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : transformed.hasAttachments,
-            attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : transformed.attachmentCount
+            attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : transformed.attachmentCount,
+            // Preserve labels from API response
+            labels: email.labels || transformed.labels || []
           };
         });
 
@@ -673,9 +701,11 @@ const Email = () => {
       console.error('Error loading sent emails:', err);
       const errorMessage = err.message || 'Failed to load sent emails';
       
-      // Check if it's a timeout error
+      // Don't show timeout errors to users - silently handle them
       if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
-        setError(`⏱️ ${errorMessage}. The email server may be slow. You can try refreshing.`);
+        // Silently handle timeout - don't show error message
+        console.warn('Sent email request timed out, but continuing silently');
+        setError(null);
       } else {
         setError(errorMessage);
       }
@@ -706,6 +736,109 @@ const Email = () => {
     const nextPage = currentPage + 1;
     setCurrentPage(nextPage);
     await loadEmails(nextPage, false);
+  };
+
+  // Load emails filtered by label
+  const loadEmailsByLabel = async () => {
+    if (!selectedAccountId || !selectedLabelId) {
+      setEmails([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Determine folder based on selected tab
+      const folder = selectedTab === 0 ? 'INBOX' : 'SENT';
+      
+      // Fetch emails by label
+      const response = await fetchEmailsByLabel(selectedLabelId, selectedAccountId, folder);
+
+      // Extract emails from response
+      const fetchedEmails = response?.emails || response?.data?.emails || [];
+
+      console.log(`📬 Loaded emails by label: ${fetchedEmails.length} emails (label: ${selectedLabelId}, folder: ${folder})`);
+      
+      if (fetchedEmails.length > 0) {
+        // Transform emails using the same transformEmail function
+        const transformedEmails = fetchedEmails.map((email, index) => {
+          const transformed = transformEmail(email, index);
+          
+          // Preserve attachment data from API response (same as regular emails)
+          const emailWithAttachments = {
+            ...transformed,
+            // Preserve attachments from API response
+            attachments: email.attachments || transformed.attachments || [],
+            hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : transformed.hasAttachments,
+            attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : transformed.attachmentCount,
+            // Preserve threading headers
+            messageId: email.messageId || email.messageID || email.message_id || transformed.messageId || null,
+            inReplyTo: email.inReplyTo || email.inReplyToHeader || null,
+            references: email.references || email.referencesHeader || null,
+            // Preserve labels from API response
+            labels: email.labels || []
+          };
+          
+          return emailWithAttachments;
+        });
+
+        // For inbox emails, group by thread (same as regular inbox emails)
+        // For sent emails, keep as individual emails (same as regular sent emails)
+        if (folder === 'INBOX') {
+          // Group emails by thread (Gmail-style conversation threading)
+          const threadedEmails = groupEmailsByThread(transformedEmails);
+          
+          console.log(`📧 Grouped ${transformedEmails.length} label-filtered emails into ${threadedEmails.length} threads`);
+          
+          // Deduplicate by UID
+          const uniqueThreads = deduplicateThreadsByUid(threadedEmails);
+          console.log(`✅ Deduplicated label-filtered emails: ${threadedEmails.length} → ${uniqueThreads.length} threads`);
+          
+          setEmails(uniqueThreads);
+        } else {
+          // For sent emails, keep as individual emails (no threading)
+          // Deduplicate by UID
+          const seenUids = new Set();
+          const uniqueEmails = transformedEmails.filter(email => {
+            const uid = String(email.uid || email.id || '');
+            if (!uid || uid === 'undefined' || uid === 'null') return true;
+            if (seenUids.has(uid)) {
+              console.warn(`⚠️ Duplicate label-filtered sent email (UID: ${uid}):`, email.subject);
+              return false;
+            }
+            seenUids.add(uid);
+            return true;
+          });
+          
+          console.log(`✅ Deduplicated label-filtered sent emails: ${transformedEmails.length} → ${uniqueEmails.length}`);
+          setEmails(uniqueEmails);
+        }
+        
+        // Label filtering doesn't support pagination yet
+        setHasMore(false);
+      } else {
+        setEmails([]);
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error('Error loading emails by label:', err);
+      const errorMessage = err.message || 'Failed to load emails by label';
+      
+      // Don't show timeout errors to users - silently handle them
+      if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
+        console.warn('Label email request timed out, but continuing silently');
+        setError(null);
+      } else {
+        setError(errorMessage);
+      }
+      
+      setEmails([]);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
   };
 
   const handleCreateAccount = async () => {
@@ -790,6 +923,12 @@ const Email = () => {
     setHasMore(true);
     setEmails([]);
     
+    // If label is selected, reload emails by label with new folder
+    if (selectedLabelId) {
+      // The useEffect will handle reloading emails by label
+      return;
+    }
+    
     // Load emails based on selected tab
     if (newValue === 0) {
       // Inbox tab
@@ -798,6 +937,18 @@ const Email = () => {
       // Sent tab
       loadSentEmails(1, true);
     }
+  };
+
+  // Handle label click - filter emails by label
+  const handleLabelClick = (labelId) => {
+    setSelectedLabelId(labelId);
+    // The useEffect will handle loading emails by label
+  };
+
+  // Clear label filter
+  const handleClearLabelFilter = () => {
+    setSelectedLabelId(null);
+    // The useEffect will handle reloading normal emails
   };
 
   const handleEmailSelect = async (email) => {
@@ -1351,10 +1502,12 @@ const Email = () => {
         console.error('Error fetching full email:', err);
         console.error('Error details:', err.response?.data || err.message);
         
-        // Show user-friendly error message
+        // Show user-friendly error message (but not for timeouts)
         const errorMessage = err.message || 'Failed to load email details';
         if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
-          setError('⏱️ Email request timed out. Showing available content. Thread view may be limited.');
+          // Silently handle timeout - don't show error message
+          console.warn('Email detail request timed out, but continuing silently');
+          setError(null);
         } else {
           setError(`⚠️ ${errorMessage}. Showing available content.`);
         }
@@ -1670,14 +1823,17 @@ const Email = () => {
                 size="small" 
                 onClick={() => {
                   setError(null);
-                  if (selectedTab === 0) {
-                    setCurrentPage(1);
-                    setHasMore(true);
-                    loadEmails(1, true);
-                  } else {
-                    setCurrentPage(1);
-                    setHasMore(true);
-                    loadSentEmails(1, true);
+                  // EmailList handles its own retry for label-filtered emails
+                  if (!selectedLabelId) {
+                    if (selectedTab === 0) {
+                      setCurrentPage(1);
+                      setHasMore(true);
+                      loadEmails(1, true);
+                    } else {
+                      setCurrentPage(1);
+                      setHasMore(true);
+                      loadSentEmails(1, true);
+                    }
                   }
                 }}
               >
@@ -1689,8 +1845,6 @@ const Email = () => {
           {error}
         </Alert>
       )}
-
-
 
       {/* Main Content Area */}
       <Box sx={{ 
@@ -1798,6 +1952,13 @@ const Email = () => {
               </Box>
             ))}
           </Box>
+
+          {/* Labels Sidebar */}
+          <LabelsSidebar
+            emailAccountId={selectedAccountId}
+            onLabelClick={handleLabelClick}
+            selectedLabelId={selectedLabelId}
+          />
         </Box>
 
         {/* Email List */}
@@ -1813,8 +1974,8 @@ const Email = () => {
           <Box sx={{ flexGrow: 1, overflow: 'auto', width: '100%' }}>
             <EmailList
               userEmail={emailAccounts.find(acc => acc._id === selectedAccountId)?.email || ''}
-              emails={getFilteredEmails()}
-              loading={loading}
+              emails={selectedLabelId ? [] : getFilteredEmails()} // Only pass emails when not filtering by label
+              loading={selectedLabelId ? false : loading} // EmailList handles its own loading when filtering
               loadingMore={loadingMore}
               hasMore={hasMore}
               onLoadMore={selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails}
@@ -1822,6 +1983,11 @@ const Email = () => {
               onEmailSelect={handleEmailSelect}
               onToggleStar={toggleStar}
               formatTimestamp={formatTimestamp}
+              // ⭐ NEW PROPS for label filtering
+              selectedLabelId={selectedLabelId}
+              folder={selectedTab === 0 ? 'INBOX' : 'SENT'}
+              emailAccountId={selectedAccountId}
+              onClearLabelFilter={handleClearLabelFilter}
             />
           </Box>
         </Box>
