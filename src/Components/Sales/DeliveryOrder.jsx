@@ -4851,43 +4851,46 @@ const handleUpdateOrder = async (e) => {
   return (
     <div className="p-6 bg-white min-h-screen">
       {/* Top Section Container with Outer Border */}
-      <div className="flex flex-col gap-6 mb-8 border border-gray-200 rounded-xl p-6 bg-white">
+      <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
         
         {/* Row 1: Stats & Actions */}
         <div className="flex flex-col xl:flex-row gap-6">
           
           {/* Left: Stats Cards - Flexible Grid */}
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Total Orders */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6 flex justify-between items-center h-[100px]">
-               <div>
-                  <p className="text-gray-500 font-medium mb-1">Total Orders</p>
-                  <p className="text-3xl font-bold text-gray-800">{filteredAllOrdersForCount.length}</p>
-               </div>
-               <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center">
-                  <Bell className="text-indigo-500" size={24} />
-               </div>
-            </div>
+  {/* Total Orders */}
+  <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+      {filteredAllOrdersForCount.length}
+    </div>
 
-            {/* Today */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6 flex justify-between items-center h-[100px]">
-               <div>
-                  <p className="text-gray-500 font-medium mb-1">Today</p>
-                  <p className="text-3xl font-bold text-gray-800">
-                      {(() => {
-                          const count = filteredAllOrdersForCount.filter(order => order.createdAt === new Date().toISOString().split('T')[0]).length;
-                          return count < 10 ? `${count}` : count;
-                      })()}
-                  </p>
-               </div>
-               <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center">
-                  <Bell className="text-indigo-500" size={24} />
-               </div>
-            </div>
-          </div>
+    <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+      Total Orders
+    </div>
+  </div>
+
+  {/* Today */}
+  <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+      {(() => {
+        const count = filteredAllOrdersForCount.filter(
+          order =>
+            order.createdAt ===
+            new Date().toISOString().split("T")[0]
+        ).length
+        return count
+      })()}
+    </div>
+
+    <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+      Today
+    </div>
+  </div>
+</div>
+
 
           {/* Right Column: Actions (Add Button & Date Range) */}
-          <div className="flex flex-col gap-4 w-full xl:w-[350px]">
+          <div className="flex flex-col gap-1 w-full xl:w-[350px]">
               {/* Add Button */}
               <button
                 onClick={() => {
@@ -4895,7 +4898,7 @@ const handleUpdateOrder = async (e) => {
                   setEditingOrder(null);
                   setShowAddOrderForm(true);
                 }}
-                className="flex items-center justify-between gap-4 px-6 h-[46px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
+                className="flex items-center justify-between gap-4 px-6 h-[40px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
               >
                 <span>Add Delivery Order</span>
                 <PlusCircle size={20} />
@@ -4906,7 +4909,7 @@ const handleUpdateOrder = async (e) => {
                   <button
                       type="button"
                       onClick={() => setShowPresetMenu(v => !v)}
-                      className="w-full text-left px-4 h-[46px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
+                      className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
                   >
                       <span className={!range.startDate || !range.endDate ? 'text-gray-800' : 'text-gray-800'}>
                       {range.startDate && range.endDate 
@@ -5142,14 +5145,14 @@ const handleUpdateOrder = async (e) => {
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">Load ID</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">Bill to</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">Carrier Name</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">Work Order No</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load ID</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Bill to</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Carrier Name</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Work Order No</th>
                   {/* <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">SHIPMENT NO</th> */}
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">Container No</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">Created By</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">Action</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Container No</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created By</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -5166,16 +5169,16 @@ const handleUpdateOrder = async (e) => {
                   return (
                     <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="py-4 px-4">
-                        <span className="text-sm text-gray-600">{order.doNum}</span>
+                        <span className="text-sm text-gray-600 font-medium">{order.doNum}</span>
                       </td>
                       <td className="py-4 px-4">
                         <span className="text-sm font-medium text-gray-800">{order.clientName}</span>
                       </td>
                       <td className="py-4 px-4">
-                        <span className="text-sm font-bold text-gray-800">{order.carrierName}</span>
+                        <span className="text-sm font-medium text-gray-800">{order.carrierName}</span>
                       </td>
                       <td className="py-4 px-4">
-                        <span className="text-sm font-bold text-gray-800">{workOrderNo}</span>
+                        <span className="text-sm font-medium text-gray-800">{workOrderNo}</span>
                       </td>
                       {/* <td className="py-4 px-4">
                         <span className="text-sm text-gray-600">{shipmentNo}</span>
@@ -5184,7 +5187,7 @@ const handleUpdateOrder = async (e) => {
                         <span className="text-sm font-medium text-gray-800">{containerNo}</span>
                       </td>
                       <td className="py-4 px-4">
-                        <span className="text-sm font-bold text-gray-800">{createdByDisplay}</span>
+                        <span className="text-sm font-medium text-gray-800">{createdByDisplay}</span>
                       </td>
                     <td className="py-4 px-4">
                       <div className="flex gap-3">
@@ -5220,7 +5223,7 @@ const handleUpdateOrder = async (e) => {
                                 onClick={() => openDeleteModal(order)}
                                 className="px-4 py-1 rounded border border-red-500 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors min-w-[70px]"
                               >
-                                Reject
+                                Delete
                               </button>
                             );
                           }

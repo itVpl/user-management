@@ -4430,9 +4430,9 @@ export default function Loads() {
   </span>
 
   {/* RIGHT: bell */}
-  <div className="flex justify-end">
+  {/* <div className="flex justify-end">
     <Bell className="text-red-500" size={20} fill="currentColor" />
-  </div>
+  </div> */}
 </div>
 
 
@@ -4457,9 +4457,9 @@ export default function Loads() {
   </span>
 
   {/* RIGHT: bell */}
-  <div className="flex justify-end">
+  {/* <div className="flex justify-end">
     <Bell className="text-red-500" size={20} fill="currentColor" />
-  </div>
+  </div> */}
 </div>
 
 
@@ -4486,9 +4486,9 @@ export default function Loads() {
               </span>
 
               {/* RIGHT: bell */}
-              <div className="flex justify-end">
+              {/* <div className="flex justify-end">
                 <Bell className="text-red-500" size={20} fill="currentColor" />
-              </div>
+              </div> */}
             </div>
           </div>
 
@@ -4771,7 +4771,7 @@ export default function Loads() {
                           onClick={() => handleDeleteLoad(load)}
                           className="px-3 py-1 border border-red-500 text-red-500 rounded-md text-sm font-medium hover:bg-red-50 transition-colors"
                         >
-                          Reject
+                          Delete
                         </button>
                       </div>
                     </td>
