@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -19,9 +19,17 @@ import {
   Send as SendIcon,
 } from '@mui/icons-material';
 import API_CONFIG from '../../config/api';
+import LabelActions from './LabelActions';
 
 const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, emailAccountId, folder, emailAccounts = [] }) => {
+  const [refreshKey, setRefreshKey] = useState(0);
+  
   if (!selectedEmail) return null;
+
+  const handleLabelUpdate = () => {
+    // Refresh the email to get updated labels
+    setRefreshKey(prev => prev + 1);
+  };
 
   // Get authentication token
   const getAuthToken = () => {
@@ -330,166 +338,108 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
       minWidth: 0,
       position: 'relative'
     }}>
-      {/* Header - Clean & Modern */}
+      {/* Header - Gmail Style */}
       <Box sx={{ 
-        p: { xs: 1.5, md: 2.5 }, 
+        px: { xs: 2, md: 3 }, 
+        pt: 2,
+        pb: 1.5,
         borderBottom: '1px solid #e8eaed',
-        background: 'linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%)',
+        backgroundColor: '#ffffff',
         flexShrink: 0,
         maxWidth: '100%',
         boxSizing: 'border-box',
         overflow: 'hidden'
       }}>
-        {/* Top Row - Actions */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        {/* Top Row - Close Button */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2 }}>
           <Tooltip title="Close">
             <IconButton 
               size="small" 
               onClick={onClose}
               sx={{ 
-                backgroundColor: '#f1f3f4',
-                '&:hover': { backgroundColor: '#e8eaed' }
+                color: '#5f6368',
+                '&:hover': { 
+                  backgroundColor: '#f1f3f4',
+                  color: '#202124'
+                }
               }}
             >
-              <CloseIcon sx={{ fontSize: 18 }} />
+              <CloseIcon sx={{ fontSize: 20 }} />
             </IconButton>
           </Tooltip>
         </Box>
 
-        {/* Subject */}
-        <Typography variant="h5" sx={{ 
+        {/* Subject - Gmail Style */}
+        <Typography variant="h6" sx={{ 
           fontWeight: 400, 
           color: '#202124', 
-          mb: hasThread ? 1.5 : 2.5,
+          mb: 1.5,
           lineHeight: 1.4,
-          fontSize: '1.375rem',
+          fontSize: '1.25rem',
           wordBreak: 'break-word',
-          overflowWrap: 'break-word'
+          overflowWrap: 'break-word',
+          letterSpacing: '-0.01em'
         }}>
-          {selectedEmail.subject}
+          {selectedEmail.subject || '(No Subject)'}
         </Typography>
+
+        {/* Labels Section - Gmail Style */}
+        <Box sx={{ mb: 1.5 }}>
+          <LabelActions
+            email={selectedEmail}
+            folder={folder}
+            emailAccountId={emailAccountId}
+            onUpdate={handleLabelUpdate}
+          />
+        </Box>
         
-        {/* Thread Info */}
+        {/* Thread Info - Gmail Style */}
         {hasThread && (
           <Box sx={{ 
-            mb: 2,
-            p: 1.5,
-            backgroundColor: '#f8f9fa',
-            borderRadius: 1,
-            border: '1px solid #e8eaed'
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            mb: 1.5,
+            flexWrap: 'wrap'
           }}>
-            <Box sx={{ 
-              color: '#5f6368', 
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              flexWrap: 'wrap'
-            }}>
-              <Chip 
-                label={selectedEmail.messageCount || threadMessages.length} 
-                size="small" 
-                sx={{ 
-                  height: 20, 
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  backgroundColor: '#e8f0fe',
-                  color: '#1a73e8',
-                  minWidth: 28
-                }} 
-              />
-              <Typography 
-                component="span"
-                variant="body2" 
-                sx={{ 
-                  color: '#5f6368', 
-                  fontSize: '0.875rem',
-                  fontWeight: 500
-                }}
-              >
-                message{(selectedEmail.messageCount || threadMessages.length) > 1 ? 's' : ''} in this conversation
-              </Typography>
-              {selectedEmail.participants && selectedEmail.participants.length > 0 && (
-                <>
-                  <Typography component="span" variant="body2" sx={{ color: '#5f6368', mx: 0.5 }}>•</Typography>
-                  <Typography component="span" variant="caption" sx={{ color: '#5f6368' }}>
-                    {selectedEmail.participants.length} participant{selectedEmail.participants.length > 1 ? 's' : ''}
-                  </Typography>
-                </>
-              )}
-              {conversationMetadata && (
-                <>
-                  <Typography component="span" variant="body2" sx={{ color: '#5f6368', mx: 0.5 }}>•</Typography>
-                  <Typography component="span" variant="caption" sx={{ color: '#5f6368' }}>
-                    {conversationMetadata.startDate} - {conversationMetadata.endDate}
-                  </Typography>
-                </>
-              )}
-            </Box>
-          </Box>
-        )}
-
-        {/* Sender Card - Only show if single email (no thread) */}
-        {!hasThread && (
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'flex-start', 
-            gap: 2,
-            p: 2,
-            backgroundColor: '#fff',
-            borderRadius: 2,
-            border: '1px solid #e8eaed'
-          }}>
-            <Avatar sx={{ 
-              width: 48, 
-              height: 48, 
-              bgcolor: getAvatarColor(selectedEmail.fromName),
-              fontSize: '1.25rem',
-              fontWeight: 500
-            }}>
-              {selectedEmail.fromName?.charAt(1)?.toUpperCase() || selectedEmail.fromName?.charAt(0)?.toUpperCase() || 'U'}
-            </Avatar>
-            <Box sx={{ flex: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                <Typography variant="body1" sx={{ fontWeight: 600, color: '#202124' }}>
-                  {selectedEmail.folder === 'sent' ? 'You' : selectedEmail.fromName}
-                </Typography>
-                <Chip 
-                  label={selectedEmail.folder === 'sent' ? 'Sent' : 'Inbox'} 
-                  size="small" 
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                color: '#5f6368', 
+                fontSize: '0.8125rem',
+                fontWeight: 400
+              }}
+            >
+              {selectedEmail.messageCount || threadMessages.length} message{(selectedEmail.messageCount || threadMessages.length) > 1 ? 's' : ''}
+            </Typography>
+            {selectedEmail.participants && selectedEmail.participants.length > 0 && (
+              <>
+                <Typography component="span" variant="body2" sx={{ color: '#dadce0', fontSize: '0.75rem' }}>•</Typography>
+                <Typography 
+                  component="span" 
+                  variant="body2" 
                   sx={{ 
-                    height: 20, 
-                    fontSize: '0.7rem',
-                    backgroundColor: selectedEmail.folder === 'sent' ? '#fce8e6' : '#e8f0fe',
-                    color: selectedEmail.folder === 'sent' ? '#d93025' : '#1a73e8'
-                  }} 
-                />
-              </Box>
-              <Typography variant="body2" sx={{ color: '#5f6368', mb: 0.5 }}>
-                {selectedEmail.folder === 'sent' ? (selectedEmail.from || 'Your email') : selectedEmail.from}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#80868b' }}>
-                {selectedEmail.folder === 'sent' ? 'To' : 'From'}: {selectedEmail.folder === 'sent' ? (selectedEmail.to || 'me') : (selectedEmail.fromName || selectedEmail.from || 'me')} • {selectedEmail.timestamp ? new Date(selectedEmail.timestamp).toLocaleDateString('en-US', { 
-                  weekday: 'short',
-                  month: 'short', 
-                  day: 'numeric',
-                  year: 'numeric',
-                  hour: '2-digit', 
-                  minute: '2-digit'
-                }) : ''}
-              </Typography>
-            </Box>
+                    color: '#5f6368', 
+                    fontSize: '0.8125rem',
+                    fontWeight: 400
+                  }}
+                >
+                  {selectedEmail.participants.slice(0, 3).join(', ')}
+                  {selectedEmail.participants.length > 3 && ` +${selectedEmail.participants.length - 3} more`}
+                </Typography>
+              </>
+            )}
           </Box>
         )}
       </Box>
 
-      {/* Email Body - Clean Design */}
+      {/* Email Body - Gmail Style */}
       <Box sx={{ 
-        p: { xs: 1.5, md: 2 }, 
+        px: { xs: 2, md: 3 }, 
+        py: 2,
         flexGrow: 1, 
         overflow: 'auto', 
-        backgroundColor: '#fff',
+        backgroundColor: '#ffffff',
         minWidth: 0,
         maxWidth: '100%',
         boxSizing: 'border-box'
@@ -660,175 +610,67 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
             <Box 
               key={message.uid || message.id || index}
               sx={{ 
-                mb: !isLastMessage ? 2 : 0,
-                maxWidth: isFromCurrentUser ? '85%' : '100%',
+                mb: !isLastMessage ? 3 : 0,
                 width: '100%',
-                ml: isFromCurrentUser ? 'auto' : 0,
-                mr: isFromCurrentUser ? 0 : 'auto',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                borderBottom: !isLastMessage ? '1px solid #e8eaed' : 'none',
+                pb: !isLastMessage ? 3 : 0
               }}
             >
-              {/* Message Header - Sequential Conversation View */}
+              {/* Message Header - Gmail Style */}
               <Box sx={{ 
                 display: 'flex', 
                 alignItems: 'flex-start', 
-                gap: 2,
-                p: 2.5,
-                backgroundColor: isFromCurrentUser ? '#e8f5e9' : (index % 2 === 0 ? '#ffffff' : '#f8f9fa'),
-                borderRadius: 2,
-                border: isFromCurrentUser 
-                  ? '2px solid #4caf50' 
-                  : '2px solid #e8eaed',
-                mb: 2,
-                position: 'relative',
-                alignSelf: isFromCurrentUser ? 'flex-end' : 'flex-start',
-                maxWidth: isFromCurrentUser ? '85%' : '100%',
-                ml: isFromCurrentUser ? 'auto' : 0,
-                mr: isFromCurrentUser ? 0 : 'auto',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  left: isFromCurrentUser ? 'auto' : 0,
-                  right: isFromCurrentUser ? 0 : 'auto',
-                  top: 0,
-                  bottom: 0,
-                  width: 4,
-                  backgroundColor: isFromCurrentUser ? '#4caf50' : getAvatarColor(senderName),
-                  borderRadius: isFromCurrentUser ? '0 2px 2px 0' : '2px 0 0 2px'
-                }
+                gap: 1.5,
+                mb: 1.5
               }}>
-                {/* Sequence Number */}
-                <Box sx={{ 
-                  minWidth: 40,
-                  textAlign: 'center',
-                  fontWeight: 'bold',
-                  color: 'primary.main',
-                  fontSize: '1rem',
-                  pt: 0.5
-                }}>
-                  #{sequenceNumber}
-                </Box>
-                
                 <Avatar sx={{ 
-                  width: 48, 
-                  height: 48, 
+                  width: 40, 
+                  height: 40, 
                   bgcolor: getAvatarColor(senderName),
-                  fontSize: '1.1rem',
-                  fontWeight: 600,
-                  border: '2px solid #fff',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  flexShrink: 0
                 }}>
                   {senderName.split(' ').length > 1 
                     ? (senderName.split(' ')[0][0] + senderName.split(' ')[1][0]).toUpperCase()
                     : senderName.charAt(0).toUpperCase()}
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75, flexWrap: 'wrap' }}>
-                    <Typography variant="body1" sx={{ fontWeight: 700, color: '#202124', fontSize: '0.95rem' }}>
-                      {senderName}
+                  {/* Sender Name and Date Row */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5, flexWrap: 'wrap', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="body1" sx={{ fontWeight: 500, color: '#202124', fontSize: '0.875rem' }}>
+                        {isFromCurrentUser ? 'me' : senderName}
+                      </Typography>
+                      {displaySenderEmail && !isFromCurrentUser && (
+                        <Typography variant="body2" sx={{ color: '#5f6368', fontSize: '0.8125rem' }}>
+                          &lt;{displaySenderEmail}&gt;
+                        </Typography>
+                      )}
+                    </Box>
+                    <Typography variant="caption" sx={{ color: '#5f6368', fontSize: '0.75rem', fontWeight: 400 }}>
+                      {formattedDate || 'Date not available'}
                     </Typography>
-                    {isFromCurrentUser && (
-                      <Chip 
-                        label="You" 
-                        size="small" 
-                        sx={{ 
-                          height: 22, 
-                          fontSize: '0.7rem',
-                          fontWeight: 600,
-                          backgroundColor: '#4caf50',
-                          color: '#fff'
-                        }} 
-                      />
-                    )}
-                    {message.folder === 'sent' && !isFromCurrentUser && (
-                      <Chip 
-                        label="Sent" 
-                        size="small" 
-                        sx={{ 
-                          height: 22, 
-                          fontSize: '0.7rem',
-                          fontWeight: 600,
-                          backgroundColor: '#fce8e6',
-                          color: '#d93025'
-                        }} 
-                      />
-                    )}
-                    {isFirstMessage && (
-                      <Chip 
-                        label="First" 
-                        size="small" 
-                        sx={{ 
-                          height: 20, 
-                          fontSize: '0.65rem',
-                          backgroundColor: '#4caf50',
-                          color: '#fff'
-                        }} 
-                      />
-                    )}
-                    {isLastMessage && (
-                      <Chip 
-                        label="Latest" 
-                        size="small" 
-                        sx={{ 
-                          height: 20, 
-                          fontSize: '0.65rem',
-                          backgroundColor: '#2196f3',
-                          color: '#fff'
-                        }} 
-                      />
-                    )}
-                    {isReply && (
-                      <Tooltip title={`Reply to message #${sequenceNumber - 1}`}>
-                        <ReplyIcon sx={{ fontSize: 18, color: '#5f6368' }} />
-                      </Tooltip>
-                    )}
                   </Box>
-                  <Typography variant="body2" sx={{ color: '#5f6368', mb: 0.5, fontSize: '0.85rem' }}>
-                    {displaySenderEmail && (
-                      <>
-                        <strong>From:</strong> {displaySenderEmail}
-                        {displayRecipientEmail && (
-                          <>
-                            {' • '}
-                            <strong>To:</strong> {displayRecipientEmail}
-                          </>
-                        )}
-                      </>
-                    )}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#80868b', fontSize: '0.8rem', fontWeight: 500 }}>
-                    {formattedDate || 'Date not available'}
-                  </Typography>
-                  {isReply && (
-                    <Typography variant="caption" sx={{ color: '#80868b', fontSize: '0.75rem', fontStyle: 'italic', ml: 1 }}>
-                      ↳ Reply to #{sequenceNumber - 1}
+                  
+                  {/* To/From Row - Gmail Style (only show if different from sender) */}
+                  {displayRecipientEmail && displayRecipientEmail !== displaySenderEmail && (
+                    <Typography variant="body2" sx={{ color: '#5f6368', fontSize: '0.8125rem', mb: 0.5 }}>
+                      to {displayRecipientEmail}
                     </Typography>
                   )}
                 </Box>
               </Box>
               
-              {/* Recipients Info - Show for clarity */}
-              {message.recipientEmails && Array.isArray(message.recipientEmails) && message.recipientEmails.length > 0 && (
-                <Box sx={{ px: 2.5, pb: 1, pt: 0 }}>
-                  <Typography variant="caption" sx={{ color: '#5f6368', fontSize: '0.75rem' }}>
-                    <strong>To:</strong> {message.recipientEmails.join(', ')}
-                  </Typography>
-                </Box>
-              )}
-              
-              {/* Message Content - Clear separation */}
+              {/* Message Content - Gmail Style */}
               <Box sx={{ 
                 maxWidth: '100%',
                 width: '100%',
-                mx: 'auto',
-                p: { xs: 2, md: 2.5 },
-                backgroundColor: '#ffffff',
-                borderRadius: 2,
-                border: '1px solid #e8eaed',
-                boxSizing: 'border-box',
-                overflow: 'hidden',
-                mb: index < messagesToDisplay.length - 1 ? 2 : 0
+                pl: 5.5, // Align with avatar
+                pr: 0,
+                mb: 1.5
               }}>
                 {(() => {
                   const htmlContent = message.html || message.htmlBody || message.htmlContent || '';
@@ -848,77 +690,79 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                     <Box
                       component="div"
                       dangerouslySetInnerHTML={{ __html: htmlContent }}
-                    sx={{ 
-                      lineHeight: 1.9, 
-                      color: '#3c4043',
-                      fontSize: '0.95rem',
-                      fontFamily: '"Google Sans", Roboto, Arial, sans-serif',
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                      maxWidth: '100%',
-                      '& img': {
-                        maxWidth: '100%',
-                        height: 'auto',
-                        borderRadius: 1,
-                        margin: '8px 0'
-                      },
-                      '& a': {
-                        color: '#1a73e8',
-                        textDecoration: 'none',
-                        wordBreak: 'break-all',
-                        '&:hover': { textDecoration: 'underline' }
-                      },
-                      '& p': { 
-                        margin: '8px 0',
+                      sx={{ 
+                        lineHeight: 1.5, 
+                        color: '#202124',
+                        fontSize: '0.875rem',
+                        fontFamily: 'Roboto, Arial, sans-serif',
                         wordBreak: 'break-word',
-                        overflowWrap: 'break-word'
-                      },
-                      '& table': {
+                        overflowWrap: 'break-word',
                         maxWidth: '100%',
-                        overflow: 'auto',
-                        display: 'block'
-                      }
-                    }}
-                  />
+                        '& img': {
+                          maxWidth: '100%',
+                          height: 'auto',
+                          borderRadius: 1,
+                          margin: '12px 0'
+                        },
+                        '& a': {
+                          color: '#1a73e8',
+                          textDecoration: 'none',
+                          wordBreak: 'break-all',
+                          '&:hover': { textDecoration: 'underline' }
+                        },
+                        '& p': { 
+                          margin: '0 0 12px 0',
+                          wordBreak: 'break-word',
+                          overflowWrap: 'break-word',
+                          lineHeight: 1.5
+                        },
+                        '& table': {
+                          maxWidth: '100%',
+                          overflow: 'auto',
+                          display: 'block',
+                          margin: '12px 0'
+                        }
+                      }}
+                    />
                   ) : bodyContent ? (
                     <Typography 
-                    component="div"
-                    sx={{ 
-                      whiteSpace: 'pre-wrap', 
-                      lineHeight: 1.9, 
-                      color: '#3c4043',
-                      fontSize: '0.95rem',
-                      fontFamily: '"Google Sans", Roboto, Arial, sans-serif',
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                      maxWidth: '100%',
-                      '& a': {
-                        display: 'inline-block',
-                        marginTop: '4px',
-                        marginBottom: '4px',
-                        wordBreak: 'break-all'
-                      }
-                    }}
-                  >
-                    {(() => {
-                      // Use extracted message content (without quoted parts)
-                      const bodyText = messageContent || message.body || message.content || message.text || '';
-                      if (!bodyText || bodyText.trim() === '') {
-                        console.warn('⚠️ Empty body for message:', message.uid, message);
-                        return <Typography variant="body2" sx={{ color: '#80868b', fontStyle: 'italic' }}>No content available</Typography>;
-                      }
-                      return formatEmailBody(bodyText);
-                    })()}
-                  </Typography>
+                      component="div"
+                      sx={{ 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: 1.5, 
+                        color: '#202124',
+                        fontSize: '0.875rem',
+                        fontFamily: 'Roboto, Arial, sans-serif',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                        maxWidth: '100%',
+                        '& a': {
+                          color: '#1a73e8',
+                          textDecoration: 'none',
+                          wordBreak: 'break-all',
+                          '&:hover': { textDecoration: 'underline' }
+                        }
+                      }}
+                    >
+                      {(() => {
+                        // Use extracted message content (without quoted parts)
+                        const bodyText = messageContent || message.body || message.content || message.text || '';
+                        if (!bodyText || bodyText.trim() === '') {
+                          console.warn('⚠️ Empty body for message:', message.uid, message);
+                          return <Typography variant="body2" sx={{ color: '#80868b', fontStyle: 'italic' }}>No content available</Typography>;
+                        }
+                        return formatEmailBody(bodyText);
+                      })()}
+                    </Typography>
                   ) : (
-                    <Typography variant="body2" sx={{ color: '#80868b', fontStyle: 'italic', p: 2 }}>
+                    <Typography variant="body2" sx={{ color: '#80868b', fontStyle: 'italic' }}>
                       No content available for this message.
                     </Typography>
                   );
                 })()}
               </Box>
               
-              {/* Message Attachments */}
+              {/* Message Attachments - Gmail Style */}
               {(() => {
                 // Debug: Log attachments for this message
                 const hasAttachments = message.hasAttachments || (message.attachments && message.attachments.length > 0);
@@ -939,16 +783,14 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                 return hasAttachments && attachments.length > 0;
               })() && (
                 <Box sx={{ 
-                  mt: 2.5, 
-                  pt: 2,
-                  borderTop: '1px solid #e8eaed',
-                  maxWidth: 800, 
-                  mx: 'auto' 
+                  mt: 2, 
+                  pl: 5.5, // Align with avatar
+                  pr: 0
                 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: '#202124', fontSize: '0.9rem' }}>
-                    📎 {message.attachments.length} Attachment{message.attachments.length > 1 ? 's' : ''} from {senderName}
+                  <Typography variant="body2" sx={{ mb: 1.5, fontWeight: 500, color: '#5f6368', fontSize: '0.8125rem' }}>
+                    {message.attachments.length} attachment{message.attachments.length > 1 ? 's' : ''}
                   </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     {message.attachments.map((att, i) => {
                       const filename = typeof att === 'string' ? att : (att.filename || att.name || `Attachment ${i + 1}`);
                       const downloadUrl = att.downloadUrl || att.url || att.link;
@@ -963,18 +805,20 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                             display: 'flex',
                             alignItems: 'center',
                             gap: 1.5,
-                            p: 1.5,
-                            backgroundColor: '#fff',
-                            border: '1px solid #e8eaed',
-                            borderRadius: 2,
-                            minWidth: 200,
-                            maxWidth: 400,
+                            p: 1,
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: 1,
+                            maxWidth: 600,
                             transition: 'all 0.2s ease',
+                            cursor: 'pointer',
                             '&:hover': {
-                              backgroundColor: '#f8f9fa',
-                              borderColor: '#1a73e8',
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                              backgroundColor: '#e8f0fe',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                             }
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadAttachment(att, message);
                           }}
                         >
                           {isImage && previewUrl ? (
@@ -983,31 +827,31 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                               src={previewUrl.startsWith('http') ? previewUrl : `${API_CONFIG.BASE_URL}${previewUrl}`}
                               alt={filename}
                               sx={{
-                                width: 48,
-                                height: 48,
+                                width: 40,
+                                height: 40,
                                 objectFit: 'cover',
                                 borderRadius: 1
                               }}
                             />
                           ) : (
-                            <AttachFileIcon sx={{ fontSize: 32, color: '#5f6368' }} />
+                            <AttachFileIcon sx={{ fontSize: 20, color: '#5f6368' }} />
                           )}
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography 
                               variant="body2" 
                               sx={{ 
-                                fontWeight: 500, 
+                                fontWeight: 400, 
                                 color: '#202124',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
-                                mb: 0.5
+                                fontSize: '0.8125rem'
                               }}
                             >
                               {filename}
                             </Typography>
                             {size && (
-                              <Typography variant="caption" sx={{ color: '#5f6368' }}>
+                              <Typography variant="caption" sx={{ color: '#5f6368', fontSize: '0.75rem' }}>
                                 {(size / 1024).toFixed(1)} KB
                               </Typography>
                             )}
@@ -1018,14 +862,15 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                                 e.stopPropagation();
                                 downloadAttachment(att, message);
                               }}
+                              size="small"
                               sx={{
-                                color: '#1a73e8',
+                                color: '#5f6368',
                                 '&:hover': {
-                                  backgroundColor: '#e8f0fe'
+                                  backgroundColor: 'rgba(26, 115, 232, 0.1)'
                                 }
                               }}
                             >
-                              <DownloadIcon />
+                              <DownloadIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         </Box>
@@ -1033,61 +878,6 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                     })}
                   </Box>
                 </Box>
-              )}
-              
-              {/* Message Footer - Sequence Info */}
-              <Box sx={{ 
-                px: 2.5, 
-                pb: 1, 
-                pt: 0.5,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTop: '1px solid #e8eaed',
-                mt: 1
-              }}>
-                <Typography variant="caption" sx={{ color: '#80868b', fontSize: '0.75rem' }}>
-                  Message {sequenceNumber} of {messagesToDisplay.length}
-                </Typography>
-                {isReply && (
-                  <Typography variant="caption" sx={{ color: '#80868b', fontSize: '0.75rem', fontStyle: 'italic' }}>
-                    ↳ Reply to #{sequenceNumber - 1}
-                  </Typography>
-                )}
-              </Box>
-              
-              {/* Divider between messages (except last) */}
-              {!isLastMessage && (
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  my: 2,
-                  gap: 2
-                }}>
-                  <Box sx={{ 
-                    flex: 1, 
-                    height: 1, 
-                    backgroundColor: '#e8eaed' 
-                  }} />
-                  <Typography variant="caption" sx={{ 
-                    color: '#80868b', 
-                    fontSize: '0.75rem',
-                    fontWeight: 500,
-                    px: 2
-                  }}>
-                    Message #{sequenceNumber + 1} ↓
-                  </Typography>
-                  <Box sx={{ 
-                    flex: 1, 
-                    height: 1, 
-                    backgroundColor: '#e8eaed' 
-                  }} />
-                </Box>
-              )}
-              
-              {/* Old divider - keeping for reference but not used */}
-              {false && index < messagesToDisplay.length - 1 && (
-                <Divider sx={{ my: 3, borderColor: '#e8eaed' }} />
               )}
             </Box>
           );
@@ -1171,13 +961,14 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
         )}
       </Box>
 
-      {/* Action Buttons - Bottom Bar */}
+      {/* Action Buttons - Gmail Style Bottom Bar */}
       <Box sx={{ 
-        p: { xs: 1.5, md: 2 }, 
+        px: 3, 
+        py: 1.5, 
         borderTop: '1px solid #e8eaed',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#ffffff',
         display: 'flex',
-        gap: 1.5,
+        gap: 1,
         flexShrink: 0,
         minWidth: 0,
         maxWidth: '100%',
@@ -1185,17 +976,18 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
         overflow: 'hidden'
       }}>
         <Button
-          variant="outlined"
+          variant="text"
           startIcon={<ReplyIcon />}
           onClick={() => onReply && onReply(selectedEmail)}
           sx={{ 
             textTransform: 'none',
-            borderColor: '#dadce0',
-            color: '#3c4043',
+            color: '#5f6368',
             fontWeight: 500,
+            fontSize: '0.875rem',
+            minWidth: 'auto',
+            px: 1.5,
             '&:hover': { 
-              backgroundColor: '#e8f0fe',
-              borderColor: '#1a73e8'
+              backgroundColor: '#f1f3f4'
             }
           }}
         >

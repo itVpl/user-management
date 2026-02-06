@@ -233,53 +233,137 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
       fullWidth
       PaperProps={{ 
         sx: { 
-          borderRadius: 3, 
-          height: '85vh', 
-          maxHeight: 750,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-          overflow: 'hidden'
+          borderRadius: 4, 
+          height: '90vh', 
+          maxHeight: 800,
+          boxShadow: '0 12px 48px rgba(0,0,0,0.15)',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
         } 
       }}
     >
-      {/* Header - Modern Gradient */}
+      {/* Header - Modern Gradient with Better Design */}
       <Box sx={{ 
-        p: 2.5, 
-        borderBottom: '1px solid #e0e0e0', 
+        p: 3, 
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%)',
+          pointerEvents: 'none'
+        }
       }}>
-        <Typography variant="h6" sx={{ fontWeight: 600, color: '#ffffff', fontSize: '1.1rem' }}>
-          New Message
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, position: 'relative', zIndex: 1 }}>
+          <Box sx={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            backgroundColor: 'rgba(255,255,255,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(10px)'
+          }}>
+            <SendIcon sx={{ color: '#ffffff', fontSize: 20 }} />
+          </Box>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 700, 
+            color: '#ffffff', 
+            fontSize: '1.25rem',
+            letterSpacing: '-0.02em'
+          }}>
+            New Message
+          </Typography>
+        </Box>
         <IconButton 
-          size="small" 
+          size="medium" 
           onClick={handleClose}
           sx={{ 
             color: '#ffffff',
-            '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' }
+            backgroundColor: 'rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(10px)',
+            position: 'relative',
+            zIndex: 1,
+            transition: 'all 0.2s',
+            '&:hover': { 
+              backgroundColor: 'rgba(255,255,255,0.25)',
+              transform: 'scale(1.05)'
+            }
           }}
         >
           <CloseIcon sx={{ fontSize: 22 }} />
         </IconButton>
       </Box>
 
-      <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden', backgroundColor: '#fafafa' }}>
-        {success && <Alert severity="success" sx={{ m: 2, borderRadius: 2 }}>Email sent successfully!</Alert>}
-        {error && <Alert severity="error" sx={{ m: 2, borderRadius: 2 }}>{error}</Alert>}
+      <DialogContent sx={{ 
+        p: 0, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        flexGrow: 1, 
+        overflow: 'hidden', 
+        backgroundColor: '#f8f9fa'
+      }}>
+        {success && (
+          <Alert 
+            severity="success" 
+            sx={{ 
+              m: 2.5, 
+              borderRadius: 2,
+              boxShadow: '0 2px 8px rgba(76, 175, 80, 0.2)',
+              '& .MuiAlert-icon': { fontSize: 24 }
+            }}
+          >
+            Email sent successfully!
+          </Alert>
+        )}
+        {error && (
+          <Alert 
+            severity="error" 
+            sx={{ 
+              m: 2.5, 
+              borderRadius: 2,
+              boxShadow: '0 2px 8px rgba(244, 67, 54, 0.2)',
+              '& .MuiAlert-icon': { fontSize: 24 }
+            }}
+          >
+            {error}
+          </Alert>
+        )}
 
         {/* To Field - Enhanced with Chips */}
-        <Box sx={{ px: 2.5, py: 2, borderBottom: '1px solid #e8eaed', backgroundColor: '#ffffff' }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
-            <Typography variant="body2" sx={{ minWidth: 50, color: '#5f6368', fontWeight: 500, pt: 1.5 }}>
+        <Box sx={{ 
+          px: 3, 
+          py: 2.5, 
+          borderBottom: '1px solid #e8eaed', 
+          backgroundColor: '#ffffff',
+          transition: 'background-color 0.2s'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 1.5 }}>
+            <Typography variant="body2" sx={{ 
+              minWidth: 60, 
+              color: '#202124', 
+              fontWeight: 600, 
+              pt: 1.5,
+              fontSize: '0.9rem',
+              letterSpacing: '0.01em'
+            }}>
               To
             </Typography>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               {/* Recipient Chips */}
               {recipientChips.length > 0 && (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
                   {recipientChips.map((email, index) => (
                     <Chip
                       key={index}
@@ -287,28 +371,42 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
                       onDelete={() => removeRecipient(email, 'to')}
                       avatar={
                         <Avatar sx={{ 
-                          width: 24, 
-                          height: 24, 
+                          width: 28, 
+                          height: 28, 
                           bgcolor: '#667eea',
-                          fontSize: '0.7rem',
-                          fontWeight: 600
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)'
                         }}>
                           {email.charAt(0).toUpperCase()}
                         </Avatar>
                       }
                       sx={{
-                        height: 32,
+                        height: 36,
                         backgroundColor: '#e8f0fe',
                         color: '#1a73e8',
-                        fontWeight: 500,
+                        fontWeight: 600,
                         fontSize: '0.875rem',
+                        borderRadius: 2,
+                        border: '1px solid rgba(26, 115, 232, 0.2)',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          backgroundColor: '#d2e3fc',
+                          transform: 'translateY(-1px)',
+                          boxShadow: '0 2px 6px rgba(26, 115, 232, 0.2)'
+                        },
                         '& .MuiChip-deleteIcon': {
                           color: '#5f6368',
                           fontSize: 18,
-                          '&:hover': { color: '#d93025' }
+                          transition: 'all 0.2s',
+                          '&:hover': { 
+                            color: '#d93025',
+                            transform: 'scale(1.1)'
+                          }
                         },
                         '& .MuiChip-label': {
-                          px: 1.5
+                          px: 1.75,
+                          py: 0.5
                         }
                       }}
                     />
@@ -317,7 +415,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
               )}
               <TextField
                 fullWidth
-                placeholder={recipientChips.length === 0 ? "Recipients (separate multiple emails with commas)" : ""}
+                placeholder={recipientChips.length === 0 ? "Recipients (separate multiple emails with commas)" : "Add more recipients..."}
                 value={emailData.to}
                 onChange={handleChange('to')}
                 variant="standard"
@@ -325,13 +423,15 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
                 helperText={
                   emailData.to.length > 0 ? (
                     emailValidation.valid ? (
-                      getRecipientCount(emailData.to) > 1 
-                        ? `${getRecipientCount(emailData.to)} recipients` 
-                        : '1 recipient'
+                      <Box component="span" sx={{ color: '#34a853', fontWeight: 500 }}>
+                        {getRecipientCount(emailData.to) > 1 
+                          ? `✓ ${getRecipientCount(emailData.to)} recipients` 
+                          : '✓ 1 recipient'}
+                      </Box>
                     ) : (
-                      emailValidation.invalidEmails.length > 0
-                        ? `Invalid email(s): ${emailValidation.invalidEmails.join(', ')}`
-                        : 'Please enter at least one valid email address'
+                      <Box component="span" sx={{ color: '#d93025' }}>
+                        Invalid email(s): {emailValidation.invalidEmails.join(', ')}
+                      </Box>
                     )
                   ) : null
                 }
@@ -339,18 +439,24 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
                   disableUnderline: true, 
                   sx: { 
                     fontSize: '0.95rem',
+                    fontWeight: 400,
                     '& input': {
-                      py: recipientChips.length > 0 ? 0.5 : 1.5
+                      py: recipientChips.length > 0 ? 0.75 : 1.5,
+                      color: '#202124'
+                    },
+                    '& input::placeholder': {
+                      color: '#9aa0a6',
+                      opacity: 1
                     }
                   } 
                 }}
-                FormHelperTextProps={{ sx: { fontSize: '0.7rem', mt: 0.5, ml: 0 } }}
+                FormHelperTextProps={{ sx: { fontSize: '0.75rem', mt: 1, ml: 0, fontWeight: 500 } }}
               />
             </Box>
           </Box>
           
           {/* CC/BCC Toggle */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
             <Button
               size="small"
               onClick={() => setShowCcBcc(!showCcBcc)}
@@ -358,17 +464,34 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
                 textTransform: 'none',
                 color: '#1a73e8',
                 fontSize: '0.875rem',
-                '&:hover': { backgroundColor: '#e8f0fe' }
+                fontWeight: 600,
+                px: 2,
+                py: 0.75,
+                borderRadius: 2,
+                backgroundColor: showCcBcc ? '#e8f0fe' : 'transparent',
+                transition: 'all 0.2s',
+                '&:hover': { 
+                  backgroundColor: '#e8f0fe',
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 2px 4px rgba(26, 115, 232, 0.15)'
+                }
               }}
             >
-              {showCcBcc ? 'Hide' : 'Show'} CC & BCC
+              {showCcBcc ? '▼ Hide' : '▶ Show'} CC & BCC
             </Button>
           </Box>
           
           {/* CC Field */}
           {showCcBcc && (
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 2 }}>
-              <Typography variant="body2" sx={{ minWidth: 50, color: '#5f6368', fontWeight: 500, pt: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mt: 2.5 }}>
+              <Typography variant="body2" sx={{ 
+                minWidth: 60, 
+                color: '#202124', 
+                fontWeight: 600, 
+                pt: 1.5,
+                fontSize: '0.9rem',
+                letterSpacing: '0.01em'
+              }}>
                 Cc
               </Typography>
               <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -438,8 +561,15 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
           
           {/* BCC Field */}
           {showCcBcc && (
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 2 }}>
-              <Typography variant="body2" sx={{ minWidth: 50, color: '#5f6368', fontWeight: 500, pt: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mt: 2.5 }}>
+              <Typography variant="body2" sx={{ 
+                minWidth: 60, 
+                color: '#202124', 
+                fontWeight: 600, 
+                pt: 1.5,
+                fontSize: '0.9rem',
+                letterSpacing: '0.01em'
+              }}>
                 Bcc
               </Typography>
               <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -509,7 +639,13 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
         </Box>
 
         {/* Subject Field */}
-        <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid #e8eaed', backgroundColor: '#ffffff' }}>
+        <Box sx={{ 
+          px: 3, 
+          py: 2, 
+          borderBottom: '1px solid #e8eaed', 
+          backgroundColor: '#ffffff',
+          transition: 'background-color 0.2s'
+        }}>
           <TextField
             fullWidth
             placeholder="Subject"
@@ -519,19 +655,35 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
             InputProps={{ 
               disableUnderline: true, 
               sx: { 
-                fontSize: '0.95rem',
-                fontWeight: 500
+                fontSize: '1rem',
+                fontWeight: 500,
+                '& input': {
+                  color: '#202124',
+                  py: 0.5
+                },
+                '& input::placeholder': {
+                  color: '#9aa0a6',
+                  opacity: 1,
+                  fontWeight: 400
+                }
               } 
             }}
           />
         </Box>
 
         {/* Body Field */}
-        <Box sx={{ px: 2.5, py: 2.5, flexGrow: 1, overflow: 'auto', backgroundColor: '#ffffff' }}>
+        <Box sx={{ 
+          px: 3, 
+          py: 3, 
+          flexGrow: 1, 
+          overflow: 'auto', 
+          backgroundColor: '#ffffff',
+          minHeight: 300
+        }}>
           <TextField
             fullWidth
             multiline
-            rows={12}
+            rows={14}
             placeholder="Compose your message..."
             value={emailData.text}
             onChange={handleChange('text')}
@@ -540,9 +692,16 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
               disableUnderline: true, 
               sx: { 
                 fontSize: '0.95rem',
-                lineHeight: 1.6,
+                lineHeight: 1.7,
                 '& textarea': {
-                  resize: 'none'
+                  resize: 'none',
+                  color: '#202124',
+                  fontFamily: 'inherit'
+                },
+                '& textarea::placeholder': {
+                  color: '#9aa0a6',
+                  opacity: 1,
+                  fontSize: '0.95rem'
                 }
               } 
             }}
@@ -551,9 +710,24 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
 
         {/* Attachments Preview */}
         {attachments.length > 0 && (
-          <Box sx={{ px: 2.5, py: 2, borderTop: '1px solid #e8eaed', backgroundColor: '#f8f9fa' }}>
-            <Typography variant="subtitle2" sx={{ color: '#202124', mb: 1.5, fontWeight: 600, fontSize: '0.875rem' }}>
-              📎 Attachments ({attachments.length}/10)
+          <Box sx={{ 
+            px: 3, 
+            py: 2.5, 
+            borderTop: '1px solid #e8eaed', 
+            backgroundColor: '#f8f9fa',
+            borderBottom: '1px solid #e8eaed'
+          }}>
+            <Typography variant="subtitle2" sx={{ 
+              color: '#202124', 
+              mb: 2, 
+              fontWeight: 700, 
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              <AttachFileIcon sx={{ fontSize: 18, color: '#5f6368' }} />
+              Attachments ({attachments.length}/10)
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
               {attachments.map((att, index) => (
@@ -563,16 +737,18 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5,
-                    px: 2,
-                    py: 1.5,
+                    px: 2.5,
+                    py: 1.75,
                     backgroundColor: '#ffffff',
-                    borderRadius: 2,
+                    borderRadius: 3,
                     border: '1px solid #e8eaed',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
                     transition: 'all 0.2s',
+                    cursor: 'pointer',
                     '&:hover': {
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                      borderColor: '#1a73e8'
+                      boxShadow: '0 4px 12px rgba(26, 115, 232, 0.15)',
+                      borderColor: '#1a73e8',
+                      transform: 'translateY(-2px)'
                     }
                   }}
                 >
@@ -640,17 +816,18 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
         style={{ display: 'none' }}
       />
 
-      {/* Footer - Enhanced */}
+      {/* Footer - Enhanced with Better Design */}
       <Box sx={{ 
-        p: 2.5, 
+        p: 3, 
         borderTop: '1px solid #e8eaed', 
         backgroundColor: '#ffffff',
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        boxShadow: '0 -2px 8px rgba(0,0,0,0.04)'
+        boxShadow: '0 -4px 12px rgba(0,0,0,0.06)',
+        gap: 2
       }}>
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flex: 1 }}>
           <Button
             variant="contained"
             startIcon={loading ? <CircularProgress size={18} sx={{ color: 'white' }} /> : <SendIcon />}
@@ -659,67 +836,96 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
             sx={{ 
               background: loading ? '#9aa0a6' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               textTransform: 'none', 
-              fontWeight: 600, 
-              px: 4, 
-              py: 1,
-              minWidth: 130,
-              borderRadius: 2,
-              boxShadow: loading ? 'none' : '0 2px 8px rgba(102, 126, 234, 0.3)',
+              fontWeight: 700, 
+              px: 5, 
+              py: 1.25,
+              minWidth: 140,
+              borderRadius: 3,
+              fontSize: '0.95rem',
+              boxShadow: loading ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.35)',
+              transition: 'all 0.3s',
               '&:hover': { 
                 background: loading ? '#9aa0a6' : 'linear-gradient(135deg, #5568d3 0%, #6a4190 100%)',
-                boxShadow: loading ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.4)'
+                boxShadow: loading ? 'none' : '0 6px 16px rgba(102, 126, 234, 0.45)',
+                transform: 'translateY(-1px)'
+              },
+              '&:active': {
+                transform: 'translateY(0px)'
               },
               '&.Mui-disabled': { 
-                background: '#9aa0a6',
-                color: 'white'
+                background: '#e0e0e0',
+                color: '#9e9e9e',
+                boxShadow: 'none'
               }
             }}
           >
             {loading ? 'Sending...' : 'Send'}
           </Button>
-          <Tooltip title="Attach files">
+          <Tooltip title="Attach files (Max 10 files, 25MB each)" arrow>
             <IconButton 
               size="medium" 
               onClick={() => fileInputRef.current?.click()} 
               disabled={attachments.length >= 10}
               sx={{
-                border: '1px solid #e8eaed',
+                width: 44,
+                height: 44,
+                border: '1.5px solid #e8eaed',
                 backgroundColor: '#f8f9fa',
+                borderRadius: 2,
+                transition: 'all 0.2s',
                 '&:hover': { 
                   backgroundColor: '#e8f0fe',
-                  borderColor: '#1a73e8'
+                  borderColor: '#1a73e8',
+                  transform: 'scale(1.05)',
+                  boxShadow: '0 2px 8px rgba(26, 115, 232, 0.2)'
                 },
                 '&.Mui-disabled': {
                   backgroundColor: '#f5f5f5',
-                  borderColor: '#e0e0e0'
+                  borderColor: '#e0e0e0',
+                  opacity: 0.6
                 }
               }}
             >
               <AttachFileIcon sx={{ 
                 color: attachments.length >= 10 ? '#9e9e9e' : '#5f6368', 
-                fontSize: 20 
+                fontSize: 22 
               }} />
             </IconButton>
           </Tooltip>
           {attachments.length > 0 && (
-            <Typography variant="caption" sx={{ color: '#5f6368', fontWeight: 500 }}>
-              {attachments.length}/10 file{attachments.length > 1 ? 's' : ''} attached
+            <Typography variant="caption" sx={{ 
+              color: '#5f6368', 
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              px: 1.5,
+              py: 0.75,
+              backgroundColor: '#e8f0fe',
+              borderRadius: 2,
+              border: '1px solid rgba(26, 115, 232, 0.2)'
+            }}>
+              {attachments.length}/10 file{attachments.length > 1 ? 's' : ''}
             </Typography>
           )}
         </Box>
-        <Tooltip title="Discard">
+        <Tooltip title="Discard draft" arrow>
           <IconButton 
             size="medium" 
             onClick={handleClose}
             sx={{
+              width: 44,
+              height: 44,
               color: '#5f6368',
+              borderRadius: 2,
+              transition: 'all 0.2s',
               '&:hover': { 
                 color: '#d93025',
-                backgroundColor: '#fce8e6'
+                backgroundColor: '#fce8e6',
+                transform: 'scale(1.05)',
+                boxShadow: '0 2px 8px rgba(217, 48, 37, 0.2)'
               }
             }}
           >
-            <DeleteIcon sx={{ fontSize: 20 }} />
+            <DeleteIcon sx={{ fontSize: 22 }} />
           </IconButton>
         </Tooltip>
       </Box>
