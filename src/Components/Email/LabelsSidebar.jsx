@@ -182,7 +182,12 @@ const LabelsSidebar = ({ emailAccountId, onLabelClick, selectedLabelId }) => {
               <ListItem
                 key={label._id}
                 disablePadding
-                sx={{ mb: 0.5 }}
+                sx={{
+                  mb: 0.5,
+                  '&:hover .MuiListItemSecondaryAction-root': {
+                    opacity: 1
+                  }
+                }}
                 secondaryAction={
                   <Tooltip title="Edit label">
                     <IconButton
@@ -203,11 +208,6 @@ const LabelsSidebar = ({ emailAccountId, onLabelClick, selectedLabelId }) => {
                     </IconButton>
                   </Tooltip>
                 }
-                sx={{
-                  '&:hover .MuiListItemSecondaryAction-root': {
-                    opacity: 1
-                  }
-                }}
               >
                 <ListItemButton
                   onClick={() => handleLabelClick(label._id)}
