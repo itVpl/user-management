@@ -51,6 +51,7 @@ const LeaveApproval = lazy(() => import("./Components/HRDashboard/LeaveApproval.
 const RateApproved = lazy(() => import("./Components/CMT/RateApproved.jsx"));
 const ManagerPendingBids = lazy(() => import("./Components/CMT/ManagerPendingBids.jsx"));
 const Loads = lazy(() => import("./Components/CMT/Loads.jsx"));
+const SubCompanies = lazy(() => import("./Components/CMT/SubCompanies.jsx"));
 const CarrierApproval = lazy(() => import("./Components/CMT/CarrierApproval.jsx"));
 const DeliveryOrder = lazy(() => import("./Components/Sales/DeliveryOrder.jsx"));
 const DOReport = lazy(() => import("./Components/Sales/DOReport.jsx"));
@@ -645,6 +646,7 @@ function App() {
           <Route path="RateApproved" element={<RateApproved />} />
           <Route path="ManagerRateApproval" element={<ManagerPendingBids />} />
           <Route path="Loads" element={<Loads />} />
+          <Route path="SubCompanies" element={<SubCompanies />} />
           <Route path="CarrierApproval" element={<CarrierApproval />} />
           <Route path="HrCreateTask" element={<HrCreateTask />} />
           <Route path="LeaveApproval" element={<LeaveApproval />} />

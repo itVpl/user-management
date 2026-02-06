@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import apiService from '../../services/apiService.js';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
 import Logo from '../../assets/LogoFinal.png';
 import IdentificaLogo from '../../assets/identifica_logo.png';
 import MtPoconoLogo from '../../assets/mtPocono.png';
@@ -906,27 +906,27 @@ export default function DeliveryOrder() {
     }
   };
 
-  // Handle search button click or Enter key
-  const handleSearch = () => {
-    setActiveSearchTerm(searchTerm.trim());
-    setCurrentPage(1); // Reset to first page on new search
-    fetchOrders(searchTerm.trim(), 1, itemsPerPage);
-  };
+  // Live search effect with debounce
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      setActiveSearchTerm(searchTerm.trim());
+      setCurrentPage(1);
+    }, 800);
 
-  // Handle Enter key press in search input
-  const handleSearchKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
 
   // Initial load and page change effect
   useEffect(() => {
-    fetchOrders(activeSearchTerm, currentPage, itemsPerPage); // Fetch orders with search and pagination
-    // Removed: fetchDispatchers, fetchShippersList, fetchTruckersList, fetchLoads
-    // These will now be called on-demand when dropdowns are clicked
+    // If date range is active, fetch ALL matching records (limit=1000) so we can filter client-side
+    // Otherwise, fetch standard page
+    const isDateFilter = range.startDate && range.endDate;
+    const limit = isDateFilter ? 1000 : itemsPerPage;
+    const page = isDateFilter ? 1 : currentPage; // Always fetch page 1 (full list) if doing client-side filtering
+    
+    fetchOrders(activeSearchTerm, page, limit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, activeSearchTerm]);
+  }, [currentPage, activeSearchTerm, range.startDate, range.endDate]);
 
   // Initial load for Total Orders and Today counts
   useEffect(() => {
@@ -1176,11 +1176,20 @@ export default function DeliveryOrder() {
   });
 
   // Use filtered orders for display (date filter only, search is server-side)
-  const currentOrders = filteredOrders;
+  // If date filter is active, we are doing client-side pagination on the filtered result
+  const isDateFilter = range.startDate && range.endDate;
   
-  // Pagination calculations from API
-  const totalPages = pagination?.totalPages || 1;
-  const totalItems = pagination?.total || filteredOrders.length;
+  let currentOrders = filteredOrders;
+  let totalPages = pagination?.totalPages || 1;
+  let totalItems = pagination?.total || filteredOrders.length;
+
+  if (isDateFilter) {
+      // Client-side pagination logic
+      totalItems = filteredOrders.length;
+      totalPages = Math.ceil(totalItems / itemsPerPage);
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      currentOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
+  }
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -4803,11 +4812,11 @@ const handleUpdateOrder = async (e) => {
   if (previewImg) {
     return (
       <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center" onClick={() => setPreviewImg(null)}>
-        <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden p-4" onClick={(e) => e.stopPropagation()}>
-          <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl shadow-lg" />
+        <div className="relative bg-white rounded-2xl overflow-hidden p-4" onClick={(e) => e.stopPropagation()}>
+          <img src={previewImg} alt="Document Preview" className="max-h-[80vh] rounded-xl" />
           <button
             onClick={() => setPreviewImg(null)}
-            className="absolute left-4 top-4 bg-white p-2 rounded-full shadow hover:bg-blue-100"
+            className="absolute left-4 top-4 bg-white p-2 rounded-full hover:bg-blue-100"
           >
             <FaArrowLeft />
           </button>
@@ -4819,7 +4828,7 @@ const handleUpdateOrder = async (e) => {
   if (modalType) {
     return (
       <div className="fixed inset-0 z-50 backdrop-blue-sm bg-black/30 flex items-center justify-center" onClick={() => setModalType(null)}>
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-[400px] relative flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white p-8 rounded-2xl w-[400px] relative flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
           <button className="absolute right-4 top-2 text-xl hover:text-red-500" onClick={() => setModalType(null)}>×</button>
           <textarea
             className="w-full border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 rounded-lg mb-4"
@@ -4829,7 +4838,7 @@ const handleUpdateOrder = async (e) => {
             onChange={(e) => setReason(e.target.value)}
           />
           <button
-            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full font-semibold shadow hover:from-blue-700 hover:to-purple-700 transition"
+            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full font-semibold hover:from-blue-700 hover:to-purple-700 transition"
             onClick={() => handleStatusUpdate(modalType === 'approval' ? 'approved' : modalType === 'rejection' ? 'rejected' : 'resubmit')}
           >
             Submit
@@ -4840,214 +4849,199 @@ const handleUpdateOrder = async (e) => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <Truck className="text-green-600" size={20} />
+    <div className="p-6 bg-white min-h-screen">
+      {/* Top Section Container with Outer Border */}
+      <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+        
+        {/* Row 1: Stats & Actions */}
+        <div className="flex flex-col xl:flex-row gap-6">
+          
+          {/* Left: Stats Cards - Flexible Grid */}
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+  {/* Total Orders */}
+  <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+      {filteredAllOrdersForCount.length}
+    </div>
+
+    <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+      Total Orders
+    </div>
+  </div>
+
+  {/* Today */}
+  <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+      {(() => {
+        const count = filteredAllOrdersForCount.filter(
+          order =>
+            order.createdAt ===
+            new Date().toISOString().split("T")[0]
+        ).length
+        return count
+      })()}
+    </div>
+
+    <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+      Today
+    </div>
+  </div>
+</div>
+
+
+          {/* Right Column: Actions (Add Button & Date Range) */}
+          <div className="flex flex-col gap-1 w-full xl:w-[350px]">
+              {/* Add Button */}
+              <button
+                onClick={() => {
+                  setFormMode('add');
+                  setEditingOrder(null);
+                  setShowAddOrderForm(true);
+                }}
+                className="flex items-center justify-between gap-4 px-6 h-[40px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
+              >
+                <span>Add Delivery Order</span>
+                <PlusCircle size={20} />
+              </button>
+
+              {/* Date Range Dropdown */}
+              <div className="relative w-full">
+                  <button
+                      type="button"
+                      onClick={() => setShowPresetMenu(v => !v)}
+                      className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
+                  >
+                      <span className={!range.startDate || !range.endDate ? 'text-gray-800' : 'text-gray-800'}>
+                      {range.startDate && range.endDate 
+                          ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                          : 'Select Date Range'}
+                      </span>
+                      <span className="ml-3 text-gray-400">▼</span>
+                  </button>
+
+                  {showPresetMenu && (
+                      <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-100 bg-white shadow-lg py-1 right-0">
+                      <button
+                          onClick={() => {
+                          setRange({ startDate: null, endDate: null, key: 'selection' });
+                          setShowPresetMenu(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-600"
+                      >
+                          Clear Filter
+                      </button>
+                      <div className="my-1 border-t border-gray-100" />
+                      {Object.keys(presets).map((lbl) => (
+                          <button
+                          key={lbl}
+                          onClick={() => applyPreset(lbl)}
+                          className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
+                          >
+                          {lbl}
+                          </button>
+                      ))}
+                      <div className="my-1 border-t border-gray-100" />
+                      <button
+                          onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                          className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
+                      >
+                          Custom Range
+                      </button>
+                      </div>
+                  )}
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Orders</p>
-                <p className="text-xl font-bold text-gray-800">{filteredAllOrdersForCount.length}</p>
-              </div>
-            </div>
-          </div>
-          {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <CheckCircle className="text-blue-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Approved</p>
-                  <p className="text-xl font-bold text-blue-600">{filteredAllOrdersForCount.filter(order => order.status === 'approved').length}</p>
-                </div>
-              </div>
-            </div> */}
-          {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                  <Clock className="text-yellow-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Pending</p>
-                  <p className="text-xl font-bold text-yellow-600">{filteredAllOrdersForCount.filter(order => order.status === 'pending').length}</p>
-                </div>
-              </div>
-            </div> */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <Calendar className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{filteredAllOrdersForCount.filter(order => order.createdAt === new Date().toISOString().split('T')[0]).length}</p>
-              </div>
-            </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="relative flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Search orders..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={handleSearchKeyPress}
-                className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors font-medium"
-            >
-              Search
-            </button>
-          </div>
-          {/* Range dropdown (like screenshot) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowPresetMenu(v => !v)}
-              className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
-            >
-              <span className={!range.startDate || !range.endDate ? 'text-gray-400' : ''}>
-                {range.startDate && range.endDate 
-                  ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
-                  : 'Select date range'}
-              </span>
-              <span className="ml-3">▼</span>
-            </button>
 
-            {showPresetMenu && (
-              <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
-                <button
-                  onClick={() => {
-                    setRange({ startDate: null, endDate: null, key: 'selection' });
-                    setShowPresetMenu(false);
-                  }}
-                  className="block w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-600"
-                >
-                  Clear Filter
-                </button>
-                <div className="my-1 border-t" />
-                {Object.keys(presets).map((lbl) => (
-                  <button
-                    key={lbl}
-                    onClick={() => applyPreset(lbl)}
-                    className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                  >
-                    {lbl}
-                  </button>
-                ))}
-                <div className="my-1 border-t" />
-                <button
-                  onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
-                  className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                >
-                  Custom Range
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
-          {showCustomRange && (
-            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
-                <DateRange
-                  ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
-                  onChange={(item) => {
-                    if (item.selection.startDate && item.selection.endDate) {
-                      setRange(item.selection);
-                    }
-                  }}
-                  moveRangeOnFirstSelection={false}
-                  months={2}
-                  direction="horizontal"
-                />
-                <div className="flex justify-end gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRange({ startDate: null, endDate: null, key: 'selection' });
-                      setShowCustomRange(false);
-                    }}
-                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                  >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomRange(false)}
-                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (range.startDate && range.endDate) {
-                        setShowCustomRange(false);
-                      }
-                    }}
-                    className={`px-4 py-2 rounded-lg ${
-                      range.startDate && range.endDate
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                    disabled={!range.startDate || !range.endDate}
-                  >
-                    OK
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setFormMode('add');
-                setEditingOrder(null);
-                setShowAddOrderForm(true);
-              }}
-              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
-            >
-              <PlusCircle size={20} /> Add Delivery Order
-            </button>
-
-          </div>
+        {/* Row 2: Search Bar */}
+        <div className="relative w-full">
+            <input
+            type="text"
+            placeholder="Search Orders"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
+            />
+            <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
         </div>
       </div>
+
+      {/* Custom Range Modal */}
+      {showCustomRange && (
+        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+          <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+            <DateRange
+              ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+              onChange={(item) => {
+                if (item.selection.startDate && item.selection.endDate) {
+                  setRange(item.selection);
+                }
+              }}
+              moveRangeOnFirstSelection={false}
+              months={2}
+              direction="horizontal"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setRange({ startDate: null, endDate: null, key: 'selection' });
+                  setShowCustomRange(false);
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCustomRange(false)}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (range.startDate && range.endDate) {
+                    setShowCustomRange(false);
+                  }
+                }}
+                className={`px-4 py-2 rounded-lg ${
+                  range.startDate && range.endDate
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+                disabled={!range.startDate || !range.endDate}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* API Error Display */}
       {/* The custom error box UI for API errors is removed as per the edit hint. */}
 
       {viewDoc && selectedOrder ? (
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
+        <div className="bg-white rounded-2xl p-8 max-w-3xl mx-auto">
           <div className="flex justify-between items-center mb-8">
             <div className="flex gap-4">
               <button
                 onClick={() => setModalType('approval')}
-                className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full shadow hover:from-green-600 hover:to-green-800 transition"
+                className="flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-full hover:from-green-600 hover:to-green-800 transition"
               >
                 <CheckCircle size={18} /> Approve
               </button>
               <button
                 onClick={() => setModalType('rejection')}
-                className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full shadow hover:from-red-600 hover:to-red-800 transition"
+                className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-full hover:from-red-600 hover:to-red-800 transition"
               >
                 <XCircle size={18} /> Reject
               </button>
               <button
                 onClick={() => setModalType('resubmit')}
-                className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full shadow hover:from-blue-600 hover:to-purple-700 transition"
+                className="flex items-center gap-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2 rounded-full hover:from-blue-600 hover:to-purple-700 transition"
               >
                 <Clock size={18} /> Re-submission
               </button>
@@ -5063,7 +5057,7 @@ const handleUpdateOrder = async (e) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50 to-white shadow flex flex-col gap-2">
+            <div className="border rounded-2xl p-6 bg-white flex flex-col gap-2">
               <div className="flex items-center gap-2 mb-2">
                 <Building className="text-green-500" size={20} />
                 <h3 className="text-lg font-bold text-green-700">Order Info</h3>
@@ -5090,7 +5084,7 @@ const handleUpdateOrder = async (e) => {
               <img
                 src={`${API_CONFIG.BASE_URL}/${selectedOrder.docUpload}`}
                 alt="Uploaded Doc"
-                className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
+                className="rounded-xl max-h-[250px] w-full object-contain border border-green-100 cursor-pointer hover:scale-105 transition"
                 onClick={() => setPreviewImg(`${API_CONFIG.BASE_URL}/${selectedOrder.docUpload}`)}
               />
               <div className="text-xs text-gray-400 mt-2">Click image to preview</div>
@@ -5099,14 +5093,14 @@ const handleUpdateOrder = async (e) => {
 
           {/* Uploaded Files Section */}
           {selectedOrder.uploadedFiles && selectedOrder.uploadedFiles.length > 0 && (
-            <div className="mt-8 border rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white shadow">
+            <div className="mt-8 border rounded-2xl p-6 bg-white">
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="text-blue-500" size={20} />
                 <h3 className="text-lg font-bold text-blue-700">Uploaded Files</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {selectedOrder.uploadedFiles.map((file, index) => (
-                  <div key={index} className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
+                  <div key={index} className="border border-gray-200 rounded-xl p-4 bg-white transition-shadow">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                         <FileText className="text-blue-600" size={16} />
@@ -5146,19 +5140,19 @@ const handleUpdateOrder = async (e) => {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <thead className="bg-white border-b border-gray-200">
                 <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">BILL TO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CARRIER NAME</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">WORK ORDER NO</th>
-                  {/* <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">SHIPMENT NO</th> */}
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CONTAINER NO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load ID</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Bill to</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Carrier Name</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Work Order No</th>
+                  {/* <th className="text-left py-4 px-4 text-gray-500 font-medium text-xs uppercase tracking-wider">SHIPMENT NO</th> */}
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Container No</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created By</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -5173,60 +5167,49 @@ const handleUpdateOrder = async (e) => {
                     : (order.createdBySalesUser?.employeeName || order.createdBySalesUser || order.createdBy || 'N/A');
                   
                   return (
-                    <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-mono text-base font-semibold text-gray-700">{order.doNum}</span>
+                    <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-600 font-medium">{order.doNum}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.clientName}</span>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">{order.clientName}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.carrierName}</span>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">{order.carrierName}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{workOrderNo}</span>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">{workOrderNo}</span>
                       </td>
-                      {/* <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{shipmentNo}</span>
+                      {/* <td className="py-4 px-4">
+                        <span className="text-sm text-gray-600">{shipmentNo}</span>
                       </td> */}
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{containerNo}</span>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">{containerNo}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{createdByDisplay}</span>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">{createdByDisplay}</span>
                       </td>
-                    <td className="py-2 px-3">
-                      <div className="flex gap-2">
+                    <td className="py-4 px-4">
+                      <div className="flex gap-3">
                         <button
                           onClick={() => handleViewOrder(order)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                          className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px]"
                         >
                           View
                         </button>
                         <button
-                          onClick={() => handleEditOrder(order)}
-                          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
-                        >
-                          Edit
-                        </button>
-                        {/* Assign Button - Commented Out */}
-                        {/* <button
-                          onClick={() => handleAssignOrder(order)}
-                          disabled={order.assignmentStatus === 'assigned'}
-                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${order.assignmentStatus === 'assigned'
-                            ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                            : 'bg-purple-500 hover:bg-purple-600 text-white'
-                            }`}
-                        >
-                          {order.assignmentStatus === 'assigned' ? 'Assigned' : 'Assign'}
-                        </button> */}
-                        <button
                           onClick={() => handleDuplicateOrder(order)}
-                          className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                          className="px-4 py-1 rounded border border-purple-500 text-purple-500 text-sm font-medium hover:bg-purple-50 transition-colors min-w-[70px]"
                         >
                           Duplicate
                         </button>
-                        {/* Only show Delete button for specific employee IDs */}
+                        <button
+                          onClick={() => handleEditOrder(order)}
+                          className="px-4 py-1 rounded border border-orange-500 text-orange-500 text-sm font-medium hover:bg-orange-50 transition-colors min-w-[70px]"
+                        >
+                          Edit
+                        </button>
+                        {/* Only show Delete/Reject button for specific employee IDs */}
                         {(() => {
                           const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
                           if (!userStr) return null;
@@ -5238,7 +5221,7 @@ const handleUpdateOrder = async (e) => {
                             return (
                               <button
                                 onClick={() => openDeleteModal(order)}
-                                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                className="px-4 py-1 rounded border border-red-500 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors min-w-[70px]"
                               >
                                 Delete
                               </button>
@@ -5271,47 +5254,53 @@ const handleUpdateOrder = async (e) => {
 
       {/* Pagination */}
       {totalPages > 1 && currentOrders.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
           <div className="text-sm text-gray-600">
             Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} orders
             {activeSearchTerm && ` (searching: "${activeSearchTerm}")`}
           </div>
-          <div className="flex gap-2 items-center flex-wrap">
+          <div className="flex gap-1 items-center">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
             >
-              Previous
+              <ChevronLeft size={18} />
+              <span>Previous</span>
             </button>
-            {getPaginationPages().map((page, index) => {
-              if (page === 'ellipsis') {
+            
+            <div className="flex items-center gap-1 mx-4">
+              {getPaginationPages().map((page, index) => {
+                if (page === 'ellipsis') {
+                  return (
+                    <span key={`ellipsis-${index}`} className="px-2 text-gray-400">
+                      ...
+                    </span>
+                  );
+                }
                 return (
-                  <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
-                    ...
-                  </span>
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                      currentPage === page
+                        ? 'bg-white border border-black shadow-sm text-black'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
                 );
-              }
-              return (
-                <button
-                  key={page}
-                  onClick={() => handlePageChange(page)}
-                  className={`px-3 py-2 border rounded-lg transition-colors text-sm font-medium min-w-[40px] ${
-                    currentPage === page
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'border-gray-300 hover:bg-gray-50 text-gray-700'
-                  }`}
-                >
-                  {page}
-                </button>
-              );
-            })}
+              })}
+            </div>
+
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
             >
-              Next
+              <span>Next</span>
+              <ChevronRight size={18} />
             </button>
           </div>
         </div>
@@ -5326,7 +5315,7 @@ const handleUpdateOrder = async (e) => {
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -5357,12 +5346,12 @@ const handleUpdateOrder = async (e) => {
                 </div>
                 <div className="flex items-center gap-4">
                   {/* Load Type Toggle - Header ke right side */}
-                  <div className="inline-flex items-center bg-blue-500 rounded-full overflow-hidden shadow-lg border-2 border-white/30">
+                  <div className="inline-flex items-center bg-blue-500 rounded-full overflow-hidden border-2 border-white/30">
                     <button
                       type="button"
                       onClick={() => handleLoadTypeToggle('OTR')}
                       className={`px-6 py-2 transition-all duration-300 text-sm font-semibold text-center ${selectedLoadType === 'OTR'
-                        ? "bg-white text-blue-600 shadow-inner"
+                        ? "bg-white text-blue-600"
                         : "bg-transparent text-white hover:bg-white/20"
                         }`}
                     >
@@ -5372,7 +5361,7 @@ const handleUpdateOrder = async (e) => {
                       type="button"
                       onClick={() => handleLoadTypeToggle('DRAYAGE')}
                       className={`px-6 py-2 transition-all duration-300 text-sm font-semibold text-center ${selectedLoadType === 'DRAYAGE'
-                        ? "bg-white text-blue-600 shadow-inner"
+                        ? "bg-white text-blue-600"
                         : "bg-transparent text-white hover:bg-white/20"
                         }`}
                     >
@@ -5396,7 +5385,7 @@ const handleUpdateOrder = async (e) => {
               className="p-6 space-y-6"
             >
               {/* Load Reference Section */}
-              <div className="bg-orange-50 p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-orange-800 mb-4">Load Reference</h3>
                 <div className="grid grid-cols-1 gap-4">
                   <div className="relative">
@@ -5428,7 +5417,7 @@ const handleUpdateOrder = async (e) => {
 
                     {/* Selected Load Data Display - Hidden per user request */}
                     {false && selectedLoadData && (
-                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="mt-4 p-4 bg-white border border-green-200 rounded-lg">
                         <h4 className="text-sm font-semibold text-green-800 mb-3">Selected Load Information</h4>
                         
                         {/* Basic Load Information */}
