@@ -721,6 +721,29 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                           overflow: 'auto',
                           display: 'block',
                           margin: '12px 0'
+                        },
+                        // Preserve bold text formatting - ensure b and strong tags display as bold
+                        '& b, & strong': {
+                          fontWeight: 700
+                        },
+                        // Preserve italic text
+                        '& i, & em': {
+                          fontStyle: 'italic'
+                        },
+                        // Preserve underline
+                        '& u': {
+                          textDecoration: 'underline'
+                        },
+                        // Preserve strikethrough
+                        '& s, & strike, & del': {
+                          textDecoration: 'line-through'
+                        },
+                        // Ensure elements with inline font-weight styles are preserved
+                        '& *[style*="font-weight: bold"], & *[style*="font-weight:bold"], & *[style*="font-weight: 700"], & *[style*="font-weight:700"]': {
+                          fontWeight: 700
+                        },
+                        '& *[style*="font-weight: bolder"]': {
+                          fontWeight: 800
                         }
                       }}
                     />

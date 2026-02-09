@@ -250,7 +250,7 @@ export const fetchSentEmails = async (accountId, limit = 30, page = 1) => {
 };
 
 // Fetch single email by UID
-export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeThread = true) => {
+export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeThread = true, markAsRead = true) => {
   const token = getAuthToken();
 
   if (!token) {
@@ -264,7 +264,8 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
   const params = new URLSearchParams({
     folder: folder.toUpperCase(), // INBOX or SENT
     includeContent: 'true', // Get full content for detail view
-    includeThread: includeThread ? 'true' : 'false' // Request full conversation thread (can be slow)
+    includeThread: includeThread ? 'true' : 'false', // Request full conversation thread (can be slow)
+    markAsRead: markAsRead ? 'true' : 'false' // Automatically mark as read when opened (default: true, only for INBOX)
   });
   
   if (accountId) {
@@ -278,6 +279,8 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
     const timeout = includeThread ? 60000 : 35000;
     
     console.log(`⏱️ Fetching email ${uidString} with ${includeThread ? 'thread' : 'single'} mode (timeout: ${timeout}ms)`);
+    console.log(`📧 API URL: ${emailUrl}`);
+    console.log(`📧 markAsRead parameter: ${markAsRead} (folder: ${folder.toUpperCase()})`);
     
     const response = await axios.get(
       emailUrl,
@@ -286,6 +289,32 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
         timeout: timeout
       }
     );
+
+    // Log the seen status from API response
+    // Backend now always returns seen at top level (email.seen)
+    if (response.data?.email) {
+      const email = response.data.email;
+      console.log(`✅ Email fetched - seen status:`, {
+        uid: email.uid,
+        seen: email.seen, // ✅ Always at top level now
+        subject: email.subject,
+        hasMessages: !!email.messages,
+        messageCount: email.messages?.length || 0,
+        note: 'Backend returns seen at top level (for threads, reflects most recent message)'
+      });
+      
+      // If it's a thread response, log each message's seen status for debugging
+      if (email.messages && Array.isArray(email.messages) && email.messages.length > 0) {
+        console.log(`✅ Thread messages seen status:`, email.messages.map((msg, idx) => ({
+          index: idx + 1,
+          uid: msg.uid,
+          seen: msg.seen,
+          subject: msg.subject?.substring(0, 50)
+        })));
+        console.log(`✅ Top-level seen (${email.seen}) matches most recent message seen (${email.messages[email.messages.length - 1]?.seen}):`, 
+          email.seen === email.messages[email.messages.length - 1]?.seen);
+      }
+    }
 
     return response.data;
   } catch (error) {
@@ -299,6 +328,52 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
     // Handle backend timeout errors
     if (error.response?.data?.message?.includes('timeout') || error.response?.data?.message?.includes('timed out')) {
       throw new Error(error.response.data.message || 'IMAP request timed out. Please try again.');
+    }
+    throw error;
+  }
+};
+
+// Mark email as read (manual)
+export const markEmailAsRead = async (uid, accountId, folder = 'INBOX') => {
+  const token = getAuthToken();
+
+  if (!token) {
+    throw new Error('Please login to access emails');
+  }
+
+  // Convert UID to string (handles both number and string UIDs)
+  const uidString = String(uid);
+  
+  // Build query parameters
+  const params = new URLSearchParams({
+    folder: folder.toUpperCase() // INBOX or SENT
+  });
+  
+  if (accountId) {
+    params.append('emailAccountId', accountId);
+  }
+  
+  const markReadUrl = `${API_BASE_URL}/email-inbox/${uidString}/read?${params.toString()}`;
+
+  try {
+    const response = await axios.patch(
+      markReadUrl,
+      {},
+      { 
+        headers: getAuthHeaders(),
+        timeout: 10000 // 10 seconds timeout for mark as read
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    // Handle timeout errors
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      throw new Error('Request timed out. Please try again.');
+    }
+    // Handle backend errors
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
     }
     throw error;
   }
@@ -555,7 +630,8 @@ export const transformEmail = (email, index) => {
     contentPreview: email.contentPreview || '', // Preview snippet for sent emails
     timestamp: finalDate,
     date: email.date, // Preserve original date string
-    isRead: email.isRead || email.read || email.seen || false,
+    seen: email.seen !== undefined ? email.seen : (email.isRead || email.read || false), // Preserve seen property from API
+    isRead: email.seen !== undefined ? email.seen : (email.isRead || email.read || false), // Map seen to isRead for backward compatibility
     isStarred: email.isStarred || email.starred || false,
     folder: email.folder || 'inbox',
     priority: email.priority || 'normal',
