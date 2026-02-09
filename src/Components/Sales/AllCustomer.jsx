@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Search, User, Mail, Phone, MapPin, CheckCircle, XCircle, Clock, Building, Truck, ChevronDown, UserCheck, X, DollarSign, CreditCard, Send, FileText, Image, Download, Eye, Paperclip, Users } from 'lucide-react';
+import { Search, User, Mail, Phone, MapPin, CheckCircle, XCircle, Clock, Building, Truck, ChevronDown, UserCheck, X, DollarSign, CreditCard, Send, FileText, Image, Download, Eye, Paperclip, Users, MessageCircle } from 'lucide-react';
 import API_CONFIG from '../../config/api';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -132,6 +134,7 @@ const SearchableDropdown = ({
 };
 
 const AllCustomer = () => {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -384,6 +387,20 @@ const AllCustomer = () => {
     } finally {
       setLoadingRequests(false);
     }
+  };
+
+  const handleChat = (customer) => {
+    const targetUser = customer.addedBy?.employeeName;
+    const targetEmpId = customer.addedBy?.empId;
+    const message = `Company: ${customer.compName || 'N/A'}, Credit Limit: ${customer.creditLimit ? parseFloat(customer.creditLimit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}`;
+    
+    navigate('/Chat', { 
+        state: { 
+            targetUser: targetUser,
+            targetEmpId: targetEmpId,
+            prefillMessage: message
+        } 
+    });
   };
 
   const closeCreditLimitModal = () => {
@@ -830,6 +847,13 @@ const AllCustomer = () => {
                           >
                               <CreditCard size={12} />
                               Add Credit Limit
+                          </button>
+                          <button
+                              onClick={() => handleChat(customer)}
+                              className="px-3 py-1 text-green-600 text-xs rounded-md transition-colors border border-green-300 hover:bg-green-50 flex items-center gap-1"
+                          >
+                              <MessageCircle size={12} />
+                              Chat
                           </button>
                         </div>
                       </td>
