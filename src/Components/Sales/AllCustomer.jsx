@@ -189,6 +189,45 @@ const AllCustomer = () => {
     }
   };
 
+  // Mark customer as viewed
+  const markCustomerAsViewed = async (customerId) => {
+    try {
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/customer/${customerId}/mark-viewed`,
+        {},
+        { headers: API_CONFIG.getAuthHeaders() }
+      );
+
+      if (response.data && response.data.success) {
+        // Optimistically update local state to remove red dot immediately
+        setCustomers(prevCustomers =>
+          prevCustomers.map(customer =>
+            customer._id === customerId
+              ? { ...customer, isNew: false }
+              : customer
+          )
+        );
+        return true;
+      } else {
+        console.error('Failed to mark customer as viewed:', response.data?.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error marking customer as viewed:', error);
+      // Revert optimistic update on error
+      fetchCustomers(); // Refresh to get correct state
+      return false;
+    }
+  };
+
+  // Handle customer name click to mark as viewed
+  const handleCustomerNameClick = async (customer) => {
+    // Mark as viewed if it's a new customer
+    if (customer.isNew === true) {
+      await markCustomerAsViewed(customer._id);
+    }
+  };
+
   const fetchSalesUsers = async () => {
     try {
       const response = await axios.get(
@@ -707,9 +746,33 @@ const AllCustomer = () => {
                             {/* <div className="bg-blue-100 p-2 rounded-lg">
                                 <Building size={16} className="text-blue-600" />
                             </div> */}
-                            <div>
-                                <div className="font-semibold text-gray-800">{customer.compName}</div>
-                                <div className="text-xs text-gray-500 capitalize">{customer.userType}</div>
+                            <div className="flex items-center gap-2 flex-1">
+                                <div 
+                                  className={`font-semibold text-gray-800 ${customer.isNew === true ? 'cursor-pointer hover:text-blue-600 transition-colors' : ''}`}
+                                  onClick={() => handleCustomerNameClick(customer)}
+                                  title={customer.isNew === true ? 'Click to mark as viewed' : ''}
+                                >
+                                  {customer.compName}
+                                </div>
+                                {customer.isNew === true && (
+                                  <span 
+                                    className="new-indicator" 
+                                    title="New customer - Click name to view"
+                                    style={{
+                                      display: 'inline-block',
+                                      width: '10px',
+                                      height: '10px',
+                                      backgroundColor: '#ef4444',
+                                      borderRadius: '50%',
+                                      flexShrink: 0,
+                                      animation: 'glowPulse 2s infinite',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 0 8px rgba(239, 68, 68, 0.8), 0 0 12px rgba(239, 68, 68, 0.6)',
+                                      position: 'relative'
+                                    }}
+                                    onClick={() => handleCustomerNameClick(customer)}
+                                  />
+                                )}
                             </div>
                         </div>
                       </td>
@@ -1402,6 +1465,28 @@ const AllCustomer = () => {
       )}
 
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="light" />
+      
+      {/* CSS for glowing pulse animation */}
+      <style>{`
+        @keyframes glowPulse {
+          0%, 100% {
+            opacity: 1;
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.8), 0 0 12px rgba(239, 68, 68, 0.6), 0 0 16px rgba(239, 68, 68, 0.4);
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.8;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 1), 0 0 18px rgba(239, 68, 68, 0.8), 0 0 24px rgba(239, 68, 68, 0.6);
+            transform: scale(1.1);
+          }
+        }
+        
+        .new-indicator:hover {
+          box-shadow: 0 0 15px rgba(239, 68, 68, 1), 0 0 25px rgba(239, 68, 68, 0.9), 0 0 35px rgba(239, 68, 68, 0.7) !important;
+          transform: scale(1.2);
+          transition: all 0.3s ease;
+        }
+      `}</style>
     </div>
   );
 };

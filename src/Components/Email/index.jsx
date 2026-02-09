@@ -44,7 +44,8 @@ import {
   sendEmail, 
   sendEmailWithAttachments, 
   replyToEmailWithFiles, 
-  replyToEmail 
+  replyToEmail,
+  markEmailAsRead
 } from './emailService';
 import { groupEmailsByThread } from './threadUtils';
 import API_CONFIG from '../../config/api';
@@ -351,16 +352,24 @@ const Email = () => {
             inReplyTo: email.inReplyTo || email.inReplyToHeader || null,
             references: email.references || email.referencesHeader || null,
             // Preserve labels from API response
-            labels: email.labels || transformed.labels || []
+            labels: email.labels || transformed.labels || [],
+            // CRITICAL: Preserve seen property from API response (for read/unread status)
+            seen: email.seen !== undefined ? email.seen : transformed.seen,
+            isRead: email.seen !== undefined ? email.seen : transformed.isRead
           };
           
-          // Log attachment data for first few emails to debug
+          // Log attachment data and seen status for first few emails to debug
           if (index < 3) {
-            console.log(`Inbox email ${index + 1} attachments:`, {
+            console.log(`Inbox email ${index + 1} attachments & seen status:`, {
+              subject: email.subject,
+              seen: email.seen,
+              isRead: email.isRead,
               hasAttachments: email.hasAttachments,
               attachmentCount: email.attachmentCount,
               attachments: email.attachments,
-              transformedAttachments: emailWithAttachments.attachments
+              transformedAttachments: emailWithAttachments.attachments,
+              finalSeen: emailWithAttachments.seen,
+              finalIsRead: emailWithAttachments.isRead
             });
           }
           return emailWithAttachments;
@@ -638,7 +647,10 @@ const Email = () => {
             hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : transformed.hasAttachments,
             attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : transformed.attachmentCount,
             // Preserve labels from API response
-            labels: email.labels || transformed.labels || []
+            labels: email.labels || transformed.labels || [],
+            // CRITICAL: Preserve seen property from API response (for read/unread status)
+            seen: email.seen !== undefined ? email.seen : transformed.seen,
+            isRead: email.seen !== undefined ? email.seen : transformed.isRead
           };
         });
 
@@ -787,7 +799,10 @@ const Email = () => {
             inReplyTo: email.inReplyTo || email.inReplyToHeader || null,
             references: email.references || email.referencesHeader || null,
             // Preserve labels from API response
-            labels: email.labels || []
+            labels: email.labels || [],
+            // CRITICAL: Preserve seen property from API response (for read/unread status)
+            seen: email.seen !== undefined ? email.seen : transformed.seen,
+            isRead: email.seen !== undefined ? email.seen : transformed.isRead
           };
           
           return emailWithAttachments;
@@ -990,7 +1005,9 @@ const Email = () => {
       if (latestMessage.uid && selectedAccountId) {
         try {
           const folder = latestMessage.folder === 'sent' ? 'SENT' : 'INBOX';
-          const response = await fetchEmailByUid(latestMessage.uid, selectedAccountId, folder, true);
+          // Auto-mark as read for INBOX emails (default behavior)
+          const shouldMarkAsRead = folder === 'INBOX';
+          const response = await fetchEmailByUid(latestMessage.uid, selectedAccountId, folder, true, shouldMarkAsRead);
           
           if (response.success && response.email && response.email.messages) {
             // Update with full thread data from backend
@@ -998,8 +1015,15 @@ const Email = () => {
               ...prev,
               threadMessages: response.email.messages,
               messages: response.email.messages,
-              messageCount: response.email.messageCount || response.email.messages.length
+              messageCount: response.email.messageCount || response.email.messages.length,
+              seen: response.email.seen !== undefined ? response.email.seen : prev.seen,
+              isRead: response.email.seen !== undefined ? response.email.seen : prev.isRead
             }));
+            
+            // Update email in list to reflect read status
+            if (shouldMarkAsRead && response.email.seen === true) {
+              updateEmailInList(latestMessage.uid, { seen: true, isRead: true });
+            }
           }
         } catch (err) {
           console.warn('Failed to fetch full thread, using cached messages:', err);
@@ -1041,9 +1065,8 @@ const Email = () => {
       uid: originalUid
     });
     
-    if (!email.isRead) {
-      markAsRead(originalId);
-    }
+    // Note: markAsRead is now handled by fetchEmailByUid API call (auto-mark as read)
+    // The old markAsRead function is kept for backward compatibility but won't be called here
 
     // For sent emails, the list response already includes content and attachments
     // We should use that content directly to avoid fetching wrong emails
@@ -1085,8 +1108,8 @@ const Email = () => {
           
           // If we don't have full content, fetch it in background
           if (!email.content && hasValidUid && selectedAccountId) {
-            // Fetch full content in background using folder=SENT
-            fetchEmailByUid(originalUid, selectedAccountId, 'SENT', false) // Don't fetch thread in background
+            // Fetch full content in background using folder=SENT (don't mark as read for SENT)
+            fetchEmailByUid(originalUid, selectedAccountId, 'SENT', false, false) // Don't fetch thread, don't mark as read
               .then(response => {
                 if (response.success && response.email) {
                   setSelectedEmail(prev => ({
@@ -1095,7 +1118,9 @@ const Email = () => {
                     body: response.email.content || prev.body,
                     html: response.email.html || prev.html,
                     cc: response.email.cc || prev.cc,
-                    bcc: response.email.bcc || prev.bcc
+                    bcc: response.email.bcc || prev.bcc,
+                    seen: response.email.seen !== undefined ? response.email.seen : prev.seen,
+                    isRead: response.email.seen !== undefined ? response.email.seen : prev.isRead
                   }));
                 }
               })
@@ -1107,7 +1132,8 @@ const Email = () => {
         // If no content/preview, fetch full details
         if (hasValidUid && selectedAccountId) {
           try {
-            const response = await fetchEmailByUid(originalUid, selectedAccountId, 'SENT', false); // Don't fetch thread in background
+            // Don't mark SENT emails as read
+            const response = await fetchEmailByUid(originalUid, selectedAccountId, 'SENT', false, false); // Don't fetch thread, don't mark as read
             if (response.success && response.email) {
               const fullEmail = response.email;
               setSelectedEmail({
@@ -1127,7 +1153,9 @@ const Email = () => {
                 bcc: fullEmail.bcc || '',
                 attachments: fullEmail.attachments || email.attachments || [],
                 hasAttachments: fullEmail.hasAttachments !== undefined ? fullEmail.hasAttachments : (fullEmail.attachments?.length > 0),
-                attachmentCount: fullEmail.attachmentCount !== undefined ? fullEmail.attachmentCount : (fullEmail.attachments?.length || 0)
+                attachmentCount: fullEmail.attachmentCount !== undefined ? fullEmail.attachmentCount : (fullEmail.attachments?.length || 0),
+                seen: fullEmail.seen !== undefined ? fullEmail.seen : email.seen,
+                isRead: fullEmail.seen !== undefined ? fullEmail.seen : email.isRead
               });
               return;
             }
@@ -1198,14 +1226,16 @@ const Email = () => {
         const folder = isSentEmail ? 'SENT' : 'INBOX';
         
         // Try to fetch with thread first (60s timeout)
+        // Auto-mark as read for INBOX emails (default behavior)
+        const shouldMarkAsRead = folder === 'INBOX';
         let response;
         try {
-          response = await fetchEmailByUid(originalUid, selectedAccountId, folder, true);
+          response = await fetchEmailByUid(originalUid, selectedAccountId, folder, true, shouldMarkAsRead);
         } catch (threadError) {
           // If thread request times out, try without thread (faster, 35s timeout)
           if (threadError.message?.includes('timeout') || threadError.message?.includes('timed out')) {
             console.warn('⚠️ Thread request timed out, fetching single email instead...');
-            response = await fetchEmailByUid(originalUid, selectedAccountId, folder, false);
+            response = await fetchEmailByUid(originalUid, selectedAccountId, folder, false, shouldMarkAsRead);
           } else {
             throw threadError; // Re-throw if it's not a timeout error
           }
@@ -1219,6 +1249,21 @@ const Email = () => {
             uid: originalUid,
             folder: folder,
             includeThread: true
+          });
+          
+          // CRITICAL: Log seen status from API response
+          // Backend now always returns seen at top level (response.email.seen)
+          console.log('👁️ API Response - Seen Status:', {
+            emailSeen: response.email.seen,
+            emailIsRead: response.email.isRead,
+            hasSeenProperty: 'seen' in response.email,
+            fullEmailKeys: Object.keys(response.email),
+            emailPreview: {
+              uid: response.email.uid,
+              subject: response.email.subject,
+              seen: response.email.seen
+            },
+            note: 'Backend now consistently returns seen at top level'
           });
           
           // Debug: Log raw API response INCLUDING ATTACHMENTS
@@ -1275,6 +1320,18 @@ const Email = () => {
           const fullEmail = hasThread ? response.email.messages[response.email.messages.length - 1] : response.email;
           const threadMessages = hasThread ? response.email.messages : null;
           
+          // CRITICAL: Backend now always returns seen at top level (response.email.seen)
+          // For threads, it reflects the most recent message's seen status
+          const apiSeenStatus = response.email.seen !== undefined ? response.email.seen : undefined;
+          console.log('👁️ Checking seen status from API:', {
+            responseEmailSeen: response.email.seen,
+            apiSeenStatus,
+            hasThread,
+            messageCount: threadMessages?.length || 0,
+            // Log message seen statuses for debugging
+            allMessageSeenStatuses: threadMessages?.map(m => ({ uid: m.uid, seen: m.seen })) || []
+          });
+          
           // Log thread info for debugging
           if (hasThread) {
             console.log('✅ Backend returned thread:', {
@@ -1282,7 +1339,9 @@ const Email = () => {
               messagesInArray: threadMessages.length,
               threadId: response.email.threadId,
               firstMessageUid: threadMessages[0]?.uid,
-              lastMessageUid: threadMessages[threadMessages.length - 1]?.uid
+              lastMessageUid: threadMessages[threadMessages.length - 1]?.uid,
+              firstMessageSeen: threadMessages[0]?.seen,
+              lastMessageSeen: threadMessages[threadMessages.length - 1]?.seen
             });
           }
           
@@ -1483,8 +1542,30 @@ const Email = () => {
             // Include thread messages if available (transformed)
             threadMessages: transformedThreadMessages,
             messages: transformedThreadMessages, // Also include as 'messages' for compatibility
-            messageCount: transformedThreadMessages ? transformedThreadMessages.length : 1
+            messageCount: transformedThreadMessages ? transformedThreadMessages.length : 1,
+            // Update seen/isRead status from fetched email (use apiSeenStatus we determined above)
+            seen: apiSeenStatus !== undefined ? apiSeenStatus : email.seen,
+            isRead: apiSeenStatus !== undefined ? apiSeenStatus : email.isRead
           };
+          
+          // Update email in list to reflect read status after opening
+          // Check if email was marked as read (apiSeenStatus === true)
+          if (shouldMarkAsRead && apiSeenStatus === true) {
+            console.log('✅ Marking email as read in list:', {
+              uid: originalUid,
+              subject: originalSubject,
+              apiSeenStatus,
+              responseEmailSeen: response.email.seen
+            });
+            updateEmailInList(originalUid, { seen: true, isRead: true });
+          } else if (shouldMarkAsRead) {
+            console.warn('⚠️ Email should be marked as read but apiSeenStatus is not true:', {
+              uid: originalUid,
+              apiSeenStatus,
+              responseEmailSeen: response.email.seen,
+              shouldMarkAsRead
+            });
+          }
           
           console.log('📧 Final email to display:', {
             hasThread: !!transformedThreadMessages,
@@ -1538,9 +1619,96 @@ const Email = () => {
     }
   };
 
+  // Helper function to update email in list after opening
+  const updateEmailInList = (emailUid, updates) => {
+    console.log('🔄 Updating email in list:', { emailUid, updates });
+    setEmails(prev => {
+      const updated = prev.map(email => {
+        // Check if this is a thread with messages
+        if (email.isThread && email.messages && Array.isArray(email.messages)) {
+          // Check if any message in the thread matches the UID
+          const hasMatchingMessage = email.messages.some(msg => String(msg.uid) === String(emailUid));
+          if (hasMatchingMessage) {
+            console.log('✅ Found matching thread, updating:', {
+              threadId: email.threadId,
+              subject: email.subject,
+              oldSeen: email.seen,
+              oldIsRead: email.isRead,
+              updates
+            });
+            // Update the thread's read status AND all messages in the thread
+            const updatedMessages = email.messages.map(msg => 
+              String(msg.uid) === String(emailUid) 
+                ? { ...msg, ...updates }
+                : msg
+            );
+            
+            // CRITICAL: Update the thread itself with seen/isRead status
+            // For threads, if any message is read, the thread should be marked as read
+            // Also update latestMessage if it exists
+            const updatedThread = {
+              ...email,
+              // Explicitly set seen and isRead properties (don't rely on spread alone)
+              seen: updates.seen !== undefined ? updates.seen : email.seen,
+              isRead: updates.isRead !== undefined ? updates.isRead : email.isRead,
+              messages: updatedMessages,
+              // Update latestMessage if it matches the UID
+              latestMessage: email.latestMessage && String(email.latestMessage.uid) === String(emailUid)
+                ? { ...email.latestMessage, ...updates }
+                : email.latestMessage
+            };
+            
+            console.log('✅ Thread updated:', {
+              threadSeen: updatedThread.seen,
+              threadIsRead: updatedThread.isRead,
+              messageSeen: updatedMessages.find(m => String(m.uid) === String(emailUid))?.seen,
+              beforeUpdate: {
+                seen: email.seen,
+                isRead: email.isRead
+              },
+              afterUpdate: {
+                seen: updatedThread.seen,
+                isRead: updatedThread.isRead
+              }
+            });
+            
+            return updatedThread;
+          }
+        }
+        // Check if this is a single email matching the UID
+        if (String(email.uid) === String(emailUid)) {
+          console.log('✅ Found matching email, updating:', {
+            uid: email.uid,
+            subject: email.subject,
+            oldSeen: email.seen,
+            oldIsRead: email.isRead,
+            updates
+          });
+          const updatedEmail = { ...email, ...updates };
+          console.log('✅ Email updated:', {
+            newSeen: updatedEmail.seen,
+            newIsRead: updatedEmail.isRead
+          });
+          return updatedEmail;
+        }
+        return email;
+      });
+      console.log('📧 Updated emails list:', updated.slice(0, 3).map(e => ({
+        uid: e.uid,
+        subject: e.subject,
+        seen: e.seen,
+        isRead: e.isRead,
+        isThread: e.isThread,
+        messageCount: e.messageCount
+      })));
+      return updated;
+    });
+  };
+
+  // Legacy markAsRead function (kept for backward compatibility)
   const markAsRead = (emailId) => {
     setEmails(prev => prev.map(email => 
-      email.id === emailId ? { ...email, isRead: true } : email
+      email.id === emailId ? { ...email, isRead: true, seen: true } : email
     ));
   };
 
@@ -1997,6 +2165,11 @@ const Email = () => {
               folder={selectedTab === 0 ? 'INBOX' : 'SENT'}
               emailAccountId={selectedAccountId}
               onClearLabelFilter={handleClearLabelFilter}
+              // ⭐ NEW PROP for bulk actions
+              onEmailsUpdate={(updateFn) => {
+                // Update emails in parent component
+                setEmails(prev => updateFn(prev));
+              }}
             />
           </Box>
         </Box>

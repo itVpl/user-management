@@ -23,7 +23,7 @@ import {
   TableChart as ExcelIcon,
   InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
-import { fetchEmailsByLabel as fetchEmailsByLabelAPI, transformEmail } from './emailService';
+import { fetchEmailsByLabel as fetchEmailsByLabelAPI, transformEmail, markEmailAsRead } from './emailService';
 import { groupEmailsByThread } from './threadUtils';
 
 // Get file type icon component based on contentType or filename
@@ -196,13 +196,15 @@ const EmailList = ({
   selectedLabelId = null,
   folder = 'INBOX', // 'INBOX' or 'SENT'
   emailAccountId = null,
-  onClearLabelFilter = null // Callback to clear label filter
+  onClearLabelFilter = null, // Callback to clear label filter
+  onEmailsUpdate = null // Callback to update emails in parent (for bulk actions)
 }) => {
   const scrollContainerRef = useRef(null);
   const loadingTriggerRef = useRef(null);
   const isLoadingRef = useRef(false); // Track if a load is in progress to prevent duplicate calls
   const scrollTimeoutRef = useRef(null); // For debouncing scroll events
   const [selectedEmails, setSelectedEmails] = useState(new Set());
+  const [bulkMarking, setBulkMarking] = useState(false);
   
   // ⭐ Internal state for label-filtered emails
   const [filteredEmails, setFilteredEmails] = useState([]);
@@ -295,7 +297,10 @@ const EmailList = ({
           // Preserve labels from API response
           return {
             ...transformed,
-            labels: email.labels || []
+            labels: email.labels || [],
+            // CRITICAL: Preserve seen property from API response (for read/unread status)
+            seen: email.seen !== undefined ? email.seen : transformed.seen,
+            isRead: email.seen !== undefined ? email.seen : transformed.isRead
           };
         });
 
@@ -495,8 +500,176 @@ const EmailList = ({
 
   const groupedEmails = groupEmailsByDate(emails);
 
+  // Get all email UIDs from selected emails
+  const getSelectedEmailUids = () => {
+    const uids = [];
+    emails.forEach(email => {
+      const emailKey = email.id || (email.uid !== null && email.uid !== undefined && email.uid !== '' ? `uid-${email.uid}` : null);
+      if (emailKey && selectedEmails.has(emailKey)) {
+        // For threads, get all message UIDs; for single emails, get the email UID
+        if (email.isThread && email.messages && Array.isArray(email.messages)) {
+          email.messages.forEach(msg => {
+            if (msg.uid) uids.push(msg.uid);
+          });
+        } else if (email.uid) {
+          uids.push(email.uid);
+        }
+      }
+    });
+    return uids;
+  };
+
+  // Handle bulk mark as read
+  const handleBulkMarkAsRead = async () => {
+    if (!emailAccountId || selectedEmails.size === 0) return;
+
+    const selectedUids = getSelectedEmailUids();
+    if (selectedUids.length === 0) {
+      console.warn('No valid email UIDs found for selected emails');
+      return;
+    }
+
+    setBulkMarking(true);
+    try {
+      // Mark all selected emails as read
+      const results = await Promise.all(
+        selectedUids.map(uid =>
+          markEmailAsRead(uid, emailAccountId, folder).catch(err => {
+            console.error(`Failed to mark email ${uid} as read:`, err);
+            return { success: false, uid };
+          })
+        )
+      );
+
+      const successCount = results.filter(r => r?.success).length;
+      console.log(`✅ Marked ${successCount} out of ${selectedUids.length} emails as read`);
+
+      // Update emails via callback if provided, otherwise update filtered emails
+      const updateEmailReadStatus = (emailList) => {
+        return emailList.map(email => {
+          const emailKey = email.id || (email.uid !== null && email.uid !== undefined && email.uid !== '' ? `uid-${email.uid}` : null);
+          if (emailKey && selectedEmails.has(emailKey)) {
+            // Mark as read if any UID in this email was successfully marked
+            const emailUids = email.isThread && email.messages
+              ? email.messages.map(m => String(m.uid)).filter(Boolean)
+              : email.uid ? [String(email.uid)] : [];
+            
+            const wasMarked = emailUids.some(uid => 
+              results.some(r => r?.success === true)
+            );
+
+            if (wasMarked) {
+              return {
+                ...email,
+                seen: true,
+                isRead: true,
+                // Also update messages if it's a thread
+                messages: email.messages ? email.messages.map(msg => ({
+                  ...msg,
+                  seen: true,
+                  isRead: true
+                })) : undefined,
+                // Update latestMessage if it exists
+                latestMessage: email.latestMessage ? {
+                  ...email.latestMessage,
+                  seen: true,
+                  isRead: true
+                } : undefined
+              };
+            }
+          }
+          return email;
+        });
+      };
+
+      // Update emails in parent if callback provided (for regular emails)
+      if (onEmailsUpdate && !isLabelFiltered) {
+        onEmailsUpdate(updateEmailReadStatus);
+      } else if (isLabelFiltered) {
+        // Update filtered emails locally
+        setFilteredEmails(prev => updateEmailReadStatus(prev));
+      }
+
+      // Clear selection after marking
+      setSelectedEmails(new Set());
+    } catch (error) {
+      console.error('Error marking emails as read:', error);
+    } finally {
+      setBulkMarking(false);
+    }
+  };
+
+  // Handle select all
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      const allEmailKeys = new Set();
+      emails.forEach(email => {
+        const emailKey = email.id || (email.uid !== null && email.uid !== undefined && email.uid !== '' ? `uid-${email.uid}` : null);
+        if (emailKey) allEmailKeys.add(emailKey);
+      });
+      setSelectedEmails(allEmailKeys);
+    } else {
+      setSelectedEmails(new Set());
+    }
+  };
+
+  const allSelected = emails.length > 0 && selectedEmails.size === emails.length;
+  const someSelected = selectedEmails.size > 0 && selectedEmails.size < emails.length;
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Bulk Action Toolbar - Show when emails are selected */}
+      {selectedEmails.size > 0 && (
+        <Box sx={{
+          px: 2,
+          py: 1,
+          backgroundColor: '#f8f9fa',
+          borderBottom: '1px solid #e0e0e0',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          flexShrink: 0
+        }}>
+          <Typography variant="body2" sx={{ color: '#5f6368', fontWeight: 500 }}>
+            {selectedEmails.size} selected
+          </Typography>
+          <Button
+            variant="text"
+            size="small"
+            onClick={handleBulkMarkAsRead}
+            disabled={bulkMarking || folder === 'SENT'}
+            sx={{
+              textTransform: 'none',
+              color: '#1a73e8',
+              fontWeight: 500,
+              fontSize: '0.875rem',
+              '&:hover': {
+                backgroundColor: '#e8f0fe'
+              },
+              '&.Mui-disabled': {
+                color: '#9e9e9e'
+              }
+            }}
+          >
+            {bulkMarking ? 'Marking...' : 'Mark as Read'}
+          </Button>
+          <Button
+            variant="text"
+            size="small"
+            onClick={() => setSelectedEmails(new Set())}
+            sx={{
+              textTransform: 'none',
+              color: '#5f6368',
+              fontSize: '0.875rem',
+              '&:hover': {
+                backgroundColor: '#f1f3f4'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+        </Box>
+      )}
       {/* Filter Banner - Show when label is selected */}
       {selectedLabelId && (
         <>
@@ -539,6 +712,44 @@ const EmailList = ({
 
       {/* Email List */}
       <List ref={scrollContainerRef} sx={{ p: 0, backgroundColor: 'white', flexGrow: 1, overflow: 'auto' }}>
+      {/* Select All Checkbox - Gmail style */}
+      {emails.length > 0 && (
+        <Box sx={{
+          px: 2,
+          py: 1,
+          borderBottom: '1px solid #e8eaed',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          backgroundColor: 'white',
+          position: 'sticky',
+          top: 0,
+          zIndex: 2
+        }}>
+          <Checkbox
+            size="small"
+            checked={allSelected}
+            indeterminate={someSelected}
+            onChange={(e) => handleSelectAll(e.target.checked)}
+            sx={{
+              p: 0.5,
+              color: '#5f6368',
+              '&.Mui-checked': {
+                color: '#1a73e8'
+              },
+              '&.Mui-indeterminate': {
+                color: '#1a73e8'
+              },
+              '&:hover': {
+                backgroundColor: 'rgba(0,0,0,0.04)'
+              }
+            }}
+          />
+          <Typography variant="body2" sx={{ color: '#5f6368', fontSize: '0.8125rem' }}>
+            {allSelected ? 'Deselect all' : someSelected ? `${selectedEmails.size} selected` : 'Select all'}
+          </Typography>
+        </Box>
+      )}
       {groupedEmails.map((group) => (
         <React.Fragment key={group.label}>
           {/* Date Header - Gmail style */}
@@ -594,6 +805,22 @@ const EmailList = ({
             const displayEmail = email.folder === 'sent' ? email.to : email.from;
             const avatarColor = getAvatarColor(displayName, displayEmail);
             const initials = getInitials(displayName, displayEmail);
+            
+            // Determine if email is read: check seen property first (from API), then isRead
+            const isRead = email.seen !== undefined ? email.seen : (email.isRead !== undefined ? email.isRead : false);
+            
+            // Debug: Log first email's read status
+            if (emailIndex === 0 && group.label === 'Today') {
+              console.log('📧 EmailList - First email read status:', {
+                subject: email.subject,
+                uid: email.uid,
+                seen: email.seen,
+                isRead: email.isRead,
+                calculatedIsRead: isRead,
+                isThread: email.isThread,
+                messageSeen: email.messages?.[0]?.seen
+              });
+            }
             
             return (
             <ListItem
@@ -726,7 +953,7 @@ const EmailList = ({
                   {/* Sender/Recipient Name - Show thread count if it's a thread */}
                   <Box
                     sx={{ 
-                      fontWeight: email.isRead ? 400 : 600, 
+                      fontWeight: isRead ? 400 : 600, 
                       color: '#202124',
                       minWidth: 200,
                       maxWidth: 200,
@@ -824,7 +1051,7 @@ const EmailList = ({
                       <Typography 
                         variant="body2" 
                         sx={{ 
-                          fontWeight: email.isRead ? 400 : 600, 
+                          fontWeight: isRead ? 400 : 600, 
                           color: '#202124',
                           overflow: 'hidden', 
                           textOverflow: 'ellipsis', 
@@ -973,7 +1200,7 @@ const EmailList = ({
                         minWidth: 60, 
                         textAlign: 'right',
                         fontSize: '0.8125rem',
-                        fontWeight: email.isRead ? 400 : 500
+                        fontWeight: isRead ? 400 : 500
                       }}
                     >
                       {formatTimestamp(email.timestamp)}
