@@ -599,6 +599,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Credit Limit</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Remaining Days</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Added On</th>
               <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
             </tr>
@@ -621,18 +622,33 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                   </span>
                 </td>
                 <td className="py-2 px-4">
+                  {cust.type === 'final_customer' ? (
+                    <span className={`font-semibold ${
+                      cust.timeline?.daysRemaining !== undefined && cust.timeline.daysRemaining !== null
+                        ? cust.timeline.daysRemaining <= 30
+                          ? 'text-red-600'
+                          : cust.timeline.daysRemaining <= 60
+                          ? 'text-orange-600'
+                          : 'text-green-600'
+                        : 'text-gray-500'
+                    }`}>
+                      {cust.timeline?.daysRemaining !== undefined && cust.timeline.daysRemaining !== null
+                        ? `${cust.timeline.daysRemaining} days`
+                        : 'N/A'}
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-gray-500">N/A</span>
+                  )}
+                </td>
+                <td className="py-2 px-4">
                   <span className={`font-semibold ${
-                    cust.timeline?.daysRemaining !== undefined && cust.timeline.daysRemaining !== null
-                      ? cust.timeline.daysRemaining <= 30
-                        ? 'text-red-600'
-                        : cust.timeline.daysRemaining <= 60
-                        ? 'text-orange-600'
-                        : 'text-green-600'
-                      : 'text-gray-500'
+                    cust.type === 'final_customer'
+                      ? 'text-green-600'
+                      : 'text-gray-700'
                   }`}>
-                    {cust.timeline?.daysRemaining !== undefined && cust.timeline.daysRemaining !== null
-                      ? `${cust.timeline.daysRemaining} days`
-                      : 'N/A'}
+                    {cust.type === 'final_customer'
+                      ? 'Active'
+                      : (cust.type || 'N/A')}
                   </span>
                 </td>
                 <td className="py-2 px-4">
@@ -671,7 +687,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
             ))}
             {pageData.length === 0 && (
               <tr>
-                <td className="py-12 text-center text-gray-500" colSpan="7">
+                <td className="py-12 text-center text-gray-500" colSpan="8">
                   <div className="flex flex-col items-center">
                     <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500 text-lg">No customer data available</p>
