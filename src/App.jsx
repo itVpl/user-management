@@ -104,6 +104,7 @@ const FollowUpReport = lazy(() => import("./Components/Sales/FollowUpReport.jsx"
 const LandingPage = lazy(() => import("./Pages/LandingPage.jsx"));
 const CreditLimitRequests = lazy(() => import("./Components/Sales/CreditLimitRequests.jsx"));
 const CreditLimitForm = lazy(() => import("./Pages/CreditLimitForm.jsx"));
+const EmployeeDocuments = lazy(() => import("./Components/HRDashboard/EmployeeDocuments.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -696,6 +697,7 @@ function App() {
           <Route path="break-report" element={<BreakReport />} />
           <Route path="allcustomer" element={<AllCustomer />} />
           <Route path="credit-limit-requests" element={<CreditLimitRequests />} />
+          <Route path="employee-documents" element={<EmployeeDocuments />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />
           <Route path="followUpReport" element={<FollowUpReport />} />
           <Route path="RateRequestReport" element={<RateRequestReport />} />

@@ -67,6 +67,15 @@ const API_CONFIG = {
     GET_CREDIT_LIMIT_FORM: '/api/v1/shipper_driver/credit-limit-form/:token',
     SUBMIT_CREDIT_LIMIT_FORM: '/api/v1/shipper_driver/credit-limit-form/:token',
     GET_CREDIT_LIMIT_REQUESTS: '/api/v1/shipper_driver/credit-limit-requests',
+    
+    // Employee Documents endpoints
+    EMPLOYEE_DOCUMENTS_BASE: '/api/v1/employee-documents',
+    EMPLOYEE_DOCUMENTS_SIGNATURES: '/api/v1/employee-documents/signatures',
+    EMPLOYEE_DOCUMENTS_SIGNATURES_UPLOAD: '/api/v1/employee-documents/signatures/upload',
+    EMPLOYEE_DOCUMENTS_OFFER_LETTER: '/api/v1/employee-documents/offer-letter/create',
+    EMPLOYEE_DOCUMENTS_LOI: '/api/v1/employee-documents/letter-of-intent/create',
+    EMPLOYEE_DOCUMENTS_SALARY_SLIP: '/api/v1/employee-documents/salary-slip/create',
+    EMPLOYEE_DOCUMENTS_FNF: '/api/v1/employee-documents/fnf/create',
   },
   
   // Helper function to get full URL
