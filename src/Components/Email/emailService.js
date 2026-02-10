@@ -537,6 +537,78 @@ const parseEmailDate = (dateString) => {
   }
 };
 
+// Decode MIME encoded words (RFC 2047)
+// Handles formats like: =?utf-8?B?...?= (Base64) or =?utf-8?Q?...?= (Quoted-Printable)
+// Supports multiple encoded words in a single string
+const decodeMimeWords = (str) => {
+  if (!str || typeof str !== 'string') {
+    return str;
+  }
+
+  // Check if the string contains MIME encoded words
+  // Pattern: =?charset?encoding?encoded-text?=
+  // Supports both B (Base64) and Q (Quoted-Printable) encodings
+  const mimeWordRegex = /=\?([^?]+)\?([BQbq])\?([^?]+)\?=/g;
+  
+  // Test if any MIME encoded words exist
+  if (!mimeWordRegex.test(str)) {
+    return str; // No MIME encoding found, return as-is
+  }
+
+  // Reset regex lastIndex
+  mimeWordRegex.lastIndex = 0;
+  
+  let decoded = str;
+  let match;
+  const matches = [];
+
+  // Collect all matches first (to avoid issues with string replacement)
+  while ((match = mimeWordRegex.exec(str)) !== null) {
+    matches.push({
+      fullMatch: match[0],
+      charset: match[1],
+      encoding: match[2].toUpperCase(),
+      encodedText: match[3],
+      index: match.index
+    });
+  }
+
+  // Process matches in reverse order to preserve indices during replacement
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const { fullMatch, charset, encoding, encodedText } = matches[i];
+    let decodedText = '';
+
+    try {
+      if (encoding === 'B') {
+        // Base64 decoding - remove whitespace first
+        const cleanBase64 = encodedText.replace(/\s/g, '');
+        decodedText = atob(cleanBase64);
+      } else if (encoding === 'Q') {
+        // Quoted-Printable decoding
+        decodedText = encodedText
+          .replace(/_/g, ' ') // Underscore represents space in Q encoding
+          .replace(/=([0-9A-F]{2})/gi, (match, hex) => {
+            return String.fromCharCode(parseInt(hex, 16));
+          });
+      }
+
+      // Replace the encoded word with decoded text
+      // JavaScript strings handle UTF-8 correctly by default
+      decoded = decoded.replace(fullMatch, decodedText);
+    } catch (error) {
+      console.warn('Error decoding MIME word:', { 
+        charset, 
+        encoding, 
+        encodedText: encodedText.substring(0, 50) + '...', 
+        error: error.message 
+      });
+      // If decoding fails, leave the original encoded text
+    }
+  }
+
+  return decoded;
+};
+
 // Transform API email to app format
 export const transformEmail = (email, index) => {
   // Parse the date field from API - try multiple possible fields
@@ -611,19 +683,20 @@ export const transformEmail = (email, index) => {
       // First try fromName/senderName fields
       if (email.fromName || email.senderName) {
         const rawName = email.fromName || email.senderName;
-        return rawName.replace(/^["']|["']$/g, '').trim();
+        return decodeMimeWords(rawName.replace(/^["']|["']$/g, '').trim());
       }
       // Extract name from "Name" <email@domain.com> format in from field
       const rawFrom = email.from || email.sender || '';
       const nameMatch = rawFrom.match(/^["']?([^"']+)["']?\s*</);
       if (nameMatch) {
-        return nameMatch[1].trim();
+        return decodeMimeWords(nameMatch[1].trim());
       }
       // Fallback: use from field (email) or default
-      return rawFrom || 'Unknown Sender';
+      const fallbackName = rawFrom || 'Unknown Sender';
+      return decodeMimeWords(fallbackName);
     })(),
     to: email.to || email.recipient || '',
-    subject: email.subject || 'No Subject',
+    subject: decodeMimeWords(email.subject) || 'No Subject', // Decode MIME encoded subjects
     body: email.body || email.text || email.content || email.contentPreview || '', // Map 'content' field from API to 'body'
     html: email.html || email.htmlBody || email.htmlContent || '',
     content: email.content || email.contentPreview || email.body || email.text || '', // Also preserve 'content' field
