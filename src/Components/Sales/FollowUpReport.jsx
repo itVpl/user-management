@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import apiService from '../../services/apiService.js';
 import { FaArrowLeft, FaDownload, FaFilePdf } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, DollarSign, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import Logo from '../../assets/LogoFinal.png';
 import IdentificaLogo from '../../assets/identifica_logo.png';
 import MtPoconoLogo from '../../assets/mtPocono.png';
@@ -428,7 +428,7 @@ export default function FollowUpReport() {
   // Generate smart pagination page numbers
   const getPaginationPages = () => {
     const pages = [];
-    const maxVisible = 7;
+    const maxVisible = 5;
     
     if (totalPages <= maxVisible) {
       for (let i = 1; i <= totalPages; i++) {
@@ -437,22 +437,18 @@ export default function FollowUpReport() {
     } else {
       pages.push(1);
       
-      if (currentPage <= 4) {
-        for (let i = 2; i <= 5; i++) {
-          pages.push(i);
-        }
+      if (currentPage <= 3) {
+        if (currentPage === 1) pages.push(2);
+        else pages.push(2, 3);
         pages.push('ellipsis');
         pages.push(totalPages);
-      } else if (currentPage >= totalPages - 3) {
+      } else if (currentPage >= totalPages - 2) {
         pages.push('ellipsis');
-        for (let i = totalPages - 4; i <= totalPages; i++) {
-          pages.push(i);
-        }
+        pages.push(totalPages - 2, totalPages - 1);
+        pages.push(totalPages);
       } else {
         pages.push('ellipsis');
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
-          pages.push(i);
-        }
+        pages.push(currentPage);
         pages.push('ellipsis');
         pages.push(totalPages);
       }
@@ -702,52 +698,54 @@ export default function FollowUpReport() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <Truck className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Follow-ups</p>
-                <p className="text-xl font-bold text-gray-800">{filteredOrders.length}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search follow-ups..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
+      {/* Top Section Wrapper */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        {/* First Row: Card & Filters */}
+        <div className="flex flex-col md:flex-row items-center gap-4 mb-6 w-full">
+          {/* Stats Card */}
+         <div className="flex-1 w-full bg-white rounded-xl border border-gray-200 p-4">
+ <div className="flex gap-4 h-full items-center">
+  
+  {/* Circle */}
+  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+    <span className="text-2xl font-bold text-gray-800">
+      {filteredOrders.length}
+    </span>
+  </div>
+
+  {/* Text with left margin */}
+  <div className="flex items-center ml-15">
+    <p className="text-base text-gray-700 font-semibold">
+      Total Follow-ups
+    </p>
+  </div>
+
+</div>
+
+</div>
+
+
           {/* Range dropdown */}
-          <div className="relative">
+          <div className="relative flex-1 w-full">
             <button
               type="button"
               onClick={() => setShowPresetMenu(v => !v)}
-              className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
+              className="w-full text-left px-4 py-3 border border-gray-200 rounded-xl bg-white flex items-center justify-between hover:border-gray-300 transition-colors"
             >
-              <span>
+              <span className="text-base font-semibold text-gray-700">
                 {isDateFilterActive 
                   ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
                   : 'All Dates'
                 }
               </span>
-              <span className="ml-3">▼</span>
+              <span className="text-gray-400">▼</span>
             </button>
-
+            
             {showPresetMenu && (
-              <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
+              <div className="absolute z-50 mt-2 w-full rounded-xl border border-gray-100 bg-white shadow-lg py-1">
                 <button
                   onClick={() => applyPreset('All Dates')}
-                  className="block w-full text-left px-3 py-2 hover:bg-gray-50 text-blue-600 font-medium"
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-blue-600 font-medium text-sm"
                 >
                   All Dates
                 </button>
@@ -755,15 +753,15 @@ export default function FollowUpReport() {
                   <button
                     key={lbl}
                     onClick={() => applyPreset(lbl)}
-                    className="block w-full text-left px-3 py-2 hover:bg-gray-50"
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 text-sm"
                   >
                     {lbl}
                   </button>
                 ))}
-                <div className="my-1 border-t" />
+                <div className="my-1 border-t border-gray-100" />
                 <button
                   onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
-                  className="block w-full text-left px-3 py-2 hover:bg-gray-50"
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 text-sm"
                 >
                   Custom Range
                 </button>
@@ -773,8 +771,8 @@ export default function FollowUpReport() {
 
           {/* Custom Range calendars */}
           {showCustomRange && (
-            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl p-6 border border-gray-100" onClick={(e) => e.stopPropagation()}>
                 <DateRange
                   ranges={[range]}
                   onChange={(item) => {
@@ -784,12 +782,13 @@ export default function FollowUpReport() {
                   moveRangeOnFirstSelection={false}
                   months={2}
                   direction="horizontal"
+                  rangeColors={['#2563eb']}
                 />
-                <div className="flex justify-end gap-2 mt-3">
+                <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100">
                   <button
                     type="button"
                     onClick={() => setShowCustomRange(false)}
-                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                    className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors"
                   >
                     Cancel
                   </button>
@@ -799,9 +798,9 @@ export default function FollowUpReport() {
                       setIsDateFilterActive(true);
                       setShowCustomRange(false);
                     }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
                   >
-                    OK
+                    Apply Range
                   </button>
                 </div>
               </div>
@@ -809,54 +808,73 @@ export default function FollowUpReport() {
           )}
 
           {/* Created By Filter */}
-          <div className="relative">
+          <div className="relative flex-1 w-full">
             <SearchableDropdown
               value={selectedCreatedBy}
               onChange={(value) => setSelectedCreatedBy(value)}
               options={[
-                { value: '', label: 'All Created By' },
+                { value: '', label: (
+          <span className="text-base font-semibold text-gray-700">
+
+            
+            All Created By
+          </span>
+        ), },
                 ...uniqueCreatedBy
               ]}
               placeholder="Select Created By"
               searchPlaceholder="Search created by..."
-              className="w-[250px]"
+              className="w-full"
+            />
+          </div>
+        </div>
+
+        {/* Second Row: Search & Export */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search follow-ups..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-base"
             />
           </div>
 
           {/* Export to CSV Button */}
           <button
             onClick={exportToCSV}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+            className="flex items-center gap-2 bg-transparent border border-gray-200 text-gray-600 hover:bg-green-50 px-6 py-3 rounded-xl transition-all font-semibold whitespace-nowrap text-base"
           >
             <FaDownload size={16} />
             Export CSV
           </button>
-
         </div>
       </div>
 
       {viewDoc && selectedOrder ? (
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
           {/* View Document UI */}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CUSTOMER NAME</th>
-                   <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CONTACT-PERSON</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">EMAIL</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">PHONE</th>
-                  {/* <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">FOLLOW UP TYPE</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">LATEST NOTE</th> */}
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Created At</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">NEXT FOLLOW UP DATE</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
+            <table className="w-full border-separate border-spacing-y-3">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase rounded-l-xl border-y border-l border-gray-200">CUSTOMER NAME</th>
+                   <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase border-y border-gray-200">CONTACT PERSON</th>
+                  <th className="text-left py-4 px-10 text-black-600 font-bold text-xs uppercase border-y border-gray-200">EMAIL</th>
+                  <th className="text-left py-4 px-8 text-black-600 font-bold text-xs uppercase border-y border-gray-200">PHONE</th>
+                  {/* <th className="text-left py-4 px-4 text-gray-500 font-semibold text-xs uppercase tracking-wider">FOLLOW UP TYPE</th>
+                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase tracking-wider">LATEST NOTE</th> */}
+                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase border-y border-gray-200">Created At</th>
+                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase border-y border-gray-200">NEXT FOLLOW UP</th>
+                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase rounded-r-xl border-y border-r border-gray-200">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y-0">
                 {currentOrders.map((order, index) => {
                   // Get latest note from follow-ups
                   const latestFollowUp = order.followUps && order.followUps.length > 0 
@@ -866,70 +884,49 @@ export default function FollowUpReport() {
                     ? (latestFollowUp.followUpNotes || latestFollowUp.note || order.description || 'No notes')
                     : (order.description || 'No notes');
                   
-                  // Format city/state
-                  
                   return (
-                    <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.customerName}</span>
+                    <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="py-4 px-4 bg-white border-y border-l border-gray-200 rounded-l-xl">
+                        <span className="text-gray-600 text-base font-medium">{order.customerName}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.contactPerson}</span>
+                      <td className="py-4 px-4 bg-white border-y border-gray-200">
+                        <span className="text-gray-600 text-base font-medium">{order.contactPerson}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{order.email}</span>
+                      <td className="py-4 px-4 bg-white border-y border-gray-200">
+                        <span className="text-gray-600 text-base font-medium">{order.email}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-mono text-base font-semibold text-gray-700">{order.phone}</span>
+                      <td className="py-4 px-4 bg-white border-y border-gray-200">
+                        <span className="font-mono text-base text-gray-600 font-medium">{order.phone}</span>
                       </td>
-                      {/* <td className="py-2 px-3">
-                        <span className="font-mono text-base font-semibold text-gray-700">{latestFollowUp?.followUpType || 'N/A'}</span>
-                      </td> */}
-                      {/* <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">
-                          {cityState || 'N/A'}
-                        </span>
-                      </td> */}
-                      {/* <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700 truncate max-w-xs block" title={latestNote}>
-                          {latestNote}
-                        </span>
-                      </td> */}
-                      {/* <td className="py-2 px-3">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
-                          order.status === 'Completed' ? 'bg-green-100 text-green-700' : 
-                          order.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 
-                          order.status === 'New' ? 'bg-blue-100 text-blue-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {order.status}
-                        </span>
-                      </td> */}
-                      <td className="py-2 px-3">
-                        <span className="text-sm text-gray-800">
-                          {order?.followUps?.[0]?.createdAt
-                            ? new Date(order.followUps[0].createdAt).toLocaleDateString()
-                            : 'No follow-up date'}
-                        </span>
-                        <div className="text-xs text-gray-800 mt-1">
-                         by {order?.followUps?.[0]?.createdBy?.employeeName || 'No follow-up employee'}
+                      <td className="py-4 px-4 bg-white border-y border-gray-200">
+                        <div className="flex flex-col">
+                          <span className="text-base text-gray-600 font-medium">
+                            {order?.followUps?.[0]?.createdAt
+                              ? new Date(order.followUps[0].createdAt).toLocaleDateString()
+                              : 'No date'}
+                          </span>
+                          <span className="text-sm text-gray-600">
+                           by {order?.followUps?.[0]?.createdBy?.employeeName || '-'}
+                          </span>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="text-sm text-gray-800">
-                          {order.followUps?.[0]?.nextFollowUpDate
-                            ? new Date(order.followUps[0].nextFollowUpDate).toLocaleDateString()
-                            : 'No next follow-up date'}
-                        </span>
-                        <div className="text-xs text-gray-800 mt-1">
-                         by {order?.followUps?.[0]?.createdBy?.employeeName || 'No follow-up employee'}
+                      <td className="py-4 px-4 bg-white border-y border-gray-200">
+                        <div className="flex flex-col">
+                          <span className="text-base text-gray-600 font-medium">
+                            {order.followUps?.[0]?.nextFollowUpDate
+                              ? new Date(order.followUps[0].nextFollowUpDate).toLocaleDateString()
+                              : 'No date'}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                           by {order?.followUps?.[0]?.createdBy?.employeeName || '-'}
+                          </span>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-4 px-4 bg-white border-y border-r border-gray-200 rounded-r-xl">
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleViewOrder(order)}
-                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded-lg text-base font-medium transition-colors"
                           >
                             View
                           </button>
@@ -942,13 +939,15 @@ export default function FollowUpReport() {
             </table>
           </div>
           {filteredOrders.length === 0 && (
-            <div className="text-center py-12">
-              <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">
-                {searchTerm ? 'No follow-ups found matching your search' : 'No follow-up records found'}
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Search className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-gray-900 font-medium text-lg mb-1">
+                {searchTerm ? 'No results found' : 'No follow-up records'}
               </p>
-              <p className="text-gray-400 text-sm">
-                {searchTerm ? 'Try adjusting your search terms' : 'Records will appear here'}
+              <p className="text-gray-500 text-sm">
+                {searchTerm ? 'Try adjusting your search or filters' : 'New follow-ups will appear here'}
               </p>
             </div>
           )}
@@ -957,47 +956,50 @@ export default function FollowUpReport() {
 
       {/* Pagination */}
       {totalPages > 1 && filteredOrders.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} follow-ups
-            {searchTerm && ` (filtered from ${orders.length} total)`}
+        <div className="flex flex-col sm:flex-row justify-between items-center mt-6 px-4">
+          <div className="text-sm text-gray-600 mb-4 sm:mb-0">
+            Showing <span className="text-gray-900">{startIndex + 1}</span> to <span className="text-gray-900">{Math.min(endIndex, filteredOrders.length)}</span> of <span className="text-gray-900">{filteredOrders.length}</span> entries
           </div>
-          <div className="flex gap-2 items-center flex-wrap">
+          <div className="flex gap-2 items-center">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
             >
+              <ChevronLeft size={16} />
               Previous
             </button>
-            {getPaginationPages().map((page, index) => {
-              if (page === 'ellipsis') {
+            <div className="flex gap-1">
+              {getPaginationPages().map((page, index) => {
+                if (page === 'ellipsis') {
+                  return (
+                    <span key={`ellipsis-${index}`} className="w-8 h-8 flex items-center justify-center text-gray-400">
+                      ...
+                    </span>
+                  );
+                }
                 return (
-                  <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
-                    ...
-                  </span>
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                      currentPage === page
+                        ? 'border border-gray-900 text-gray-900 bg-white'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
                 );
-              }
-              return (
-                <button
-                  key={page}
-                  onClick={() => handlePageChange(page)}
-                  className={`px-3 py-2 border rounded-lg transition-colors text-sm font-medium min-w-[40px] ${
-                    currentPage === page
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'border-gray-300 hover:bg-gray-50 text-gray-700'
-                  }`}
-                >
-                  {page}
-                </button>
-              );
-            })}
+              })}
+            </div>
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
             >
               Next
+              <ChevronRight size={16} />
             </button>
           </div>
         </div>
