@@ -71,6 +71,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Payroll": ["Pay Rolls"],
     "Documents": [
       "HR Document Verification",
+      "Employee Documents",
       "Employees Hygine",
       "Employee Hygiene"
     ],
@@ -435,6 +436,7 @@ const menuItems = [
   { name: "Shipper", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ShippersLDocuments" },
   { name: "Shipper Load Data", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ShiperLoadData" },
   { name: "HR Document Verification", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrDocumentsVerification" },
+  { name: "Employee Documents", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-documents" },
   { name: "Attendance Leave", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/Attendanceleave" },
   { name: "Emp Leaves", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/empleaves" },
   { name: "Team", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TLTeams" },
@@ -820,6 +822,11 @@ const Sidebar = () => {
 
   useEffect(() => {
     const fetchModules = async () => {
+      // Declare variables in outer scope so they're accessible in catch block
+      let department = "";
+      let role = "";
+      let isSuperAdmin = false;
+      
       try {
         setLoading(true);
         const user = JSON.parse(localStorage.getItem("user") || sessionStorage.getItem("user") || "{}");
@@ -837,10 +844,10 @@ const Sidebar = () => {
         }
 
         // Get user department and role
-        const department = user?.department || "";
-        const role = (user?.role || "").toLowerCase().trim();
+        department = user?.department || "";
+        role = (user?.role || "").toLowerCase().trim();
         const isUniversalUser = role === "universal_user";
-        const isSuperAdmin = role === "superadmin" || role === "super admin";
+        isSuperAdmin = role === "superadmin" || role === "super admin";
         setUserDepartment(department);
         setUserRole(role); // Set role early so it's available everywhere
         const hasDepartmentCategories = getDepartmentCategories(department, role) !== null;
@@ -905,15 +912,21 @@ const Sidebar = () => {
           }
           console.log("📋 All menu items:", menuItems.map(m => ({ name: m.name, path: m.path })));
 
-          // Match menu items with active modules by name (case insensitive)
-          // Also normalize multiple spaces to single space for matching
+          // Match menu items with active modules by name or label (case insensitive)
+          // Also normalize multiple spaces to single space and hyphens for matching
           const matchedMenus = menuItems.filter((item) => {
             const match = activeModules.some((mod) => {
-              const modName = mod.name.trim().replace(/\s+/g, ' ').toLowerCase();
-              const itemName = item.name.trim().replace(/\s+/g, ' ').toLowerCase();
-              const isMatch = modName === itemName;
+              // Normalize module name (handle hyphens and spaces)
+              const modName = (mod.name || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
+              // Also check label field if it exists
+              const modLabel = (mod.label || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
+              // Normalize menu item name
+              const itemName = item.name.trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
+              
+              // Match by name OR label
+              const isMatch = modName === itemName || modLabel === itemName;
               if (isMatch) {
-                console.log(`✅ Matched: "${mod.name}" (ID: ${mod._id}) with menu item "${item.name}"`);
+                console.log(`✅ Matched: "${mod.name}"${mod.label ? ` (label: "${mod.label}")` : ''} (ID: ${mod._id}) with menu item "${item.name}"`);
               }
               return isMatch;
             });
@@ -926,11 +939,12 @@ const Sidebar = () => {
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
           console.log("❌ Unmatched active modules:", activeModules.filter(mod => 
             !matchedMenus.some(item => {
-              const modName = mod.name.trim().replace(/\s+/g, ' ').toLowerCase();
-              const itemName = item.name.trim().replace(/\s+/g, ' ').toLowerCase();
-              return modName === itemName;
+              const modName = (mod.name || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
+              const modLabel = (mod.label || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
+              const itemName = item.name.trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
+              return modName === itemName || modLabel === itemName;
             })
-          ).map(m => ({ name: m.name, id: m._id })));
+          ).map(m => ({ name: m.name, label: m.label, id: m._id })));
           
           // Always include Companies menu item
           const companiesMenuItem = menuItems.find(item => item.name === 'Companies');
@@ -1226,6 +1240,22 @@ const Sidebar = () => {
                 }
                 if (dinnerStatusMenuItem && !otherMenus.some(item => item.name === "Dinner Status")) {
                   otherMenus.push(dinnerStatusMenuItem);
+                }
+              }
+              
+              // TEMPORARY BYPASS: Add Employee Documents for HR users (after all filtering)
+              // This bypasses module permission check - remove after adding module to database
+              if ((department === "hr" || department === "HR") && !deptMenus.some(item => item.name === "Employee Documents")) {
+                const employeeDocumentsItem = menuItems.find(item => item.name === "Employee Documents");
+                if (employeeDocumentsItem) {
+                  deptMenus.push(employeeDocumentsItem);
+                  // Add to categorized as well
+                  const category = getModuleCategory("Employee Documents", department, role);
+                  if (!categorized[category]) {
+                    categorized[category] = [];
+                  }
+                  categorized[category].push(employeeDocumentsItem);
+                  console.log("✅ Added Employee Documents to HR menu (bypass)");
                 }
               }
               
