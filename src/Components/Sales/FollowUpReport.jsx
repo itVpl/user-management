@@ -863,15 +863,15 @@ export default function FollowUpReport() {
             <table className="w-full border-separate border-spacing-y-3">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase rounded-l-xl border-y border-l border-gray-200">CUSTOMER NAME</th>
-                   <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase border-y border-gray-200">CONTACT PERSON</th>
-                  <th className="text-left py-4 px-10 text-black-600 font-bold text-xs uppercase border-y border-gray-200">EMAIL</th>
-                  <th className="text-left py-4 px-8 text-black-600 font-bold text-xs uppercase border-y border-gray-200">PHONE</th>
+                  <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase rounded-l-xl border-y border-l border-gray-200">CUSTOMER NAME</th>
+                   <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200">CONTACT PERSON</th>
+                  <th className="text-left py-4 px-10 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200">EMAIL</th>
+                  <th className="text-left py-4 px-8 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200">PHONE</th>
                   {/* <th className="text-left py-4 px-4 text-gray-500 font-semibold text-xs uppercase tracking-wider">FOLLOW UP TYPE</th>
-                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase tracking-wider">LATEST NOTE</th> */}
-                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase border-y border-gray-200">Created At</th>
-                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase border-y border-gray-200">NEXT FOLLOW UP</th>
-                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase rounded-r-xl border-y border-r border-gray-200">ACTIONS</th>
+                  <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase tracking-wider">LATEST NOTE</th> */}
+                  <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200">Created At</th>
+                  <th className="text-left py-4 px-2 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200">NEXT FOLLOW UP</th>
+                  <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase rounded-r-xl border-y border-r border-gray-200">ACTIONS</th>
                 </tr>
               </thead>
               <tbody className="divide-y-0">
