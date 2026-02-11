@@ -4,6 +4,7 @@ import axios from 'axios';
 import { User, Building2, FileText, PlusCircle, Eye, EyeOff, Search, Mail, X, Calendar, MapPin, Phone, CreditCard, Clock, CheckCircle, XCircle, Building, MessageSquare } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import { toast, ToastContainer } from 'react-toastify';
+import { Plus } from 'lucide-react';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Searchable Select Component
@@ -71,7 +72,7 @@ const SearchableSelect = React.memo(function SearchableSelect({
         </div>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-h-60 overflow-hidden">
+          <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl max-h-60 overflow-hidden">
             {/* Search Input */}
             <div className="p-2 border-b border-gray-200">
               <div className="relative">
@@ -589,61 +590,61 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
 
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm text-gray-700">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Company Name</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">MC DOT</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Credit Limit</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Remaining Days</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Added On</th>
-              <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+        <table className="min-w-full text-sm text-gray-700 border-separate border-spacing-y-3">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="py-4 px-4 text-left text-xs font-bold text-black-600 uppercase border-y border-l border-gray-200 rounded-l-xl first:pl-6 align-middle">Company Name</th>
+              <th className="py-4 px-4 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle">MC DOT</th>
+              <th className="py-4 px-10 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle">Email</th>
+              <th className="py-4 px-1 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 whitespace-nowrap align-middle">Credit Limit</th>
+              <th className="py-4 px-4 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 whitespace-nowrap align-middle">Remaining Days</th>
+              <th className="py-4 px-4 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle">Type</th>
+              <th className="py-4 px-4 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle">Added On</th>
+              <th className="py-4 px-16 text-left text-xs font-bold text-black-600 uppercase border-y border-r border-gray-200 rounded-r-xl last:pr-6 align-middle">Action</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="space-y-4">
             {pageData.map((cust, index) => (
-              <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                <td className="py-2 px-4">
+              <tr key={index} className="group transition-colors">
+                <td className="py-4 px-4 border-y border-l border-gray-200 rounded-l-xl first:pl-6 align-middle bg-white group-hover:bg-gray-50">
                   <span className="font-medium text-gray-700">{cust.compName}</span>
                 </td>
-                <td className="py-2 px-4">
+                <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
                   <span className="font-medium text-gray-700">{cust.mc_dot_no || 'N/A'}</span>
                 </td>
-                <td className="py-2 px-4">
+                <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
                   <span className="font-medium text-gray-700">{cust.email}</span>
                 </td>
-                <td className="py-2 px-4">
-                  <span className="font-semibold text-blue-600">
+                <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
+                  <span className="font-medium text-blue-700">
                     ${cust.creditLimit ? parseFloat(cust.creditLimit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                   </span>
                 </td>
-                <td className="py-2 px-4">
+                <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
                   {cust.type === 'final_customer' ? (
-                    <span className={`font-semibold ${
+                    <span className={`font-medium ${
                       cust.timeline?.daysRemaining !== undefined && cust.timeline.daysRemaining !== null
                         ? cust.timeline.daysRemaining <= 30
-                          ? 'text-red-600'
+                          ? 'text-red-700'
                           : cust.timeline.daysRemaining <= 60
-                          ? 'text-orange-600'
-                          : 'text-green-600'
-                        : 'text-gray-500'
+                          ? 'text-orange-700'
+                          : 'text-green-700'
+                        : 'text-gray-700'
                     }`}>
                       {cust.timeline?.daysRemaining !== undefined && cust.timeline.daysRemaining !== null
                         ? `${cust.timeline.daysRemaining} days`
                         : 'N/A'}
                     </span>
                   ) : (
-                    <span className="font-semibold text-gray-500">N/A</span>
+                    <span className="font-medium text-gray-700">N/A</span>
                   )}
                 </td>
-                <td className="py-2 px-4">
-                  <span className={`font-semibold ${
+                <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
+                  <span className={`font-medium ${
                     cust.type === 'final_customer'
-                      ? 'text-green-600'
+                      ? 'text-green-700'
                       : 'text-gray-700'
                   }`}>
                     {cust.type === 'final_customer'
@@ -651,24 +652,24 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                       : (cust.type || 'N/A')}
                   </span>
                 </td>
-                <td className="py-2 px-4">
+                <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
                   <span className="font-medium text-gray-700">
                     {cust.addedAt ? new Date(cust.addedAt).toLocaleDateString() : 'N/A'}
                   </span>
                 </td>
-                <td className="py-2 px-4">
-                  <div className="flex items-center gap-2 flex-wrap">
+                <td className="py-4 px-4 border-y border-r border-gray-200 rounded-r-xl last:pr-6 whitespace-nowrap align-middle bg-white group-hover:bg-gray-50">
+                  <div className="flex items-center gap-2 flex-nowrap">
                     <button
                       onClick={() => handleView(cust)}
-                      className="px-3 py-1 text-xs rounded-md transition-colors border border-blue-300 text-blue-600 hover:bg-blue-50"
+                      className="px-4 py-1 font-medium rounded-md transition-colors border border-blue-300 text-blue-700 hover:bg-blue-50"
                     >
                       View
                     </button>
                     <button
                       onClick={() => handleFollowUp(cust)}
-                      className="px-3 py-1 text-xs rounded-md transition-colors border border-green-300 text-green-600 hover:bg-green-50 flex items-center gap-1"
+                      className="px-4 py-1 font-medium rounded-md transition-colors border border-green-300 text-green-700 hover:bg-green-50 flex items-center gap-1"
                     >
-                      <MessageSquare size={12} />
+                      {/* <MessageSquare size={12} /> */}
                       Follow Up
                     </button>
                     <button
@@ -742,7 +743,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
       {viewModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeViewModal}>
           <div 
-            className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -873,7 +874,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                       <div className="mb-6 space-y-4">
                         <h4 className="text-sm font-semibold text-gray-700 mb-3">Prospect History ({viewModal.data.prospectDetails.length} entries)</h4>
                         {viewModal.data.prospectDetails.map((prospect, prospectIdx) => (
-                          <div key={prospect._id || prospectIdx} className="bg-white rounded-lg p-4 border border-amber-200 hover:shadow-md transition-shadow">
+                          <div key={prospect._id || prospectIdx} className="bg-white rounded-lg p-4 border border-amber-200">
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-semibold text-gray-500">Entry #{prospectIdx + 1}</span>
@@ -1025,7 +1026,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                               className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${
                                 (prospectSubmitting || isFinalCustomer)
                                   ? 'bg-gray-400 cursor-not-allowed'
-                                  : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-lg hover:shadow-xl'
+                                  : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700'
                               }`}
                             >
                               {prospectSubmitting ? (
@@ -1066,7 +1067,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                   ) : followUpHistory.data && followUpHistory.data.followUpHistory && followUpHistory.data.followUpHistory.length > 0 ? (
                     <div className="space-y-4">
                       {followUpHistory.data.followUpHistory.map((followUp, idx) => (
-                        <div key={followUp._id || idx} className="bg-white rounded-lg p-4 border border-purple-200 hover:shadow-md transition-shadow">
+                        <div key={followUp._id || idx} className="bg-white rounded-lg p-4 border border-purple-200">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <span className={`px-2 py-1 rounded-full text-xs font-semibold capitalize ${
@@ -1150,7 +1151,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
       {followUpModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeFollowUpModal}>
           <div 
-            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -1283,7 +1284,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                   className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${
                     followUpSubmitting
                       ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
+                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
                   }`}
                 >
                   {followUpSubmitting ? (
@@ -1765,61 +1766,54 @@ const AddCustomer = () => {
   return (
     <div className="p-6">
       {/* Stats + Search + Add */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <button
             onClick={() => setFilterType(filterType === 'total' ? 'all' : 'total')}
-            className={`bg-white rounded-2xl shadow-xl p-4 border transition-all cursor-pointer hover:shadow-2xl ${
-              filterType === 'total' ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-100'
+            className={`bg-white rounded-xl p-4 border transition-all cursor-pointer w-full flex items-center gap-4 ${
+              filterType === 'total' ? 'border-blue-500 bg-blue-50/30' : 'border-gray-200 hover:border-blue-300'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <User className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Customers</p>
-                <p className="text-xl font-bold text-gray-800">{totalStats.totalCustomers || 0}</p>
-              </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl font-bold text-blue-600">{totalStats.totalCustomers || 0}</span>
+            </div>
+            <div className="flex-grow text-center">
+              <p className="text-base font-semibold text-gray-700">Total Customers</p>
             </div>
           </button>
-
 
           <button
             onClick={() => setFilterType(filterType === 'today' ? 'all' : 'today')}
-            className={`bg-white rounded-2xl shadow-xl p-4 border transition-all cursor-pointer hover:shadow-2xl ${
-              filterType === 'today' ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-100'
+            className={`bg-white rounded-xl p-4 border transition-all cursor-pointer w-full flex items-center gap-4 ${
+              filterType === 'today' ? 'border-purple-500 bg-purple-50/30' : 'border-gray-200 hover:border-purple-300'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <Building2 className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{Math.max(todaysCountDisplay, 0)}</p>
-              </div>
+            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl font-bold text-purple-600">{Math.max(todaysCountDisplay, 0)}</span>
+            </div>
+            <div className="flex-grow text-center">
+              <p className="text-base font-semibold text-gray-700">Today's Customers</p>
             </div>
           </button>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          <div className="relative flex-grow w-full md:w-auto">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
-              placeholder="Search by company name"
+              placeholder="Search by company name..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-base transition-all"
             />
           </div>
 
-
           <button
             onClick={handleOpen}
-            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 rounded-xl text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm text-base"
           >
-            <PlusCircle size={20} /> Add Customer
+            <Plus size={18} strokeWidth={4} /> Add Customer
           </button>
         </div>
       </div>
@@ -1839,7 +1833,7 @@ const AddCustomer = () => {
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+            className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2149,7 +2143,7 @@ const AddCustomer = () => {
                   type="submit"
                   disabled={loading}
                   className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${!loading
-                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
                       : 'bg-gray-300 cursor-not-allowed'
                     }`}
                 >
@@ -2179,7 +2173,7 @@ const AddCustomer = () => {
           onClick={closeAction}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl"
+            className="bg-white rounded-2xl w-full max-w-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-red-500 to-purple-600 text-white p-4 rounded-t-2xl flex justify-between items-center">
