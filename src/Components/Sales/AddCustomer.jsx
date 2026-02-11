@@ -674,10 +674,10 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                     </button>
                     <button
                       onClick={() => onAction?.(cust)}
-                      className={`px-3 py-1 text-xs rounded-md transition-colors border ${
+                      className={`px-4 py-1 text-sm font-medium rounded-md transition-colors border ${
                         /blacklist/i.test(cust?.status)
-                          ? 'text-green-600 border-green-300 hover:bg-green-50'
-                          : 'text-red-600 border-red-300 hover:bg-red-50'
+                          ? 'text-green-700 border-green-300 hover:bg-green-50'
+                          : 'text-red-700 border-red-300 hover:bg-red-50'
                       }`}
                     >
                       {/blacklist/i.test(cust?.status) ? 'Remove From Blacklist' : 'Blacklist'}
