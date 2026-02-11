@@ -400,57 +400,64 @@ export default function ManagerPendingBids() {
 
   return (
     <div className="p-6">
-      {/* Header with Statistics */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Clock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending Bids</p>
-                <p className="text-xl font-bold text-yellow-600">{statistics.totalPending || pendingBids.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <DollarSign className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Value</p>
-                <p className="text-xl font-bold text-blue-600">${statistics.totalValue?.toLocaleString() || '0'}</p>
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6 space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Pending Bids */}
+          <div className="bg-white rounded-2xl border border border-gray-200 p-4 relative overflow-hidden">
+            <div className="flex justify-between items-start h-full flex-col gap-4">
+              <div className="text-gray-700 font-medium">Pending Bids</div>
+              <div className="flex justify-between items-center w-full">
+                <div className="text-2xl font-bold text-gray-900">{statistics.totalPending || pendingBids.length}</div>
+                <div className="w-8 h-8 bg-red-50 rounded-full flex items-center justify-center">
+                  <Clock className="text-red-500" size={16} />
+                </div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <DollarSign className="text-purple-600" size={20} />
+
+          {/* Total Value */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4">
+            <div className="flex justify-between items-start h-full flex-col gap-4">
+              <div className="text-gray-700 font-medium">Total Value</div>
+              <div className="flex justify-between items-center w-full">
+                <div className="text-2xl font-bold text-gray-900">${statistics.totalValue?.toLocaleString() || '0'}</div>
+                <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center">
+                  <DollarSign className="text-blue-500" size={16} />
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Avg Rate</p>
-                <p className="text-xl font-bold text-purple-600">${statistics.avgRate?.toLocaleString() || '0'}</p>
+            </div>
+          </div>
+
+          {/* Avg Rate */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4">
+            <div className="flex justify-between items-start h-full flex-col gap-4">
+              <div className="text-gray-700 font-medium">Avg Rate</div>
+              <div className="flex justify-between items-center w-full">
+                <div className="text-2xl font-bold text-gray-900">${statistics.avgRate?.toLocaleString() || '0'}</div>
+                <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center">
+                  <DollarSign className="text-purple-500" size={16} />
+                </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Search and Export Section */}
         <div className="flex items-center gap-4">
-          <div className="relative">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="Search pending bids..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             />
           </div>
           <button
             onClick={handleExportToCSV}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 whitespace-nowrap"
           >
             <FaDownload size={16} />
             Export CSV
@@ -458,101 +465,100 @@ export default function ManagerPendingBids() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-yellow-100 to-orange-200">
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto p-4">
+          <table className="w-full border-separate border-spacing-y-4">
+            <thead className="bg-gray-100">
               <tr>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid ID</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Origin</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">Destination</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Original Rate</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Current Rate</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Threshold</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate Diff %</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipper</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Forwarded By</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs whitespace-nowrap first:rounded-l-lg last:rounded-r-lg uppercase tracking-wider">Bid ID</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs whitespace-nowrap uppercase tracking-wider">Load ID</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs uppercase tracking-wider">Origin</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs uppercase tracking-wider">Destination</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs whitespace-nowrap uppercase tracking-wider">Original Rate</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs whitespace-nowrap uppercase tracking-wider">Current Rate</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs whitespace-nowrap uppercase tracking-wider">Threshold</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs whitespace-nowrap uppercase tracking-wider">Rate Diff %</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs uppercase tracking-wider">Shipper</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs uppercase tracking-wider">Carrier</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs uppercase tracking-wider">Forwarded By</th>
+                <th className="text-left py-4 px-2 text-gray-700 font-bold text-xs whitespace-nowrap first:rounded-l-lg last:rounded-r-lg uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredBids.map((bid, index) => {
                 const rateDiffPercent = parseFloat(bid.rateDifferencePercentage) || 0;
                 const isBelowThreshold = rateDiffPercent < 0;
-                
+
                 return (
-                  <tr key={bid.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{bid.id}</span>
+                  <tr key={bid.id} className="group">
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200 first:border-l first:rounded-l-lg last:border-r last:rounded-r-lg whitespace-nowrap">
+                      <span className="font-medium text-gray-700 text-sm">{bid.id}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{bid.loadId}</span>
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200 whitespace-nowrap">
+                      <span className="font-medium text-gray-700 text-sm">{bid.loadId}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{bid.origin}</span>
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200">
+                      <span className="font-medium text-gray-700 text-sm">{bid.origin}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{bid.destination}</span>
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200">
+                      <span className="font-medium text-gray-700 text-sm">{bid.destination}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-600">${bid.originalRate.toLocaleString()}</span>
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200 whitespace-nowrap">
+                      <span className="font-medium text-gray-600 text-sm">${bid.originalRate.toLocaleString()}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-bold text-blue-600">${bid.currentRate.toLocaleString()}</span>
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200 whitespace-nowrap">
+                      <span className="font-bold text-blue-600 text-sm">${bid.currentRate.toLocaleString()}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-600">${bid.thresholdRate.toLocaleString()}</span>
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200 whitespace-nowrap">
+                      <span className="font-medium text-gray-600 text-sm">${bid.thresholdRate.toLocaleString()}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200 whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         {isBelowThreshold ? (
                           <TrendingDown className="text-red-500" size={16} />
                         ) : (
                           <TrendingUp className="text-green-500" size={16} />
                         )}
-                        <span className={`font-bold ${isBelowThreshold ? 'text-red-600' : 'text-green-600'}`}>
+                        <span className={`font-bold text-sm ${isBelowThreshold ? 'text-red-600' : 'text-green-600'}`}>
                           {bid.rateDifferencePercentage}%
                         </span>
                       </div>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200">
                       <div>
-                        <p className="font-medium text-gray-700">{bid.shipperName}</p>
-                        <p className="text-xs text-gray-500">MC: {bid.shipperInfo?.mc_dot_no || 'N/A'}</p>
+                        <p className="font-medium text-gray-700 text-sm">{bid.shipperName}</p>
+                        <p className="text-xs text-gray-500 mt-1">MC: {bid.shipperInfo?.mc_dot_no || 'N/A'}</p>
                       </div>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200">
                       <div>
-                        <p className="font-medium text-gray-700">{bid.truckerName}</p>
-                        <p className="text-xs text-gray-500">MC: {bid.carrierInfo?.mcDotNo || 'N/A'}</p>
+                        <p className="font-medium text-gray-700 text-sm">{bid.truckerName}</p>
+                        <p className="text-xs text-gray-500 mt-1">MC: {bid.carrierInfo?.mcDotNo || 'N/A'}</p>
                       </div>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200">
                       <div>
-                        <p className="font-medium text-gray-700">{bid.forwardedBy}</p>
-                        <p className="text-xs text-gray-500">{bid.forwardedAt}</p>
+                        <p className="font-medium text-gray-700 text-sm">{bid.forwardedBy}</p>
+                        <p className="text-xs text-gray-500 mt-1">{bid.forwardedAt}</p>
                       </div>
                     </td>
-                    <td className="py-2 px-3">
-                      <div className="flex gap-2">
+                    <td className="py-4 px-2 bg-white border-t border-b border-gray-200 first:border-l first:rounded-l-lg last:border-r last:rounded-r-lg whitespace-nowrap">
+                      <div className="flex gap-1">
                         <button
                           onClick={() => handleViewBid(bid)}
-                          className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-1 rounded-lg text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-medium transition-colors"
                         >
                           View
                         </button>
                         <button
                           onClick={() => handleOpenApproveModal(bid)}
-                          className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-1 rounded-lg text-sm hover:from-green-600 hover:to-emerald-700 transition-all duration-200"
+                          className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs font-medium transition-colors"
                         >
                           Approve
                         </button>
                         <button
                           onClick={() => handleOpenRejectModal(bid)}
-                          className="bg-gradient-to-r from-red-500 to-pink-600 text-white px-3 py-1 rounded-lg text-sm hover:from-red-600 hover:to-pink-700 transition-all duration-200"
+                          className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-medium transition-colors"
                         >
                           Reject
                         </button>

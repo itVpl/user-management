@@ -797,128 +797,105 @@ export default function DailyFollowUp() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <FaPhone className="text-blue-600" size={20} />
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        {/* Row 1: Stats Cards */}
+        <div className="flex flex-col md:flex-row items-center gap-4 mb-6 w-full">
+          {/* Total Follow-Ups */}
+          <div className="flex-1 w-full bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex gap-4 h-full items-center">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
+                <span className="text-2xl font-bold text-blue-600">{followUps.length}</span>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Follow-Ups</p>
-                <p className="text-xl font-bold text-gray-800">{followUps.length}</p>
+              <div className="flex items-center justify-center flex-1">
+                <p className="text-base text-gray-700 font-semibold">Total Follow-Ups</p>
               </div>
             </div>
           </div>
-          {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div classNa="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <FaCheckCircle className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Completed</p>
-                <p className="text-xl font-bold text-green-600">{followUps.filter(fu => fu.status === 'completed').length}</p>
-              </div>
-            </div>
-          </div> */}
-          {/* <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <FaClock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-xl font-bold text-yellow-600">{followUps.filter(fu => fu.status === 'pending').length}</p>
-              </div>
-            </div>
-          </div> */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <FaCalendar className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">
-                  {followUps.filter(fu => fu.followUpDate === toLocalISO()).length}
-                </p>
 
+          {/* Today Follow-Ups */}
+          <div className="flex-1 w-full bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex gap-4 h-full items-center">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center shrink-0">
+                <span className="text-2xl font-bold text-purple-600">
+                  {followUps.filter(fu => fu.followUpDate === toLocalISO()).length}
+                </span>
+              </div>
+              <div className="flex items-center justify-center flex-1">
+                <p className="text-base text-gray-700 font-semibold">Today's Follow-Ups</p>
               </div>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
+
+        {/* Row 2: Search & Add Button */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="relative flex-1 w-full">
             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="Search follow-ups..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-base"
             />
           </div>
           <button
             onClick={() => setShowAddFollowUpForm(true)}
-            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl transition-all font-semibold whitespace-nowrap text-base shadow hover:from-blue-600 hover:to-blue-700"
           >
-            <FaPlus size={20} /> Add Follow-Up
+            <FaPlus size={16} />
+            Add Follow-Up
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-              <tr>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S. No</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Customer Name</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Contact (Phone)</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Follow-Up Date</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Follow-Up Type</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Next Follow-Up Date</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+          <table className="w-full border-separate border-spacing-y-3">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase rounded-l-xl border-y border-l border-gray-200 whitespace-nowrap">S. No</th>
+                <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200">Customer Name</th>
+                <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200 whitespace-nowrap">Contact (Phone)</th>
+                <th className="text-left py-4 px-10 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200 whitespace-nowrap">Email</th>
+                <th className="text-left py-4 px-2 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200 whitespace-nowrap">Follow-Up Date</th>
+                <th className="text-left py-4 px-4 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200 whitespace-nowrap">Follow-Up Type</th>
+                <th className="text-left py-4 px-2 font-sans text-black-600 font-bold text-xs uppercase border-y border-gray-200 whitespace-nowrap">Next Follow-Up Date</th>
+                <th className="text-left py-4 px-10 font-sans text-black-600 font-bold text-xs uppercase rounded-r-xl border-y border-r border-gray-200">Action</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y-0">
               {filteredFollowUps.map((followUp, index) => (
-                <tr key={followUp.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                  <td className="py-2 px-3">
+                <tr key={followUp.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="py-4 px-4 bg-white border-y border-l border-gray-200 rounded-l-xl">
                     <span className="font-medium text-gray-700">{followUp.sNo}</span>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="py-4 px-4 bg-white border-y border-gray-200">
                     <span className="font-medium text-gray-700">{followUp.customerName}</span>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="py-4 px-4 bg-white border-y border-gray-200">
                     <span className="font-medium text-gray-700">{followUp.customerPhone}</span>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="py-4 px-4 bg-white border-y border-gray-200">
                     <span className="font-medium text-gray-700">{followUp.customerEmail}</span>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="py-4 px-4 bg-white border-y border-gray-200">
                     <span className="font-medium text-gray-700">{followUp.followUpDate}</span>
                   </td>
-                  <td className="py-2 px-3">
-                    <div className="flex items-center gap-2">
-                      {(followUp.followUpType || '').toLowerCase() === 'call' && <FaPhone className="text-blue-500" size={14} />}
-                      {(followUp.followUpType || '').toLowerCase() === 'email' && <FaEnvelope className="text-green-500" size={14} />}
-                      <span className="font-medium text-gray-700">
-                        {followUp.followUpType ? (followUp.followUpType[0].toUpperCase() + followUp.followUpType.slice(1).toLowerCase()) : ''}
-                      </span>
-
-                    </div>
+                  <td className="py-4 px-4 bg-white border-y border-gray-200">
+                    <span className="font-medium text-gray-700">
+                      {followUp.followUpType ? (followUp.followUpType[0].toUpperCase() + followUp.followUpType.slice(1).toLowerCase()) : ''}
+                    </span>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="py-4 px-4 bg-white border-y border-gray-200">
                     <span className="font-medium text-gray-700">{followUp.nextFollowUpDate}</span>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="py-4 px-4 bg-white border-y border-r border-gray-200 rounded-r-xl">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleViewFollowUp(followUp)}
                         disabled={viewLoadingId === followUp.id}
-                        className={`px-3 py-1 text-white text-xs rounded-md transition-colors ${viewLoadingId === followUp.id ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
+                        className={`px-4 py-1 text-white text-gray-700 font-medium rounded-md transition-colors ${viewLoadingId === followUp.id ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
                           }`}
                       >
                         {viewLoadingId === followUp.id ? 'Loading...' : 'View'}
@@ -927,7 +904,7 @@ export default function DailyFollowUp() {
                       <button
                         onClick={() => handleEditFollowUp(followUp)}
                         disabled={editLoadingId === followUp.id}
-                        className={`px-3 py-1 text-white text-xs rounded-md transition-colors ${editLoadingId === followUp.id ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'
+                        className={`px-3 py-1 text-white text-gray-700 font-medium rounded-md transition-colors ${editLoadingId === followUp.id ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'
                           }`}
                       >
                         {editLoadingId === followUp.id ? 'Loading...' : 'Edit'}

@@ -42,6 +42,7 @@ import {
 import API_CONFIG from '../../config/api.js';
 import sharedSocketService from '../../services/sharedSocketService';
 import LogoFinal from '../../assets/LogoFinal.png';
+import { useLocation } from "react-router-dom";
 
 // Helper function to format employee name with alias
 const formatEmployeeName = (user) => {
@@ -433,6 +434,7 @@ const AudioPlayer = ({ src, isMyMessage, fileName, messageId, caption }) => {
 };
 
 const ChatPage = () => {
+  const location = useLocation();
   const [chatList, setChatList] = useState([]);
   const [chatUsers, setChatUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -589,6 +591,167 @@ const ChatPage = () => {
     // Consider "near bottom" if within 300px - gives more room for viewing older messages
     return distanceFromBottom < 300;
   };
+
+  // Handle navigation from other pages (e.g. AllCustomer)
+  useEffect(() => {
+    const handleNavigation = async () => {
+      // Check for target user from navigation state
+      if (location.state?.targetUser || location.state?.targetEmpId) {
+        const { targetUser, targetEmpId, prefillMessage } = location.state;
+        
+        console.log('🔄 Chat Navigation triggered:', { targetUser, targetEmpId, prefillMessage });
+
+        // STRATEGY 1: ID-BASED LOOKUP (Best/Exact Match)
+        if (targetEmpId) {
+            // A. Check if already selected
+            if (selectedUser?.empId === targetEmpId) {
+                console.log('✅ User already selected (by ID):', targetEmpId);
+                if (prefillMessage && input === "") setInput(prefillMessage);
+                return;
+            }
+
+            // B. Check if in chat list
+            const userInList = chatList.find(u => u.empId === targetEmpId);
+            if (userInList) {
+                console.log('✅ Found user in chat list (by ID):', userInList);
+                setSelectedUser(userInList);
+                setSelectedGroup(null);
+                setChatType('individual');
+                
+                // Trigger updates
+                window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                    detail: { selectedEmpId: userInList.empId, selectedGroupId: null }
+                }));
+                fetchMessages(userInList.empId);
+                markMessagesAsSeen(userInList.empId);
+                clearUnreadCount(userInList.empId);
+                
+                if (prefillMessage && input === "") setInput(prefillMessage);
+                return;
+            }
+
+            // C. Fetch directly from API (New Chat)
+            try {
+                console.log('👤 Fetching user by ID directly:', targetEmpId);
+                const res = await axios.get(
+                    `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${targetEmpId}`,
+                    { withCredentials: true }
+                );
+                
+                if (res.data && res.data.employee) {
+                    const fullUser = res.data.employee;
+                    console.log('✅ User loaded by ID:', fullUser);
+                    
+                    setSelectedUser(fullUser);
+                    setSelectedGroup(null);
+                    setChatType('individual');
+                    
+                    // Trigger updates
+                    window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                        detail: { selectedEmpId: fullUser.empId, selectedGroupId: null }
+                    }));
+                    fetchMessages(fullUser.empId);
+                    markMessagesAsSeen(fullUser.empId);
+                    clearUnreadCount(fullUser.empId);
+                    
+                    if (prefillMessage && input === "") setInput(prefillMessage);
+                    return;
+                }
+            } catch (err) {
+                console.error("❌ Failed to fetch user by ID:", err);
+                // Fallback to name search if ID fetch fails
+            }
+        }
+
+        // STRATEGY 2: NAME-BASED SEARCH (Fallback)
+        if (targetUser) {
+             // If already selected the target user
+            if (selectedUser && (
+                selectedUser.employeeName === targetUser || 
+                selectedUser.aliasName === targetUser ||
+                formatEmployeeName(selectedUser) === targetUser
+            )) {
+                if (prefillMessage && input === "") setInput(prefillMessage);
+                return;
+            }
+
+            // 1. Try to find in existing chat list
+            let userToSelect = chatList.find(user => 
+            (user.employeeName && user.employeeName === targetUser) || 
+            (user.aliasName && user.aliasName === targetUser) ||
+            (formatEmployeeName(user) === targetUser)
+            );
+            
+            // 2. If not found, search via API
+            if (!userToSelect) {
+            try {
+                console.log('🌐 Searching via API for:', targetUser);
+                const res = await axios.get(
+                `${API_CONFIG.BASE_URL}/api/v1/chat/search-users?q=${encodeURIComponent(targetUser)}`,
+                { withCredentials: true }
+                );
+                const searchResults = res.data || [];
+                
+                // Try to find exact match in search results
+                userToSelect = searchResults.find(user => 
+                (user.employeeName && user.employeeName === targetUser) || 
+                (user.aliasName && user.aliasName === targetUser) ||
+                (formatEmployeeName(user) === targetUser)
+                );
+                
+                // Fallback to first result if strict match fails but results exist
+                if (!userToSelect && searchResults.length > 0) {
+                    userToSelect = searchResults[0];
+                    console.log('⚠️ Strict match failed, using first result:', userToSelect);
+                }
+            } catch (err) {
+                console.error("❌ Failed to search for target user", err);
+            }
+            }
+
+            // 3. Select the user if found
+            if (userToSelect) {
+            try {
+                console.log('👤 Fetching full profile for:', userToSelect.empId);
+                // We need full profile for consistent state
+                const res = await axios.get(
+                `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${userToSelect.empId}`,
+                { withCredentials: true }
+                );
+                const fullUser = res.data.employee;
+                
+                setSelectedUser(fullUser);
+                setSelectedGroup(null);
+                setChatType('individual');
+                
+                // Load messages for this user
+                fetchMessages(fullUser.empId); 
+                
+                // Notify and mark seen
+                window.dispatchEvent(new CustomEvent('chatSelectionChanged', {
+                    detail: { selectedEmpId: fullUser.empId, selectedGroupId: null }
+                }));
+                await markMessagesAsSeen(fullUser.empId);
+                clearUnreadCount(fullUser.empId);
+                
+                if (prefillMessage && input === "") {
+                    setInput(prefillMessage);
+                }
+            } catch (err) {
+                console.error("❌ Failed to load full user profile", err);
+            }
+            } else {
+                console.warn('⚠️ User not found anywhere:', targetUser);
+            }
+        }
+      }
+    };
+    
+    // Run if not loading chat list, or if we have ID we can skip waiting (but waiting is safer)
+    if (!loadingChatList) {
+        handleNavigation();
+    }
+  }, [location.state, chatList, loadingChatList, selectedUser]);
 
   // Auto-scroll to bottom when NEW messages arrive (only if user is near bottom)
   useEffect(() => {
