@@ -18,6 +18,7 @@ import {
   DollarSign,
   Receipt,
   UserCheck,
+  Mail,
 } from 'lucide-react';
 import employeeDocumentsService from '../../services/employeeDocumentsService';
 import alertify from 'alertifyjs';
@@ -34,6 +35,7 @@ const EmployeeDocuments = () => {
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDocumentTypeModal, setShowDocumentTypeModal] = useState(false);
   const [documentType, setDocumentType] = useState('offer_letter'); // 'offer_letter', 'letter_of_intent', 'salary_slip', 'fnf'
   
   // Filters
@@ -143,6 +145,28 @@ const EmployeeDocuments = () => {
     } catch (error) {
       console.error('Error deleting document:', error);
       alertify.error(error.message || 'Failed to delete document');
+    }
+  };
+
+  // Send PDF to employee by email
+  const handleSendPDF = async (documentId) => {
+    if (!documentId) {
+      alertify.error('Document ID is missing');
+      return;
+    }
+    try {
+      setLoading(true);
+      const result = await employeeDocumentsService.sendPDF(documentId);
+      if (result.success) {
+        alertify.success(`PDF sent to ${result.data?.sentTo || 'employee'}`);
+      } else {
+        alertify.error(result.message || 'Failed to send PDF');
+      }
+    } catch (error) {
+      console.error('Error sending PDF:', error);
+      alertify.error(error.message || 'Failed to send PDF');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -289,8 +313,7 @@ const EmployeeDocuments = () => {
           </button>
           <button
             onClick={() => {
-              setShowCreateModal(true);
-              setDocumentType('offer_letter');
+              setShowDocumentTypeModal(true);
             }}
             className="ml-auto px-6 py-3 font-medium text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg m-2 transition-colors"
           >
@@ -420,6 +443,13 @@ const EmployeeDocuments = () => {
                               <Download className="w-4 h-4" />
                             </button>
                             <button
+                              onClick={() => handleSendPDF(doc.documentId)}
+                              className="text-indigo-600 hover:text-indigo-900 p-1"
+                              title="Send PDF to employee"
+                            >
+                              <Mail className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => handleDeleteDocument(doc.documentId)}
                               className="text-red-600 hover:text-red-900 p-1"
                               title="Delete"
@@ -467,6 +497,123 @@ const EmployeeDocuments = () => {
         <SignatureManagement />
       )}
 
+      {/* Document Type Selection Modal */}
+      {showDocumentTypeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Plus className="w-6 h-6 text-blue-600" />
+                <h3 className="text-xl font-bold text-gray-900">Select Document Type</h3>
+              </div>
+              <button
+                onClick={() => setShowDocumentTypeModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Document Type Options */}
+            <div className="p-6">
+              <p className="text-gray-600 mb-6">Choose the type of document you want to create:</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Offer Letter */}
+                <button
+                  onClick={() => {
+                    setDocumentType('offer_letter');
+                    setShowDocumentTypeModal(false);
+                    setShowCreateModal(true);
+                  }}
+                  className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                      <Briefcase className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Offer Letter</h4>
+                      <p className="text-sm text-gray-600">Create a job offer letter for new employees</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Letter of Intent */}
+                <button
+                  onClick={() => {
+                    setDocumentType('letter_of_intent');
+                    setShowDocumentTypeModal(false);
+                    setShowCreateModal(true);
+                  }}
+                  className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
+                      <FileCheck className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Letter of Intent</h4>
+                      <p className="text-sm text-gray-600">Create a letter of intent for potential hires</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Salary Slip */}
+                <button
+                  onClick={() => {
+                    setDocumentType('salary_slip');
+                    setShowDocumentTypeModal(false);
+                    setShowCreateModal(true);
+                  }}
+                  className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-yellow-100 rounded-lg group-hover:bg-yellow-200 transition-colors">
+                      <DollarSign className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Salary Slip</h4>
+                      <p className="text-sm text-gray-600">Generate monthly salary slips for employees</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* FNF */}
+                <button
+                  onClick={() => {
+                    setDocumentType('fnf');
+                    setShowDocumentTypeModal(false);
+                    setShowCreateModal(true);
+                  }}
+                  className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
+                      <Receipt className="w-6 h-6 text-red-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">FNF Document</h4>
+                      <p className="text-sm text-gray-600">Create Full and Final settlement documents</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-200 flex items-center justify-end">
+              <button
+                onClick={() => setShowDocumentTypeModal(false)}
+                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Document Modal */}
       {showCreateModal && (
         <DocumentForm
@@ -487,6 +634,7 @@ const EmployeeDocuments = () => {
           onUpdate={handleDocumentUpdated}
           onDelete={handleDeleteDocument}
           onGeneratePDF={handleGeneratePDF}
+          onSendPDF={handleSendPDF}
         />
       )}
     </div>

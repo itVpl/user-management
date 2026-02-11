@@ -117,6 +117,10 @@ class EmployeeDocumentsService {
   async createOfferLetter(data) {
     try {
       const url = `${this.baseURL}/api/v1/employee-documents/offer-letter/create`;
+      
+      console.log('Creating offer letter with data:', data);
+      console.log('Request URL:', url);
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: this.getAuthHeaders(),
@@ -126,6 +130,11 @@ class EmployeeDocumentsService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('Backend error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData: errorData,
+        });
         throw new Error(errorData.message || `Failed to create offer letter: ${response.status}`);
       }
 
@@ -348,6 +357,34 @@ class EmployeeDocumentsService {
       return await response.blob();
     } catch (error) {
       console.error('Error generating PDF:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send PDF to employee by email
+   * @param {string} documentId - Document ID
+   * @returns {Promise<{success: boolean, data?: {sentTo: string, documentType: string}, message?: string}>}
+   */
+  async sendPDF(documentId) {
+    try {
+      const url = `${this.baseURL}/api/v1/employee-documents/${documentId}/send-pdf`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        credentials: 'include',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = result.message || `Failed to send PDF: ${response.status}`;
+        throw new Error(errorMsg);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error sending PDF:', error);
       throw error;
     }
   }

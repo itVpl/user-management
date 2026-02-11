@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Edit, Trash2, Download, Loader, Briefcase, FileText, DollarSign, Receipt } from 'lucide-react';
+import { X, Edit, Trash2, Download, Loader, Briefcase, FileText, DollarSign, Receipt, Mail } from 'lucide-react';
 
-const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF }) => {
+const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, onSendPDF }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -49,6 +49,16 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF }
     setLoading(true);
     try {
       await onGeneratePDF(document.documentId, document.documentType, document.employeeName);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendPDF = async () => {
+    if (!onSendPDF) return;
+    setLoading(true);
+    try {
+      await onSendPDF(document.documentId);
     } finally {
       setLoading(false);
     }
@@ -122,6 +132,17 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF }
               {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               PDF
             </button>
+            {onSendPDF && (
+              <button
+                onClick={handleSendPDF}
+                disabled={loading}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                title="Send PDF to employee"
+              >
+                {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                Send PDF
+              </button>
+            )}
             <button
               onClick={handleDelete}
               disabled={loading}
