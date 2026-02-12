@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Search, User, Mail, Phone, MapPin, CheckCircle, XCircle, Clock, Building, Truck, ChevronDown, UserCheck, X, DollarSign, CreditCard, Send, FileText, Image, Download, Eye, Paperclip, Users, MessageCircle } from 'lucide-react';
+import { Search, User, Mail, Phone, MapPin, CheckCircle, XCircle, Clock, Building, Truck, ChevronDown, UserCheck, X, DollarSign, CreditCard, Send, FileText, Image, Download, Eye, Paperclip, Users, MessageCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import API_CONFIG from '../../config/api';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -93,7 +93,7 @@ const SearchableDropdown = ({
       </div>
 
       {isOpen && !disabled && !loading && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg max-h-60 overflow-hidden">
           {/* Search Input */}
           <div className="p-2 border-b border-gray-200">
             <div className="relative">
@@ -672,52 +672,58 @@ const AllCustomer = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                        <User className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-600">Total Customers</p>
-                        <p className="text-xl font-bold text-gray-800">{customers.length}</p>
-                    </div>
-                </div>
-            </div>
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        {/* First Row: Card & Filters */}
+        <div className="flex flex-col md:flex-row items-center gap-4 mb-6 w-full">
+          {/* Stats Card */}
+          <div className="flex-1 w-full bg-white rounded-xl border border-gray-200 p-4">
+  <div className="flex items-center gap-4">
+    <div className="w-16 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+      <span className="text-2xl font-bold text-black-600">{customers.length}</span>
+    </div>
+    <p className="text-base font-semibold text-gray-700 flex-1 text-center">Total Customers</p>
+  </div>
+</div>
+
+          {/* Created By Filter */}
+          <div className="relative flex-1 w-full">
+            <SearchableDropdown
+              value={selectedCreatedBy}
+              onChange={(value) => setSelectedCreatedBy(value)}
+              options={[
+                { value: '', label: (
+          <span className="text-base font-semibold text-gray-700">
+
+
+            All Created By
+          </span>
+        ), },
+                ...uniqueCreatedBy
+              ]}
+              placeholder="Select Created By"
+              searchPlaceholder="Search created by..."
+              className="w-full"
+            />
+          </div>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="relative">
+
+        {/* Second Row: Search */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="Search Customers..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          
-          {/* Created By Filter */}
-          <div className="relative">
-            <SearchableDropdown
-              value={selectedCreatedBy}
-              onChange={(value) => setSelectedCreatedBy(value)}
-              options={[
-                { value: '', label: 'All Created By' },
-                ...uniqueCreatedBy
-              ]}
-              placeholder="Select Created By"
-              searchPlaceholder="Search created by..."
-              className="w-[250px]"
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-base"
             />
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex flex-col justify-center items-center h-96 bg-white rounded-2xl shadow-lg border border-gray-100">
+        <div className="flex flex-col justify-center items-center h-96 bg-white rounded-2xl border border-gray-100">
           <div className="relative">
             <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           </div>
@@ -727,171 +733,138 @@ const AllCustomer = () => {
         </div>
       ) : (
         <>
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm text-gray-700 border-separate border-spacing-y-3">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="py-4 px-4 text-left text-xs font-bold text-black-600 uppercase border-y border-l border-gray-200 rounded-l-xl first:pl-6 align-middle">Company Name</th>
+                <th className="py-4 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle whitespace-nowrap">MC/DOT No</th>
+                <th className="py-4 px-10 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle">Contact Info</th>
+                <th className="py-4 px-4 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle">Location</th>
+                <th className="py-4 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle whitespace-nowrap">Credit Limit</th>
+                <th className="py-4 px-4 text-left text-xs font-bold text-black-600 uppercase border-y border-gray-200 align-middle">Added By</th>
+                <th className="py-4 px-20 text-left text-xs font-bold text-black-600 uppercase border-y border-r border-gray-200 rounded-r-xl last:pr-6 align-middle">Action</th>
+              </tr>
+            </thead>
+            <tbody className="space-y-4">
+              {currentItems.length === 0 ? (
                 <tr>
-                  <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Company Name</th>
-                  <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">MC/DOT No</th>
-                  <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Contact Info</th>
-                  <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Location</th>
-                  <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Credit Limit</th>
-                  <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Added By</th>
-                  <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                  <td colSpan="7" className="py-12 text-center bg-white border border-gray-200 rounded-xl">
+                      <div className="flex flex-col items-center justify-center">
+                          <User className="w-16 h-16 text-gray-300 mb-4" />
+                          <p className="text-gray-500 text-lg">No customers found</p>
+                          <p className="text-gray-400 text-sm">Try adjusting your search terms</p>
+                      </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {currentItems.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="py-12 text-center">
-                        <div className="flex flex-col items-center justify-center">
-                            <User className="w-16 h-16 text-gray-300 mb-4" />
-                            <p className="text-gray-500 text-lg">No customers found</p>
-                            <p className="text-gray-400 text-sm">Try adjusting your search terms</p>
-                        </div>
+              ) : (
+                currentItems.map((customer, idx) => (
+                  <tr 
+                    key={customer._id || idx} 
+                    className="group transition-colors"
+                  >
+                    <td className="py-4 px-4 border-y border-l border-gray-200 rounded-l-xl first:pl-6 align-middle bg-white group-hover:bg-gray-50">
+                      <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1">
+                              <div 
+                                className={`font-medium text-gray-700 ${customer.isNew === true ? 'cursor-pointer hover:text-blue-600 transition-colors' : ''}`}
+                                onClick={() => handleCustomerNameClick(customer)}
+                                title={customer.isNew === true ? 'Click to mark as viewed' : ''}
+                              >
+                                {customer.compName}
+                              </div>
+                              {customer.isNew === true && (
+                                <span 
+                                  className="new-indicator" 
+                                  title="New customer - Click name to view"
+                                  style={{
+                                    display: 'inline-block',
+                                    width: '10px',
+                                    height: '10px',
+                                    backgroundColor: '#ef4444',
+                                    borderRadius: '50%',
+                                    flexShrink: 0,
+                                    animation: 'glowPulse 2s infinite',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 0 8px rgba(239, 68, 68, 0.8), 0 0 12px rgba(239, 68, 68, 0.6)',
+                                    position: 'relative'
+                                  }}
+                                  onClick={() => handleCustomerNameClick(customer)}
+                                />
+                              )}
+                          </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
+                        <span className="font-medium text-gray-700">{customer.mc_dot_no || 'N/A'}</span>
+                    </td>
+                    <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
+                      <div className="space-y-1">
+                          <div className="flex items-center gap-1 font-medium text-gray-700">
+                              <Mail size={12} className="text-gray-400" />
+                              {customer.email}
+                          </div>
+                          <div className="flex items-center gap-1 font-medium text-gray-700">
+                              <Phone size={12} className="text-gray-400" />
+                              {customer.phoneNo}
+                          </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50 text-gray-700">
+                      <div className="flex items-start gap-1">
+                          <div>
+                              <div className="font-medium text-gray-700">{customer.city}, {customer.state}</div>
+                              <div className="text-sm text-gray-500">{customer.country}</div>
+                          </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
+                      <span className="font-medium text-blue-700">
+                        ${customer.creditLimit ? parseFloat(customer.creditLimit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50 text-gray-700">
+                      <div className="flex items-center gap-2">
+                           <div>
+                              <div className="font-medium text-gray-700">{customer.addedBy?.employeeName || 'N/A'}</div>
+                              {customer.addedBy?.department && <div className="text-sm text-gray-500">{customer.addedBy.department}</div>}
+                           </div>
+                      </div>
+                    </td>
+                   <td className="py-4 px-4 border-y border-r border-gray-200 rounded-r-xl last:pr-6 align-middle bg-white group-hover:bg-gray-50 text-gray-700">
+                      <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap">
+                        <button
+                          onClick={() => handleReAssign(customer)}
+                          className="px-4 py-1 text-orange-700 font-medium rounded-md border border-orange-300 whitespace-nowrap bg-orange-50 hover:bg-orange-600 hover:text-white hover:border-orange-600 transition-colors"
+                        >
+                          Re-Assign
+                        </button>
+                        <button
+                          onClick={() => handleAddCreditLimit(customer)}
+                          className="px-4 py-1 text-blue-700 font-medium rounded-md border border-blue-300 flex items-center gap-1 whitespace-nowrap bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors"
+                        >
+                          Add Credit Limit
+                        </button>
+                        <button
+                          onClick={() => handleChat(customer)}
+                          className="px-4 py-1 text-green-700 font-medium rounded-md border border-green-300 flex items-center gap-1 bg-green-50 hover:bg-green-600 hover:text-white hover:border-green-600 transition-colors"
+                        >
+                          Chat
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ) : (
-                  currentItems.map((customer, idx) => (
-                    <tr 
-                      key={customer._id || idx} 
-                      className={`border-b border-gray-100 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50/30`}
-                    >
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                            {/* <div className="bg-blue-100 p-2 rounded-lg">
-                                <Building size={16} className="text-blue-600" />
-                            </div> */}
-                            <div className="flex items-center gap-2 flex-1">
-                                <div 
-                                  className={`font-semibold text-gray-800 ${customer.isNew === true ? 'cursor-pointer hover:text-blue-600 transition-colors' : ''}`}
-                                  onClick={() => handleCustomerNameClick(customer)}
-                                  title={customer.isNew === true ? 'Click to mark as viewed' : ''}
-                                >
-                                  {customer.compName}
-                                </div>
-                                {customer.isNew === true && (
-                                  <span 
-                                    className="new-indicator" 
-                                    title="New customer - Click name to view"
-                                    style={{
-                                      display: 'inline-block',
-                                      width: '10px',
-                                      height: '10px',
-                                      backgroundColor: '#ef4444',
-                                      borderRadius: '50%',
-                                      flexShrink: 0,
-                                      animation: 'glowPulse 2s infinite',
-                                      cursor: 'pointer',
-                                      boxShadow: '0 0 8px rgba(239, 68, 68, 0.8), 0 0 12px rgba(239, 68, 68, 0.6)',
-                                      position: 'relative'
-                                    }}
-                                    onClick={() => handleCustomerNameClick(customer)}
-                                  />
-                                )}
-                            </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                          <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-700">{customer.mc_dot_no || 'N/A'}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-1 text-sm text-gray-700">
-                                <Mail size={12} className="text-gray-400" />
-                                {customer.email}
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                                <Phone size={12} className="text-gray-400" />
-                                {customer.phoneNo}
-                            </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-700">
-                        <div className="flex items-start gap-1">
-                            <MapPin size={14} className="text-gray-400 mt-0.5" />
-                            <div>
-                                <div>{customer.city}, {customer.state}</div>
-                                <div className="text-xs text-gray-500">{customer.country}</div>
-                            </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-semibold text-blue-600">
-                          ${customer.creditLimit ? parseFloat(customer.creditLimit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-gray-700">
-                        <div className="flex items-center gap-2">
-                             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                                {customer.addedBy?.employeeName?.charAt(0) || 'A'}
-                             </div>
-                             <div>
-                                <div className="text-sm font-medium">{customer.addedBy?.employeeName || 'N/A'}</div>
-                                {customer.addedBy?.department && <div className="text-xs text-gray-500">{customer.addedBy.department}</div>}
-                             </div>
-                        </div>
-                      </td>
-                     <td className="py-3 px-4 text-gray-700">
-  <div className="flex items-center gap-2">
-
-    {/* Re-Assign */}
-    <button
-      onClick={() => handleReAssign(customer)}
-      className="px-3 py-1 text-orange-600 text-xs rounded-md border border-orange-300 whitespace-nowrap
-                 bg-orange-50
-                 transform
-                 transition-[background-color,color,border-color,transform]
-                 duration-500 ease-out
-                 hover:scale-105
-                 hover:bg-orange-600 hover:text-white hover:border-orange-600"
-    >
-      Re-Assign
-    </button>
-
-    {/* Add Credit Limit */}
-    <button
-      onClick={() => handleAddCreditLimit(customer)}
-      className="px-3 py-1 text-blue-600 text-xs rounded-md border border-blue-300 flex items-center gap-1 whitespace-nowrap
-                 bg-blue-50
-                 transform
-                 transition-[background-color,color,border-color,transform]
-                 duration-500 ease-out
-                 hover:scale-105
-                 hover:bg-blue-600 hover:text-white hover:border-blue-600"
-    >
-      Add Credit Limit
-    </button>
-
-    {/* Chat */}
-    <button
-      onClick={() => handleChat(customer)}
-      className="px-3 py-1 text-green-600 text-xs rounded-md border border-green-300 flex items-center gap-1
-                 bg-green-50
-                 transform
-                 transition-[background-color,color,border-color,transform]
-                 duration-500 ease-out
-                 hover:scale-105
-                 hover:bg-green-600 hover:text-white hover:border-green-600"
-    >
-      Chat
-    </button>
-
-  </div>
-</td>
-
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
         </div>
 
         {/* Pagination */}
         {filteredCustomers.length > 0 && (
-            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+            <div className="flex justify-between items-center mt-2 px-4">
             <div className="text-sm text-gray-600">
                 Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredCustomers.length)} of {filteredCustomers.length} customers
                 {searchTerm && ` (filtered from ${customers.length} total)`}
@@ -901,14 +874,16 @@ const AllCustomer = () => {
                 <button
                 onClick={() => paginate(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
                 >
+                <ChevronLeft size={16} />
                 Previous
                 </button>
+                <div className="flex gap-1">
                 {getPageNumbers().map((page, index) => {
                   if (page === 'ellipsis') {
                     return (
-                      <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                      <span key={`ellipsis-${index}`} className="w-8 h-8 flex items-center justify-center text-gray-400">
                         ...
                       </span>
                     );
@@ -917,22 +892,24 @@ const AllCustomer = () => {
                     <button
                       key={page}
                       onClick={() => paginate(page)}
-                      className={`px-3 py-2 border rounded-lg transition-colors text-sm font-medium ${
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
                         currentPage === page
-                          ? 'bg-blue-500 text-white border-blue-500 shadow-md'
-                          : 'border-gray-300 hover:bg-gray-50 text-gray-700'
+                          ? 'border border-gray-900 text-gray-900 bg-white'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                       }`}
                     >
                       {page}
                     </button>
                   );
                 })}
+                </div>
                 <button
                 onClick={() => paginate(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
                 >
                 Next
+                <ChevronRight size={16} />
                 </button>
             </div>
             )}
@@ -944,8 +921,8 @@ const AllCustomer = () => {
       {/* Re-Assign Modal */}
       {reassignModal.visible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
-          <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-orange-100">
-            <div className="bg-gradient-to-r from-orange-600 to-red-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
+          <div className="bg-white/90 backdrop-blur-lg rounded-3xl w-full max-w-2xl p-8 border border-orange-100">
+            <div className="bg-gradient-to-r from-orange-600 to-red-500 text-white px-6 py-4 rounded-xl mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
                   Re-Assign Customer
@@ -1019,7 +996,7 @@ const AllCustomer = () => {
                 </div>
                 
                 {isSalesDropdownOpen && (
-                  <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl max-h-60 overflow-y-auto">
                     {/* Clear/Unselect option */}
                     {selectedSalesUser && (
                       <div
@@ -1110,7 +1087,7 @@ const AllCustomer = () => {
               <button
                 onClick={handleReassignSubmit}
                 disabled={reassignSubmitting}
-                className={`px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-red-500 text-white font-medium shadow-lg hover:shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2 ${
+                className={`px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-red-500 text-white font-medium hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2 ${
                   reassignSubmitting ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >
@@ -1134,8 +1111,8 @@ const AllCustomer = () => {
       {/* Credit Limit Modal */}
       {creditLimitModal.visible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 p-4">
-          <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-8 border border-blue-100">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
+          <div className="bg-white/90 backdrop-blur-lg rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-8 border border-blue-100">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-4 rounded-xl mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
                   <CreditCard size={24} />
@@ -1463,12 +1440,12 @@ const AllCustomer = () => {
               <button
                 onClick={handleSendCreditLimitFormEmail}
                 disabled={sendingEmail || emailSent}
-                className={`px-6 py-2.5 rounded-xl font-medium shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2 ${
+                className={`px-6 py-2.5 rounded-xl font-medium hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2 ${
                   emailSent 
-                    ? 'bg-green-600 text-white hover:shadow-green-500/30' 
+                    ? 'bg-green-600 text-white' 
                     : sendingEmail
                     ? 'bg-gray-400 text-white opacity-70 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-purple-600 to-indigo-500 text-white hover:shadow-purple-500/30'
+                    : 'bg-gradient-to-r from-purple-600 to-indigo-500 text-white'
                 }`}
               >
                 {sendingEmail ? (
@@ -1491,7 +1468,7 @@ const AllCustomer = () => {
               <button
                 onClick={handleCreditLimitSubmit}
                 disabled={creditLimitSubmitting}
-                className={`px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2 ${
+                className={`px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2 ${
                   creditLimitSubmitting ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >
@@ -1519,18 +1496,15 @@ const AllCustomer = () => {
         @keyframes glowPulse {
           0%, 100% {
             opacity: 1;
-            box-shadow: 0 0 8px rgba(239, 68, 68, 0.8), 0 0 12px rgba(239, 68, 68, 0.6), 0 0 16px rgba(239, 68, 68, 0.4);
             transform: scale(1);
           }
           50% {
             opacity: 0.8;
-            box-shadow: 0 0 12px rgba(239, 68, 68, 1), 0 0 18px rgba(239, 68, 68, 0.8), 0 0 24px rgba(239, 68, 68, 0.6);
             transform: scale(1.1);
           }
         }
         
         .new-indicator:hover {
-          box-shadow: 0 0 15px rgba(239, 68, 68, 1), 0 0 25px rgba(239, 68, 68, 0.9), 0 0 35px rgba(239, 68, 68, 0.7) !important;
           transform: scale(1.2);
           transition: all 0.3s ease;
         }
