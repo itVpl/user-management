@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
-import { User, Mail, Building, Search, Calendar, Star, CheckCircle, XCircle } from 'lucide-react';
+import { User, Mail, Building, Search, Calendar, Star, CheckCircle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -313,7 +313,7 @@ export default function TeamRating() {
     }
   };
 
-  // Filter rating list based on logged-in user
+  // Filter rating list based on logged-in user and search
   const filteredRatingListData = useMemo(() => {
     let filtered = [...ratingListData];
     const currentUserEmpId = getCurrentUserEmpId();
@@ -334,8 +334,19 @@ export default function TeamRating() {
       );
     }
 
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(emp =>
+        emp.employeeName.toLowerCase().includes(term) ||
+        emp.empId.toLowerCase().includes(term) ||
+        emp.email.toLowerCase().includes(term) ||
+        (emp.rating?.value && emp.rating.value.toLowerCase().includes(term))
+      );
+    }
+
     return filtered;
-  }, [ratingListData]);
+  }, [ratingListData, searchTerm]);
 
   // Handle rating list date change
   useEffect(() => {
@@ -417,78 +428,87 @@ export default function TeamRating() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <User className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Employees</p>
-                <p className="text-xl font-bold text-gray-800">{filteredEmployees.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Star className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Ratings Completed</p>
-                <p className="text-xl font-bold text-blue-600">
-                  {filteredEmployees.filter(emp => emp.rating?.completed === true).length}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col gap-6 mb-6">
+        {/* Title Section
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search employees..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-            />
+          {/* <div className="bg-blue-500 p-3 rounded-xl text-white">
+            <Building size={24} />
+          </div> */}
+          {/* <div>
+            <h1 className="text-2xl font-bold text-gray-800">Team Rating</h1>
+            <p className="text-sm text-gray-600">Manage and view employee ratings</p>
           </div>
-        </div>
-      </div>
+        </div>  */}
 
-      {/* Tabs */}
-      <div className="mb-6">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-1 inline-flex">
-          <button
-            onClick={() => {
-              setActiveTab('giveRating');
-              setRatingListPage(1);
-            }}
-            className={`px-6 py-3 rounded-xl font-medium transition-colors ${
-              activeTab === 'giveRating'
-                ? 'bg-blue-500 text-white shadow-md'
-                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-            }`}
-          >
-            Give Rating
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('ratingList');
-              if (ratingListDate) {
-                fetchRatingList(ratingListDate);
-              }
-            }}
-            className={`px-6 py-3 rounded-xl font-medium transition-colors ${
-              activeTab === 'ratingList'
-                ? 'bg-blue-500 text-white shadow-md'
-                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-            }`}
-          >
-            Rating List
-          </button>
+        {/* Dashboard Section */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          {/* Row 1: Stats Cards */}
+          <div className="flex flex-col md:flex-row gap-6 mb-6">
+            <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center">
+              <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
+                {activeTab === 'giveRating' ? filteredEmployees.length : filteredRatingListData.length}
+              </div>
+              <div className="flex-1 text-center">
+                <p className="text-base font-semibold text-gray-700">Total Employees</p>
+              </div>
+            </div>
+            
+            <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center">
+              <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-2xl font-bold">
+                {activeTab === 'giveRating' 
+                  ? filteredEmployees.filter(emp => emp.rating?.completed === true).length
+                  : filteredRatingListData.filter(emp => emp.rating?.completed === true).length
+                }
+              </div>
+              <div className="flex-1 text-center">
+                <p className="text-base font-semibold text-gray-700">Ratings Completed</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Search & Tabs */}
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search employees..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-base"
+              />
+            </div>
+            <div className="bg-gray-100 p-1 rounded-xl flex shrink-0">
+              <button
+                onClick={() => {
+                  setActiveTab('giveRating');
+                  setRatingListPage(1);
+                }}
+                className={`px-6 py-2.5 rounded-lg font-semibold transition-all text-base ${
+                  activeTab === 'giveRating'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Give Rating
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('ratingList');
+                  if (ratingListDate) {
+                    fetchRatingList(ratingListDate);
+                  }
+                }}
+                className={`px-6 py-2.5 rounded-lg font-semibold transition-all text-base ${
+                  activeTab === 'ratingList'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Rating List
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -500,41 +520,41 @@ export default function TeamRating() {
           <div className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee ID</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee Name</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Value</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+            <table className="min-w-full text-sm text-gray-700 border-separate border-spacing-y-3">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase tracking-wider rounded-l-lg border-y border-l border-gray-200">Employee ID</th>
+                  <th className="text-left py-4 px-6 text-black-600 font-bold text-xs uppercase tracking-wider border-y border-gray-200">Employee Name</th>
+                  <th className="text-left py-4 px-16 text-black-600 font-bold text-xs uppercase tracking-wider border-y border-gray-200">Email</th>
+                  <th className="text-left py-4 px-9 text-black-600 font-bold text-xs uppercase tracking-wider border-y border-gray-200">Status</th>
+                  <th className="text-left py-4 px-2 text-black-600 font-bold text-xs uppercase tracking-wider border-y border-gray-200">Value</th>
+                  <th className="text-left py-4 px-10 text-black-600 font-bold text-xs uppercase tracking-wider rounded-r-lg border-y border-r border-gray-200">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {currentEmployees.map((employee, index) => (
-                  <tr key={employee.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-base font-semibold text-gray-700">{employee.empId}</span>
+                {currentEmployees.map((employee) => (
+                  <tr key={employee.id} className="bg-white">
+                    <td className="py-4 px-6 border-y border-l border-gray-200 rounded-l-lg">
+                      <span className="font-medium text-gray-700">{employee.empId}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-4 px-6 border-y border-gray-200">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        {/* <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                           <User className="text-blue-600" size={16} />
-                        </div>
+                        </div> */}
                         <span className="font-medium text-gray-700">{employee.employeeName}</span>
                       </div>
                     </td>
-                    <td className="py-2 px-3">
-                      <div className="flex items-center gap-2">
+                    <td className="py-4 px-6 border-y border-gray-200">
+                      <div className="flex items-center gap-1">
                         <Mail className="text-gray-400" size={14} />
-                        <span className="text-gray-700">{employee.email}</span>
+                        <span className="font-medium text-gray-700">{employee.email}</span>
                       </div>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    <td className="py-4 px-6 border-y border-gray-200">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-gray-700 font-medium ${
                         employee.rating?.status === 'completed'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
@@ -542,20 +562,20 @@ export default function TeamRating() {
                         {employee.rating?.status === 'completed' ? 'Completed' : 'Incomplete'}
                       </span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-4 px-6 border-y border-gray-200">
                       {employee.rating?.value ? (
-                        <span className="text-sm font-semibold text-gray-700">
+                        <span className="font-medium text-gray-700">
                           {employee.rating.value}
                         </span>
                       ) : (
-                        <span className="text-sm text-gray-400">-</span>
+                        <span className="font-medium text-gray-700">-</span>
                       )}
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-4 px-6 border-y border-r border-gray-200 rounded-r-lg">
                       <button
                         onClick={() => handleRatingClick(employee)}
                         disabled={employee.rating?.status === 'completed'}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                        className={`px-4 py-2 rounded-lg text-gray-700 font-medium transition-colors flex items-center gap-2 ${
                           employee.rating?.status === 'completed'
                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             : 'bg-blue-500 hover:bg-blue-600 text-white'
@@ -586,37 +606,41 @@ export default function TeamRating() {
 
       {/* Pagination */}
       {totalPages > 1 && filteredEmployees.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+        <div className="flex justify-between items-center mt-6 px-4 border border-separate border-gray-200 p-2 rounded-xl">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredEmployees.length)} of {filteredEmployees.length} employees
             {searchTerm && ` (filtered from ${employees.length} total)`}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
             >
+              <ChevronLeft size={16} />
               Previous
             </button>
+            <div className="flex gap-1">
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
               <button
                 key={page}
                 onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'border-gray-300 hover:bg-gray-50'
+                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${currentPage === page
+                  ? 'border border-gray-900 text-gray-900 bg-white'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                   }`}
               >
                 {page}
               </button>
             ))}
+            </div>
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
             >
               Next
+              <ChevronRight size={16} />
             </button>
           </div>
         </div>
@@ -645,45 +669,45 @@ export default function TeamRating() {
           </div>
 
           {loadingRatingList ? (
-            <div className="flex justify-center items-center py-12 bg-white rounded-2xl shadow-xl border border-gray-100">
+            <div className="flex justify-center items-center py-12 bg-white rounded-2xl border border-gray-200">
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                    <tr>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee ID</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee Name</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                      <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Value</th>
-                    </tr>
-                  </thead>
+                <table className="min-w-full text-sm text-gray-700 border-separate border-spacing-y-3">
+                  <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left py-4 px-4 text-black-600 font-bold text-xs uppercase tracking-wider rounded-l-lg border-y border-l border-gray-200">Employee ID</th>
+                  <th className="text-left py-4 px-5 text-black-600 font-bold text-xs uppercase tracking-wider border-y border-gray-200">Employee Name</th>
+                  <th className="text-left py-4 px-16 text-black-600 font-bold text-xs uppercase tracking-wider border-y border-gray-200">Email</th>
+                  <th className="text-left py-4 px-9 text-black-600 font-bold text-xs uppercase tracking-wider border-y border-gray-200">Status</th>
+                  <th className="text-left py-4 px-2 text-black-600 font-bold text-xs uppercase tracking-wider rounded-r-lg border-y border-r border-gray-200">Value</th>
+                </tr>
+              </thead>
                   <tbody>
                     {currentRatingList.length > 0 ? (
-                      currentRatingList.map((emp, index) => (
-                        <tr key={emp.empId} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                          <td className="py-2 px-3">
-                            <span className="font-mono text-base font-semibold text-gray-700">{emp.empId}</span>
+                      currentRatingList.map((emp) => (
+                        <tr key={emp.empId} className="bg-white">
+                          <td className="py-4 px-6 border-y border-l border-gray-200 rounded-l-lg">
+                            <span className="font-medium text-gray-700">{emp.empId}</span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-4 px-6 border-y border-gray-200">
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              {/* <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                                 <User className="text-blue-600" size={16} />
-                              </div>
+                              </div> */}
                               <span className="font-medium text-gray-700">{emp.employeeName}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
-                            <div className="flex items-center gap-2">
+                          <td className="py-4 px-6 border-y border-gray-200">
+                            <div className="flex items-center gap-1">
                               <Mail className="text-gray-400" size={14} />
-                              <span className="text-gray-700">{emp.email}</span>
+                              <span className="text-gray-700 font-medium">{emp.email}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          <td className="py-4 px-6 border-y border-gray-200">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-gray-700 font-medium ${
                               emp.rating?.status === 'completed'
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-red-100 text-red-800'
@@ -691,13 +715,13 @@ export default function TeamRating() {
                               {emp.rating?.status === 'completed' ? 'Completed' : 'Incomplete'}
                             </span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="py-4 px-6 border-y border-r border-gray-200 rounded-r-lg">
                             {emp.rating?.value ? (
-                              <span className="text-sm font-semibold text-gray-700">
+                              <span className="font-medium text-gray-700">
                                 {emp.rating.value}
                               </span>
                             ) : (
-                              <span className="text-sm text-gray-400">-</span>
+                              <span className="font-medium text-gray-700">-</span>
                             )}
                           </td>
                         </tr>
@@ -720,36 +744,40 @@ export default function TeamRating() {
 
           {/* Rating List Pagination */}
           {ratingListTotalPages > 1 && filteredRatingListData.length > 0 && (
-            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+            <div className="flex justify-between items-center mt-6 px-4 border border-separate border-gray-200 p-2 rounded-xl">
               <div className="text-sm text-gray-600">
                 Showing {ratingListStartIndex + 1} to {Math.min(ratingListEndIndex, filteredRatingListData.length)} of {filteredRatingListData.length} ratings
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <button
                   onClick={() => handleRatingListPageChange(ratingListPage - 1)}
                   disabled={ratingListPage === 1}
-                  className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
                 >
+                  <ChevronLeft size={16} />
                   Previous
                 </button>
+                <div className="flex gap-1">
                 {Array.from({ length: ratingListTotalPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
                     onClick={() => handleRatingListPageChange(page)}
-                    className={`px-3 py-2 border rounded-lg transition-colors ${ratingListPage === page
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'border-gray-300 hover:bg-gray-50'
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${ratingListPage === page
+                      ? 'border border-gray-900 text-gray-900 bg-white'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                       }`}
                   >
                     {page}
                   </button>
                 ))}
+                </div>
                 <button
                   onClick={() => handleRatingListPageChange(ratingListPage + 1)}
                   disabled={ratingListPage === ratingListTotalPages}
-                  className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
                 >
                   Next
+                  <ChevronRight size={16} />
                 </button>
               </div>
             </div>
