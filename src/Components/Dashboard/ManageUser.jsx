@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AdminIcon } from '../../assets/image';
 import { ArrowDown } from '../../assets/image';
 import AddUserModal from './AddUser';
@@ -423,26 +424,35 @@ const ManageUser = () => {
           onUpdate={handleUpdateUser}
         />
       )}
-      <div className="flex justify-between items-center mb-4">
-        <input
-          type="text"
-          placeholder="Search Employees"
-          className="border p-2 rounded-lg"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <button
-          className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
-          onClick={() => setShowModal(true)}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-          Add User
-        </button>
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="relative flex-1 w-full">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Search Employees..."
+                className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-xl leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-300 focus:border-blue-300 transition-all duration-200 sm:text-base"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <button
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 whitespace-nowrap"
+              onClick={() => setShowModal(true)}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Add User
+            </button>
+          </div>
       </div>
       {loading ? (
-        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border border-gray-100">
           <div className="relative">
             <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
             <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
@@ -454,18 +464,18 @@ const ManageUser = () => {
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Name</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Department</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Role</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto p-4">
+              <table className="w-full border-separate border-spacing-y-4">
+                <thead>
+                  <tr className="text-sm text-gray-500">
+                    <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Employee ID</th>
+                    <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Name</th>
+                    <th className="font-semibold text-base px-15 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Email</th>
+                    <th className="font-semibold text-base px-1 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Department</th>
+                    <th className="font-semibold text-base px-10 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Role</th>
+                    <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Status</th>
+                    <th className="font-semibold text-base px-15 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -493,24 +503,24 @@ const ManageUser = () => {
                       const isExpanded = expandedIndex === globalIndex;
                       return (
                         <React.Fragment key={user._id}>
-                          <tr className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                            <td className="py-2 px-3">
+                          <tr className="bg-white hover:bg-gray-50 transition-colors group">
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                               <span className="font-medium text-gray-700">{user.empId}</span>
                             </td>
-                            <td className="py-2 px-3">
-                              <span className="font-semibold text-gray-800">{user.employeeName}</span>
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                              <span className="font-medium text-gray-800">{user.employeeName}</span>
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                               <span className="font-medium text-gray-700">{user.email}</span>
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                               <span className="font-medium text-gray-700">{user.department}</span>
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                               <select
                                 value={user.role}
                                 onChange={(e) => handleRoleChange(user.empId, e.target.value)}
-                                className="px-3 py-1 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-400 transition-colors"
+                                className="px-3 py-1 border border-gray-300 rounded-lg text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-400 transition-colors"
                               >
                                 <option value="superadmin">Superadmin</option>
                                 <option value="admin">Admin</option>
@@ -519,33 +529,33 @@ const ManageUser = () => {
                                 <option value="teamlead">Team Lead</option>
                               </select>
                             </td>
-                            <td className="py-2 px-3">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-gray-700 font-medium ${
                                 user.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                               }`}>
                                 {user.isActive ? 'Active' : 'Inactive'}
                               </span>
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => toggleExpand(globalIndex)}
-                                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                  className="border border-blue-500 text-blue-500 bg-white hover:bg-blue-500 hover:text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                                 >
                                   View
                                 </button>
                                 <button
                                   onClick={() => handleEditUser(user)}
-                                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                  className="border border-green-500 text-green-500 bg-white hover:bg-green-500 hover:text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                                 >
                                   Edit
                                 </button>
                                 <button
                                   onClick={() => toggleStatus(globalIndex)}
-                                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${
                                     user.isActive 
-                                      ? 'bg-red-500 hover:bg-red-600 text-white' 
-                                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                      ? 'border-red-500 text-red-500 bg-white hover:bg-red-500 hover:text-white' 
+                                      : 'border-blue-500 text-blue-500 bg-white hover:bg-blue-500 hover:text-white'
                                   }`}
                                 >
                                   {user.isActive ? 'Deactivate' : 'Activate'}
@@ -560,46 +570,51 @@ const ManageUser = () => {
                 </tbody>
               </table>
             </div>
-          </div>
-
-          {totalPages > 1 && filteredUsers.length > 0 && (
-            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="text-sm text-gray-600">
-                Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, filteredUsers.length)} of {filteredUsers.length} employees
-                {searchTerm && ` (filtered from ${users.length} total)`}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-                >
-                  Previous
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-2 rounded-lg transition-colors ${
-                      currentPage === page
-                        ? 'bg-blue-500 text-white'
-                        : 'border border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+             </div>
         </>)}
+
+            {totalPages > 1 && filteredUsers.length > 0 && (
+              <div className="flex justify-between items-center mt-6 px-4 border border-separate border-gray-200 p-2 rounded-xl">
+                <div className="text-sm text-gray-600">
+                  Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, filteredUsers.length)} of {filteredUsers.length} employees
+                  {searchTerm && ` (filtered from ${users.length} total)`}
+                </div>
+                <div className="flex gap-2 items-center">
+                  <button
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+                  >
+                    <ChevronLeft size={16} />
+                    Previous
+                  </button>
+                  <div className="flex gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === page
+                          ? 'border border-gray-900 text-gray-900 bg-white'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+                  >
+                    Next
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+         
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
@@ -608,7 +623,7 @@ const ManageUser = () => {
           onClick={() => setShowConfirmModal(false)}
         >
           <div 
-            className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4"
+            className="bg-white rounded-2xl border border-gray-200 p-8 max-w-md w-full mx-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-center">
@@ -664,7 +679,7 @@ const ManageUser = () => {
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
           <div 
-            className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar mx-4"
+            className="bg-white rounded-3xl border border-gray-200 max-w-5xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar mx-4"
             onClick={(e) => e.stopPropagation()}
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
@@ -695,7 +710,7 @@ const ManageUser = () => {
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 {/* Personal Details */}
-                <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-xl p-5 border border-gray-100">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                       <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -767,7 +782,7 @@ const ManageUser = () => {
                 </div>
 
                 {/* Documents */}
-                <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-xl p-5 border border-gray-100">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
@@ -791,7 +806,7 @@ const ManageUser = () => {
                         }
                       }}
                       disabled={downloading}
-                      className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-md ${
+                      className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 ${
                         downloading ? 'bg-blue-400 cursor-not-allowed text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
                       }`}
                     >
@@ -833,7 +848,7 @@ const ManageUser = () => {
               <div className="flex justify-end pt-4 border-t">
                 <button
                   onClick={() => setShowViewModal(false)}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition"
                 >
                   Close
                 </button>
