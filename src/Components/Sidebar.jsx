@@ -68,7 +68,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Emp Leaves",
       "Leave Approval"
     ],
-    "Payroll": ["Pay Rolls"],
+    "Payroll": ["Pay Rolls", "Salary Modification"],
     "Documents": [
       "HR Document Verification",
       "Employee Documents",
@@ -433,6 +433,7 @@ const menuItems = [
   { name: "Revenue & Satatistics", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AgentRevenueStatistics" },
   { name: "Employee Hygiene", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/EmployeeHygiene" },
   { name: "Pay Rolls", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/PayrollPage" },
+  { name: "Salary Modification", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/salary-modification" },
   { name: "Shipper", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ShippersLDocuments" },
   { name: "Shipper Load Data", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ShiperLoadData" },
   { name: "HR Document Verification", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrDocumentsVerification" },
