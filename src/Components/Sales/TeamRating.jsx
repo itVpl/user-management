@@ -313,7 +313,7 @@ export default function TeamRating() {
     }
   };
 
-  // Filter rating list based on logged-in user
+  // Filter rating list based on logged-in user and search
   const filteredRatingListData = useMemo(() => {
     let filtered = [...ratingListData];
     const currentUserEmpId = getCurrentUserEmpId();
@@ -334,8 +334,19 @@ export default function TeamRating() {
       );
     }
 
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(emp =>
+        emp.employeeName.toLowerCase().includes(term) ||
+        emp.empId.toLowerCase().includes(term) ||
+        emp.email.toLowerCase().includes(term) ||
+        (emp.rating?.value && emp.rating.value.toLowerCase().includes(term))
+      );
+    }
+
     return filtered;
-  }, [ratingListData]);
+  }, [ratingListData, searchTerm]);
 
   // Handle rating list date change
   useEffect(() => {
@@ -435,7 +446,7 @@ export default function TeamRating() {
           <div className="flex flex-col md:flex-row gap-6 mb-6">
             <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center">
               <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
-                {employees.length}
+                {activeTab === 'giveRating' ? filteredEmployees.length : filteredRatingListData.length}
               </div>
               <div className="flex-1 text-center">
                 <p className="text-base font-semibold text-gray-700">Total Employees</p>
@@ -444,7 +455,10 @@ export default function TeamRating() {
             
             <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center">
               <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-2xl font-bold">
-                {employees.filter(emp => emp.rating?.completed === true).length}
+                {activeTab === 'giveRating' 
+                  ? filteredEmployees.filter(emp => emp.rating?.completed === true).length
+                  : filteredRatingListData.filter(emp => emp.rating?.completed === true).length
+                }
               </div>
               <div className="flex-1 text-center">
                 <p className="text-base font-semibold text-gray-700">Ratings Completed</p>
