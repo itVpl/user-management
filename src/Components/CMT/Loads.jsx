@@ -4670,9 +4670,9 @@ export default function Loads() {
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base rounded-l-2xl">Load ID</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Origin</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Destination</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Shipper</th>
+                  <th className="text-left py-4 px-2 text-gray-800 font-medium text-base">Shipper</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Rate</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
+                  <th className="text-left py-4 px-9 text-gray-800 font-medium text-base">Status</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base rounded-r-2xl">Action</th>
                 </tr>
               </thead>
