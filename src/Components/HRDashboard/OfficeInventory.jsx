@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Package, Building2, FileText, PlusCircle, X, Monitor, Printer, Search, ChevronDown } from 'lucide-react';
+import { Package, Building2, FileText, PlusCircle, X, Monitor, Printer, Search, ChevronDown, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -44,6 +44,9 @@ const OfficeInventory = () => {
     notes: ''
   });
   const [updateStockLoading, setUpdateStockLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const itemsPerPage = 5;
   
   // Searchable dropdown states
   const [dropdownStates, setDropdownStates] = useState({
@@ -592,6 +595,19 @@ const OfficeInventory = () => {
 
 
 
+  // Pagination Logic
+  const filteredInventory = inventory.filter(item => 
+    item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  
+  const lowStockCount = inventory.filter(item => item.quantity <= (item.minimumStock || 0)).length;
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredInventory.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+
   // Loading state
   if (loading) {
     return (
@@ -612,89 +628,102 @@ const OfficeInventory = () => {
 
   return (
     <div className="p-6">
-             {/* Top Stats */}
-       <div className="flex gap-4 mb-6 flex-wrap items-center justify-between">
-         <div className="flex gap-4 flex-wrap">
-           <div className="bg-white w-[250px] shadow-md rounded-2xl px-4 py-3 flex items-center space-x-4">
-             <div className="bg-green-100 p-2 rounded-lg">
-               <Package className="w-6 h-6 text-green-600" />
-             </div>
-             <div>
-               <h2 className="text-sm font-medium text-gray-600">Total Items</h2>
-                               <p className="text-xl font-bold text-green-600">
-                  {inventory.length}
-                </p>
-             </div>
-           </div>
-         </div>
+      {/* Top Section */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          
+          {/* Total Items Stat */}
+          <div className="w-full md:w-auto p-4 border border-gray-200 rounded-xl flex items-center gap-4 min-w-[200px] bg-gray-50">
+            <div className="w-12 h-10 bg-white rounded-full flex items-center justify-center text-blue-600 font-bold text-2xl shadow-sm">
+              {inventory.length}
+            </div>
+            <span className="text-gray-600 font-medium text-lg">Total Items</span>
+          </div>
 
-        {/* Add Button */}
-        <button
-          onClick={handleOpen}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition flex items-center gap-2 mt-4 sm:mt-0"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Add Inventory Item
-        </button>
+          {/* Search & Actions */}
+          <div className="flex flex-col md:flex-row items-center gap-4 flex-1 w-full md:justify-end">
+            <div className="relative w-full md:max-w-md">
+              <input 
+                type="text" 
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1); // Reset to first page on search
+                }}
+                placeholder="Search Item Name or Category..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm"
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            </div>
+
+            <button
+              onClick={handleOpen}
+              className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors font-medium shadow-md hover:shadow-lg whitespace-nowrap w-full md:w-auto"
+            >
+              <PlusCircle className="w-5 h-5" />
+              Add Inventory Item
+            </button>
+          </div>
+        </div>
       </div>
 
              {/* Table */}
-       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-         <div className="overflow-x-auto">
-           <table className="w-full">
-             <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-               <tr>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Item Name</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Category</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Quantity</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Unit</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Location</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Supplier</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Cost/Unit</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Purchase Date</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Expiry Date</th>
-                 <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+         <div className="overflow-x-auto p-4">
+           <table className="w-full border-separate border-spacing-y-4">
+             <thead>
+               <tr className="text-sm text-gray-500">
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Item Name</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Category</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Quantity</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Unit</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Location</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Supplier</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Cost/Unit</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Purchase Date</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Expiry Date</th>
+                 <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Actions</th>
                </tr>
              </thead>
              <tbody>
-               {inventory.map((item, index) => (
-                 <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                   <td className="py-2 px-3">
+               {currentItems.map((item, index) => (
+                 <tr key={index} className="bg-white hover:bg-gray-50 transition-colors group">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-medium text-gray-700">{item.itemName}</span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-medium text-gray-700 capitalize">{item.category}</span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-mono text-base font-semibold text-gray-700">{item.quantity}</span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-medium text-gray-700 capitalize">{item.unit}</span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-medium text-gray-700">{item.location}</span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-medium text-gray-700">{item.supplier?.name || 'N/A'}</span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-medium text-gray-700">₹{item.cost?.perUnit || 'N/A'}</span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-medium text-gray-700">
                        {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString() : 'N/A'}
                      </span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <span className="font-medium text-gray-700">
                        {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A'}
                      </span>
                    </td>
-                   <td className="py-2 px-3">
+                   <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                      <div className="flex gap-2">
                        <button
                          onClick={() => handleViewItem(item)}
-                         className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                         className="cursor-pointer hover:bg-blue-600 hover:text-white px-3 py-1 rounded-lg text-base font-medium transition-colors outline outline-1 outline-blue-300"
                        >
                          View
                        </button>
@@ -713,6 +742,48 @@ const OfficeInventory = () => {
            </div>
          )}
        </div>
+
+       {/* Pagination Controls */}
+       {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-6 px-4 border border-separate border-gray-200 p-2 rounded-xl">
+          <div className="text-sm text-gray-600">
+            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, inventory.length)} of {inventory.length} entries
+          </div>
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+            <div className="flex gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                  currentPage === page
+                    ? 'border border-gray-900 text-gray-900 bg-white'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+            </div>
+            <button
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Enhanced Modal */}
       {open && (
