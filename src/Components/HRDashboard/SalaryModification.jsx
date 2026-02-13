@@ -365,12 +365,18 @@ const SalaryModification = () => {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Working Days</p>
-                  <p className="text-2xl font-bold text-gray-800">{mySalary.workingDays}</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Days in Month</p>
+                  <p className="text-2xl font-bold text-gray-800">
+                    {mySalary.totalDaysInMonth ?? mySalary.workingDays ?? '-'}
+                  </p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Present Days</p>
-                  <p className="text-2xl font-bold text-green-600">{mySalary.presentDays}</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {typeof mySalary.presentDays === 'number' && mySalary.presentDays % 1 !== 0
+                      ? mySalary.presentDays.toFixed(1)
+                      : mySalary.presentDays ?? '-'}
+                  </p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Basic Salary</p>
@@ -388,7 +394,7 @@ const SalaryModification = () => {
               <div className="bg-green-50 border border-green-200 rounded-lg p-5">
                 <p className="text-sm font-medium text-green-800 mb-1">Salary Payable</p>
                 <p className="text-3xl font-bold text-green-700">
-                  ₹{(mySalary.salary?.salaryPayable || 0).toLocaleString()}
+                  ₹{(mySalary.salary?.salaryPayable || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </p>
                 {mySalary.salary?.message && (
                   <p className="text-sm text-green-700 mt-2">{mySalary.salary.message}</p>
@@ -494,7 +500,7 @@ const SalaryModification = () => {
                       <td className="px-4 py-3 text-gray-600">{emp.empId}</td>
                       <td className="px-4 py-3 text-gray-600">{emp.department || '-'}</td>
                       <td className="px-4 py-3 text-right">{emp.approvedLeaveDays ?? 0}</td>
-                      <td className="px-4 py-3 text-right">{emp.sandwichLeaveDays ?? 0}</td>
+                      <td className="px-4 py-3 text-right">{Math.round((emp.sandwichLeaveDays ?? 0) / 3)}</td>
                       <td className="px-4 py-3 text-right font-medium">{emp.totalLeaveDaysForSalary ?? 0}</td>
                       <td className="px-4 py-3 text-right">{emp.presentDays ?? 0}</td>
                     </tr>
@@ -569,8 +575,8 @@ const SalaryModification = () => {
                     </div>
                     <div className="flex gap-4 text-sm">
                       <span>Approved: {emp.approvedLeaveCount ?? 0}</span>
-                      <span>Sandwich: {emp.sandwichLeaveCount ?? 0}</span>
-                      <span className="font-medium">Total: {emp.totalLeaveDaysForSalary ?? 0}</span>
+                      <span>Sandwich: {Math.round((emp.sandwichLeaveCount ?? 0) / 3)}</span>
+                      <span className="font-medium">Total for Salary: {emp.totalLeaveDaysForSalary ?? 0}</span>
                     </div>
                   </button>
                   {expandedEmpId === emp.empId && emp.leaves && emp.leaves.length > 0 && (
@@ -889,7 +895,7 @@ const SalaryModification = () => {
                       <tr key={emp.empId} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium text-gray-800">{emp.employeeName}</td>
                         <td className="px-4 py-3 text-gray-600">{emp.empId}</td>
-                        <td className="px-4 py-3 text-right font-medium text-amber-700">{emp.sandwichLeaveDays}</td>
+                        <td className="px-4 py-3 text-right font-medium text-amber-700">{Math.round((emp.sandwichLeaveDays ?? 0) / 3)}</td>
                       </tr>
                     ))}
                 </tbody>

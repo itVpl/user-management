@@ -137,7 +137,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Reports": [
       "Call Data",
       "Call Records (Id)",
-      "Report Analysis"
+      "Report Analysis",
+      "DO Report"
     ],
     "System Administration": [
       "Manage Module"
@@ -285,7 +286,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ],
     "Sales Reports": [
       "Sales Dept Report",
-      "Follow Up Report"
+      "Follow Up Report",
+      "DO Report"
     ],
     "Common Reports": [
       "Call Data",
@@ -538,7 +540,8 @@ const DEPARTMENT_REPORTS = {
   ],
   "Sales": [
     "Sales Dept Report",
-    "Follow Up Report"
+    "Follow Up Report",
+    "DO Report"
   ],
   "Finance": [
     "Receivable Report",
