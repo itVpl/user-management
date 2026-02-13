@@ -75,7 +75,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Employees Hygine",
       "Employee Hygiene"
     ],
-    "Recruitment": ["Candidate Shortlist"],
+    "Recruitment": ["Candidate Shortlist", "Employee Feedback", "Employee Feedback Report"],
     "Office Management": [
       "Office Inventory",
       "Office Expenses",
@@ -401,7 +401,8 @@ const getAllUniversalUserDepartments = () => {
   return {
     "CMT": DEPARTMENT_MODULE_CATEGORIES["CMT_UNIVERSAL"],
     "Sales": DEPARTMENT_MODULE_CATEGORIES["Sales_UNIVERSAL"],
-    "Finance": DEPARTMENT_MODULE_CATEGORIES["Finance_UNIVERSAL"]
+    "Finance": DEPARTMENT_MODULE_CATEGORIES["Finance_UNIVERSAL"],
+    "HR": DEPARTMENT_MODULE_CATEGORIES["HR"]
   };
 };
 
@@ -453,6 +454,8 @@ const menuItems = [
   { name: "Task", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/HrCreateTask" },
   { name: "Leave Approval", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/LeaveApproval" },
   { name: "Candidate Shortlist", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/candidate-shortlist" },
+  { name: "Employee Feedback", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-feedback" },
+  { name: "Employee Feedback Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-feedback-report" },
   { name: "Target Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/target-reports" },
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
   { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },
@@ -525,7 +528,8 @@ const REPORT_NAMES = [
   "CMT Dept Report",
   "Trucker Report",
   "Target Reports",
-  "QA Call Report"
+  "QA Call Report",
+  "Employee Feedback Report"
 ];
 
 // Department-wise report categorization
@@ -551,7 +555,8 @@ const DEPARTMENT_REPORTS = {
   "HR": [
     "Break Report",
     "Target Reports",
-    "Emp Login Report"
+    "Emp Login Report",
+    "Employee Feedback Report"
   ],
   "QA": [
     "QA Call Report"
@@ -890,9 +895,11 @@ const Sidebar = () => {
           console.log("📦 Total modules from API:", data.modules.length);
           console.log("📦 All modules:", data.modules.map(m => ({ name: m.name, id: m._id, isActive: m.isActive })));
           
+          // Only show modules the user has access to (strict: no modules if allowedModuleIds empty)
           const activeModules = data.modules.filter((mod) => 
             mod.isActive === true && 
-            (allowedModuleIds.length === 0 || allowedModuleIds.includes(mod._id.toString()))
+            allowedModuleIds.length > 0 &&
+            allowedModuleIds.includes(mod._id.toString())
           );
 
           console.log("✅ Active modules (filtered by allowedModuleIds):", activeModules.map(m => ({ name: m.name, id: m._id })));
@@ -917,18 +924,23 @@ const Sidebar = () => {
           console.log("📋 All menu items:", menuItems.map(m => ({ name: m.name, path: m.path })));
 
           // Match menu items with active modules by name or label (case insensitive)
-          // Also normalize multiple spaces to single space and hyphens for matching
+          // Also normalize multiple spaces, hyphens, and camelCase (e.g. LeaveApproval -> leave approval) for matching
+          const normalizeForMatch = (str) =>
+            (str || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+          // Allow "Dept" <-> "Department" so "CMT Department Report" matches "CMT Dept Report"
+          const normalizeDept = (s) => s.replace(/\bdept\b/g, 'department');
           const matchedMenus = menuItems.filter((item) => {
             const match = activeModules.some((mod) => {
-              // Normalize module name (handle hyphens and spaces)
-              const modName = (mod.name || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
-              // Also check label field if it exists
-              const modLabel = (mod.label || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
-              // Normalize menu item name
-              const itemName = item.name.trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
+              const modName = normalizeForMatch(mod.name);
+              const modLabel = normalizeForMatch(mod.label);
+              const itemName = normalizeForMatch(item.name);
+              const modNameDept = normalizeDept(modName);
+              const itemNameDept = normalizeDept(itemName);
               
-              // Match by name OR label
-              const isMatch = modName === itemName || modLabel === itemName;
+              // Match by name OR label (including Dept/Department variant)
+              const isMatch =
+                modName === itemName || modLabel === itemName ||
+                modNameDept === itemNameDept || normalizeDept(modLabel) === itemNameDept;
               if (isMatch) {
                 console.log(`✅ Matched: "${mod.name}"${mod.label ? ` (label: "${mod.label}")` : ''} (ID: ${mod._id}) with menu item "${item.name}"`);
               }
@@ -943,15 +955,18 @@ const Sidebar = () => {
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
           console.log("❌ Unmatched active modules:", activeModules.filter(mod => 
             !matchedMenus.some(item => {
-              const modName = (mod.name || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
-              const modLabel = (mod.label || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
-              const itemName = item.name.trim().replace(/\s+/g, ' ').replace(/-/g, ' ').toLowerCase();
-              return modName === itemName || modLabel === itemName;
+              const modName = normalizeForMatch(mod.name);
+              const modLabel = normalizeForMatch(mod.label);
+              const itemName = normalizeForMatch(item.name);
+              const modNameDept = normalizeDept(modName);
+              const itemNameDept = normalizeDept(itemName);
+              return modName === itemName || modLabel === itemName ||
+                modNameDept === itemNameDept || normalizeDept(modLabel) === itemNameDept;
             })
           ).map(m => ({ name: m.name, label: m.label, id: m._id })));
           
-          // Always include Companies menu item
-          const companiesMenuItem = menuItems.find(item => item.name === 'Companies');
+          // Company menu item - only show if user has access (in matchedMenus)
+          const companyMenuItem = menuItems.find(item => item.name === 'Company');
           
           // Handle universal_user and superadmin with department-wise dropdowns
           if (isUniversalUser || isSuperAdmin) {
@@ -1048,13 +1063,13 @@ const Sidebar = () => {
               commonModules.includes(item.name)
             );
             
-            // Add Companies if available
-            if (companiesMenuItem && matchedMenus.some(m => m.name === 'Company')) {
+            // Add Company only if user has access
+            if (companyMenuItem && matchedMenus.some(m => m.name === 'Company')) {
               const dashboardIndex = otherMenus.findIndex(item => item.name === 'Dashboard');
               if (dashboardIndex >= 0) {
-                otherMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
+                otherMenus.splice(dashboardIndex + 1, 0, companyMenuItem);
               } else {
-                otherMenus.unshift(companiesMenuItem);
+                otherMenus.unshift(companyMenuItem);
               }
             }
             
@@ -1089,16 +1104,9 @@ const Sidebar = () => {
             setDepartmentMenuItems(allDeptMenus);
             setDepartmentCategories(departmentCategoriesMap[firstDept] || {});
             
-            // For superadmin, also show separate Reports dropdown
-            if (isSuperAdmin) {
-              console.log("✅ Setting Reports dropdown for superadmin");
-              setReportMenuItems(reports);
-              setReportCategories(categorizedReports);
-            } else {
-              // Don't show separate Reports dropdown for universal_user (reports are in department dropdowns)
-              setReportMenuItems([]);
-              setReportCategories({});
-            }
+            // Show Reports dropdown for any user who has report modules (superadmin and universal_user)
+            setReportMenuItems(reports);
+            setReportCategories(categorizedReports);
             
             setFilteredMenuItems(otherMenus);
             
@@ -1118,50 +1126,17 @@ const Sidebar = () => {
           setUserRole(role);
           console.log("✅ User role stored:", role);
           
-          // If no modules matched but user has allowedModules, try to show department modules
+          // If no modules matched, only show basic menus (do not show modules without access)
           if (matchedMenus.length === 0) {
-            if (allowedModuleIds.length > 0 && hasDepartmentCategories) {
-              console.warn("⚠️ No modules matched by name, but user has allowedModules. Showing department modules as fallback.");
-              // Get all department module names
-              const allDeptModuleNames = getAllDepartmentModules(department, role);
-              // Show menu items that are in department categories
-              const deptMenus = menuItems.filter(item => 
-                allDeptModuleNames.includes(item.name)
-              );
-              // For fallback case, we don't have matchedMenus, so we can't filter reports by permissions
-              // Only show basic menus in this case
-              const otherMenus = menuItems.filter(item => 
-                !allDeptModuleNames.includes(item.name) && 
-                !REPORT_NAMES.includes(item.name) &&
-                ['Dashboard', 'Tracking', 'Companies'].includes(item.name)
-              );
-              
-              // Categorize department modules
-              const categorized = {};
-              deptMenus.forEach(item => {
-                const category = getModuleCategory(item.name, department, role);
-                if (!categorized[category]) {
-                  categorized[category] = [];
-                }
-                categorized[category].push(item);
-              });
-              
-              setDepartmentMenuItems(deptMenus);
-              setDepartmentCategories(categorized);
-              setReportMenuItems([]); // Don't show reports in fallback case without proper permissions
-              setFilteredMenuItems(otherMenus);
-            } else {
-              console.warn("⚠️ No modules matched, showing basic menus");
-              // For superadmin, include Tracking in basic menus (outside departments)
-              const basicMenuNames = isSuperAdmin ? ['Dashboard', 'Tracking'] : ['Dashboard', 'Tracking'];
-              const basicMenus = menuItems.filter(item => 
-                basicMenuNames.includes(item.name)
-              );
-              setFilteredMenuItems(basicMenus);
-              setDepartmentMenuItems([]);
-              setDepartmentCategories({});
-              setReportMenuItems([]); // Don't show reports if no modules matched
-            }
+            console.warn("⚠️ No modules matched for user access, showing basic menus only");
+            const basicMenuNames = isSuperAdmin ? ['Dashboard', 'Tracking'] : ['Dashboard', 'Tracking'];
+            const basicMenus = menuItems.filter(item => 
+              basicMenuNames.includes(item.name)
+            );
+            setFilteredMenuItems(basicMenus);
+            setDepartmentMenuItems([]);
+            setDepartmentCategories({});
+            setReportMenuItems([]);
           } else {
             // For users with department categories, separate department modules and categorize them
             if (hasDepartmentCategories) {
@@ -1213,14 +1188,14 @@ const Sidebar = () => {
                 categorized[category].push(item);
               });
               
-              // Add Companies to other menus if not already included
-              const hasCompanies = otherMenus.some(item => item.name === 'Companies');
-              if (!hasCompanies && companiesMenuItem) {
+              // Add Company to other menus only if user has access (in matchedMenus)
+              const hasCompany = otherMenus.some(item => item.name === 'Company');
+              if (!hasCompany && companyMenuItem && matchedMenus.some(m => m.name === 'Company')) {
                 const dashboardIndex = otherMenus.findIndex(item => item.name === 'Dashboard');
                 if (dashboardIndex >= 0) {
-                  otherMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
+                  otherMenus.splice(dashboardIndex + 1, 0, companyMenuItem);
                 } else {
-                  otherMenus.unshift(companiesMenuItem);
+                  otherMenus.unshift(companyMenuItem);
                 }
               }
               
@@ -1247,33 +1222,13 @@ const Sidebar = () => {
                 }
               }
               
-              // TEMPORARY BYPASS: Add Employee Documents for HR users (after all filtering)
-              // This bypasses module permission check - remove after adding module to database
-              if ((department === "hr" || department === "HR") && !deptMenus.some(item => item.name === "Employee Documents")) {
-                const employeeDocumentsItem = menuItems.find(item => item.name === "Employee Documents");
-                if (employeeDocumentsItem) {
-                  deptMenus.push(employeeDocumentsItem);
-                  // Add to categorized as well
-                  const category = getModuleCategory("Employee Documents", department, role);
-                  if (!categorized[category]) {
-                    categorized[category] = [];
-                  }
-                  categorized[category].push(employeeDocumentsItem);
-                  console.log("✅ Added Employee Documents to HR menu (bypass)");
-                }
-              }
-              
               setDepartmentMenuItems(deptMenus);
               setDepartmentCategories(categorized);
-              // Only show Reports dropdown for superadmin
+              // Show Reports dropdown for any user who has report modules (not only superadmin)
+              setReportMenuItems(reports);
+              setReportCategories(categorizedReports);
               if (isSuperAdmin) {
-                console.log("✅ Setting Reports dropdown for superadmin");
-                setReportMenuItems(reports);
-                setReportCategories(categorizedReports);
                 console.log("📋 Chat, Email, Dinner Status, and Tracking moved outside departments for superadmin");
-              } else {
-                setReportMenuItems([]);
-                setReportCategories({});
               }
               setFilteredMenuItems(otherMenus);
             } else {
@@ -1291,24 +1246,18 @@ const Sidebar = () => {
                 !(isSuperAdmin && item.name === "Tracking")
               );
               
-              const hasCompanies = otherMenus.some(item => item.name === 'Companies');
-              if (!hasCompanies && companiesMenuItem) {
+              const hasCompany = otherMenus.some(item => item.name === 'Company');
+              if (!hasCompany && companyMenuItem && matchedMenus.some(m => m.name === 'Company')) {
                 const dashboardIndex = otherMenus.findIndex(item => item.name === 'Dashboard');
                 if (dashboardIndex >= 0) {
-                  otherMenus.splice(dashboardIndex + 1, 0, companiesMenuItem);
+                  otherMenus.splice(dashboardIndex + 1, 0, companyMenuItem);
                 } else {
-                  otherMenus.unshift(companiesMenuItem);
+                  otherMenus.unshift(companyMenuItem);
                 }
               }
-              // Only show Reports dropdown for superadmin
-              if (isSuperAdmin) {
-                console.log("✅ Setting Reports dropdown for superadmin");
-                setReportMenuItems(reports);
-                setReportCategories(categorizedReports);
-              } else {
-                setReportMenuItems([]);
-                setReportCategories({});
-              }
+              // Show Reports dropdown for any user who has report modules
+              setReportMenuItems(reports);
+              setReportCategories(categorizedReports);
               setFilteredMenuItems(otherMenus);
               setDepartmentMenuItems([]);
               setDepartmentCategories({});
@@ -1651,8 +1600,8 @@ const Sidebar = () => {
                       </NavLink>
                     );
                   })}
-                  {/* Reports Section - Top Level (only for superadmin) */}
-                  {reportMenuItems.length > 0 && userRole && (userRole.toLowerCase() === "superadmin" || userRole.toLowerCase() === "super admin") && (
+                  {/* Reports Section - show for any user who has report modules */}
+                  {reportMenuItems.length > 0 && (
                     <div className="w-full mt-2">
                       <button
                         onClick={(e) => handleFlyoutOpen('reports', e)}

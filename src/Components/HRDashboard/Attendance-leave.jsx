@@ -77,7 +77,17 @@ const HRManagementSystem = () => {
         setDailyAttendanceData(res.data.records || []);
       } catch (error) {
         console.error("Error fetching attendance:", error);
-        setAttendanceError("Could not fetch attendance.");
+        const status = error.response?.status;
+        const msg = error.response?.data?.message || error.response?.data?.msg;
+        if (status === 403 || status === 401) {
+          setAttendanceError(
+            msg || "You don't have permission to view attendance. Contact HR or admin to get access."
+          );
+        } else if (msg) {
+          setAttendanceError(msg);
+        } else {
+          setAttendanceError("Could not fetch attendance. Please try again or contact support.");
+        }
       } finally {
         setLoadingAttendance(false);
       }
@@ -100,7 +110,17 @@ const HRManagementSystem = () => {
         }
       } catch (err) {
         console.error("Error fetching leave requests", err);
-        setLeaveError("Could not fetch leave data.");
+        const status = err.response?.status;
+        const msg = err.response?.data?.message || err.response?.data?.msg;
+        if (status === 403 || status === 401) {
+          setLeaveError(
+            msg || "You don't have permission to view leave data. Contact HR or admin to get access."
+          );
+        } else if (msg) {
+          setLeaveError(msg);
+        } else {
+          setLeaveError("Could not fetch leave data. Please try again or contact support.");
+        }
       } finally {
         setLoadingLeaves(false);
       }

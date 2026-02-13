@@ -106,6 +106,8 @@ const CreditLimitRequests = lazy(() => import("./Components/Sales/CreditLimitReq
 const CreditLimitForm = lazy(() => import("./Pages/CreditLimitForm.jsx"));
 const EmployeeDocuments = lazy(() => import("./Components/HRDashboard/EmployeeDocuments.jsx"));
 const SalaryModification = lazy(() => import("./Components/HRDashboard/SalaryModification.jsx"));
+const EmployeeFeedback = lazy(() => import("./Components/HRDashboard/EmployeeFeedback.jsx"));
+const EmployeeFeedbackReport = lazy(() => import("./Components/HRDashboard/EmployeeFeedbackReport.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -700,6 +702,8 @@ function App() {
           <Route path="credit-limit-requests" element={<CreditLimitRequests />} />
           <Route path="employee-documents" element={<EmployeeDocuments />} />
           <Route path="salary-modification" element={<SalaryModification />} />
+          <Route path="employee-feedback" element={<EmployeeFeedback />} />
+          <Route path="employee-feedback-report" element={<EmployeeFeedbackReport />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />
           <Route path="followUpReport" element={<FollowUpReport />} />
           <Route path="RateRequestReport" element={<RateRequestReport />} />

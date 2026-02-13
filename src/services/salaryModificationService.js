@@ -122,6 +122,37 @@ export const deleteSandwichLeave = async (id) => {
 };
 
 /**
+ * POST /sandwich-leave/removal-request
+ * HR: Submit request to remove (waive) a sandwich leave. Multipart/form-data (reason + optional attachments).
+ */
+export const submitSandwichLeaveRemovalRequest = async (sandwichLeaveId, reason, files = []) => {
+  const token =
+    sessionStorage.getItem('authToken') ||
+    localStorage.getItem('authToken') ||
+    sessionStorage.getItem('token') ||
+    localStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('sandwichLeaveId', sandwichLeaveId);
+  formData.append('reason', reason);
+  (files || []).forEach((file) => formData.append('attachments', file));
+  const url = `${API_CONFIG.BASE_URL}${BASE_PATH}/sandwich-leave/removal-request`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+    credentials: 'include',
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const err = new Error(data?.message || `API Error: ${response.status}`);
+    err.status = response.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+};
+
+/**
  * GET /summary/:empId
  * Salary modification summary for an employee
  */
