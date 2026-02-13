@@ -2127,15 +2127,65 @@ export default function DOReport() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Export to CSV function
-  const exportToCSV = () => {
+  // Helper: escape CSV cell (quotes and commas)
+  const escapeCsv = (val) => {
+    if (val === null || val === undefined) return '""';
+    const s = String(val).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  // Export to CSV - fetches full DO details so Importer/Exporter (and all view data) are included
+  const exportToCSV = async () => {
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    if (!token) {
+      alertify.error('Not authenticated');
+      return;
+    }
+    if (filteredOrders.length === 0) {
+      alertify.warning('No data to export');
+      return;
+    }
+
+    const BATCH_SIZE = 8;
+    const getOrderId = (o) => o.originalId || o._id || (o.id && o.id.startsWith('DO-') ? o.id.replace('DO-', '') : o.id);
+
     try {
-      if (filteredOrders.length === 0) {
-        alertify.warning('No data to export');
-        return;
+      alertify.message('Preparing export with full details...');
+      const ordersWithFullData = [];
+      for (let i = 0; i < filteredOrders.length; i += BATCH_SIZE) {
+        const batch = filteredOrders.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map(async (order) => {
+            const orderId = getOrderId(order);
+            if (!orderId) return order;
+            try {
+              const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 10000
+              });
+              if (res?.data?.success && res.data.data) {
+                const full = res.data.data;
+                return {
+                  ...order,
+                  returnLocation: order.returnLocation || full.returnLocation || {},
+                  importerName: full.importerName ?? order.importerName ?? '',
+                  importerAddress: full.importerAddress ?? order.importerAddress ?? '',
+                  exporterName: full.exporterName ?? order.exporterName ?? '',
+                  exporterAddress: full.exporterAddress ?? order.exporterAddress ?? '',
+                  bols: order.bols?.length ? order.bols : (full.bols || []),
+                  shipper: order.shipper || full.shipper || {},
+                  customers: order.customers?.length ? order.customers : (full.customers || [])
+                };
+              }
+            } catch (e) {
+              console.warn('Fetch full DO for export failed for', orderId, e?.response?.status);
+            }
+            return order;
+          })
+        );
+        ordersWithFullData.push(...results);
       }
 
-      // Define CSV headers - matching table columns
       const headers = [
         'Load Num',
         'Bill To',
@@ -2146,13 +2196,38 @@ export default function DOReport() {
         'Customer Fee',
         'Carrier Fee',
         'Margin',
-        'Created By'
+        'Created By',
+        'Load Type',
+        'Return Location Name',
+        'Return Address',
+        'Return City',
+        'Return State',
+        'Return Zip',
+        'Return Date',
+        'Importer Name',
+        'Importer Address',
+        'Exporter Name',
+        'Exporter Address',
+        'BOL Numbers',
+        'Pickup Locations (Summary)',
+        'Drop Locations (Summary)'
       ];
 
-      // Convert data to CSV format
+      const formatDate = (d) => {
+        if (!d) return '';
+        try {
+          const x = new Date(d);
+          return isNaN(x.getTime()) ? '' : x.toISOString().slice(0, 19).replace('T', ' ');
+        } catch { return ''; }
+      };
+
+      const pickUpLocs = (order) => order.shipper?.pickUpLocations || order.shipper?.pickupLocations || [];
+      const dropLocs = (order) => order.shipper?.dropLocations || order.shipper?.deliveryLocations || [];
+      const locSummary = (arr) => (arr || []).map(l => [l.address, l.city, l.state, l.zipCode].filter(Boolean).join(', ')).filter(Boolean).join(' | ');
+
       const csvContent = [
         headers.join(','),
-        ...filteredOrders.map(order => {
+        ...ordersWithFullData.map(order => {
           const workOrderNo = order.customers?.[0]?.workOrderNo || 'N/A';
           const shipmentNo = order.shipper?.shipmentNo || 'N/A';
           const containerNo = order.shipper?.containerNo || 'N/A';
@@ -2161,23 +2236,37 @@ export default function DOReport() {
           const marginAmount = customerFee - carrierFee;
           const marginPercentage = carrierFee > 0 ? ((marginAmount / carrierFee) * 100).toFixed(1) : 0;
           const marginDisplay = `$${marginAmount} / ${marginPercentage}%`;
-          
+          const rl = order.returnLocation || {};
+          const bolNums = (order.bols || []).map(b => b.bolNo || '').filter(Boolean).join('; ');
           return [
-            `"${order.doNum || 'N/A'}"`,
-            `"${order.clientName || 'N/A'}"`,
-            `"${order.carrierName || 'N/A'}"`,
-            `"${workOrderNo}"`,
-            `"${shipmentNo}"`,
-            `"${containerNo}"`,
-            `"$${customerFee}"`,
-            `"$${carrierFee}"`,
-            `"${marginDisplay}"`,
-            `"${order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'}"`
+            escapeCsv(order.doNum || 'N/A'),
+            escapeCsv(order.clientName || 'N/A'),
+            escapeCsv(order.carrierName || 'N/A'),
+            escapeCsv(workOrderNo),
+            escapeCsv(shipmentNo),
+            escapeCsv(containerNo),
+            escapeCsv(`$${customerFee}`),
+            escapeCsv(`$${carrierFee}`),
+            escapeCsv(marginDisplay),
+            escapeCsv(order.createdBySalesUser?.employeeName || order.createdBySalesUser || 'N/A'),
+            escapeCsv(order.loadType || ''),
+            escapeCsv(rl.name || ''),
+            escapeCsv(rl.returnFullAddress || rl.address || ''),
+            escapeCsv(rl.city || ''),
+            escapeCsv(rl.state || ''),
+            escapeCsv(rl.zipCode || ''),
+            escapeCsv(formatDate(rl.returnDate)),
+            escapeCsv(order.importerName || ''),
+            escapeCsv(order.importerAddress || ''),
+            escapeCsv(order.exporterName || ''),
+            escapeCsv(order.exporterAddress || ''),
+            escapeCsv(bolNums),
+            escapeCsv(locSummary(pickUpLocs(order))),
+            escapeCsv(locSummary(dropLocs(order)))
           ].join(',');
         })
       ].join('\n');
 
-      // Create and download file
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -2189,7 +2278,6 @@ export default function DOReport() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
       alertify.success('CSV exported successfully!');
     } catch (error) {
       console.error('Export to CSV error:', error);
@@ -8102,6 +8190,35 @@ const handleUpdateOrder = async (e) => {
                                 })()
                               : 'N/A'}
                           </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Importer / Exporter - Only for DRAYAGE (always show section, values or N/A) */}
+                {selectedOrder?.loadType === 'DRAYAGE' && (
+                  <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <h3 className="text-lg font-bold text-gray-800">Importer / Exporter</h3>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600">Importer Name</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.importerName || 'N/A'}</p>
+                        </div>
+                        <div className="col-span-2 md:col-span-1">
+                          <p className="text-sm text-gray-600">Importer Address</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.importerAddress || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Exporter Name</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.exporterName || 'N/A'}</p>
+                        </div>
+                        <div className="col-span-2 md:col-span-1">
+                          <p className="text-sm text-gray-600">Exporter Address</p>
+                          <p className="font-medium text-gray-800">{selectedOrder.exporterAddress || 'N/A'}</p>
                         </div>
                       </div>
                     </div>
