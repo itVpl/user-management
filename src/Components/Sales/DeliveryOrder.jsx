@@ -568,6 +568,11 @@ export default function DeliveryOrder() {
       zipCode: '',
       returnDate: '' // Return date for DRAYAGE
     },
+    // Importer/Exporter (DRAYAGE only, optional)
+    importerName: '',
+    importerAddress: '',
+    exporterName: '',
+    exporterAddress: '',
 
     // Pickup Locations - each has weight, individual date, and remarks (optional)
     pickupLocations: [
@@ -1046,6 +1051,10 @@ export default function DeliveryOrder() {
           zipCode: '',
           returnDate: ''
         },
+        importerName: src.importerName || '',
+        importerAddress: src.importerAddress || '',
+        exporterName: src.exporterName || '',
+        exporterAddress: src.exporterAddress || '',
 
         pickupLocations: (src.shipper?.pickUpLocations || [{
           name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: ''
@@ -2277,6 +2286,12 @@ export default function DeliveryOrder() {
           .filter(b => (b.bolNo || '').trim())
           .map(b => ({ bolNo: b.bolNo.trim() })),
         ...(returnLocationData ? { returnLocation: returnLocationData } : {}),
+        ...((formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') ? {
+          importerName: formData.importerName || '',
+          importerAddress: formData.importerAddress || '',
+          exporterName: formData.exporterName || '',
+          exporterAddress: formData.exporterAddress || ''
+        } : {}),
         loadReference: formData.selectedLoad && formData.selectedLoad.trim() ? formData.selectedLoad : '',
         supportingDocs: formData.docs ? '' : '' // Will be handled in multipart
       };
@@ -2334,6 +2349,13 @@ export default function DeliveryOrder() {
         // Return location for DRAYAGE
         if (returnLocationData) {
           fd.append('returnLocation', JSON.stringify(returnLocationData));
+        }
+        // Importer/Exporter for DRAYAGE (optional)
+        if (formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') {
+          fd.append('importerName', formData.importerName || '');
+          fd.append('importerAddress', formData.importerAddress || '');
+          fd.append('exporterName', formData.exporterName || '');
+          fd.append('exporterAddress', formData.exporterAddress || '');
         }
 
         // Load reference
@@ -2673,8 +2695,13 @@ const validateForm = (mode = formMode) => {
         address: '',
         city: '',
         state: '',
-        zipCode: ''
+        zipCode: '',
+        returnDate: ''
       },
+      importerName: '',
+      importerAddress: '',
+      exporterName: '',
+      exporterAddress: '',
 
       // Pickup Locations — with weight, date, remarks
       pickupLocations: [
@@ -2859,7 +2886,11 @@ const validateForm = (mode = formMode) => {
             weight: '',
             returnDate: ''
           },
-          
+          importerName: fullOrderData.importerName || '',
+          importerAddress: fullOrderData.importerAddress || '',
+          exporterName: fullOrderData.exporterName || '',
+          exporterAddress: fullOrderData.exporterAddress || '',
+
           pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{
             name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: ''
           }]).map(l => ({
@@ -3376,6 +3407,12 @@ const handleUpdateOrder = async (e) => {
         .filter(b => (b.bolNo || '').trim())
         .map(b => ({ bolNo: b.bolNo.trim() })),
       ...(returnLocationData ? { returnLocation: returnLocationData } : {}),
+      ...((formData.loadType === 'DRAYAGE' || selectedLoadType === 'DRAYAGE') ? {
+        importerName: formData.importerName || '',
+        importerAddress: formData.importerAddress || '',
+        exporterName: formData.exporterName || '',
+        exporterAddress: formData.exporterAddress || ''
+      } : {}),
     };
 
     console.log('Final update payload:', JSON.stringify(updatePayload, null, 2));
@@ -6637,6 +6674,55 @@ const handleUpdateOrder = async (e) => {
   </div>
 )}
 
+                {/* Importer / Exporter Section - Only for DRAYAGE (optional) */}
+                {selectedLoadType === 'DRAYAGE' && (
+                  <div className="bg-white p-4 rounded-lg mt-4">
+                    <h4 className="text-md font-semibold text-gray-800 mb-4">Importer / Exporter</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Importer Name</label>
+                        <input
+                          type="text"
+                          value={formData.importerName || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, importerName: e.target.value }))}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="Importer name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Importer Address</label>
+                        <input
+                          type="text"
+                          value={formData.importerAddress || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, importerAddress: e.target.value }))}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="Full address"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Exporter Name</label>
+                        <input
+                          type="text"
+                          value={formData.exporterName || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, exporterName: e.target.value }))}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="Exporter name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Exporter Address</label>
+                        <input
+                          type="text"
+                          value={formData.exporterAddress || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, exporterAddress: e.target.value }))}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="Full address"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               </div>
 
               {/* Document Upload */}
@@ -7261,6 +7347,43 @@ const handleUpdateOrder = async (e) => {
                               : 'N/A'}
                           </p>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Importer / Exporter - Only for DRAYAGE when present */}
+                {selectedOrder?.loadType === 'DRAYAGE' && (selectedOrder?.importerName || selectedOrder?.importerAddress || selectedOrder?.exporterName || selectedOrder?.exporterAddress) && (
+                  <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <h3 className="text-lg font-bold text-gray-800">Importer / Exporter</h3>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        {(selectedOrder?.importerName || selectedOrder?.importerAddress) && (
+                          <>
+                            <div>
+                              <p className="text-sm text-gray-600">Importer Name</p>
+                              <p className="font-medium text-gray-800">{selectedOrder.importerName || 'N/A'}</p>
+                            </div>
+                            <div className="col-span-2 md:col-span-1">
+                              <p className="text-sm text-gray-600">Importer Address</p>
+                              <p className="font-medium text-gray-800">{selectedOrder.importerAddress || 'N/A'}</p>
+                            </div>
+                          </>
+                        )}
+                        {(selectedOrder?.exporterName || selectedOrder?.exporterAddress) && (
+                          <>
+                            <div>
+                              <p className="text-sm text-gray-600">Exporter Name</p>
+                              <p className="font-medium text-gray-800">{selectedOrder.exporterName || 'N/A'}</p>
+                            </div>
+                            <div className="col-span-2 md:col-span-1">
+                              <p className="text-sm text-gray-600">Exporter Address</p>
+                              <p className="font-medium text-gray-800">{selectedOrder.exporterAddress || 'N/A'}</p>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
