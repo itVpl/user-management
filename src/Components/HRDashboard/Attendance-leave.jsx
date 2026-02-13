@@ -34,13 +34,11 @@ const HRManagementSystem = () => {
   const [finalizing, setFinalizing] = useState({});
 
 
-  // Leave Balance (static demo)
-  const leaveBalanceData = [
-    { empId: 'VPL001', name: 'Troy',    casualLeave: '06', sickLeave: '03', totalLeave: '09' },
-    { empId: 'VPL002', name: 'Easton',  casualLeave: '06', sickLeave: '03', totalLeave: '09' },
-    { empId: 'VPL003', name: 'Dhruv',   casualLeave: '01', sickLeave: '2.5', totalLeave: '3.5' },
-    { empId: 'VPL004', name: 'Rishabh', casualLeave: '03', sickLeave: '00', totalLeave: '03' },
-  ];
+  // Leave Balance (from API)
+  const [leaveBalanceData, setLeaveBalanceData] = useState([]);
+  const [loadingLeaveBalance, setLoadingLeaveBalance] = useState(true);
+  const [leaveBalanceError, setLeaveBalanceError] = useState(null);
+  const [leaveBalanceSearch, setLeaveBalanceSearch] = useState('');
 
 
   // Pagination
@@ -49,7 +47,7 @@ const HRManagementSystem = () => {
 
 
   // Reset page on tab/date/filter/search change
-  useEffect(() => setCurrentPage(1), [activeTab, selectedDate, attendanceStatusFilter, leaveStatusFilter, attendanceSearch, leaveSearch]);
+  useEffect(() => setCurrentPage(1), [activeTab, selectedDate, attendanceStatusFilter, leaveStatusFilter, attendanceSearch, leaveSearch, leaveBalanceSearch]);
 
 
   // ------------------ FETCH: Attendance ------------------
@@ -126,6 +124,42 @@ const HRManagementSystem = () => {
       }
     };
     fetchLeaveRequests();
+  }, []);
+
+
+  // ------------------ FETCH: Leave Balance ------------------
+  useEffect(() => {
+    const fetchLeaveBalance = async () => {
+      try {
+        setLoadingLeaveBalance(true);
+        setLeaveBalanceError(null);
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/leave/balance`, {
+          withCredentials: true,
+        });
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setLeaveBalanceData(res.data.data);
+        } else {
+          setLeaveBalanceData([]);
+        }
+      } catch (err) {
+        console.error("Error fetching leave balance:", err);
+        const status = err.response?.status;
+        const msg = err.response?.data?.message || err.response?.data?.msg;
+        if (status === 403 || status === 401) {
+          setLeaveBalanceError(
+            msg || "You don't have permission to view leave balance. Contact HR or admin to get access."
+          );
+        } else if (msg) {
+          setLeaveBalanceError(msg);
+        } else {
+          setLeaveBalanceError("Could not fetch leave balance. Please try again or contact support.");
+        }
+        setLeaveBalanceData([]);
+      } finally {
+        setLoadingLeaveBalance(false);
+      }
+    };
+    fetchLeaveBalance();
   }, []);
 
 
@@ -263,6 +297,14 @@ const HRManagementSystem = () => {
   });
 
 
+  const leaveBalanceFiltered = leaveBalanceData.filter(r => {
+    const matchText = (leaveBalanceSearch || '').trim().toLowerCase();
+    if (!matchText) return true;
+    const str = `${r.empId || ''} ${r.name || ''}`.toLowerCase();
+    return str.includes(matchText);
+  });
+
+
   // Pagination helpers on filtered lists
   const paginated = (arr) => {
     const start = (currentPage - 1) * recordsPerPage;
@@ -275,7 +317,7 @@ const HRManagementSystem = () => {
     ? attendanceFiltered
     : activeTab === 'leaveRequest'
     ? leaveFiltered
-    : leaveBalanceData;
+    : leaveBalanceFiltered;
 
 
   const totalPages = Math.max(1, Math.ceil(currentData.length / recordsPerPage));
@@ -423,7 +465,7 @@ const HRManagementSystem = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600">Employees</p>
-              <p className="text-xl font-bold text-gray-800">{leaveBalanceData.length}</p>
+              <p className="text-xl font-bold text-gray-800">{leaveBalanceFiltered.length}</p>
             </div>
           </div>
         </div>
@@ -493,10 +535,11 @@ const HRManagementSystem = () => {
                   ? 'Search by employee, leave type, dept, role...'
                   : 'Search by employee name or ID...'
               }
-              value={activeTab === 'dailyAttendance' ? attendanceSearch : activeTab === 'leaveRequest' ? leaveSearch : ''}
+              value={activeTab === 'dailyAttendance' ? attendanceSearch : activeTab === 'leaveRequest' ? leaveSearch : leaveBalanceSearch}
               onChange={(e) => {
                 if (activeTab === 'dailyAttendance') setAttendanceSearch(e.target.value);
                 else if (activeTab === 'leaveRequest') setLeaveSearch(e.target.value);
+                else setLeaveBalanceSearch(e.target.value);
               }}
               className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -596,12 +639,15 @@ const HRManagementSystem = () => {
             <tbody>
               {/* Loading state */}
               {((activeTab === 'dailyAttendance' && loadingAttendance) ||
-                (activeTab === 'leaveRequest' && loadingLeaves)) && (
+                (activeTab === 'leaveRequest' && loadingLeaves) ||
+                (activeTab === 'leaveBalance' && loadingLeaveBalance)) && (
                 <tr>
                   <td colSpan={activeTab === 'dailyAttendance' ? 9 : activeTab === 'leaveRequest' ? 10 : 5} className="py-16">
                     <div className="flex flex-col items-center justify-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                      <p className="text-gray-600">{activeTab === 'dailyAttendance' ? 'Loading attendance...' : 'Loading leave requests...'}</p>
+                      <p className="text-gray-600">
+                        {activeTab === 'dailyAttendance' ? 'Loading attendance...' : activeTab === 'leaveRequest' ? 'Loading leave requests...' : 'Loading leave balance...'}
+                      </p>
                     </div>
                   </td>
                 </tr>
@@ -610,12 +656,15 @@ const HRManagementSystem = () => {
 
               {/* Error state */}
               {((activeTab === 'dailyAttendance' && attendanceError) ||
-                (activeTab === 'leaveRequest' && leaveError)) && (
+                (activeTab === 'leaveRequest' && leaveError) ||
+                (activeTab === 'leaveBalance' && leaveBalanceError)) && (
                 <tr>
                   <td colSpan={activeTab === 'dailyAttendance' ? 9 : activeTab === 'leaveRequest' ? 10 : 5} className="py-12">
                     <div className="text-center">
                       <AlertCircle className="w-16 h-16 text-red-300 mx-auto mb-4" />
-                      <p className="text-red-600">{activeTab === 'dailyAttendance' ? attendanceError : leaveError}</p>
+                      <p className="text-red-600">
+                        {activeTab === 'dailyAttendance' ? attendanceError : activeTab === 'leaveRequest' ? leaveError : leaveBalanceError}
+                      </p>
                     </div>
                   </td>
                 </tr>
@@ -680,17 +729,18 @@ const HRManagementSystem = () => {
               )}
 
 
-              {activeTab === 'leaveBalance' && (
-                leaveBalanceData.length === 0 ? (
+              {activeTab === 'leaveBalance' && !loadingLeaveBalance && !leaveBalanceError && (
+                leaveBalanceFiltered.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-center py-12">
                       <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-500 text-lg">No data available.</p>
+                      <p className="text-gray-500 text-lg">No leave balance data available.</p>
+                      <p className="text-gray-400 text-sm">Try a different search or check back later.</p>
                     </td>
                   </tr>
                 ) : (
-                  paginated(leaveBalanceData).map((row, idx) => (
-                    <tr key={idx} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                  paginated(leaveBalanceFiltered).map((row, idx) => (
+                    <tr key={row.empId || idx} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                       <td className="py-4 px-6 text-blue-700 font-medium">{row.empId}</td>
                       <td className="py-4 px-6 text-gray-800">{row.name}</td>
                       <td className="py-4 px-6 text-gray-700">{row.casualLeave}</td>

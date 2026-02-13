@@ -65,8 +65,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ],
     "Attendance & Leave": [
       "Attendance Leave",
-      "Emp Leaves",
-      "Leave Approval"
+      "Emp Leaves"
     ],
     "Payroll": ["Pay Rolls", "Salary Modification"],
     "Documents": [
@@ -529,7 +528,9 @@ const REPORT_NAMES = [
   "Trucker Report",
   "Target Reports",
   "QA Call Report",
-  "Employee Feedback Report"
+  "Employee Feedback Report",
+  "Attendance Leave",
+  "Leave Approval"
 ];
 
 // Department-wise report categorization
@@ -553,6 +554,8 @@ const DEPARTMENT_REPORTS = {
     "DO Report"
   ],
   "HR": [
+    "Attendance Leave",
+    "Leave Approval",
     "Break Report",
     "Target Reports",
     "Emp Login Report",
@@ -601,6 +604,21 @@ const categorizeReportsByDepartment = (reportItems) => {
         categorized["Common"] = [];
       }
       categorized["Common"].push(item);
+    }
+  });
+  
+  // Sort items within each department by DEPARTMENT_REPORTS order so display order is consistent
+  Object.keys(categorized).forEach((dept) => {
+    const order = DEPARTMENT_REPORTS[dept];
+    if (Array.isArray(order)) {
+      categorized[dept].sort((a, b) => {
+        const i = order.indexOf(a.name);
+        const j = order.indexOf(b.name);
+        if (i === -1 && j === -1) return 0;
+        if (i === -1) return 1;
+        if (j === -1) return -1;
+        return i - j;
+      });
     }
   });
   
